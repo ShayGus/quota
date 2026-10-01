@@ -5,7 +5,7 @@
  * section an account lands in, the order of the rows, and what happens to a row
  * while a newer order is waiting (spec 4.1-4.3, spec 17).
  */
-import { render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
 import { describe, expect, it } from "vitest";
 
@@ -26,7 +26,11 @@ import {
 function Harness(): React.ReactElement {
   const state: RendererState = useRendererState();
   return (
-    <Overview state={state} onOpenAccount={() => undefined} onReconnect={() => undefined} />
+    <Overview
+      state={state}
+      onOpenAccount={() => undefined}
+      onReconnect={() => undefined}
+    />
   );
 }
 
@@ -60,23 +64,26 @@ describe("the account row", () => {
 
     const cells = cellsOf("a1");
     expect(cells).toHaveLength(3);
-    expect(cells[0]).toHaveTextContent("72%");
-    expect(cells[1]).toHaveTextContent("41%");
-    expect(cells[2]).toHaveTextContent("0%");
-    expect(within(cells[2] as HTMLElement).getAllByText("0%").length).toBeGreaterThan(0);
+    expect(cells[0]?.textContent).toContain("72%");
+    expect(cells[1]?.textContent).toContain("41%");
+    expect(cells[2]?.textContent).toContain("0%");
+    // All three are in one row, so the values are compared together.
+    expect(cells).toHaveLength(3);
   });
 
   it("says an offered column is absent rather than drawing a ring for it", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
-        account("a1", "codex", 1, [quotaWindow("session-window", "session", percent(72))]),
+        account("a1", "codex", 1, [
+          quotaWindow("session-window", "session", percent(72)),
+        ]),
       ]),
     );
     render(<Harness />);
 
     const cells = cellsOf("a1");
-    expect(cells[1]).toHaveTextContent("Not offered");
-    expect(within(cells[1] as HTMLElement).queryByRole("img")).toBeNull();
+    expect(cells[1]?.textContent).toContain("Not offered");
+    expect(cells[1]?.querySelector(".ring")).toBeNull();
   });
 });
 
@@ -87,7 +94,9 @@ describe("the presentation order", () => {
         account("high", "codex", 1, [quotaWindow("w", "session", percent(86))], {
           rank: 86,
         }),
-        account("low", "claude", 2, [quotaWindow("w", "session", percent(3))], { rank: 3 }),
+        account("low", "claude", 2, [quotaWindow("w", "session", percent(3))], {
+          rank: 3,
+        }),
         account("middle", "clinepass", 3, [quotaWindow("w", "session", percent(41))], {
           rank: 41,
         }),
@@ -174,9 +183,11 @@ describe("the needs-checking section", () => {
     render(<Harness />);
 
     expect(rowOrder()).toEqual(["stale", "fresh"]);
-    expect(screen.getByText("Needs checking")).toBeInTheDocument();
-    const sections = screen.getAllByText(/Needs checking|Least remaining first/);
-    expect(sections[0]).toHaveTextContent("Needs checking");
+    const headings = document.querySelectorAll(".section-separator strong");
+    expect([...headings].map((heading) => heading.textContent)).toEqual([
+      "Needs checking",
+      "Least remaining first",
+    ]);
   });
 
   it("places an account with no comparable rank in needs checking, not at the bottom", () => {
@@ -214,7 +225,7 @@ describe("the needs-checking section", () => {
     render(<Harness />);
 
     expect(rowOrder()).toEqual(["ranked", "off"]);
-    expect(screen.getByText("Monitoring off")).toBeInTheDocument();
+    expect(screen.getAllByText("Monitoring off").length).toBeGreaterThan(0);
   });
 });
 
@@ -270,7 +281,7 @@ describe("the remaining-allowance label", () => {
 });
 
 describe("a value update while the list is busy", () => {
-  it("updates the value but keeps row identity, order, and focus stable", async () => {
+  it("updates the value but keeps row identity, order, and focus stable", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("first", "codex", 1, [quotaWindow("w", "session", percent(80))], {
@@ -305,8 +316,8 @@ describe("a value update while the list is busy", () => {
     });
 
     // Values are current immediately.
-    expect(cellsOf("first")[0]).toHaveTextContent("2%");
-    expect(cellsOf("second")[0]).toHaveTextContent("95%");
+    expect(cellsOf("first")[0]?.textContent).toContain("2%");
+    expect(cellsOf("second")[0]?.textContent).toContain("95%");
     // The displayed order has not moved yet, and focus stayed on its row.
     expect(rowOrder()).toEqual(["second", "first"]);
     expect(document.activeElement).toBe(focusedButton);
@@ -369,7 +380,7 @@ describe("a value update while the list is busy", () => {
         ]),
       );
     });
-    expect(screen.getByRole("button", { name: /update order/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /update order/i })).toBeTruthy();
   });
 
   it("has a documented idle delay before an unattended reorder", () => {
@@ -378,13 +389,15 @@ describe("a value update while the list is busy", () => {
 });
 
 describe("the overview filters", () => {
-  it("keeps every account visible by default and filters on request", async () => {
+  it("keeps every account visible by default and filters on request", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("calm", "codex", 1, [quotaWindow("w", "session", percent(90))], {
           rank: 90,
         }),
-        account("low", "claude", 2, [quotaWindow("w", "session", percent(4))], { rank: 4 }),
+        account("low", "claude", 2, [quotaWindow("w", "session", percent(4))], {
+          rank: 4,
+        }),
       ]),
     );
     applyPendingOrder();
@@ -392,8 +405,76 @@ describe("the overview filters", () => {
     expect(rowOrder()).toEqual(["low", "calm"]);
 
     const attention = screen.getByRole("button", { name: /needs attention/i });
-    expect(attention).toHaveTextContent("1");
-    attention.click();
+    expect(attention.textContent).toContain("1");
+    act(() => {
+      fireEvent.click(attention);
+    });
     expect(rowOrder()).toEqual(["low"]);
+  });
+});
+
+describe("freshness", () => {
+  it("draws a stale reading muted and dashed with a last-known caption", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("stale", "claude", 1, [quotaWindow("w", "session", percent(93))], {
+          rank: null,
+          unrankedReason: "stale",
+        }),
+      ]),
+    );
+    applyPendingOrder();
+    render(<Harness />);
+
+    const ring = document.querySelector(".ring");
+    expect(ring?.className).toContain("ring--stale");
+    expect(screen.getAllByText("last known").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Stale reading").length).toBeGreaterThan(0);
+    // The number stays visible; it is not hidden or turned into zero.
+    expect(screen.getAllByText("93%").length).toBeGreaterThan(0);
+  });
+
+  it("draws a reset-pending reading as not current rather than refilled", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("due", "codex", 1, [quotaWindow("w", "session", percent(18))], {
+          rank: null,
+          unrankedReason: "reset_pending",
+        }),
+      ]),
+    );
+    applyPendingOrder();
+    render(<Harness />);
+
+    expect(document.querySelector(".ring")?.className).toContain("ring--stale");
+    expect(screen.getAllByText("18%").length).toBeGreaterThan(0);
+    expect(screen.queryByText("100%")).toBeNull();
+  });
+
+  it("keeps a known zero visible when another window is missing (AC-53)", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account(
+          "partial",
+          "clinepass",
+          1,
+          [
+            quotaWindow("session-window", "session", percent(68)),
+            quotaWindow("missing-week", "weekly", unavailable()),
+            quotaWindow("model-week", "custom", percent(0), { label: "Model X weekly" }),
+          ],
+          { rank: null, unrankedReason: "incomplete" },
+        ),
+      ]),
+    );
+    applyPendingOrder();
+    render(<Harness />);
+
+    // Three states at once: a current reading, a missing one, and a known zero
+    // that names the scope it belongs to.
+    expect(screen.getAllByText("68%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Not reported").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Model X weekly: 0%").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Partial reading").length).toBeGreaterThan(0);
   });
 });

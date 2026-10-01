@@ -60,7 +60,12 @@ body {
   margin: 0;
   background: var(--page);
   color: var(--text);
-  font-family: "Segoe UI Variable", "Segoe UI", -apple-system, BlinkMacSystemFont, Arial,
+  font-family:
+    "Segoe UI Variable",
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    Arial,
     sans-serif;
   font-size: 14px;
   font-synthesis: none;

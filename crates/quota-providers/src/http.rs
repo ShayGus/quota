@@ -64,6 +64,9 @@ impl ProviderHttp {
             .connect_timeout(Duration::from_secs(CONNECT_DEADLINE_SECONDS))
             .timeout(Duration::from_secs(REQUEST_DEADLINE_SECONDS))
             .redirect(Policy::custom(|attempt| {
+                if attempt.previous().len() >= MAX_REDIRECTS {
+                    return attempt.stop();
+                }
                 // A credential never travels to a new origin: only a redirect
                 // that stays on the origin of the first request is followed.
                 let origin = attempt.previous().first().map(reqwest::Url::origin);

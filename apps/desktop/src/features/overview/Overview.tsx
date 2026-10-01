@@ -9,7 +9,8 @@
 import { useEffect, useRef, useState, type JSX } from "react";
 
 import type { AccountId, IndicatorStyle } from "../../generated/bindings";
-import { applyPendingOrder, visiblePlacements } from "../../shared/state/store";
+import { applyOrder, placeAccounts } from "../../shared/state/order";
+import { applyPendingOrder } from "../../shared/state/store";
 import type { RendererState } from "../../shared/state/types";
 import { useNow } from "../../shared/ui/useNow";
 import { AccountColumns, AccountRow } from "./AccountRow";
@@ -71,7 +72,11 @@ export function Overview({
     };
   }, [pending, state.snapshot]);
 
-  const placements = visiblePlacements();
+  // The placements are derived from the snapshot prop and the applied order, so
+  // the render is a pure function of its inputs. Reading module state here would
+  // be invisible to the React Compiler and could be memoized wrongly.
+  const accounts = state.snapshot?.accounts ?? [];
+  const placements = applyOrder(placeAccounts(accounts), state.appliedOrder);
   const query = search.trim().toLowerCase();
   const matches = placements.filter((entry) => {
     const { account } = entry;
@@ -91,7 +96,9 @@ export function Overview({
       .toLowerCase();
     return haystack.includes(query);
   });
-  const attentionCount = placements.filter((entry) => needsAttention(entry.account)).length;
+  const attentionCount = placements.filter((entry) =>
+    needsAttention(entry.account),
+  ).length;
 
   let renderedSection: string | null = null;
   const rows: JSX.Element[] = [];

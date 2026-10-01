@@ -74,7 +74,9 @@ export function Select<T extends string>({
         aria-label={label}
         value={value}
         onChange={(event) => {
-          const next = options.find(([candidate]) => candidate === event.currentTarget.value);
+          const next = options.find(
+            ([candidate]) => candidate === event.currentTarget.value,
+          );
           if (next !== undefined) {
             onChange(next[0]);
           }

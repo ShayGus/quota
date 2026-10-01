@@ -9,6 +9,7 @@
 #![doc = include_str!("../README.md")]
 
 pub mod bootstrap;
+pub mod bootstrap_helpers;
 pub mod ipc;
 pub mod platform;
 pub mod state;

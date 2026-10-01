@@ -1,8 +1,8 @@
 //! Pool construction and proof that every pooled connection carries the
-//! required SQLite settings.
+//! required `SQLite` settings.
 //!
 //! A one-off `PRAGMA` statement configures the single connection that executed
-//! it. SQLite reports foreign-key enforcement, journal mode, synchronous
+//! it. `SQLite` reports foreign-key enforcement, journal mode, synchronous
 //! setting, and busy timeout per connection, so a pooled database is only
 //! configured once every connection in the pool agrees. [`verify_pool_settings`]
 //! is what proves that; it is not a decoration.
@@ -16,7 +16,7 @@ use crate::error::{PersistenceError, PersistenceResult};
 
 /// The `PRAGMA journal_mode` value this crate requires.
 const REQUIRED_JOURNAL_MODE: &str = "wal";
-/// The `PRAGMA synchronous` value this crate requires. SQLite reports `2` for `FULL`.
+/// The `PRAGMA synchronous` value this crate requires. `SQLite` reports `2` for `FULL`.
 const REQUIRED_SYNCHRONOUS: i64 = 2;
 
 /// The bounded settings applied to every pooled connection.
@@ -127,7 +127,7 @@ pub async fn open_pool(
 ///
 /// The pool's whole connection budget is acquired at once and held while each
 /// connection is read, so a connection that opens the connection lazily and
-/// silently keeps SQLite's defaults cannot pass unnoticed. A single one-off
+/// silently keeps `SQLite`'s defaults cannot pass unnoticed. A single one-off
 /// `PRAGMA` on one connection would prove nothing about the rest.
 ///
 /// # Errors

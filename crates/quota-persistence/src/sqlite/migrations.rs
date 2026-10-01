@@ -1,7 +1,7 @@
 //! Ordered, embedded, transactional migrations.
 //!
 //! A hand-rolled ordered list is used instead of `sqlx::migrate!`. The whole
-//! schema is one file, [`sqlx::migrate!`] derives its version numbers from file
+//! schema is one file, `sqlx::migrate!` derives its version numbers from file
 //! names while this schema records them in `schema_migrations` under the
 //! numbers this crate declares, and the list makes the recorded version and the
 //! applied statements visibly the same value. Applied statements are compiled
@@ -99,7 +99,7 @@ async fn apply(pool: &SqlitePool, version: u32, statements: &str) -> Persistence
 
 /// Executes a migration file statement by statement.
 ///
-/// [`sqlx::raw_sql`] executes a multi-statement script through the SQLite
+/// [`sqlx::raw_sql`] executes a multi-statement script through the `SQLite`
 /// multi-statement path, which does not surface a failing statement's own text.
 /// Executing each statement separately keeps the failure attributable.
 async fn run_statements(

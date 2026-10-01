@@ -73,12 +73,30 @@ export function reportTransportFailure(failure: TransportFailure): void {
 }
 
 /**
+ * Owns one operation started from a synchronous UI handler.
+ *
+ * A click handler cannot await, and `void promise` is not error handling
+ * (spec 7.8.2). This attaches the failure path explicitly, so the promise
+ * always has an owner.
+ */
+export function launch(operation: Promise<unknown>): void {
+  operation.catch((reason: unknown) => {
+    reportTransportFailure({
+      code: "unknown_error",
+      detail: reason instanceof Error ? reason.name : "command rejected",
+    });
+  });
+}
+
+/**
  * Owns one asynchronous operation.
  *
  * The promise is awaited inside this function, so a rejection is always
  * handled. A caller that needs the value uses the awaited form instead.
  */
-export async function reportAsync<T>(operation: Promise<Invocation<T>>): Promise<T | null> {
+export async function reportAsync<T>(
+  operation: Promise<Invocation<T>>,
+): Promise<T | null> {
   const result = await operation;
   if ("transportError" in result) {
     reportTransportFailure(result.transportError);

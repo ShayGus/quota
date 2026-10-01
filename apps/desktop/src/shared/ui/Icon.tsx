@@ -40,9 +40,7 @@ export type IconName =
 /** The path data for every icon, on a 24-unit view box. */
 const PATHS: Record<IconName, JSX.Element> = {
   "arrow-left": <path d="M20 12H5m6-6-6 6 6 6" />,
-  bell: (
-    <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />
-  ),
+  bell: <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />,
   check: <path d="m5 12 4 4L19 6" />,
   "chevron-down": <path d="m6 9 6 6 6-6" />,
   clock: (
@@ -67,9 +65,7 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   layers: <path d="m12 3 10 5-10 5L2 8l10-5Zm-10 9 10 5 10-5M2 16l10 5 10-5" />,
-  link: (
-    <path d="m10 8 3-3a5 5 0 0 1 7 7l-3 3M14 16l-3 3a5 5 0 0 1-7-7l3-3M8 16l8-8" />
-  ),
+  link: <path d="m10 8 3-3a5 5 0 0 1 7 7l-3 3M14 16l-3 3a5 5 0 0 1-7-7l3-3M8 16l8-8" />,
   moon: <path d="M21 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z" />,
   mouse: (
     <>
@@ -139,7 +135,13 @@ const PATHS: Record<IconName, JSX.Element> = {
 };
 
 /** Renders one icon at the given pixel size. */
-export function Icon({ name, size = 18 }: { name: IconName; size?: number }): JSX.Element {
+export function Icon({
+  name,
+  size = 18,
+}: {
+  name: IconName;
+  size?: number;
+}): JSX.Element {
   return (
     <svg
       className="icon"
@@ -166,14 +168,26 @@ export function Logo({ size = 26 }: { size?: number }): JSX.Element {
       aria-hidden="true"
       focusable="false"
     >
-      <circle cx="15" cy="15" r="10" stroke="currentColor" strokeWidth="3.6" opacity=".2" />
+      <circle
+        cx="15"
+        cy="15"
+        r="10"
+        stroke="currentColor"
+        strokeWidth="3.6"
+        opacity=".2"
+      />
       <path
         d="M15 5a10 10 0 1 1-9.5 6.9"
         stroke="currentColor"
         strokeWidth="3.6"
         strokeLinecap="round"
       />
-      <path d="m21 22 5 5" stroke="currentColor" strokeWidth="3.6" strokeLinecap="round" />
+      <path
+        d="m21 22 5 5"
+        stroke="currentColor"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }

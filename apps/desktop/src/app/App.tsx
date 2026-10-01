@@ -11,6 +11,7 @@ import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
 import type { AccountId } from "../generated/bindings";
+import { launch } from "../shared/ipc/report";
 import { useRendererState } from "../shared/state/useRendererState";
 import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
@@ -27,18 +28,39 @@ type View =
 
 /** The settings actions, wired to the typed commands. */
 const settingsActions: SettingsActions = {
-  savePreferences: (next) => void actions.savePreferences(next),
-  setAlwaysOnTop: (alwaysOnTop) => void actions.setAlwaysOnTop(alwaysOnTop),
-  setOverviewMode: (mode) => void actions.setOverviewMode(mode),
-  fitToAccounts: () => void actions.fitToAccounts(),
-  resetPosition: () => void actions.resetPosition(),
-  setAccountEnabled: (accountId, enabled) =>
-    void actions.setAccountEnabled(accountId, enabled),
-  renameAccount: (accountId, nickname) => void actions.renameAccount(accountId, nickname),
-  disconnectAccount: (accountId) => void actions.disconnectAccount(accountId),
-  openUsagePage: (accountId) => void actions.openUsagePage(accountId),
-  clearHistory: (accountId) => void actions.clearHistory(accountId),
-  exportDiagnostics: () => void actions.exportDiagnostics(),
+  savePreferences: (next) => {
+    launch(actions.savePreferences(next));
+  },
+  setAlwaysOnTop: (alwaysOnTop) => {
+    launch(actions.setAlwaysOnTop(alwaysOnTop));
+  },
+  setOverviewMode: (mode) => {
+    launch(actions.setOverviewMode(mode));
+  },
+  fitToAccounts: () => {
+    launch(actions.fitToAccounts());
+  },
+  resetPosition: () => {
+    launch(actions.resetPosition());
+  },
+  setAccountEnabled: (accountId, enabled) => {
+    launch(actions.setAccountEnabled(accountId, enabled));
+  },
+  renameAccount: (accountId, nickname) => {
+    launch(actions.renameAccount(accountId, nickname));
+  },
+  disconnectAccount: (accountId) => {
+    launch(actions.disconnectAccount(accountId));
+  },
+  openUsagePage: (accountId) => {
+    launch(actions.openUsagePage(accountId));
+  },
+  clearHistory: (accountId) => {
+    launch(actions.clearHistory(accountId));
+  },
+  exportDiagnostics: () => {
+    launch(actions.exportDiagnostics());
+  },
 };
 
 /** The window root, inside the application-level boundary. */
@@ -60,7 +82,8 @@ function QuotaWindow(): JSX.Element {
 
   const account =
     view.name === "detail" && state.snapshot !== null
-      ? (state.snapshot.accounts.find((candidate) => candidate.account_id === view.id) ?? null)
+      ? (state.snapshot.accounts.find((candidate) => candidate.account_id === view.id) ??
+        null)
       : null;
 
   return (
@@ -128,7 +151,8 @@ function WindowFooter(): JSX.Element {
       <span className="shell__state">{label}</span>
       {state.persistence !== null && state.persistence.kind !== "available" ? (
         <span className="shell__state">
-          Local storage {state.persistence.kind === "degraded" ? "degraded" : "needs repair"}
+          Local storage{" "}
+          {state.persistence.kind === "degraded" ? "degraded" : "needs repair"}
         </span>
       ) : null}
     </footer>

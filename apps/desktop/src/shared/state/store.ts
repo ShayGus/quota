@@ -153,11 +153,6 @@ export function visiblePlacements(): readonly PlacedAccount[] {
   return applyOrder(placeAccounts(snapshot.accounts), state.appliedOrder);
 }
 
-/** The account identity at the top of the displayed order, or `null`. */
-export function firstVisibleAccountId(): AccountId | null {
-  return visiblePlacements()[0]?.account.account_id ?? null;
-}
-
 /**
  * The current order for one snapshot, for a caller that has none in the store.
  *

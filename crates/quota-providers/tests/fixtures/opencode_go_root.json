@@ -1,0 +1,11 @@
+{
+  "rolling": {
+    "percent": "99.6"
+  },
+  "weekly": {
+    "percent": 100
+  },
+  "monthly": {
+    "percent": 55
+  }
+}

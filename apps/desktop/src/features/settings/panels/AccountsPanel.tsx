@@ -68,7 +68,8 @@ function ManagedAccount({
         <div>
           <dt>Connection</dt>
           <dd>
-            {account.connection_state} · generation {String(account.connection_generation)}
+            {account.connection_state} · generation{" "}
+            {String(account.connection_generation)}
           </dd>
         </div>
       </dl>

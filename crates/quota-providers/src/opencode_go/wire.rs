@@ -35,20 +35,35 @@ impl OpenCodeGoEnvelope {
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct OpenCodeGoUsage {
     /// The rolling allowance.
-    #[serde(default, alias = "rolling")]
-    pub(crate) rolling_usage: Option<OpenCodeGoBucket>,
+    #[serde(
+        default,
+        rename = "rollingUsage",
+        alias = "rolling",
+        alias = "rolling_usage"
+    )]
+    pub(crate) rolling: Option<OpenCodeGoBucket>,
     /// The weekly allowance.
-    #[serde(default, alias = "weekly")]
-    pub(crate) weekly_usage: Option<OpenCodeGoBucket>,
+    #[serde(
+        default,
+        rename = "weeklyUsage",
+        alias = "weekly",
+        alias = "weekly_usage"
+    )]
+    pub(crate) weekly: Option<OpenCodeGoBucket>,
     /// The monthly allowance. This is the only connector in scope that has one.
-    #[serde(default, alias = "monthly")]
-    pub(crate) monthly_usage: Option<OpenCodeGoBucket>,
+    #[serde(
+        default,
+        rename = "monthlyUsage",
+        alias = "monthly",
+        alias = "monthly_usage"
+    )]
+    pub(crate) monthly: Option<OpenCodeGoBucket>,
 }
 
 impl OpenCodeGoUsage {
     /// Whether the block named no window at all.
     pub(crate) fn is_empty(&self) -> bool {
-        self.rolling_usage.is_none() && self.weekly_usage.is_none() && self.monthly_usage.is_none()
+        self.rolling.is_none() && self.weekly.is_none() && self.monthly.is_none()
     }
 }
 
@@ -64,11 +79,12 @@ pub(crate) struct OpenCodeGoBucket {
     )]
     pub(crate) percent: Option<Numberish>,
     /// Percent points still available, when that is the reported polarity.
-    #[serde(default, alias = "remainingPercent")]
+    #[serde(default, rename = "percentRemaining", alias = "remainingPercent")]
     pub(crate) percent_remaining: Option<Numberish>,
     /// The reset instant, as a date string or epoch seconds.
     #[serde(
         default,
+        rename = "resetsAt",
         alias = "resetAt",
         alias = "reset_at",
         alias = "nextResetTime"
@@ -77,11 +93,4 @@ pub(crate) struct OpenCodeGoBucket {
     /// The reset delay in seconds.
     #[serde(default, alias = "reset_in_sec")]
     pub(crate) reset_in_sec: Option<Numberish>,
-}
-
-impl OpenCodeGoBucket {
-    /// The reset instant, from either spelling.
-    pub(crate) fn reset(&self) -> Option<&Numberish> {
-        self.resets_at.as_ref().or(self.reset_in_sec.as_ref())
-    }
 }

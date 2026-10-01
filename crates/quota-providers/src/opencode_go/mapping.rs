@@ -72,9 +72,9 @@ impl WindowSpec {
     /// The bucket this window reads from the payload.
     fn window<'a>(&self, usage: &'a OpenCodeGoUsage) -> Option<&'a OpenCodeGoBucket> {
         match self.bucket {
-            "rolling" => usage.rolling_usage.as_ref(),
-            "weekly" => usage.weekly_usage.as_ref(),
-            _ => usage.monthly_usage.as_ref(),
+            "rolling" => usage.rolling.as_ref(),
+            "weekly" => usage.weekly.as_ref(),
+            _ => usage.monthly.as_ref(),
         }
     }
 }

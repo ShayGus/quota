@@ -2,7 +2,7 @@
 //!
 //! This crate owns two durable owners and nothing else:
 //!
-//! - [`sqlite`] holds typed repositories over one SQLite pool. The pool is
+//! - [`sqlite`] holds typed repositories over one `SQLite` pool. The pool is
 //!   opened and migrated once by the caller; cloning the handle never opens a
 //!   second pool and never claims a second migration owner.
 //! - [`store`] holds the versioned presentation-preferences document. It is

@@ -68,7 +68,7 @@ pub enum PersistenceError {
 /// The result of a durable-state operation.
 pub type PersistenceResult<T> = Result<T, PersistenceError>;
 
-/// Classifies a raw SQLx failure into the variant that describes it.
+/// Classifies a raw `SQLx` failure into the variant that describes it.
 pub(crate) fn query_error(table: &'static str, error: sqlx::Error) -> PersistenceError {
     match error {
         sqlx::Error::PoolTimedOut | sqlx::Error::PoolClosed => PersistenceError::PoolUnavailable,
@@ -85,7 +85,7 @@ pub(crate) fn query_error(table: &'static str, error: sqlx::Error) -> Persistenc
     }
 }
 
-/// Attaches the addressed table to a raw SQLx failure.
+/// Attaches the addressed table to a raw `SQLx` failure.
 pub(crate) trait TableContext<T> {
     /// Classifies this failure against the table the statement addressed.
     fn table(self, table: &'static str) -> PersistenceResult<T>;

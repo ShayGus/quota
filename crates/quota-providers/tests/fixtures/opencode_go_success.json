@@ -1,0 +1,16 @@
+{
+  "usage": {
+    "rollingUsage": {
+      "percent": 28,
+      "resetsAt": 1790000000
+    },
+    "weeklyUsage": {
+      "percentRemaining": 35.5,
+      "resetAt": "2026-09-30T12:00:00Z"
+    },
+    "monthlyUsage": {
+      "usagePercent": "100",
+      "nextResetTime": 1795000000
+    }
+  }
+}

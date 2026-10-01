@@ -11,11 +11,7 @@ import type { Preferences, PrivacyAliasMode } from "../../../generated/bindings"
 import { Icon } from "../../../shared/ui/Icon";
 import { SettingRow, Select, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import {
-  withAliasMode,
-  withExportIdentities,
-  withRetainHistory,
-} from "../preferences";
+import { withAliasMode, withExportIdentities, withRetainHistory } from "../preferences";
 
 /** The alias modes. */
 const ALIAS_MODES: readonly (readonly [PrivacyAliasMode, string])[] = [

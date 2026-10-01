@@ -1,4 +1,4 @@
-//! Typed repositories over one SQLite pool.
+//! Typed repositories over one `SQLite` pool.
 //!
 //! [`SqliteRepositories`] holds a handle to a pool that was already opened and
 //! migrated. Cloning a [`sqlx::SqlitePool`] clones an `Arc` handle; it never
@@ -7,9 +7,14 @@
 pub mod account_repository;
 pub mod alert_repository;
 pub mod backoff_repository;
+pub mod connection_repository;
+mod history_repository;
 pub mod measurement_repository;
 pub mod migrations;
+mod outbox_repository;
 pub mod pool;
+mod rows;
+mod window_writer;
 
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
@@ -17,10 +22,12 @@ use serde::de::DeserializeOwned;
 
 use crate::error::{PersistenceError, PersistenceResult};
 
-pub use account_repository::{AccountRecord, AccountRepository, NewAccount, NewConnection};
+pub use account_repository::{AccountRecord, AccountRepository, NewAccount};
 pub use alert_repository::{AlertLevel, AlertRepository, EpisodeKey};
 pub use backoff_repository::{BackoffRecord, BackoffRepository};
-pub use measurement_repository::MeasurementRepository;
+pub use connection_repository::{ConnectionRecord, NewConnection};
+pub use history_repository::HistoryEntry;
+pub use measurement_repository::{MeasurementRepository, StoredMeasurement};
 pub use migrations::run_migrations;
 pub use pool::{SqlitePoolSettings, open_pool, verify_pool_settings};
 

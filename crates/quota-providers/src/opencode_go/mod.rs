@@ -22,7 +22,6 @@ use quota_domain::account::{
 use quota_domain::polling::{FixedIntervalPolicy, PollingStrategy, ProviderPollingPolicy};
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::SourceKind;
-use tracing::Instrument;
 
 use crate::credentials;
 use crate::decode::{self, DecodedUsage};
@@ -58,6 +57,65 @@ impl OpenCodeGoAdapter {
         Ok(Self {
             http: Arc::new(ProviderHttp::new()?),
         })
+    }
+    /// Performs one read at the credential, HTTP, and decoding boundary.
+    ///
+    /// `skip_all` keeps every argument out of the span by default, and the field
+    /// list records only what is safe to log: the provider, an opaque connection
+    /// identity, and a profile label. No credential, address, body, path, or full
+    /// URL is recorded.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            provider = ProviderId::OpenCodeGo.as_str(),
+            connection = %binding.connection_id,
+            profile = binding.profile_label.as_deref().unwrap_or("default"),
+        )
+    )]
+    async fn perform_read(
+        &self,
+        binding: ConnectionBinding,
+        context: ReadContext,
+    ) -> Result<FetchOutcome, ProviderError> {
+        let credential = credentials::opencode_go_credential().await?;
+        let profile_label = credential.profile_label.clone();
+        let pool = decode::pool_id(ProviderId::OpenCodeGo, &profile_label);
+        // There is no provider-reported identity, so the check covers
+        // what exists: the provider and the credential profile.
+        decode::ensure_binding(
+            &binding,
+            ProviderId::OpenCodeGo,
+            None,
+            Some(profile_label.as_str()),
+        )?;
+        let authorization = format!("Bearer {}", credential.key.expose());
+        let headers = [
+            ("Authorization", authorization.as_str()),
+            ("Accept", "application/json"),
+        ];
+        let reply = self
+            .http
+            .get(GetRequest {
+                url: USAGE_URL,
+                headers: &headers,
+                deadline: context.deadline,
+            })
+            .await?;
+        if let Some(failure) = classify_status(reply.status, reply.retry_after) {
+            return Err(failure);
+        }
+        let envelope: wire::OpenCodeGoEnvelope =
+            serde_json::from_value(reply.body).map_err(|_| ProviderError::UnsupportedSchema {
+                detail: "the payload did not match the supported OpenCode Go shape".to_owned(),
+            })?;
+        let decoded: DecodedUsage = mapping::decode(&envelope, &pool, Utc::now())?;
+        let identity = VerifiedIdentity {
+            principal_label: format!("OpenCode Go ({profile_label})"),
+            workspace_label: None,
+            plan_label: None,
+            source: SourceKind::ObservedWebEndpoint,
+        };
+        Ok(decoded.into_outcome(identity))
     }
 }
 
@@ -131,55 +189,6 @@ impl ProviderAdapter for OpenCodeGoAdapter {
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
         let binding = binding.clone();
-        Box::pin(
-            async move {
-                let credential = credentials::opencode_go_credential().await?;
-                let profile_label = credential.profile_label.clone();
-                let pool = decode::pool_id(ProviderId::OpenCodeGo, &profile_label);
-                // There is no provider-reported identity, so the check covers
-                // what exists: the provider and the credential profile.
-                decode::ensure_binding(
-                    binding,
-                    ProviderId::OpenCodeGo,
-                    None,
-                    Some(profile_label.as_str()),
-                )?;
-                let authorization = format!("Bearer {}", credential.key.expose());
-                let headers = [
-                    ("Authorization", authorization.as_str()),
-                    ("Accept", "application/json"),
-                ];
-                let reply = self
-                    .http
-                    .get(GetRequest {
-                        url: USAGE_URL,
-                        headers: &headers,
-                        deadline: context.deadline,
-                    })
-                    .await?;
-                if let Some(failure) = classify_status(reply.status, reply.retry_after) {
-                    return Err(failure);
-                }
-                let envelope: wire::OpenCodeGoEnvelope = serde_json::from_value(reply.body)
-                    .map_err(|_| ProviderError::UnsupportedSchema {
-                        detail: "the payload did not match the supported OpenCode Go shape"
-                            .to_owned(),
-                    })?;
-                let decoded: DecodedUsage = mapping::decode(&envelope, &pool, Utc::now())?;
-                let identity = VerifiedIdentity {
-                    principal_label: format!("OpenCode Go ({profile_label})"),
-                    workspace_label: None,
-                    plan_label: None,
-                    source: SourceKind::ObservedWebEndpoint,
-                };
-                Ok(decoded.into_outcome(identity))
-            }
-            .instrument(tracing::info_span!(
-                "quota_provider_read",
-                provider = ProviderId::OpenCodeGo.as_str(),
-                connection = %binding.connection_id,
-                profile = binding.profile_label.as_deref().unwrap_or("default"),
-            )),
-        )
+        Box::pin(self.perform_read(binding, context))
     }
 }

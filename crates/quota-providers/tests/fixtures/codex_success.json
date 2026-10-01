@@ -1,0 +1,16 @@
+{
+  "rate_limit": {
+    "primary_window": {
+      "used_percent": 28,
+      "reset_at": 1790000000,
+      "limit_window_seconds": 18000
+    },
+    "secondary_window": {
+      "usedPercent": "64.5",
+      "resetsAt": 1790400000,
+      "windowDurationMins": 10080
+    }
+  },
+  "plan_type": "plus",
+  "email": "synthetic.user@example.invalid"
+}

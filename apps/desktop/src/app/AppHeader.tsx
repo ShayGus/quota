@@ -9,6 +9,7 @@ import type { JSX } from "react";
 
 import type { RendererState } from "../shared/state/types";
 import { Icon, Logo } from "../shared/ui/Icon";
+import { launch } from "../shared/ipc/report";
 import { actions } from "./actions";
 
 /** The header, including the independent always-on-top control. */
@@ -54,7 +55,7 @@ export function AppHeader({
           aria-pressed={alwaysOnTop}
           aria-label={alwaysOnTop ? "Turn off always on top" : "Keep the window on top"}
           onClick={() => {
-            void actions.setAlwaysOnTop(!alwaysOnTop);
+            launch(actions.setAlwaysOnTop(!alwaysOnTop));
           }}
         >
           <Icon name="pin" size={17} />

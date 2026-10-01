@@ -118,17 +118,11 @@ export type QuotaCategory = "session" | "weekly" | "monthly" | "daily" | "custom
 
 /** What a reported duration actually means. */
 export type WindowSemantics =
-  | "anchored_period"
-  | "rolling_period"
-  | "calendar_cycle"
-  | "unknown";
+  "anchored_period" | "rolling_period" | "calendar_cycle" | "unknown";
 
 /** What kind of change happens at a boundary. */
 export type BoundaryKind =
-  | "full_reset"
-  | "next_replenishment"
-  | "billing_boundary"
-  | "unknown";
+  "full_reset" | "next_replenishment" | "billing_boundary" | "unknown";
 
 /** What the number represents in the plan. */
 export type MetricRole = "included_allowance" | "extra_spend_cap" | "credit_balance";
@@ -163,10 +157,12 @@ export type UnrankedReason =
   | "no_included_allowance";
 
 /** Which accounts a read or refresh covers. */
-export type AccountSelection = { readonly kind: "all" } | {
-  readonly kind: "listed";
-  readonly account_refs: readonly AccountRef[];
-};
+export type AccountSelection =
+  | { readonly kind: "all" }
+  | {
+      readonly kind: "listed";
+      readonly account_refs: readonly AccountRef[];
+    };
 
 /** Why a refresh was requested. */
 export type RefreshReason =
@@ -213,10 +209,7 @@ export interface MoneyMeasurement {
 
 /** Why an allowance has no usable number. */
 export type UnavailableReason =
-  | "not_reported"
-  | "unsupported"
-  | "invalid_response"
-  | "not_applicable";
+  "not_reported" | "unsupported" | "invalid_response" | "not_applicable";
 
 /** A normalised reading of one allowance. */
 export type Measurement =
@@ -388,7 +381,11 @@ export interface NotificationThresholds {
 /** When notifications may be shown. */
 export type QuietHours =
   | { readonly kind: "never" }
-  | { readonly kind: "daily_utc"; readonly from_minute: number; readonly to_minute: number };
+  | {
+      readonly kind: "daily_utc";
+      readonly from_minute: number;
+      readonly to_minute: number;
+    };
 
 /** What the user wants to be told. */
 export interface NotificationPolicy {
@@ -442,16 +439,28 @@ export type CommandError =
       readonly context: { readonly field: string; readonly reason: string };
     }
   | { readonly kind: "account_not_found" }
-  | { readonly kind: "unsupported_provider"; readonly context: { readonly provider_id: string } }
-  | { readonly kind: "unsupported_method"; readonly context: { readonly requested: string } }
+  | {
+      readonly kind: "unsupported_provider";
+      readonly context: { readonly provider_id: string };
+    }
+  | {
+      readonly kind: "unsupported_method";
+      readonly context: { readonly requested: string };
+    }
   | { readonly kind: "reconnect_required" }
-  | { readonly kind: "permission_denied"; readonly context: { readonly window_label: string } }
+  | {
+      readonly kind: "permission_denied";
+      readonly context: { readonly window_label: string };
+    }
   | { readonly kind: "secure_store_unavailable" }
   | {
       readonly kind: "revision_conflict";
       readonly context: { readonly expected: number; readonly actual: number };
     }
-  | { readonly kind: "persistence_unavailable"; readonly context: { readonly owner: string } }
+  | {
+      readonly kind: "persistence_unavailable";
+      readonly context: { readonly owner: string };
+    }
   | {
       readonly kind: "native_operation_unsupported";
       readonly context: { readonly operation: string };
@@ -743,10 +752,20 @@ const CONNECTION_STATES = [
   "unsupported",
   "disconnected",
 ] as const satisfies readonly ConnectionState[];
-const FETCH_STATES = ["idle", "fetching", "backoff", "offline", "error"] as const satisfies
-  readonly FetchState[];
-const QUOTA_CATEGORIES = ["session", "weekly", "monthly", "daily", "custom"] as const satisfies
-  readonly QuotaCategory[];
+const FETCH_STATES = [
+  "idle",
+  "fetching",
+  "backoff",
+  "offline",
+  "error",
+] as const satisfies readonly FetchState[];
+const QUOTA_CATEGORIES = [
+  "session",
+  "weekly",
+  "monthly",
+  "daily",
+  "custom",
+] as const satisfies readonly QuotaCategory[];
 const WINDOW_SEMANTICS = [
   "anchored_period",
   "rolling_period",
@@ -764,8 +783,12 @@ const METRIC_ROLES = [
   "extra_spend_cap",
   "credit_balance",
 ] as const satisfies readonly MetricRole[];
-const ENFORCEMENTS = ["hard", "soft", "informational", "unknown"] as const satisfies
-  readonly Enforcement[];
+const ENFORCEMENTS = [
+  "hard",
+  "soft",
+  "informational",
+  "unknown",
+] as const satisfies readonly Enforcement[];
 const SOURCE_KINDS = [
   "documented_api",
   "documented_cli_protocol",
@@ -780,8 +803,11 @@ const UNAVAILABLE_REASONS = [
   "invalid_response",
   "not_applicable",
 ] as const satisfies readonly UnavailableReason[];
-const ORDER_SECTIONS = ["needs_checking", "ranked", "monitoring_off"] as const satisfies
-  readonly OrderSection[];
+const ORDER_SECTIONS = [
+  "needs_checking",
+  "ranked",
+  "monitoring_off",
+] as const satisfies readonly OrderSection[];
 const UNRANKED_REASONS = [
   "stale",
   "incomplete",
@@ -797,14 +823,23 @@ const THEMES = ["system", "light", "dark"] as const satisfies readonly Theme[];
 const DENSITIES = ["compact", "comfortable"] as const satisfies readonly Density[];
 const INDICATOR_STYLES = ["ring", "bar"] as const satisfies readonly IndicatorStyle[];
 const OVERVIEW_MODES = ["floating", "tray"] as const satisfies readonly OverviewMode[];
-const LAUNCH_BEHAVIORS = ["quiet_in_tray", "restore_last_mode"] as const satisfies readonly
-  LaunchBehavior[];
-const PRIVACY_ALIAS_MODES = ["off", "stable_aliases"] as const satisfies readonly
-  PrivacyAliasMode[];
-const CARDINALITIES = ["independent", "workspace_scoped", "single_profile"] as const satisfies
-  readonly AccountCardinality[];
-const CREDENTIAL_OWNERSHIPS = ["app_owned", "external_client"] as const satisfies readonly
-  CredentialOwnership[];
+const LAUNCH_BEHAVIORS = [
+  "quiet_in_tray",
+  "restore_last_mode",
+] as const satisfies readonly LaunchBehavior[];
+const PRIVACY_ALIAS_MODES = [
+  "off",
+  "stable_aliases",
+] as const satisfies readonly PrivacyAliasMode[];
+const CARDINALITIES = [
+  "independent",
+  "workspace_scoped",
+  "single_profile",
+] as const satisfies readonly AccountCardinality[];
+const CREDENTIAL_OWNERSHIPS = [
+  "app_owned",
+  "external_client",
+] as const satisfies readonly CredentialOwnership[];
 
 /** Reads a quota scope. The resource and label must both survive. */
 function parseScope(value: unknown): QuotaScope | null {
@@ -911,13 +946,17 @@ function parseMeasurement(value: unknown): Measurement | null {
           currency: text(body["currency"]),
           scale: count(body["scale"]),
           used_minor_units:
-            typeof body["used_minor_units"] === "number" ? body["used_minor_units"] : null,
+            typeof body["used_minor_units"] === "number"
+              ? body["used_minor_units"]
+              : null,
           remaining_minor_units:
             typeof body["remaining_minor_units"] === "number"
               ? body["remaining_minor_units"]
               : null,
           limit_minor_units:
-            typeof body["limit_minor_units"] === "number" ? body["limit_minor_units"] : null,
+            typeof body["limit_minor_units"] === "number"
+              ? body["limit_minor_units"]
+              : null,
         },
       };
     case "unlimited":
@@ -1207,7 +1246,10 @@ export function parsePreferences(value: unknown): Preferences | null {
   const indicator = oneOf(source["indicator_style"], INDICATOR_STYLES);
   const mode = oneOf(source["overview_mode"], OVERVIEW_MODES);
   const launch = oneOf(source["launch_behavior"], LAUNCH_BEHAVIORS);
-  const aliasMode = oneOf(source["privacy"] === undefined ? undefined : nested(source["privacy"])["alias_mode"], PRIVACY_ALIAS_MODES);
+  const aliasMode = oneOf(
+    source["privacy"] === undefined ? undefined : nested(source["privacy"])["alias_mode"],
+    PRIVACY_ALIAS_MODES,
+  );
   if (
     theme === null ||
     density === null ||
@@ -1366,7 +1408,10 @@ export function parseCommandError(payload: unknown): CommandError | null {
     case "revision_conflict":
       return {
         kind: "revision_conflict",
-        context: { expected: count(context["expected"]), actual: count(context["actual"]) },
+        context: {
+          expected: count(context["expected"]),
+          actual: count(context["actual"]),
+        },
       };
     case "persistence_unavailable":
       return {
@@ -1397,7 +1442,9 @@ export function parseCommandError(payload: unknown): CommandError | null {
 
 /** Whether retrying the same call could plausibly succeed unchanged. */
 export function isRetryable(error: CommandError): boolean {
-  return error.kind === "initialization_pending" || error.kind === "persistence_unavailable";
+  return (
+    error.kind === "initialization_pending" || error.kind === "persistence_unavailable"
+  );
 }
 
 /* ------------------------------------------------------------------- calls */
@@ -1541,7 +1588,9 @@ export function getSnapshot(): Promise<Invocation<SnapshotResponse>> {
 }
 
 /** Requests a read of the selected accounts. */
-export function refreshAccounts(request: RefreshAccountsRequest): Promise<Invocation<null>> {
+export function refreshAccounts(
+  request: RefreshAccountsRequest,
+): Promise<Invocation<null>> {
   return callVoid("refresh_accounts", { request });
 }
 
@@ -1553,7 +1602,9 @@ export function setMonitoringState(
 }
 
 /** Enables or disables one account. */
-export function setAccountEnabled(request: SetAccountEnabledRequest): Promise<Invocation<null>> {
+export function setAccountEnabled(
+  request: SetAccountEnabledRequest,
+): Promise<Invocation<null>> {
   return callVoid("set_account_enabled", { request });
 }
 
@@ -1563,7 +1614,9 @@ export function renameAccount(request: RenameAccountRequest): Promise<Invocation
 }
 
 /** Disconnects one account. Siblings from the same provider are untouched. */
-export function disconnectAccount(request: DisconnectAccountRequest): Promise<Invocation<null>> {
+export function disconnectAccount(
+  request: DisconnectAccountRequest,
+): Promise<Invocation<null>> {
   return callVoid("disconnect_account", { request });
 }
 
@@ -1575,12 +1628,16 @@ export function beginConnection(
 }
 
 /** Cancels a live connection attempt. */
-export function cancelConnection(request: CancelConnectionRequest): Promise<Invocation<null>> {
+export function cancelConnection(
+  request: CancelConnectionRequest,
+): Promise<Invocation<null>> {
   return callVoid("cancel_connection", { request });
 }
 
 /** Lists the compiled adapters and what each declares. */
-export function listProviderCapabilities(): Promise<Invocation<readonly RegisteredProvider[]>> {
+export function listProviderCapabilities(): Promise<
+  Invocation<readonly RegisteredProvider[]>
+> {
   return call(
     "list_provider_capabilities",
     {},

@@ -54,18 +54,14 @@ pub(crate) fn decode(
         ("primary", limits.primary_window.as_ref()),
         ("secondary", limits.secondary_window.as_ref()),
     ] {
-        match wire {
-            Some(window) => {
-                let duration = window.duration_seconds();
-                let category = category_for(duration);
-                let draft = account_draft(pool, bucket, category, duration, received_at);
-                let (measurement, boundary, issues) = read_window(window, received_at);
-                usage.push(draft.build(measurement, boundary, issues)?);
-            }
-            None => {
-                let draft = account_draft(pool, bucket, QuotaCategory::Custom, None, received_at);
-                usage.push(draft.reported_missing()?);
-            }
+        if let Some(window) = wire {
+            let duration = window.duration_seconds();
+            let draft = account_draft(pool, bucket, category_for(duration), duration, received_at);
+            let (measurement, boundary, issues) = read_window(window, received_at);
+            usage.push(draft.build(measurement, boundary, issues)?);
+        } else {
+            let draft = account_draft(pool, bucket, QuotaCategory::Custom, None, received_at);
+            usage.push(draft.reported_missing()?);
         }
     }
 

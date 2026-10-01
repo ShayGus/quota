@@ -63,8 +63,8 @@ export class FeatureBoundary extends Component<BoundaryProps, BoundaryState> {
       <div className="fallback" role="alert">
         <h2>The {this.props.surface} view stopped rendering.</h2>
         <p>
-          Accounts and monitoring continue in the backend. Reloading this view does not clear
-          accounts and does not restart polling.
+          Accounts and monitoring continue in the backend. Reloading this view does not
+          clear accounts and does not restart polling.
         </p>
         <button
           type="button"

@@ -7,13 +7,12 @@
 import type {
   AccountSnapshot,
   AppSnapshot,
+  Measurement,
   MonitoringState,
   PersistenceStatus,
   Preferences,
-  QuotaWindow,
-  Measurement,
-  Percent,
   ProviderId,
+  QuotaWindow,
   UnrankedReason,
 } from "../src/generated/bindings";
 
@@ -68,8 +67,8 @@ export function percent(remaining: number): Measurement {
   return {
     kind: "percentage",
     value: {
-      used_percent: (100 - remaining) as Percent,
-      remaining_percent: remaining as Percent,
+      used_percent: 100 - remaining,
+      remaining_percent: remaining,
       precision: 0,
     },
   };
@@ -128,7 +127,7 @@ export function account(
         : {
             kind: "ranked",
             value: {
-              remaining_percent: rank as Percent,
+              remaining_percent: rank,
               controlling_window_id: (windows[0]?.id ?? "w") as QuotaWindow["id"],
               scope_label: windows[0]?.scope.label ?? "Subscription",
               rule_version: 1,

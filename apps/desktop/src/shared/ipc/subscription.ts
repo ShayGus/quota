@@ -22,9 +22,14 @@ import {
   setLink,
 } from "../state/store";
 
-/** Starts the subscription. Resolves with the function that stops it. */
+/**
+ * Starts the subscription and resolves with the function that stops it.
+ *
+ * Registration is asynchronous, so a caller that unmounts before this resolves
+ * must call the returned function as soon as it arrives. The caller owns that
+ * contract; this function cannot observe its own cancellation.
+ */
 export async function startSnapshotSubscription(): Promise<() => void> {
-  let stopped = false;
   const unlisten = await attachEventHandlers({
     onSnapshotUpdated: (payload) => {
       acceptSnapshot(payload.snapshot);
@@ -50,13 +55,11 @@ export async function startSnapshotSubscription(): Promise<() => void> {
       acceptPersistence(payload.status);
     },
   });
-  if (stopped) {
-    for (const detach of unlisten) {
-      detach();
-    }
-    return () => undefined;
-  }
+  let stopped = false;
   return () => {
+    if (stopped) {
+      return;
+    }
     stopped = true;
     for (const detach of unlisten) {
       detach();

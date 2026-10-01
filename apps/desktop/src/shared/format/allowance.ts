@@ -27,7 +27,8 @@ export function remainingPercent(measurement: Measurement): number | null {
         : null;
     }
     case "money": {
-      const { remaining_minor_units: remaining, limit_minor_units: limit } = measurement.value;
+      const { remaining_minor_units: remaining, limit_minor_units: limit } =
+        measurement.value;
       return remaining !== null && limit !== null && limit > 0
         ? 100 * (remaining / limit)
         : null;
@@ -40,11 +41,26 @@ export function remainingPercent(measurement: Measurement): number | null {
 }
 
 /**
+ * The words for why a reading has no number.
+ *
+ * An unrecognized reason resolves to the general wording, so a payload this
+ * build does not understand can never fall through into a numeric label.
+ */
+const UNAVAILABLE_WORDS: Record<string, string> = {
+  not_reported: "Not reported",
+  unsupported: "Not supported",
+  invalid_response: "Unreadable",
+  not_applicable: "Not applicable",
+};
+
+/**
  * The label for one reading.
  *
- * A positive remainder below one percent reads `<1%`, never `0%` (AC-08). A
- * genuine zero reads `0%`. An unavailable reading keeps its own words and never
- * acquires a percentage.
+ * The forms are the ones the specification's own example table uses: a whole
+ * number (`0%`, `53%`), `<1%` for a positive remainder below one percent so it
+ * can never read as zero (AC-08), and one decimal place at the top of the range
+ * so a near-full value cannot read as a false `100%`. A reading with no number
+ * keeps words and never acquires a percentage (AC-07).
  */
 export function formatRemaining(measurement: Measurement): string {
   if (measurement.kind === "unlimited") {
@@ -54,27 +70,20 @@ export function formatRemaining(measurement: Measurement): string {
     return "Not included";
   }
   if (measurement.kind === "unavailable") {
-    switch (measurement.value) {
-      case "not_reported":
-        return "Not reported";
-      case "unsupported":
-        return "Not supported";
-      case "invalid_response":
-        return "Unreadable";
-      case "not_applicable":
-        return "Not applicable";
-    }
+    return UNAVAILABLE_WORDS[measurement.value] ?? "No reading";
   }
   const percent = remainingPercent(measurement);
-  if (percent === null) {
+  if (percent === null || !Number.isFinite(percent)) {
     return "No reading";
   }
-  if (percent > 0 && percent < 1) {
+  if (percent <= 0) {
+    return "0%";
+  }
+  if (percent < 1) {
     return "<1%";
   }
-  const clamped = Math.min(100, Math.max(0, percent));
-  const places = clamped <= 1 || clamped >= 99 ? 1 : 0;
-  return `${clamped.toFixed(places)}%`;
+  const clamped = Math.min(100, percent);
+  return `${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`;
 }
 
 /** The severity of a reading. Only a real number can be low or critical. */

@@ -1,0 +1,33 @@
+{
+  "rate_limits": {
+    "primary": {
+      "usedPercent": "137.5",
+      "reset_at": "2026-09-30T12:00:00Z",
+      "limit_window_seconds": 18000
+    },
+    "code_review_rate_limit": {
+      "used_percent": 28,
+      "limit_window_seconds": 604800
+    },
+    "additional_rate_limits": [
+      {
+        "id": "gpt-5-codex",
+        "display_name": "GPT-5 Codex",
+        "rate_limit": {
+          "used_percent": 92,
+          "windowDurationMins": 1440
+        }
+      }
+    ],
+    "rateLimitsByLimitId": {
+      "monthly-custom": {
+        "used_percent": 3,
+        "limit_window_seconds": 2592000
+      }
+    }
+  },
+  "credits": {
+    "balance": "12.5",
+    "unlimited": false
+  }
+}

@@ -54,7 +54,12 @@ pub(crate) struct CodexLimitSet {
     #[serde(default, alias = "additionalRateLimits")]
     pub(crate) additional_rate_limits: Vec<CodexAdditionalLimit>,
     /// The multi-bucket view, keyed by the provider's own limit identifier.
-    #[serde(default, alias = "rateLimitsByLimitID")]
+    #[serde(
+        default,
+        rename = "rateLimitsByLimitId",
+        alias = "rateLimitsByLimitID",
+        alias = "rate_limits_by_limit_id"
+    )]
     pub(crate) rate_limits_by_limit_id: BTreeMap<String, CodexWindow>,
     /// The plan label, when the block carries one.
     #[serde(default, alias = "planType")]
@@ -141,7 +146,11 @@ pub(crate) struct CodexWindow {
     #[serde(default, alias = "limitWindowSeconds")]
     pub(crate) limit_window_seconds: Option<Numberish>,
     /// The window duration in minutes.
-    #[serde(default, alias = "windowDurationMinutes")]
+    #[serde(
+        default,
+        alias = "windowDurationMins",
+        alias = "window_duration_minutes"
+    )]
     pub(crate) window_duration_mins: Option<Numberish>,
 }
 

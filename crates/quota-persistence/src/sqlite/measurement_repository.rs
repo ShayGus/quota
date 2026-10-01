@@ -1,19 +1,24 @@
-//! Latest readings and optional normalized history.
+//! Latest readings.
 //!
 //! One accepted reading is written as one transaction: the window definition,
 //! the current reading, and — when the reading actually moved — one history
 //! row. An unchanged observation is coalesced rather than appended, so a
 //! minute-by-minute poll does not grow the history table without bound.
+//!
+//! History reads and retention live in a sibling private module; both are
+//! `impl` blocks on the same [`MeasurementRepository`].
 
 use chrono::{DateTime, Utc};
+use quota_domain::Percent;
 use quota_domain::ids::{AccountId, QuotaWindowId};
 use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::Measurement;
-use quota_domain::quota::window::{BoundaryKind, Completeness, QuotaWindow, SourceKind};
+use quota_domain::quota::window::QuotaWindow;
 use sqlx::{Row, SqlitePool};
 
 use crate::error::{PersistenceError, PersistenceResult, TableContext};
 use crate::sqlite::codec;
+use crate::sqlite::window_writer::upsert_window;
 
 /// The stored current reading of one account and window.
 #[derive(Clone, Debug, PartialEq)]
@@ -32,21 +37,10 @@ pub struct StoredMeasurement {
     pub issues: Vec<QuotaIssue>,
 }
 
-/// One row of optional history.
-#[derive(Clone, Debug, PartialEq)]
-pub struct HistoryEntry {
-    /// The window the reading belonged to.
-    pub window_id: QuotaWindowId,
-    /// The remaining percentage, when the reading had one.
-    pub remaining_percent: Option<f64>,
-    /// When the value was observed.
-    pub observed_at: DateTime<Utc>,
-}
-
-/// Writes current readings and prunes optional history.
+/// Writes current readings and reads optional history.
 #[derive(Clone, Debug)]
 pub struct MeasurementRepository {
-    pool: SqlitePool,
+    pub(crate) pool: SqlitePool,
 }
 
 impl MeasurementRepository {
@@ -74,37 +68,15 @@ impl MeasurementRepository {
         account_id: &AccountId,
         window: &QuotaWindow,
     ) -> PersistenceResult<bool> {
-        let remaining = window
-            .measurement
-            .remaining_percent()
-            .map(|value| value.value());
+        let remaining = window.measurement.remaining_percent().map(Percent::value);
         let received_at = codec::instant(window.received_at);
 
         let mut transaction = self.pool.begin().await.table("latest_measurements")?;
 
         upsert_window(&mut transaction, account_id, window).await?;
 
-        let previous: Option<(String, Option<String>)> = sqlx::query_as(
-            "SELECT measurement_json, observed_at FROM latest_measurements
-              WHERE account_id = ? AND window_id = ?",
-        )
-        .bind(account_id.as_str())
-        .bind(window.id.as_str())
-        .fetch_optional(&mut *transaction)
-        .await
-        .table("latest_measurements")?;
-
-        let unchanged = previous.is_some_and(|(json, observed)| {
-            let previous_remaining = serde_json::from_str::<Measurement>(&json)
-                .ok()
-                .and_then(|value| value.remaining_percent())
-                .map(|value| value.value());
-            previous_remaining == remaining && observed == window.observed_at.map(codec::instant)
-        });
-
-        let measurement_json = codec::json(&window.measurement, "latest_measurements")?;
-        let measurement_kind = measurement_kind(&window.measurement);
-        let issues_json = codec::json(&window.issues, "latest_measurements")?;
+        let previous = read_previous(&mut transaction, account_id, window).await?;
+        let unchanged = coalesces(previous, window);
 
         sqlx::query(
             "INSERT INTO latest_measurements (
@@ -125,8 +97,8 @@ impl MeasurementRepository {
         )
         .bind(account_id.as_str())
         .bind(window.id.as_str())
-        .bind(measurement_kind)
-        .bind(measurement_json)
+        .bind(measurement_kind(&window.measurement))
+        .bind(codec::json(&window.measurement, "latest_measurements")?)
         .bind(window.period_started_at.map(codec::instant))
         .bind(window.boundary.map(|boundary| codec::instant(boundary.at)))
         .bind(
@@ -138,7 +110,7 @@ impl MeasurementRepository {
         .bind(window.observed_at.map(codec::instant))
         .bind(&received_at)
         .bind(window.valid_until.map(codec::instant))
-        .bind(issues_json)
+        .bind(codec::json(&window.issues, "latest_measurements")?)
         .execute(&mut *transaction)
         .await
         .table("latest_measurements")?;
@@ -179,13 +151,7 @@ impl MeasurementRepository {
         account_id: &AccountId,
         window: &QuotaWindow,
     ) -> PersistenceResult<bool> {
-        let remaining = window
-            .measurement
-            .remaining_percent()
-            .map(|value| value.value());
-        let observed_at = window.observed_at.map(codec::instant);
-
-        let previous: Option<(String, Option<String>)> = sqlx::query_as(
+        let previous = sqlx::query_as(
             "SELECT measurement_json, observed_at FROM latest_measurements
               WHERE account_id = ? AND window_id = ?",
         )
@@ -195,13 +161,7 @@ impl MeasurementRepository {
         .await
         .table("latest_measurements")?;
 
-        Ok(previous.is_some_and(|(json, observed)| {
-            let previous_remaining = serde_json::from_str::<Measurement>(&json)
-                .ok()
-                .and_then(|value| value.remaining_percent())
-                .map(|value| value.value());
-            previous_remaining == remaining && observed == observed_at
-        }))
+        Ok(coalesces(previous, window))
     }
 
     /// Reads the stored current reading of one account and window.
@@ -231,11 +191,6 @@ impl MeasurementRepository {
             return Ok(None);
         };
 
-        let measurement_json: String = row
-            .try_get("measurement_json")
-            .table("latest_measurements")?;
-        let issues_json: String = row.try_get("issues_json").table("latest_measurements")?;
-        let received_at: String = row.try_get("received_at").table("latest_measurements")?;
         let observed_at: Option<String> =
             row.try_get("observed_at").table("latest_measurements")?;
 
@@ -246,13 +201,15 @@ impl MeasurementRepository {
             )
             .map_err(|_| PersistenceError::RowRejected {
                 table: "latest_measurements",
-                reason: "a stored window identity could not become a valid domain identifier",
+                reason: "a stored window identity could not become a valid identifier",
             })?,
-            measurement: serde_json::from_str(&measurement_json).map_err(|_| {
-                PersistenceError::RowRejected {
-                    table: "latest_measurements",
-                    reason: "a stored reading is not a measurement this build can read",
-                }
+            measurement: serde_json::from_str(
+                &row.try_get::<String, _>("measurement_json")
+                    .table("latest_measurements")?,
+            )
+            .map_err(|_| PersistenceError::RowRejected {
+                table: "latest_measurements",
+                reason: "a stored reading is not a measurement this build can read",
             })?,
             definition_version: u32::try_from(
                 row.try_get::<i64, _>("definition_version")
@@ -265,150 +222,63 @@ impl MeasurementRepository {
             observed_at: observed_at
                 .map(|text| codec::parse_instant(&text, "latest_measurements"))
                 .transpose()?,
-            received_at: codec::parse_instant(&received_at, "latest_measurements")?,
-            issues: serde_json::from_str(&issues_json).map_err(|_| {
-                PersistenceError::RowRejected {
-                    table: "latest_measurements",
-                    reason: "stored validation findings are not readable by this build",
-                }
+            received_at: codec::parse_instant(
+                &row.try_get::<String, _>("received_at")
+                    .table("latest_measurements")?,
+                "latest_measurements",
+            )?,
+            issues: serde_json::from_str(
+                &row.try_get::<String, _>("issues_json")
+                    .table("latest_measurements")?,
+            )
+            .map_err(|_| PersistenceError::RowRejected {
+                table: "latest_measurements",
+                reason: "stored validation findings are not readable by this build",
             })?,
         }))
     }
-
-    /// Lists the history rows of one account, oldest first.
-    ///
-    /// # Errors
-    /// Returns a typed persistence error when the read fails.
-    pub async fn history_for_account(
-        &self,
-        account_id: &AccountId,
-    ) -> PersistenceResult<Vec<HistoryEntry>> {
-        let rows = sqlx::query(
-            "SELECT window_id, remaining_percent, observed_at
-               FROM measurement_history
-              WHERE account_id = ?
-              ORDER BY observed_at, id",
-        )
-        .bind(account_id.as_str())
-        .fetch_all(&self.pool)
-        .await
-        .table("measurement_history")?;
-
-        rows.iter()
-            .map(|row| {
-                Ok(HistoryEntry {
-                    window_id: QuotaWindowId::new(
-                        row.try_get::<String, _>("window_id")
-                            .table("measurement_history")?,
-                    )
-                    .map_err(|_| PersistenceError::RowRejected {
-                        table: "measurement_history",
-                        reason: "a stored window identity could not become a valid identifier",
-                    })?,
-                    remaining_percent: row
-                        .try_get("remaining_percent")
-                        .table("measurement_history")?,
-                    observed_at: codec::parse_instant(
-                        &row.try_get::<String, _>("observed_at")
-                            .table("measurement_history")?,
-                        "measurement_history",
-                    )?,
-                })
-            })
-            .collect()
-    }
-
-    /// Deletes the optional history rows of one account, and no other account's.
-    ///
-    /// # Returns
-    /// The number of history rows removed.
-    ///
-    /// # Errors
-    /// Returns a typed persistence error when the delete fails.
-    pub async fn clear_history_for_account(
-        &self,
-        account_id: &AccountId,
-    ) -> PersistenceResult<u64> {
-        let deleted = sqlx::query("DELETE FROM measurement_history WHERE account_id = ?")
-            .bind(account_id.as_str())
-            .execute(&self.pool)
-            .await
-            .table("measurement_history")?
-            .rows_affected();
-        Ok(deleted)
-    }
 }
 
-/// Writes the window definition the measurements reference.
-///
-/// The pool row the window references is created from the owning account's
-/// provider when it does not exist yet. The pool's provider is therefore never
-/// invented: it is read from the account, and an unknown account creates no
-/// pool row, so the window insert fails its foreign key and the transaction
-/// rolls the whole reading back.
-async fn upsert_window(
+/// Reads the stored observation key for one account and window.
+async fn read_previous(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     account_id: &AccountId,
     window: &QuotaWindow,
-) -> PersistenceResult<()> {
-    sqlx::query(
-        "INSERT OR IGNORE INTO quota_pools (id, provider_id, shared)
-         SELECT ?, provider_id, 0 FROM accounts WHERE id = ?",
+) -> PersistenceResult<Option<(String, Option<String>)>> {
+    sqlx::query_as(
+        "SELECT measurement_json, observed_at FROM latest_measurements
+          WHERE account_id = ? AND window_id = ?",
     )
-    .bind(window.pool_id.as_str())
     .bind(account_id.as_str())
-    .execute(&mut **transaction)
-    .await
-    .table("quota_pools")?;
-
-    sqlx::query(
-        "INSERT INTO quota_windows (
-             id, pool_id, provider_bucket_id, scope_resource, scope_label, category,
-             semantics, duration_seconds, metric_role, enforcement, source_kind,
-             completeness, definition_version
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (id) DO UPDATE SET
-             provider_bucket_id = excluded.provider_bucket_id,
-             scope_resource = excluded.scope_resource,
-             scope_label = excluded.scope_label,
-             category = excluded.category,
-             semantics = excluded.semantics,
-             duration_seconds = excluded.duration_seconds,
-             metric_role = excluded.metric_role,
-             enforcement = excluded.enforcement,
-             source_kind = excluded.source_kind,
-             completeness = excluded.completeness,
-             definition_version = excluded.definition_version",
-    )
     .bind(window.id.as_str())
-    .bind(window.pool_id.as_str())
-    .bind(window.provider_bucket_id.as_deref())
-    .bind(window.scope.resource().as_str())
-    .bind(window.scope.label())
-    .bind(codec::encode(&window.category, "quota_windows")?)
-    .bind(codec::encode(&window.semantics, "quota_windows")?)
-    .bind(
-        window
-            .duration
-            .map(|duration| duration.num_seconds())
-            .filter(|seconds| *seconds >= 0),
-    )
-    .bind(codec::encode(&window.metric_role, "quota_windows")?)
-    .bind(codec::encode(&window.enforcement, "quota_windows")?)
-    .bind(codec::encode(&window.source, "quota_windows")?)
-    .bind(codec::encode(&window.completeness, "quota_windows")?)
-    .bind(i64::from(window.definition_version.0))
-    .execute(&mut **transaction)
+    .fetch_optional(&mut **transaction)
     .await
-    .table("quota_windows")?;
-    Ok(())
+    .table("latest_measurements")
+}
+
+/// Whether the stored observation already matches the incoming reading.
+///
+/// Both the remaining percentage and the observation time must match. A
+/// provider that re-reports the same value within the same period is a new
+/// observation when its timestamp moved, and a repeated poll of the same
+/// instant is not.
+fn coalesces(previous: Option<(String, Option<String>)>, window: &QuotaWindow) -> bool {
+    let remaining = window.measurement.remaining_percent().map(Percent::value);
+    let observed_at = window.observed_at.map(codec::instant);
+
+    previous.is_some_and(|(json, observed)| {
+        let previous_remaining = serde_json::from_str::<Measurement>(&json)
+            .ok()
+            .and_then(|value| value.remaining_percent())
+            .map(Percent::value);
+        previous_remaining == remaining && observed == observed_at
+    })
 }
 
 /// The stored discriminator of a reading.
 ///
-/// It is derived from the reading's own serialization, so a new measurement
-/// variant cannot be written under a stale name, and it lets a recovery tool
-/// inspect the shape of a row whose JSON this build cannot parse.
+/// It lets a recovery tool inspect the shape of a row whose JSON this build
+/// cannot parse.
 fn measurement_kind(measurement: &Measurement) -> &'static str {
     match measurement {
         Measurement::Percentage(_) => "percentage",
@@ -418,23 +288,4 @@ fn measurement_kind(measurement: &Measurement) -> &'static str {
         Measurement::NotEntitled => "not_entitled",
         Measurement::Unavailable(_) => "unavailable",
     }
-}
-
-/// Keeps the vocabulary decoders exercised for the window columns this module
-/// reads back.
-#[allow(dead_code)]
-fn decode_window_vocabulary(
-    source: &str,
-    completeness: &str,
-) -> PersistenceResult<(SourceKind, Completeness)> {
-    Ok((
-        codec::decode(source, "quota_windows")?,
-        codec::decode(completeness, "quota_windows")?,
-    ))
-}
-
-/// Keeps the boundary-kind decoder reachable from the read path.
-#[allow(dead_code)]
-fn decode_boundary_kind(kind: &str) -> PersistenceResult<BoundaryKind> {
-    codec::decode(kind, "latest_measurements")
 }

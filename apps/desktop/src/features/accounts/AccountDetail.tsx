@@ -130,7 +130,9 @@ export function AccountDetail({
             {account.identity?.workspace_label != null
               ? ` · ${account.identity.workspace_label}`
               : ""}
-            {account.identity?.plan_label != null ? ` · ${account.identity.plan_label}` : ""}
+            {account.identity?.plan_label != null
+              ? ` · ${account.identity.plan_label}`
+              : ""}
           </p>
         </div>
         <span className={`badge badge--${status.tone}`}>
@@ -181,7 +183,8 @@ export function AccountDetail({
         <div>
           <dt>Connection</dt>
           <dd>
-            {account.connection_state} · generation {String(account.connection_generation)}
+            {account.connection_state} · generation{" "}
+            {String(account.connection_generation)}
           </dd>
         </div>
         <div>
@@ -214,14 +217,13 @@ export function AccountDetail({
       {account.order.kind === "unranked" ? (
         <p className="note">
           This account is in “Needs checking” because its rank reason is “
-          {account.order.value.reason}”. Its last known percentage is never used as a current
-          sorting value.
+          {account.order.value.reason}”. Its last known percentage is never used as a
+          current sorting value.
         </p>
       ) : (
         <p className="note">
-          Ranked by {account.order.value.scope_label}:{" "}
-          {controllingValue}
-          . Rule version {String(account.order.value.rule_version)}.
+          Ranked by {account.order.value.scope_label}: {controllingValue}. Rule version{" "}
+          {String(account.order.value.rule_version)}.
         </p>
       )}
     </section>

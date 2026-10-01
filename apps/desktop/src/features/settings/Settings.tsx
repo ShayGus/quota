@@ -7,11 +7,7 @@
  */
 import { useState, type JSX } from "react";
 
-import type {
-  AccountId,
-  AccountSnapshot,
-  Preferences,
-} from "../../generated/bindings";
+import type { AccountId, AccountSnapshot, Preferences } from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
 import { Icon, type IconName } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
@@ -77,8 +73,8 @@ export function Settings({
       <div className="settings__content">
         {preferences === null ? (
           <p className="note">
-            Quota has not received the confirmed preferences yet. Settings appear as soon as
-            the backend publishes them.
+            Quota has not received the confirmed preferences yet. Settings appear as soon
+            as the backend publishes them.
           </p>
         ) : tab === "window" ? (
           <WindowPanel

@@ -4,6 +4,9 @@
 //! two independent accounts never share an episode merely because they name the
 //! same provider. The key is also the outbox deduplication key, so a second
 //! crossing of the same threshold cannot enqueue a second notification.
+//!
+//! Outbox statements live in a sibling private module; both are `impl` blocks
+//! on the same [`AlertRepository`].
 
 use chrono::{DateTime, Utc};
 use quota_domain::ids::{AccountId, QuotaWindowId};
@@ -12,11 +15,12 @@ use sqlx::{Row, SqlitePool};
 
 use crate::error::{PersistenceError, PersistenceResult, TableContext};
 use crate::sqlite::codec;
+use crate::sqlite::rows;
 
 /// The severity an episode was opened at.
 ///
 /// The thresholds behind these levels are a supervisor policy, not a storage
-/// concern; storage records which level an episode belongs to so a level can
+/// concern; storage records which level an episode belongs to so one level can
 /// re-arm independently of the others.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -76,7 +80,7 @@ pub struct AlertEpisode {
 /// Opens, arms, and closes alert episodes.
 #[derive(Clone, Debug)]
 pub struct AlertRepository {
-    pool: SqlitePool,
+    pub(crate) pool: SqlitePool,
 }
 
 impl AlertRepository {
@@ -103,7 +107,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         opened_at: DateTime<Utc>,
     ) -> PersistenceResult<bool> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let changed = sqlx::query(
             "INSERT INTO alert_episodes (
                  account_id, window_id, definition_version, level, opened_at, armed_at, closed_at
@@ -115,10 +119,10 @@ impl AlertRepository {
                  closed_at = NULL
              WHERE alert_episodes.closed_at IS NOT NULL",
         )
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .bind(codec::instant(opened_at))
         .execute(&self.pool)
         .await
@@ -133,16 +137,16 @@ impl AlertRepository {
     /// # Errors
     /// Returns a typed persistence error when the read fails.
     pub async fn is_open(&self, key: &EpisodeKey) -> PersistenceResult<bool> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let open: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?
                 AND closed_at IS NULL",
         )
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .fetch_optional(&self.pool)
         .await
         .table("alert_episodes")?;
@@ -151,22 +155,22 @@ impl AlertRepository {
 
     /// Reports whether a notification is already enqueued for this open episode.
     ///
-    /// A supervisor consults this before enqueuing, so a level cannot notify
-    /// twice while the same episode is open.
+    /// A supervisor consults this before enqueuing, so one level cannot notify
+    /// twice while the same episode stays open.
     ///
     /// # Errors
     /// Returns a typed persistence error when the read fails.
     pub async fn is_armed(&self, key: &EpisodeKey) -> PersistenceResult<bool> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let armed: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?
                 AND armed_at IS NOT NULL AND closed_at IS NULL",
         )
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .fetch_optional(&self.pool)
         .await
         .table("alert_episodes")?;
@@ -176,13 +180,13 @@ impl AlertRepository {
     /// Records that a notification for this episode has been enqueued.
     ///
     /// # Errors
-    /// Returns [`PersistenceError::RowRejected`] when no live episode exists.
+    /// Returns [`PersistenceError::RowRejected`] when no open episode exists.
     pub async fn mark_armed(
         &self,
         key: &EpisodeKey,
         armed_at: DateTime<Utc>,
     ) -> PersistenceResult<()> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let updated = sqlx::query(
             "UPDATE alert_episodes
                 SET armed_at = ?
@@ -190,15 +194,15 @@ impl AlertRepository {
                 AND closed_at IS NULL",
         )
         .bind(codec::instant(armed_at))
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .execute(&self.pool)
         .await
         .table("alert_episodes")?
         .rows_affected();
-        require_one(updated)
+        rows::require_one(updated, "alert_episodes")
     }
 
     /// Closes an episode after a verified recovery.
@@ -214,7 +218,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         closed_at: DateTime<Utc>,
     ) -> PersistenceResult<bool> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let updated = sqlx::query(
             "UPDATE alert_episodes
                 SET closed_at = ?
@@ -222,10 +226,10 @@ impl AlertRepository {
                 AND closed_at IS NULL",
         )
         .bind(codec::instant(closed_at))
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .execute(&self.pool)
         .await
         .table("alert_episodes")?
@@ -234,8 +238,8 @@ impl AlertRepository {
         if updated == 1 {
             return Ok(true);
         }
-        // No live row was closed. The key must still exist, or the caller is
-        // closing an episode that was never opened.
+        // No live row was closed. The key must still exist, otherwise the caller
+        // is closing an episode that was never opened.
         self.episode(key).await?;
         Ok(false)
     }
@@ -245,15 +249,15 @@ impl AlertRepository {
     /// # Errors
     /// Returns [`PersistenceError::RowRejected`] when no episode exists for the key.
     pub async fn episode(&self, key: &EpisodeKey) -> PersistenceResult<AlertEpisode> {
-        let (account_id, window_id, version, level) = key_parts(key)?;
+        let parts = EpisodeParts::of(key)?;
         let row = sqlx::query(
             "SELECT opened_at, armed_at, closed_at FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?",
         )
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(version)
-        .bind(&level)
+        .bind(&parts.account_id)
+        .bind(&parts.window_id)
+        .bind(parts.version)
+        .bind(&parts.level)
         .fetch_optional(&self.pool)
         .await
         .table("alert_episodes")?
@@ -273,72 +277,36 @@ impl AlertRepository {
             closed_at: read_instant(&row, "closed_at")?,
         })
     }
-
-    /// Enqueues one notification for an episode, at most once per episode key.
-    ///
-    /// # Returns
-    /// `true` when this call inserted the entry, `false` when an entry for the
-    /// same episode key already exists.
-    ///
-    /// # Errors
-    /// Returns a typed persistence error when the write is refused and could
-    /// not be attributed to the deduplication key.
-    pub async fn enqueue_notification(
-        &self,
-        key: &EpisodeKey,
-        created_at: DateTime<Utc>,
-    ) -> PersistenceResult<bool> {
-        let (account_id, window_id, _version, level) = key_parts(key)?;
-        let episode_key = episode_key_text(key)?;
-
-        let inserted = sqlx::query(
-            "INSERT INTO notification_outbox (
-                 account_id, window_id, level, episode_key, created_at, delivered_at
-             ) VALUES (?, ?, ?, ?, ?, NULL)
-             ON CONFLICT (episode_key) DO NOTHING",
-        )
-        .bind(&account_id)
-        .bind(&window_id)
-        .bind(&level)
-        .bind(&episode_key)
-        .bind(codec::instant(created_at))
-        .execute(&self.pool)
-        .await
-        .table("notification_outbox")?
-        .rows_affected();
-
-        // SQLite reports zero changed rows when the conflict clause suppressed
-        // the insert, so this is the deduplication answer itself.
-        Ok(inserted == 1)
-    }
-
-    /// Lists the episode keys that have an undelivered notification.
-    ///
-    /// # Errors
-    /// Returns a typed persistence error when the read fails.
-    pub async fn undelivered_keys(&self) -> PersistenceResult<Vec<String>> {
-        sqlx::query_scalar("SELECT episode_key FROM notification_outbox WHERE delivered_at IS NULL")
-            .fetch_all(&self.pool)
-            .await
-            .table("notification_outbox")
-    }
 }
 
-/// Splits an episode key into its stored columns.
-fn key_parts(key: &EpisodeKey) -> PersistenceResult<(String, String, i64, String)> {
-    Ok((
-        key.account_id.as_str().to_owned(),
-        key.window_id.as_str().to_owned(),
-        i64::from(key.definition_version),
-        codec::encode(&key.level, "alert_episodes")?,
-    ))
+/// One episode key, split into the columns the schema stores.
+pub(crate) struct EpisodeParts {
+    /// The account column.
+    pub(crate) account_id: String,
+    /// The window column.
+    pub(crate) window_id: String,
+    /// The definition-version column.
+    pub(crate) version: i64,
+    /// The level column.
+    pub(crate) level: String,
 }
 
+impl EpisodeParts {
+    /// Splits an episode key into its stored columns.
+    pub(crate) fn of(key: &EpisodeKey) -> PersistenceResult<Self> {
+        Ok(Self {
+            account_id: key.account_id.as_str().to_owned(),
+            window_id: key.window_id.as_str().to_owned(),
+            version: i64::from(key.definition_version),
+            level: codec::encode(&key.level, "alert_episodes")?,
+        })
+    }
+}
 /// Renders the outbox deduplication key for an episode.
 ///
 /// The fields are serialized as a JSON array rather than joined with a
-/// separator, because an identifier may itself contain any separator character.
-fn episode_key_text(key: &EpisodeKey) -> PersistenceResult<String> {
+/// separator, because an identifier may itself contain any separator.
+pub(crate) fn outbox_key(key: &EpisodeKey) -> PersistenceResult<String> {
     codec::json(
         &serde_json::json!([
             key.account_id.as_str(),
@@ -348,18 +316,6 @@ fn episode_key_text(key: &EpisodeKey) -> PersistenceResult<String> {
         ]),
         "notification_outbox",
     )
-}
-
-/// Maps a "no rows were changed" outcome onto a typed rejection.
-fn require_one(changed: u64) -> PersistenceResult<()> {
-    if changed == 1 {
-        Ok(())
-    } else {
-        Err(PersistenceError::RowRejected {
-            table: "alert_episodes",
-            reason: "no open episode matched the requested key",
-        })
-    }
 }
 
 /// Reads an optional RFC 3339 column.

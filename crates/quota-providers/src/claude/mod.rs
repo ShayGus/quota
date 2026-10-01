@@ -23,7 +23,6 @@ use quota_domain::ids::{ConnectionAttemptId, ProviderPrincipalId};
 use quota_domain::polling::{FixedIntervalPolicy, PollingStrategy, ProviderPollingPolicy};
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::SourceKind;
-use tracing::Instrument;
 
 use crate::credentials::{self, ClaudeCredential};
 use crate::decode::{self, DecodedUsage, masked_address};
@@ -125,8 +124,7 @@ impl ClaudeAdapter {
         let principal_label = account
             .email
             .as_deref()
-            .map(masked_address)
-            .unwrap_or_else(|| account_uuid.clone());
+            .map_or_else(|| account_uuid.clone(), masked_address);
         Ok(VerifiedProfile {
             identity: VerifiedIdentity {
                 principal_label,
@@ -136,6 +134,46 @@ impl ClaudeAdapter {
             },
             account_uuid,
         })
+    }
+    /// Performs one read at the credential, HTTP, and decoding boundary.
+    ///
+    /// `skip_all` keeps every argument out of the span by default, and the field
+    /// list records only what is safe to log: the provider, an opaque connection
+    /// identity, and a profile label. No credential, address, body, path, or full
+    /// URL is recorded.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            provider = ProviderId::Claude.as_str(),
+            connection = %binding.connection_id,
+            profile = binding.profile_label.as_deref().unwrap_or("default"),
+        )
+    )]
+    async fn perform_read(
+        &self,
+        binding: ConnectionBinding,
+        context: ReadContext,
+    ) -> Result<FetchOutcome, ProviderError> {
+        let credential = credentials::claude_credential().await?;
+        let profile_label = credential.profile_label.clone();
+        let pool = decode::pool_id(ProviderId::Claude, &profile_label);
+        // The profile route proves which account this credential belongs
+        // to, so a re-login for another account cannot answer for this
+        // binding.
+        let profile = self.verified_profile(&credential, context.clone()).await?;
+        decode::ensure_binding(
+            &binding,
+            ProviderId::Claude,
+            Some(profile.account_uuid.as_str()),
+            Some(profile_label.as_str()),
+        )?;
+        let body = self.get_route(USAGE_URL, &credential, context).await?;
+        let usage: wire::ClaudeUsage =
+            serde_json::from_value(body).map_err(|_| ProviderError::UnsupportedSchema {
+                detail: "the payload did not match the supported Claude usage shape".to_owned(),
+            })?;
+        let decoded: DecodedUsage = mapping::decode(&usage, &pool, Utc::now())?;
+        Ok(decoded.into_outcome(profile.identity))
     }
 }
 
@@ -207,36 +245,6 @@ impl ProviderAdapter for ClaudeAdapter {
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
         let binding = binding.clone();
-        Box::pin(
-            async move {
-                let credential = credentials::claude_credential().await?;
-                let profile_label = credential.profile_label.clone();
-                let pool = decode::pool_id(ProviderId::Claude, &profile_label);
-                // The profile route proves which account this credential belongs
-                // to, so a re-login for another account cannot answer for this
-                // binding.
-                let profile = self.verified_profile(&credential, context.clone()).await?;
-                decode::ensure_binding(
-                    binding,
-                    ProviderId::Claude,
-                    Some(profile.account_uuid.as_str()),
-                    Some(profile_label.as_str()),
-                )?;
-                let body = self.get_route(USAGE_URL, &credential, context).await?;
-                let usage: wire::ClaudeUsage =
-                    serde_json::from_value(body).map_err(|_| ProviderError::UnsupportedSchema {
-                        detail: "the payload did not match the supported Claude usage shape"
-                            .to_owned(),
-                    })?;
-                let decoded: DecodedUsage = mapping::decode(&usage, &pool, Utc::now())?;
-                Ok(decoded.into_outcome(profile.identity))
-            }
-            .instrument(tracing::info_span!(
-                "quota_provider_read",
-                provider = ProviderId::Claude.as_str(),
-                connection = %binding.connection_id,
-                profile = binding.profile_label.as_deref().unwrap_or("default"),
-            )),
-        )
+        Box::pin(self.perform_read(binding, context))
     }
 }

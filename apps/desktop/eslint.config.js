@@ -4,35 +4,35 @@
 // `strictTypeChecked` profile, plus the current `eslint-plugin-react-hooks`
 // `recommended-latest` set, which carries the React Compiler diagnostics.
 // Formatting belongs to Prettier alone; no formatting rule is defined here.
+//
+// Type-aware rules need a file that a TypeScript project actually includes, so
+// the typed preset is applied to the source, config, and test files that the
+// three tsconfig projects cover, and only the JavaScript config file is left
+// untyped.
 import js from "@eslint/js";
 import reactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+
+const TYPED_FILES = ["src/**/*.{ts,tsx}", "tests/**/*.{ts,tsx}", "*.config.ts"];
 
 export default tseslint.config(
   {
     ignores: ["dist/**", "coverage/**", "node_modules/**"],
   },
   js.configs.recommended,
-  tseslint.configs.strictTypeChecked,
   {
-    files: ["**/*.{ts,tsx}"],
+    files: TYPED_FILES,
+    extends: [...tseslint.configs.strictTypeChecked],
     languageOptions: {
       parserOptions: {
         projectService: true,
         tsconfigRootDir: import.meta.dirname,
       },
     },
-  },
-  {
-    files: ["**/*.{ts,tsx}"],
-    plugins: { "react-hooks": reactHooks },
     rules: {
-      ...reactHooks.configs["recommended-latest"].rules,
-      // A dependency array warning is a defect here, not a suggestion.
-      "react-hooks/exhaustive-deps": "error",
-      // Generated bindings are machine output, but they stay typechecked.
-      // No rule is disabled for them; they are plain typed code.
+      // A dependency-array warning is a defect here, not a suggestion. The
+      // compiler diagnostics below come from the plugin's own recommended set.
       "@typescript-eslint/consistent-type-imports": [
         "error",
         { prefer: "type-imports", fixStyle: "separate-type-imports" },
@@ -41,7 +41,12 @@ export default tseslint.config(
         "error",
         { ignoreVoid: false, checkThenables: true },
       ],
-      "@typescript-eslint/no-misused-promises": ["error"],
+      // The JSX void-return check is deliberately left ON: a promise must not be
+      // passed where React expects a synchronous handler.
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        { checksVoidReturn: { attributes: true } },
+      ],
       "@typescript-eslint/switch-exhaustiveness-check": "error",
       "@typescript-eslint/no-non-null-assertion": "error",
       "@typescript-eslint/restrict-template-expressions": [
@@ -51,20 +56,23 @@ export default tseslint.config(
     },
   },
   {
-    files: ["**/*.config.{ts,js}", "eslint.config.js"],
-    languageOptions: { globals: globals.node },
+    files: TYPED_FILES,
+    plugins: { "react-hooks": reactHooks },
+    rules: {
+      ...reactHooks.configs["recommended-latest"].rules,
+      "react-hooks/exhaustive-deps": "error",
+    },
   },
   {
-    files: ["tests/**/*.{ts,tsx}"],
+    files: ["src/**/*.{ts,tsx}"],
     languageOptions: { globals: globals.browser },
   },
   {
-    // The one audited native-integration boundary. It is the only module allowed
-    // to name a Tauri wire string; every other module calls its typed wrappers.
-    files: ["src/generated/bindings.ts"],
-    rules: {
-      "@typescript-eslint/no-unsafe-assignment": "error",
-      "@typescript-eslint/no-unsafe-return": "error",
-    },
+    files: ["tests/**/*.{ts,tsx}"],
+    languageOptions: { globals: { ...globals.browser, ...globals.node } },
+  },
+  {
+    files: ["*.config.{ts,js}", "eslint.config.js"],
+    languageOptions: { globals: globals.node },
   },
 );

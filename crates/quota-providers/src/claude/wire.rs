@@ -111,6 +111,10 @@ pub(crate) struct ClaudeExtraUsage {
     #[serde(default, alias = "isEnabled")]
     pub(crate) is_enabled: Option<bool>,
     /// Percent points of the cap used.
+    ///
+    /// The observed payload carries this alongside the two amounts. The amounts
+    /// are what the cap is built from, because a monetary cap is an amount, not a
+    /// percentage; the percentage alone never becomes included quota.
     #[serde(default)]
     pub(crate) utilization: Option<Numberish>,
     /// The monthly cap, in minor units of the reported currency.

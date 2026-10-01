@@ -22,7 +22,6 @@ use quota_domain::ids::{ProviderPrincipalId, QuotaPoolId};
 use quota_domain::polling::{EventAssistedPolicy, PollingStrategy, ProviderPollingPolicy};
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::SourceKind;
-use tracing::Instrument;
 
 use crate::credentials::{self, CodexCredential};
 use crate::decode::{self, DecodedUsage};
@@ -87,7 +86,68 @@ impl CodexAdapter {
             serde_json::from_value(reply.body).map_err(|_| ProviderError::UnsupportedSchema {
                 detail: "the payload did not match the supported Codex shape".to_owned(),
             })?;
+        // The payload may repeat the account it belongs to. A payload for
+        // another account is refused rather than attributed to this one.
+        if let Some(reported) = envelope.account_id.as_deref()
+            && let Some(expected) = credential.account_id.as_deref()
+            && reported != expected
+        {
+            return Err(ProviderError::InvalidData {
+                detail: "the payload belongs to another account".to_owned(),
+            });
+        }
         mapping::decode(&envelope, pool, Utc::now())
+    }
+    /// Performs one read at the credential, HTTP, and decoding boundary.
+    ///
+    /// `skip_all` keeps every argument out of the span by default, and the field
+    /// list records only what is safe to log: the provider, an opaque connection
+    /// identity, and a profile label. No credential, address, body, path, or full
+    /// URL is recorded.
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            provider = ProviderId::Codex.as_str(),
+            connection = %binding.connection_id,
+            profile = binding.profile_label.as_deref().unwrap_or("default"),
+        )
+    )]
+    async fn perform_read(
+        &self,
+        binding: ConnectionBinding,
+        context: ReadContext,
+    ) -> Result<FetchOutcome, ProviderError> {
+        let credential = credentials::codex_credential().await?;
+        let profile_label = credential.profile_label.clone();
+        let pool = decode::pool_id(ProviderId::Codex, &profile_label);
+        decode::ensure_binding(
+            &binding,
+            ProviderId::Codex,
+            credential.account_id.as_deref(),
+            Some(profile_label.as_str()),
+        )?;
+        let mut last_error = None;
+        for url in [PRIMARY_URL, FALLBACK_URL] {
+            match self
+                .read_endpoint(url, &credential, &pool, context.clone())
+                .await
+            {
+                Ok(usage) => {
+                    let identity = verified_identity(
+                        usage
+                            .principal_label
+                            .clone()
+                            .unwrap_or_else(|| profile_label.clone()),
+                        usage.plan_label.clone(),
+                    );
+                    return Ok(usage.into_outcome(identity));
+                }
+                Err(error) => last_error = Some(error),
+            }
+        }
+        Err(last_error.unwrap_or(ProviderError::Transient {
+            detail: "no Codex usage endpoint answered".to_owned(),
+        }))
     }
 }
 
@@ -160,47 +220,7 @@ impl ProviderAdapter for CodexAdapter {
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
         let binding = binding.clone();
-        Box::pin(
-            async move {
-                let credential = credentials::codex_credential().await?;
-                let profile_label = credential.profile_label.clone();
-                let pool = decode::pool_id(ProviderId::Codex, &profile_label);
-                decode::ensure_binding(
-                    binding,
-                    ProviderId::Codex,
-                    credential.account_id.as_deref(),
-                    Some(profile_label.as_str()),
-                )?;
-                let mut last_error = None;
-                for url in [PRIMARY_URL, FALLBACK_URL] {
-                    match self
-                        .read_endpoint(url, &credential, &pool, context.clone())
-                        .await
-                    {
-                        Ok(usage) => {
-                            let identity = verified_identity(
-                                usage
-                                    .principal_label
-                                    .clone()
-                                    .unwrap_or_else(|| profile_label.clone()),
-                                usage.plan_label.clone(),
-                            );
-                            return Ok(usage.into_outcome(identity));
-                        }
-                        Err(error) => last_error = Some(error),
-                    }
-                }
-                Err(last_error.unwrap_or(ProviderError::Transient {
-                    detail: "no Codex usage endpoint answered".to_owned(),
-                }))
-            }
-            .instrument(tracing::info_span!(
-                "quota_provider_read",
-                provider = ProviderId::Codex.as_str(),
-                connection = %binding.connection_id,
-                profile = binding.profile_label.as_deref().unwrap_or("default"),
-            )),
-        )
+        Box::pin(self.perform_read(binding, context))
     }
 }
 

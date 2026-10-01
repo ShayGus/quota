@@ -1,0 +1,25 @@
+{
+  "limits": [
+    {
+      "percent": 28,
+      "group": "five_hour",
+      "resets_at": "2026-09-30T12:00:00Z"
+    },
+    {
+      "percent": "64.5",
+      "group": "seven_day",
+      "resets_at": 1790400000
+    },
+    {
+      "percent": 92,
+      "group": "seven_day_opus",
+      "resets_at": 1790400000,
+      "scope": {
+        "model": {
+          "id": "claude-opus-4",
+          "display_name": "Claude Opus 4"
+        }
+      }
+    }
+  ]
+}

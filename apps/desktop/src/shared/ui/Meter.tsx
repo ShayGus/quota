@@ -33,13 +33,7 @@ export function Ring({
   return (
     <span className={`ring ring--${severity}`} aria-hidden="true">
       <svg viewBox="0 0 100 100" fill="none">
-        <circle
-          className="ring__track"
-          cx="50"
-          cy="50"
-          r={RADIUS}
-          strokeWidth={STROKE}
-        />
+        <circle className="ring__track" cx="50" cy="50" r={RADIUS} strokeWidth={STROKE} />
         <circle
           className="ring__arc"
           cx="50"

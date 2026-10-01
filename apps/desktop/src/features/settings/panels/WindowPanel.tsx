@@ -106,16 +106,24 @@ export function WindowPanel({
       <dl className="detail__list">
         <div>
           <dt>Confirmed mode</dt>
-          <dd>{confirmed === null ? "Not confirmed by the system yet" : confirmed.mode}</dd>
+          <dd>
+            {confirmed === null ? "Not confirmed by the system yet" : confirmed.mode}
+          </dd>
         </div>
         <div>
           <dt>Confirmed always on top</dt>
-          <dd>{confirmed === null ? "Not confirmed yet" : String(confirmed.always_on_top)}</dd>
+          <dd>
+            {confirmed === null ? "Not confirmed yet" : String(confirmed.always_on_top)}
+          </dd>
         </div>
         <div>
           <dt>Confirmed visibility</dt>
           <dd>
-            {confirmed === null ? "Not confirmed" : confirmed.visible ? "Shown" : "Hidden"}
+            {confirmed === null
+              ? "Not confirmed"
+              : confirmed.visible
+                ? "Shown"
+                : "Hidden"}
           </dd>
         </div>
       </dl>

@@ -33,6 +33,7 @@
 pub mod credentials;
 pub(crate) mod decode;
 pub(crate) mod http;
+pub mod offline;
 pub mod registry;
 
 pub(crate) mod claude;
@@ -42,6 +43,7 @@ pub(crate) mod opencode_go;
 #[cfg(feature = "test-fixtures")]
 pub mod fixture;
 
+pub use offline::{OfflineReading, decode_offline};
 pub use registry::ProviderRegistry;
 
 #[cfg(feature = "test-fixtures")]

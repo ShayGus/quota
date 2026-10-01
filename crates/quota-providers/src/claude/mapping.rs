@@ -207,21 +207,28 @@ fn named_limit(
 }
 
 /// The category a named limit's own group text proves, never a guess.
+///
+/// The provider names these groups after the period they cover, so the name is
+/// the evidence: `five_hour` is the five-hour allowance and `seven_day` is the
+/// seven-day one. A name outside this vocabulary keeps the custom category
+/// rather than being forced into a period nobody claimed.
 fn category_for(group: Option<&str>) -> QuotaCategory {
     let Some(group) = group else {
         return QuotaCategory::Custom;
     };
-    let text = group.to_ascii_lowercase();
-    if text.contains("five") || text.contains("5h") || text.contains("session") {
+    let text = group.to_ascii_lowercase().replace([' ', '-'], "_");
+    if text.contains("five_hour") || text.contains("5h") || text.contains("session") {
         return QuotaCategory::Session;
     }
-    if text.contains("week") {
+    if text.contains("seven_day") || text.contains("7d") || text.contains("week") {
         return QuotaCategory::Weekly;
     }
     if text.contains("month") {
         return QuotaCategory::Monthly;
     }
-    if text.contains("day") {
+    // A one-day group is checked after the seven-day one, so `seven_day` never
+    // lands here.
+    if text.contains("day") || text.contains("24h") {
         return QuotaCategory::Daily;
     }
     QuotaCategory::Custom
@@ -274,13 +281,20 @@ fn extra_usage(
     let Some(currency) = currency(extra) else {
         return draft.invalid(vec![QuotaIssue::UnsupportedSchemaVersion { version: 0 }]);
     };
-    let limit = minor_units(extra.monthly_limit.as_ref(), scale);
-    let used = minor_units(extra.used_credits.as_ref(), scale);
+    let limit = minor_units(extra.monthly_limit.as_ref());
+    let used = minor_units(extra.used_credits.as_ref());
     if limit.is_none() && used.is_none() {
-        // The utilisation alone names no amount, so nothing is invented.
-        return Ok(draft.reported_missing()?);
+        // No amount arrived, so no amount is invented. A reported utilisation
+        // still proves the provider meant to send a spend cap, so that reading
+        // is unusable rather than merely absent.
+        if extra.utilization.is_some() {
+            return draft.invalid(vec![QuotaIssue::NonFiniteValue {
+                field: "extra_usage.monthly_limit".to_owned(),
+            }]);
+        }
+        return draft.reported_missing();
     }
-    Ok(draft.build(
+    draft.build(
         Measurement::Money(MoneyMeasurement {
             currency,
             scale,
@@ -290,7 +304,7 @@ fn extra_usage(
         }),
         None,
         Vec::new(),
-    )?)
+    )
 }
 
 /// The decimal scale the amounts use, when it is interpretable.
@@ -323,21 +337,24 @@ fn currency(extra: &ClaudeExtraUsage) -> Option<CurrencyCode> {
 }
 
 /// Converts a reported amount into whole minor units at the reported scale.
-fn minor_units(reported: Option<&Numberish>, scale: u8) -> Option<i64> {
+///
+/// The reported amounts are already minor units, and `decimal_places` is the
+/// scale that turns them into major units: 5000 with a scale of two is 50.00.
+/// The value is therefore stored unchanged, and the scale travels with it. See
+/// the extra-usage note in `README.md` for what this interpretation rests on.
+fn minor_units(reported: Option<&Numberish>) -> Option<i64> {
     let field = reported?.field()?;
-    if field.value < 0.0 {
+    if field.value < 0.0 || field.value.fract().abs() > f64::EPSILON {
         return None;
     }
-    let factor = 10_f64.powi(i32::from(scale));
-    let scaled = (field.value * factor).round();
-    if !scaled.is_finite() || scaled.abs() >= 9_007_199_254_740_992.0 {
+    if field.value.abs() >= 9_007_199_254_740_992.0 {
         return None;
     }
     #[expect(
         clippy::cast_possible_truncation,
         reason = "the value is a bounded, integral minor-unit amount"
     )]
-    Some(scaled as i64)
+    Some(field.value.trunc() as i64)
 }
 
 /// Decodes the reported used percentage, or the issue that makes it unusable.

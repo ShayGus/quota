@@ -44,7 +44,11 @@ export function orderValue(account: AccountSnapshot): number | null {
  * connection ordinal and then by account identity, so a rename or a value
  * change above or below never reshuffles two equal rows (spec AC-50).
  */
-function compare(a: AccountSnapshot, b: AccountSnapshot, section: OverviewSection): number {
+function compare(
+  a: AccountSnapshot,
+  b: AccountSnapshot,
+  section: OverviewSection,
+): number {
   if (section === "ranked") {
     const left = orderValue(a);
     const right = orderValue(b);
@@ -81,7 +85,9 @@ export function placeAccounts(
 }
 
 /** The account identities in canonical presentation order. */
-export function canonicalOrder(accounts: readonly AccountSnapshot[]): readonly AccountId[] {
+export function canonicalOrder(
+  accounts: readonly AccountSnapshot[],
+): readonly AccountId[] {
   return placeAccounts(accounts).map((entry) => entry.account.account_id);
 }
 
@@ -102,8 +108,10 @@ export function applyOrder(
   order.forEach((id, index) => position.set(id, index));
   const fallback = order.length;
   return [...placed].sort((a, b) => {
-    const left = position.get(a.account.account_id) ?? fallback + a.account.connection_ordinal;
-    const right = position.get(b.account.account_id) ?? fallback + b.account.connection_ordinal;
+    const left =
+      position.get(a.account.account_id) ?? fallback + a.account.connection_ordinal;
+    const right =
+      position.get(b.account.account_id) ?? fallback + b.account.connection_ordinal;
     return left - right;
   });
 }
