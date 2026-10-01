@@ -1,0 +1,20 @@
+{
+  "_note": "Synthetic fixture. No value here came from a real account.",
+  "plan_type": "pro",
+  "rate_limit": {
+    "primary_window": { "used_percent": 20, "limit_window_seconds": 18000 },
+    "secondary_window": { "used_percent": 40, "limit_window_seconds": 604800 }
+  },
+  "code_review_rate_limit": {
+    "primary_window": { "used_percent": 30, "limit_window_seconds": 604800 }
+  },
+  "additional_rate_limits": [
+    {
+      "limit_name": "GPT-5.4-Codex-Spark",
+      "rate_limit": {
+        "primary_window": { "used_percent": 10, "limit_window_seconds": 18000 },
+        "secondary_window": { "used_percent": 20, "limit_window_seconds": 604800 }
+      }
+    }
+  ]
+}

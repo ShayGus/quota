@@ -99,6 +99,7 @@ impl OpenCodeGoAdapter {
                 url: USAGE_URL,
                 headers: &headers,
                 deadline: context.deadline,
+                response_headers: &[],
             })
             .await?;
         if let Some(failure) = classify_status(reply.status, reply.retry_after) {

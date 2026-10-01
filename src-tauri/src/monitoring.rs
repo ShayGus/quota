@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use quota_contracts::CommandError;
 use quota_contracts::commands::{BeginConnectionRequest, ConnectionAttemptAccepted};
 use quota_contracts::events::ConnectionProgress;
 use quota_contracts::refs::AttemptRef;
@@ -22,7 +23,19 @@ use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::snapshot::MonitoringState;
 use tokio::sync::{Semaphore, mpsc, watch};
 
-use connection::emit_connection_progress;
+use connection::AttemptReporter;
+
+/// The live handle to one connection attempt.
+///
+/// The attempt stays here until it reaches a terminal result, so a cancellation
+/// can reach it and a terminal event can be emitted under the same revision
+/// counter that emitted its progress.
+struct AttemptHandle {
+    /// The flag the running attempt watches.
+    cancel: watch::Sender<bool>,
+    /// The counter that numbers this attempt's progress.
+    reporter: Arc<AttemptReporter>,
+}
 
 mod connection;
 mod policy;
@@ -83,7 +96,7 @@ struct RuntimeState {
 pub struct MonitoringRuntime {
     sender: mpsc::Sender<RefreshRequest>,
     shutdown: watch::Sender<bool>,
-    attempts: Arc<tokio::sync::Mutex<HashMap<ConnectionAttemptId, watch::Sender<bool>>>>,
+    attempts: Arc<tokio::sync::Mutex<HashMap<ConnectionAttemptId, AttemptHandle>>>,
     connection_gate: Arc<tokio::sync::Mutex<()>>,
     state: RuntimeState,
 }
@@ -214,31 +227,56 @@ impl MonitoringRuntime {
             })?;
         let attempt_id = ConnectionAttemptId::generate();
         let (cancel, cancel_receiver) = watch::channel(false);
-        self.attempts
-            .lock()
-            .await
-            .insert(attempt_id.clone(), cancel);
+        let reporter = Arc::new(AttemptReporter::new());
+        self.attempts.lock().await.insert(
+            attempt_id.clone(),
+            AttemptHandle {
+                cancel,
+                reporter: Arc::clone(&reporter),
+            },
+        );
         let runtime = self.clone();
         let owned_attempt = attempt_id.clone();
         tauri::async_runtime::spawn(async move {
-            let result = connection::run_connection_attempt(
-                runtime.clone(),
-                adapter,
-                request,
-                owned_attempt.clone(),
-                cancel_receiver,
-            )
-            .await;
-            runtime.attempts.lock().await.remove(&owned_attempt);
-            if let Err(error) = result {
-                emit_connection_progress(
-                    &runtime.state,
-                    &owned_attempt,
-                    2,
-                    ConnectionProgress::Failed { error },
-                )
-                .await;
+            // The body runs as its own task so a panic comes back as a join
+            // error instead of unwinding past the cleanup below and leaving the
+            // attempt stuck as Started forever.
+            let body = tokio::spawn({
+                let runtime = runtime.clone();
+                let owned_attempt = owned_attempt.clone();
+                let inner_reporter = Arc::clone(&reporter);
+                async move {
+                    connection::run_connection_attempt(
+                        runtime,
+                        adapter,
+                        request,
+                        owned_attempt,
+                        cancel_receiver,
+                        inner_reporter,
+                    )
+                    .await
+                }
+            });
+            let failure = match body.await {
+                Err(joined) if joined.is_panic() => Some(CommandError::Internal {
+                    code: "connection_attempt_stopped_unexpectedly".into(),
+                }),
+                // A finished attempt already reported its own terminal result,
+                // a cancelled one reported `Cancelled`, and an aborted task has
+                // nobody left to report to.
+                Ok(Ok(()) | Err(CommandError::Cancelled)) | Err(_) => None,
+                Ok(Err(error)) => Some(error),
+            };
+            if let Some(error) = failure {
+                reporter
+                    .emit(
+                        &runtime.state,
+                        &owned_attempt,
+                        ConnectionProgress::Failed { error },
+                    )
+                    .await;
             }
+            runtime.attempts.lock().await.remove(&owned_attempt);
         });
         Ok(ConnectionAttemptAccepted {
             attempt_ref: AttemptRef::new(attempt_id.clone()),
@@ -256,12 +294,15 @@ impl MonitoringRuntime {
         // verified rather than cancelled, and one that has not reached the gate
         // sees the flag and stops.
         let _connection_gate = self.connection_gate.lock().await;
-        let cancel = self.attempts.lock().await.remove(attempt_id);
-        let Some(cancel) = cancel else {
-            return Err(quota_contracts::CommandError::Cancelled);
+        let handle = self.attempts.lock().await.remove(attempt_id);
+        let Some(handle) = handle else {
+            return Err(CommandError::Cancelled);
         };
-        cancel.send_replace(true);
-        emit_connection_progress(&self.state, attempt_id, 2, ConnectionProgress::Cancelled).await;
+        handle.cancel.send_replace(true);
+        handle
+            .reporter
+            .emit(&self.state, attempt_id, ConnectionProgress::Cancelled)
+            .await;
         Ok(())
     }
 

@@ -39,6 +39,36 @@ const PRIMARY_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 /// The second usage endpoint, tried when the first yields nothing usable.
 const FALLBACK_URL: &str = "https://chatgpt.com/backend-api/codex/usage";
 
+/// The response header that overrides the account's first used percentage.
+pub(crate) const PRIMARY_USED_HEADER: &str = "x-codex-primary-used-percent";
+
+/// The response header that overrides the account's second used percentage.
+pub(crate) const SECONDARY_USED_HEADER: &str = "x-codex-secondary-used-percent";
+
+/// The response header that overrides the remaining credit balance.
+pub(crate) const CREDITS_BALANCE_HEADER: &str = "x-codex-credits-balance";
+
+/// The only response headers this adapter reads.
+const RESPONSE_HEADERS: &[&str] = &[
+    PRIMARY_USED_HEADER,
+    SECONDARY_USED_HEADER,
+    CREDITS_BALANCE_HEADER,
+];
+
+/// Whether a failure from the first endpoint is worth trying the second for.
+///
+/// A rejected credential, a refused request, and a rate limit all describe the
+/// account rather than the endpoint, so the second endpoint cannot answer them
+/// any better. Retrying would only replace that clear reason with a vaguer one.
+fn is_decisive(error: &ProviderError) -> bool {
+    matches!(
+        error,
+        ProviderError::Authentication
+            | ProviderError::Authorization
+            | ProviderError::RateLimited { .. }
+    )
+}
+
 /// The adapter for the Codex CLI's own usage report.
 #[derive(Debug)]
 pub(crate) struct CodexAdapter {
@@ -65,18 +95,29 @@ impl CodexAdapter {
         context: ReadContext,
     ) -> Result<DecodedUsage, ProviderError> {
         let authorization = format!("Bearer {}", credential.token.expose());
-        let account_id = credential.account_id.clone().unwrap_or_default();
-        let headers = [
-            ("Authorization", authorization.as_str()),
-            ("ChatGPT-Account-Id", account_id.as_str()),
-            ("Accept", "application/json"),
+        // The account header travels only when the credential named an account:
+        // an empty header is not the same as an absent one to the endpoint.
+        let mut headers = vec![
+            ("Authorization", authorization),
+            ("Accept", "application/json".to_owned()),
         ];
+        headers.extend(
+            credential
+                .account_id
+                .clone()
+                .map(|id| ("ChatGPT-Account-Id", id)),
+        );
+        let header_refs: Vec<(&str, &str)> = headers
+            .iter()
+            .map(|(name, value)| (*name, value.as_str()))
+            .collect();
         let reply = self
             .http
             .get(GetRequest {
                 url,
-                headers: &headers,
+                headers: &header_refs,
                 deadline: context.deadline,
+                response_headers: RESPONSE_HEADERS,
             })
             .await?;
         if let Some(failure) = classify_status(reply.status, reply.retry_after) {
@@ -96,7 +137,19 @@ impl CodexAdapter {
                 detail: "the payload belongs to another account".to_owned(),
             });
         }
-        mapping::decode(&envelope, pool, Utc::now())
+        mapping::decode(
+            &envelope,
+            pool,
+            Utc::now(),
+            &mapping::HeaderOverrides {
+                primary: reply.headers.get(PRIMARY_USED_HEADER).map(String::as_str),
+                secondary: reply.headers.get(SECONDARY_USED_HEADER).map(String::as_str),
+                credits: reply
+                    .headers
+                    .get(CREDITS_BALANCE_HEADER)
+                    .map(String::as_str),
+            },
+        )
     }
     /// Performs one read at the credential, HTTP, and decoding boundary.
     ///
@@ -126,7 +179,7 @@ impl CodexAdapter {
             credential.account_id.as_deref(),
             Some(profile_label.as_str()),
         )?;
-        let mut last_error = None;
+        let mut first_error = None;
         for url in [PRIMARY_URL, FALLBACK_URL] {
             match self
                 .read_endpoint(url, &credential, &pool, context.clone())
@@ -142,10 +195,16 @@ impl CodexAdapter {
                     );
                     return Ok(usage.into_outcome(identity));
                 }
-                Err(error) => last_error = Some(error),
+                Err(error) => {
+                    let decisive = is_decisive(&error);
+                    first_error.get_or_insert(error);
+                    if decisive {
+                        break;
+                    }
+                }
             }
         }
-        Err(last_error.unwrap_or(ProviderError::Transient {
+        Err(first_error.unwrap_or(ProviderError::Transient {
             detail: "no Codex usage endpoint answered".to_owned(),
         }))
     }
@@ -162,8 +221,8 @@ impl ProviderAdapter for CodexAdapter {
             cardinality: AccountCardinality::SingleProfile,
             supports_app_owned_authorization: false,
             supports_external_profile: true,
-            // Codex has no monthly allowance.
-            reports_monthly_window: false,
+            // A plan whose only allowance covers a month reports one window.
+            reports_monthly_window: true,
             minimum_interval_seconds: VERIFICATION_SECONDS,
         }
     }

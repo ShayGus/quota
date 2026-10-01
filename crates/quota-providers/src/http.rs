@@ -5,6 +5,7 @@
 //! limit, and a redirect rule that refuses to carry a credential to another
 //! origin. Nothing here logs a header, a body, a token, or a full URL.
 
+use std::collections::BTreeMap;
 use std::sync::LazyLock;
 use std::time::Duration;
 
@@ -34,6 +35,11 @@ pub(crate) struct GetRequest<'a> {
     pub(crate) headers: &'a [(&'a str, &'a str)],
     /// The absolute deadline for the whole read, when the scheduler gave one.
     pub(crate) deadline: Option<DateTime<Utc>>,
+    /// The response header names this request needs, and no others.
+    ///
+    /// Only these names survive the transport, so a provider can never be
+    /// handed a header it did not ask for.
+    pub(crate) response_headers: &'a [&'a str],
 }
 
 /// What a completed request returned, before any provider interpretation.
@@ -44,6 +50,8 @@ pub(crate) struct HttpReply {
     pub(crate) retry_after: Option<DateTime<Utc>>,
     /// The response body, decoded as JSON.
     pub(crate) body: serde_json::Value,
+    /// The declared response headers the provider actually sent.
+    pub(crate) headers: BTreeMap<String, String>,
 }
 
 /// A client configured for one provider family.
@@ -97,6 +105,7 @@ impl ProviderHttp {
             .map_err(|error| transport_error(&error))?;
         let status = response.status();
         let retry_after = retry_after(&response);
+        let headers = declared_headers(&response, request.response_headers);
         if let Some(error) = classify_status(status, retry_after.as_ref().ok().copied().flatten()) {
             return Err(error);
         }
@@ -119,8 +128,27 @@ impl ProviderHttp {
             status,
             retry_after,
             body,
+            headers,
         })
     }
+}
+
+/// Copies the declared response headers, and nothing else.
+///
+/// A header this crate does not name is dropped with the rest of the response,
+/// so no set-cookie or internal identifier can reach a decoder by accident.
+fn declared_headers(response: &reqwest::Response, names: &[&str]) -> BTreeMap<String, String> {
+    let mut headers = BTreeMap::new();
+    for name in names {
+        let Some(value) = response.headers().get(*name) else {
+            continue;
+        };
+        let Ok(text) = value.to_str() else {
+            continue;
+        };
+        headers.insert((*name).to_owned(), text.trim().to_owned());
+    }
+    headers
 }
 
 /// Installs the process-wide rustls crypto provider once, on first use.
@@ -295,6 +323,7 @@ mod tests {
                         url: &url,
                         headers: &[],
                         deadline: None,
+                        response_headers: &[],
                     })
                     .await;
                 match status {
@@ -335,6 +364,7 @@ mod tests {
                     url: &url,
                     headers: &[],
                     deadline: None,
+                    response_headers: &[],
                 })
                 .await
                 .err()

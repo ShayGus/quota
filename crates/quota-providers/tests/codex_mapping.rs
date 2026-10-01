@@ -13,7 +13,7 @@ use chrono::{DateTime, Duration, Utc};
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_domain::quota::window::QuotaCategory;
-use quota_providers::decode_offline;
+use quota_providers::{decode_offline, decode_offline_with_headers};
 
 fn received_at() -> DateTime<Utc> {
     DateTime::from_timestamp(1_789_000_000, 0).unwrap()
@@ -312,4 +312,139 @@ fn an_unknown_field_is_ignored() {
     assert!(
         (session[0].measurement.remaining_percent().unwrap().value() - 72.0).abs() < f64::EPSILON
     );
+}
+
+/// A body that carries its review and extra allowances at the root keeps them.
+#[test]
+fn a_root_review_and_extra_pair_are_not_dropped() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_root_review_and_extras.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "every reported window arrived");
+    let buckets: Vec<&str> = reading
+        .windows
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    assert_eq!(
+        buckets,
+        vec![
+            "primary",
+            "secondary",
+            "code-review",
+            "gpt-5-4-codex-spark",
+            "gpt-5-4-codex-spark-secondary",
+        ]
+    );
+    let review = reading
+        .windows
+        .iter()
+        .find(|window| window.provider_bucket_id.as_deref() == Some("code-review"))
+        .expect("the review allowance exists");
+    assert_eq!(review.category, QuotaCategory::Weekly);
+}
+
+/// A prepaid plan reports credits and no allowance at all.
+#[test]
+fn a_credits_only_payload_connects_without_an_allowance() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_credits_only.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "no allowance was expected of it");
+    assert_eq!(reading.windows.len(), 1, "only the balance is reported");
+    let credits = &reading.windows[0];
+    assert_eq!(credits.provider_bucket_id.as_deref(), Some("credits"));
+    assert!(!credits.metric_role.is_included_allowance());
+    assert_eq!(credits.measurement.remaining_percent(), None);
+}
+
+/// A plan whose only allowance covers a month reports one window, not two.
+#[test]
+fn a_lone_monthly_allowance_does_not_invent_a_second_one() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_monthly_only.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "nothing was missing from it");
+    assert_eq!(reading.windows.len(), 1);
+    assert_eq!(reading.windows[0].category, QuotaCategory::Monthly);
+    assert_eq!(
+        reading.windows[0].duration,
+        Some(Duration::seconds(2_592_000))
+    );
+}
+
+/// A reported header wins over the body, and only when it is readable.
+#[test]
+fn a_response_header_overrides_the_body_and_ignores_nonsense() {
+    let payload = fixture("codex_success.json");
+    let mut headers = std::collections::BTreeMap::new();
+    headers.insert("x-codex-primary-used-percent".to_owned(), "77".to_owned());
+    let reading = decode_offline_with_headers(
+        ProviderId::Codex,
+        &payload,
+        "codex-local",
+        received_at(),
+        &headers,
+    )
+    .unwrap();
+    let session = &reading.category(QuotaCategory::Session)[0];
+    let remaining = session.measurement.remaining_percent().unwrap();
+    assert!((remaining.value() - 23.0).abs() < f64::EPSILON);
+
+    headers.insert(
+        "x-codex-primary-used-percent".to_owned(),
+        "not-a-number".to_owned(),
+    );
+    let kept = decode_offline_with_headers(
+        ProviderId::Codex,
+        &payload,
+        "codex-local",
+        received_at(),
+        &headers,
+    )
+    .unwrap();
+    let body = kept.category(QuotaCategory::Session)[0]
+        .measurement
+        .remaining_percent()
+        .unwrap();
+    assert!(
+        (body.value() - 72.0).abs() < f64::EPSILON,
+        "an unreadable header leaves the body's own value standing"
+    );
+}
+
+/// A header may also carry the remaining credit balance.
+#[test]
+fn a_response_header_carries_the_credit_balance() {
+    let mut headers = std::collections::BTreeMap::new();
+    headers.insert("x-codex-credits-balance".to_owned(), "7.5".to_owned());
+    let reading = decode_offline_with_headers(
+        ProviderId::Codex,
+        &fixture("codex_multibucket.json"),
+        "codex-local",
+        received_at(),
+        &headers,
+    )
+    .unwrap();
+    let credits = reading
+        .windows
+        .iter()
+        .find(|window| window.provider_bucket_id.as_deref() == Some("credits"))
+        .expect("the credit balance exists");
+    let Measurement::Quantity(balance) = &credits.measurement else {
+        panic!("expected a quantity balance");
+    };
+    assert_eq!(balance.remaining, Some(7.5));
 }

@@ -187,9 +187,9 @@ fn an_unusable_amount_scale_produces_a_typed_issue() {
     assert_eq!(extra.issues.len(), 1);
 }
 
-/// A usable named-limits array replaces the three fixed windows.
+/// A usable named-limits array fills the slots the fixed fields left empty.
 #[test]
-fn a_usable_limits_array_replaces_the_fixed_windows() {
+fn a_usable_limits_array_fills_the_slots_the_fixed_fields_left_empty() {
     let reading = decode_offline(
         ProviderId::Claude,
         &fixture("claude_limits.json"),
@@ -197,9 +197,10 @@ fn a_usable_limits_array_replaces_the_fixed_windows() {
         received_at(),
     )
     .unwrap();
-    // Three named limits and three windows: had the fixed set also been decoded,
-    // there would be six. The identities come from each limit's own group and
-    // model scope, so they do not depend on the order of the array.
+    // Three named limits and three windows: the fixed fields were not reported
+    // here, so each named limit took the slot for its own period instead of
+    // being reported as a missing window beside it. The identities come from
+    // each limit's own group and model scope, not from where it sits.
     assert_eq!(reading.windows.len(), 3);
     let identities: Vec<&str> = reading
         .windows
@@ -410,4 +411,117 @@ fn an_unusable_limit_invalidates_the_window_too() {
         Measurement::Unavailable(UnavailableReason::InvalidResponse),
         "an invalid limit was collapsed into absence"
     );
+}
+
+/// The two sources describe different allowances, so neither replaces the other.
+#[test]
+fn fixed_and_scoped_limits_are_merged_not_substituted() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_mixed_scoped.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    assert_eq!(
+        reading.windows.len(),
+        3,
+        "session, weekly and the model window"
+    );
+    assert!(
+        reading.is_complete(),
+        "nothing the payload reported was lost"
+    );
+    let remaining = |bucket: &str| {
+        reading
+            .windows
+            .iter()
+            .find(|window| window.provider_bucket_id.as_deref() == Some(bucket))
+            .expect("the window exists")
+            .measurement
+            .remaining_percent()
+            .expect("a reported percentage")
+            .value()
+    };
+    assert!((remaining("five-hour") - 72.0).abs() < f64::EPSILON);
+    assert!((remaining("weekly") - 55.0).abs() < f64::EPSILON);
+    assert!((remaining("weekly-scoped-claude-fable") - 87.0).abs() < f64::EPSILON);
+}
+
+/// An entry without a percentage states nothing, and must not shift the others.
+#[test]
+fn a_sparse_limits_array_never_panics_and_keeps_the_scoped_entry() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_sparse_limits.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(
+        reading.windows.iter().any(
+            |window| window.provider_bucket_id.as_deref() == Some("weekly-scoped-claude-fable")
+        ),
+        "the entry that does report a percentage survives the sparse array"
+    );
+}
+
+/// The model and product allowances arrive as fixed fields of their own.
+#[test]
+fn sonnet_and_product_windows_are_reported() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_product_windows.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    let buckets: Vec<&str> = reading
+        .windows
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    for expected in [
+        "weekly-sonnet",
+        "weekly-oauth-apps",
+        "weekly-design",
+        "weekly-routines",
+    ] {
+        assert!(buckets.contains(&expected), "{expected} in {buckets:?}");
+    }
+    let sonnet = reading
+        .windows
+        .iter()
+        .find(|window| window.provider_bucket_id.as_deref() == Some("weekly-sonnet"))
+        .expect("the Sonnet allowance exists");
+    assert_eq!(sonnet.scope.label(), "Claude Sonnet");
+    assert_eq!(sonnet.duration, Some(Duration::seconds(604_800)));
+}
+
+/// Two entries for one scope are separated rather than one being dropped.
+#[test]
+fn two_limits_for_the_same_scope_are_both_kept() {
+    let payload = r#"{"limits":[
+        {"kind":"seven_day","percent":10},
+        {"kind":"seven_day","percent":20}]}"#;
+    let reading =
+        decode_offline(ProviderId::Claude, payload, "claude-local", received_at()).unwrap();
+    let weekly: Vec<&str> = reading
+        .category(QuotaCategory::Weekly)
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    assert_eq!(weekly.len(), 2, "neither entry was dropped: {weekly:?}");
+}
+
+/// Extra spend with no cap is still a cap-shaped window with no ceiling.
+#[test]
+fn extra_spend_without_a_cap_is_not_a_percentage() {
+    let measurement = extra_usage_measurement(r#"{"usedCredits":2500}"#);
+    let Measurement::Money(money) = measurement else {
+        panic!("extra spend is an amount, not a percentage: {measurement:?}");
+    };
+    assert_eq!(money.limit_minor_units, None);
+    assert_eq!(money.used_minor_units, Some(2500));
+    assert_eq!(money.remaining_minor_units, None);
 }

@@ -10,8 +10,9 @@ import { useState, type JSX } from "react";
 import type {
   AccountId,
   AccountSnapshot,
-  AttemptRef,
   BeginConnectionRequest,
+  ConnectionAttemptAccepted,
+  ConnectionAttemptId,
   Preferences,
 } from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
@@ -52,7 +53,11 @@ export interface SettingsActions {
    */
   readonly beginConnection: (
     request: BeginConnectionRequest,
-  ) => Promise<AttemptRef | null>;
+  ) => Promise<ConnectionAttemptAccepted | null>;
+  /**
+   * Forgets a finished connection attempt once its result has been shown.
+   */
+  readonly clearConnectionAttempt: (attemptId: ConnectionAttemptId) => void;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
   /** Drops retained history for one account. The host has no all-accounts clear. */
@@ -106,6 +111,7 @@ export function Settings({
         ) : tab === "accounts" ? (
           <AccountsPanel
             accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+            attempts={state.attempts}
             now={now}
             actions={actions}
           />

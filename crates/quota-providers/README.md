@@ -51,23 +51,36 @@ Reads the quota the Codex CLI reports for its own login.
 - Endpoints: `GET https://chatgpt.com/backend-api/wham/usage`, then, when that yields
   nothing usable, `GET https://chatgpt.com/backend-api/codex/usage`. Both are
   undocumented.
-- Credential: `$CODEX_HOME/auth.json`, defaulting to `~/.codex/auth.json`. Read from
-  `tokens.access_token`; the account identity is `account_id`.
+- Credential: `$CODEX_HOME/auth.json`, otherwise `<user profile>/.codex/auth.json`. On
+  Windows that profile is `USERPROFILE`, which Windows exports to every process; `HOME` is
+  used only where it is the platform's own home variable. Read from `tokens.access_token`;
+  the account identity is `account_id`.
 - Credential owner: the Codex CLI. It owns and refreshes this file. This adapter never
   writes to, refreshes, or rotates it, and never runs the Codex CLI. An expired or
   rejected token becomes `ProviderError::Authentication` for the user to fix in Codex.
-- Request: the bearer token plus the `ChatGPT-Account-Id` header.
-- Decoded fields: `rate_limit`/`rateLimits`/`rate_limits` or the root object;
-  `primary_window`/`primary` and `secondary_window`/`secondary`; `code_review_rate_limit`;
-  `additional_rate_limits[]`; `rateLimitsByLimitId`. Used percent:
-  `used_percent`/`usedPercent`, as a number or a numeric string. Reset:
-  `reset_at`/`resetsAt` (epoch seconds or a date string) or `reset_after_seconds`.
-  Duration: `limit_window_seconds` (seconds) or `windowDurationMins` (minutes). Plan:
-  `plan_type`/`planType`. Optional `credits.balance`/`credits.unlimited`.
+- Request: the bearer token, `Accept: application/json`, and `ChatGPT-Account-Id` only
+  when the credential named an account. An empty header is not the same as an absent one.
+- Decoded fields: `rate_limit`/`rateLimits`/`rate_limits` and the root object, both read,
+  so a body that reports its review allowance at the root keeps it;
+  `primary_window`/`primary` and `secondary_window`/`secondary`, either as a pair or as a
+  window carried directly on the block; `code_review_rate_limit` as a pair or a window;
+  `additional_rate_limits[]` with `limit_name`/`id`/`name` and a `rate_limit` pair or
+  window; `rateLimitsByLimitId`. Used percent: `used_percent`/`usedPercent`, as a number
+  or a numeric string. Reset: `reset_at`/`resetsAt` (epoch seconds or a date string) or
+  `reset_after_seconds`. Duration: `limit_window_seconds` (seconds) or
+  `windowDurationMins` (minutes). Plan: `plan_type`/`planType`. Optional
+  `credits.balance`/`credits.unlimited`.
+- Response headers: only `x-codex-primary-used-percent`, `x-codex-secondary-used-percent`,
+  and `x-codex-credits-balance` survive the transport, and only when they parse as finite
+  numbers. An unreadable header leaves the body's own value standing.
+- A payload that carries only `credits` is a reading, not an unusable response: it
+  connects and reports the balance, with no allowance invented for it.
 - Window mapping: exactly 18000 seconds maps to `QuotaCategory::Session`, exactly 604800
   seconds to `QuotaCategory::Weekly`, and any other duration keeps its own resource scope
-  under `QuotaCategory::Custom`. Codex has no monthly allowance, so no monthly window is
-  ever created for it.
+  under `QuotaCategory::Custom`. The account's own first window is the one exception: when
+  a plan reports that window alone and it covers twenty days or more, it is that month's
+  allowance and becomes `QuotaCategory::Monthly`. A lone first window never produces a
+  second, invented allowance.
 - Roles: a window is `MetricRole::IncludedAllowance`. `credits` is
   `MetricRole::CreditBalance`, never included quota.
 - Cadence: an event-assisted policy with a five-minute verification interval; the minimum
@@ -82,26 +95,32 @@ Reads Claude subscription usage for the Claude Code login.
 - Endpoints: `GET https://api.anthropic.com/api/oauth/usage` for the reading and
   `GET https://api.anthropic.com/api/oauth/profile` for the identity. Both are
   undocumented, and both require the `anthropic-beta: oauth-2025-04-20` header.
-- Credential: `$CLAUDE_CONFIG_DIR/.credentials.json`, defaulting to
-  `~/.claude/.credentials.json`. Read from `claudeAiOauth.accessToken` or
-  `claudeAiOauth.access_token`.
+- Credential: `$CLAUDE_CONFIG_DIR/.credentials.json`, otherwise
+  `<user profile>/.claude/.credentials.json`, resolved the same way as every other default
+  here. Read from `claudeAiOauth.accessToken` or `claudeAiOauth.access_token`, and from a
+  root-level `accessToken`/`access_token`, which is the other shape this file has been
+  written in.
 - Credential owner: Claude Code. It owns and refreshes this file. This adapter never
   refreshes the token, never writes to the file, and never runs Claude Code. The optional
   inference-based quota path is out of scope and does not exist in this crate.
 - Identity: `account.uuid` from the profile route. Without it the reading is refused with
   `ProviderError::InvalidData`, so an account with no reported identity reads as
   unverified rather than inventing one. The address is masked in any label this crate
-  produces.
-- Decoded fields: `five_hour`, `seven_day`, and optional `seven_day_opus`, each with
-  `utilization` (percent points used) and `resets_at`/`reset_at`; a `limits[]` array with
-  `percent`, `group`/`kind`, `resets_at`, and optional `scope.model.id`/`display_name`;
-  optional `extra_usage` with `is_enabled`, `monthly_limit`, `used_credits`,
-  `decimal_places`.
-- Window mapping: a `limits[]` array that carries a percentage replaces the three fixed
-  windows outright, and each entry keeps its own group and model scope. A fixed window the
-  source did not report becomes `Unavailable(NotReported)` and is recorded in
-  `expected_but_missing`. The Opus weekly window is optional: a plan without it simply has
-  no such window.
+  produces. The proved profile is kept in memory against a one-way fingerprint of the
+  token that proved it, so connecting asks the route once instead of twice, and a
+  different token never reads a cached answer.
+- Decoded fields: `five_hour`, `seven_day`, and optional `seven_day_opus`,
+  `seven_day_sonnet`, `seven_day_oauth_apps`, `seven_day_design`, and
+  `seven_day_routines`, each with `utilization` (percent points used) and
+  `resets_at`/`reset_at`; a `limits[]` array with `percent`, `group`/`kind`, `resets_at`,
+  and optional `scope.model.id`/`display_name`; optional `extra_usage` with `is_enabled`,
+  `monthly_limit`, `used_credits`, `decimal_places`.
+- Window mapping: the fixed fields and the `limits[]` array are merged, never substituted
+  for one another, and every entry keeps its own group and model scope. Only the two
+  account-wide windows are expected: one the payload does not report becomes
+  `Unavailable(NotReported)` and is recorded in `expected_but_missing`, unless a named
+  limit already describes that same period. A model-specific or product allowance the
+  payload does not mention is simply absent rather than missing.
 - Extra usage: `MetricRole::ExtraSpendCap`, never included quota, and never ranked. It is
   a `MoneyMeasurement`. The reported amounts are read as minor units with `decimal_places`
   as their scale, so `monthly_limit: 5000` with `decimal_places: 2` is 50.00; the scale
@@ -119,9 +138,12 @@ Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
 
 - Endpoint: `GET https://opencode.ai/zen/go/v1/usage` with a bearer key and a JSON accept
   header. It is undocumented.
-- Credential: `$XDG_DATA_HOME/opencode/auth.json`, defaulting to
-  `~/.local/share/opencode/auth.json`. The `opencode-go` entry is preferred, then
-  `opencode`, taking a literal `key`, `apiKey`, `api_key`, `access`, or `token`.
+- Credential: `OPENCODE_API_KEY` when it is set, otherwise
+  `$XDG_DATA_HOME/opencode/auth.json`, otherwise
+  `<user profile>/.local/share/opencode/auth.json`. Only the `opencode-go` entry is read,
+  taking a literal `key`, `apiKey`, `api_key`, `access`, or `token`. The generic
+  `opencode` entry belongs to another product, so it is never sent to the Go usage
+  endpoint.
 - Credential owner: the `OpenCode` login. Quota has no refresh path for this credential at
   all, and never writes to the file.
 - Decoded fields: `usage` or the root object; `rollingUsage`/`rolling`,

@@ -5,6 +5,7 @@
 //! fetch, which is what the adapter tests drive with sanitized fixtures. It
 //! performs no I/O and makes no network call; the caller supplies the pool seed
 //! and the receipt instant.
+use std::collections::BTreeMap;
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
@@ -75,6 +76,24 @@ pub fn decode_offline(
     pool_seed: &str,
     received_at: DateTime<Utc>,
 ) -> Result<OfflineReading, ProviderError> {
+    decode_offline_with_headers(provider, payload, pool_seed, received_at, &BTreeMap::new())
+}
+
+/// Decodes a captured payload together with the response headers that came
+/// with it.
+///
+/// The headers are the ones the transport already filtered by name, so this
+/// entry point can only see a provider's own declared values.
+///
+/// # Errors
+/// Returns the same failures as [`decode_offline`].
+pub fn decode_offline_with_headers(
+    provider: ProviderId,
+    payload: &str,
+    pool_seed: &str,
+    received_at: DateTime<Utc>,
+    headers: &BTreeMap<String, String>,
+) -> Result<OfflineReading, ProviderError> {
     let trimmed = payload.trim_start_matches('\u{feff}').trim_start();
     if !trimmed.starts_with('{') {
         return Err(ProviderError::InvalidData {
@@ -92,7 +111,20 @@ pub fn decode_offline(
                 serde_json::from_value(document).map_err(|_| ProviderError::UnsupportedSchema {
                     detail: "the payload did not match the supported Codex shape".to_owned(),
                 })?;
-            codex::mapping::decode(&envelope, &pool, received_at)?
+            codex::mapping::decode(
+                &envelope,
+                &pool,
+                received_at,
+                &codex::mapping::HeaderOverrides {
+                    primary: headers.get(codex::PRIMARY_USED_HEADER).map(String::as_str),
+                    secondary: headers
+                        .get(codex::SECONDARY_USED_HEADER)
+                        .map(String::as_str),
+                    credits: headers
+                        .get(codex::CREDITS_BALANCE_HEADER)
+                        .map(String::as_str),
+                },
+            )?
         }
         ProviderId::Claude => {
             let usage: claude::wire::ClaudeUsage =

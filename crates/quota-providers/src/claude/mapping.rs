@@ -1,7 +1,8 @@
 //! Turn a Claude usage payload into normalised quota windows.
 //!
-//! The rules this mapping will not break: a usable named-limits array replaces
-//! the three fixed windows outright; every entry keeps its own model scope; the
+//! The rules this mapping will not break: the fixed windows and the named-limits
+//! array are merged, never substituted for one another, so a payload that
+//! reports both keeps both; every named limit keeps its own model scope; the
 //! paid extra-usage summary becomes an extra-spend cap, never included quota,
 //! and never takes part in ranking. An amount without a usable scale stays
 //! uninterpreted instead of inventing a currency.
@@ -16,14 +17,9 @@ use quota_domain::quota::money::MoneyMeasurement;
 use quota_domain::quota::units::CurrencyCode;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
 
+use crate::claude::fixed::{SESSION_SECONDS, WEEKLY_SECONDS, fixed_windows};
 use crate::claude::wire::{ClaudeExtraUsage, ClaudeLimit, ClaudeUsage, ClaudeWindow};
 use crate::decode::{self, DecodedUsage, Numberish, WindowDraft, percentage};
-
-/// The duration of the short rolling window, in seconds.
-const SESSION_SECONDS: i64 = 18_000;
-
-/// The duration of the weekly window, in seconds.
-const WEEKLY_SECONDS: i64 = 604_800;
 
 /// The scale used when the payload omits the decimal-place count.
 const DEFAULT_SCALE: u8 = 2;
@@ -53,12 +49,36 @@ pub(crate) fn decode(
         });
     }
     let mut decoded = DecodedUsage::new();
-    if usable_limits(&usage.limits) {
-        for (limit, bucket) in usable_limits_named(&usage.limits) {
-            decoded.push(named_limit(limit, &bucket, pool, received_at)?);
+    let named = usable_limits_named(&usage.limits);
+    let mut reported: Vec<QuotaCategory> = Vec::new();
+    let mut absent: Vec<(QuotaCategory, WindowDraft<'_>)> = Vec::new();
+
+    for fixed in fixed_windows(usage) {
+        let draft = fixed.draft(pool, received_at);
+        match fixed.wire {
+            Some(window) => {
+                reported.push(fixed.category);
+                decoded.push(measured_window(window, &draft)?);
+            }
+            None if fixed.expected => absent.push((fixed.category, draft)),
+            None => {}
         }
-    } else {
-        fixed_windows(usage, pool, received_at, &mut decoded)?;
+    }
+
+    // A named limit that is not model-scoped describes the same allowance as
+    // the fixed field for its period, so it fills that slot instead of leaving
+    // the account looking short of a window the payload did report.
+    for (limit, bucket) in &named {
+        let category = limit_category(limit);
+        if !is_model_scoped(limit) && !reported.contains(&category) {
+            reported.push(category);
+            absent.retain(|(absent_category, _)| *absent_category != category);
+        }
+        decoded.push(named_limit(limit, bucket, pool, received_at)?);
+    }
+
+    for (_, draft) in absent {
+        decoded.push(draft.reported_missing()?);
     }
     if let Some(extra) = usage.extra_usage.as_ref() {
         decoded.push(extra_usage(extra, pool, received_at)?);
@@ -66,43 +86,50 @@ pub(crate) fn decode(
     Ok(decoded)
 }
 
-/// Whether the named-limits array is usable and replaces the fixed windows.
-pub(crate) fn usable_limits(limits: &[ClaudeLimit]) -> bool {
-    !limits.is_empty() && limits.iter().any(|entry| entry.percent.is_some())
-}
-
 /// The named limits that state a percentage, each with the identity it keeps.
 ///
 /// Identity comes from the group and the model scope, so removing an unrelated
 /// entry from the array does not rename an unchanged allowance. Two entries that
-/// genuinely describe the same scope are disambiguated by position, because
+/// genuinely describe the same scope are separated by position, because
 /// otherwise one of them would be dropped silently.
 fn usable_limits_named(limits: &[ClaudeLimit]) -> Vec<(&ClaudeLimit, String)> {
-    let buckets: Vec<String> = limits
+    let usable: Vec<&ClaudeLimit> = limits
         .iter()
-        // An entry without a percentage states nothing about a limit.
         .filter(|entry| entry.percent.is_some())
-        .map(semantic_bucket)
         .collect();
-    let mut seen: usize = 0;
-    let mut named = Vec::new();
-    for (index, entry) in limits.iter().enumerate() {
-        if entry.percent.is_none() {
-            continue;
-        }
-        let bucket = &buckets[index];
-        seen += 1;
-        // Two entries describing the same scope are separated by position, so
-        // neither is dropped.
-        let ambiguous = buckets.iter().filter(|other| *other == bucket).count() > 1;
-        let named_bucket = if ambiguous {
-            format!("{bucket}-{seen}")
-        } else {
-            bucket.clone()
-        };
-        named.push((entry, named_bucket));
-    }
-    named
+    let buckets: Vec<String> = usable.iter().map(|entry| semantic_bucket(entry)).collect();
+    let mut seen = 0_usize;
+    usable
+        .into_iter()
+        .zip(buckets.iter().cloned())
+        .map(|(entry, bucket)| {
+            seen += 1;
+            // Two entries describing the same scope are separated by position,
+            // so neither is dropped.
+            let ambiguous = buckets.iter().filter(|other| **other == bucket).count() > 1;
+            let named_bucket = if ambiguous {
+                format!("{bucket}-{seen}")
+            } else {
+                bucket
+            };
+            (entry, named_bucket)
+        })
+        .collect()
+}
+
+/// Whether a named limit applies to one model rather than the whole account.
+fn is_model_scoped(limit: &ClaudeLimit) -> bool {
+    limit
+        .scope
+        .as_ref()
+        .and_then(|scope| scope.model.as_ref())
+        .and_then(|model| model.id.as_deref())
+        .is_some_and(|id| !id.trim().is_empty())
+}
+
+/// The period a named limit's own group text names.
+fn limit_category(limit: &ClaudeLimit) -> QuotaCategory {
+    category_for(limit.group.as_deref().or(limit.kind.as_deref()))
 }
 
 /// The stable identity of one named limit: its group, qualified by its model.
@@ -110,77 +137,15 @@ fn semantic_bucket(limit: &ClaudeLimit) -> String {
     let model = limit.scope.as_ref().and_then(|scope| scope.model.as_ref());
     let model_id = model.and_then(|model| model.id.as_deref());
     let group = limit.group.as_deref().or(limit.kind.as_deref());
-    let base = decode::identifier(group.unwrap_or_else(|| model_id.unwrap_or("account")));
+    let base = decode::identifier(group.unwrap_or(model_id.unwrap_or("account")));
     match model_id {
         Some(model) if group.is_some() => format!("{base}-{}", decode::identifier(model)),
         _ => base,
     }
 }
 
-/// Decodes the three fixed windows, keeping the missing ones explicit.
-fn fixed_windows(
-    usage: &ClaudeUsage,
-    pool: &QuotaPoolId,
-    received_at: DateTime<Utc>,
-    decoded: &mut DecodedUsage,
-) -> Result<(), ProviderError> {
-    let session = WindowDraft {
-        provider: ProviderId::Claude,
-        pool_id: pool,
-        category: QuotaCategory::Session,
-        resource: "account",
-        resource_label: "Claude account",
-        bucket_id: Some("five-hour"),
-        metric_role: MetricRole::IncludedAllowance,
-        semantics: WindowSemantics::RollingPeriod,
-        duration_seconds: Some(SESSION_SECONDS),
-        received_at,
-    };
-    // The five-hour allowance is the one window this source always offers.
-    match usage.five_hour.as_ref() {
-        Some(window) => decoded.push(fixed_window(window, &session)?),
-        None => decoded.push(session.reported_missing()?),
-    }
-
-    let weekly = WindowDraft {
-        provider: ProviderId::Claude,
-        pool_id: pool,
-        category: QuotaCategory::Weekly,
-        resource: "account",
-        resource_label: "Claude account",
-        bucket_id: Some("weekly"),
-        metric_role: MetricRole::IncludedAllowance,
-        semantics: WindowSemantics::RollingPeriod,
-        duration_seconds: Some(WEEKLY_SECONDS),
-        received_at,
-    };
-    match usage.seven_day.as_ref() {
-        Some(window) => decoded.push(fixed_window(window, &weekly)?),
-        None => decoded.push(weekly.reported_missing()?),
-    }
-
-    // The Opus weekly allowance is model-scoped and optional: a plan without it
-    // simply has no such window, so nothing is fabricated when it is absent.
-    if let Some(window) = usage.seven_day_opus.as_ref() {
-        let opus = WindowDraft {
-            provider: ProviderId::Claude,
-            pool_id: pool,
-            category: QuotaCategory::Weekly,
-            resource: "opus",
-            resource_label: "Claude Opus",
-            bucket_id: Some("weekly-opus"),
-            metric_role: MetricRole::IncludedAllowance,
-            semantics: WindowSemantics::RollingPeriod,
-            duration_seconds: Some(WEEKLY_SECONDS),
-            received_at,
-        };
-        decoded.push(fixed_window(window, &opus)?);
-    }
-    Ok(())
-}
-
-/// Builds one fixed window from its reported utilisation.
-fn fixed_window(
+/// Builds one window from its reported utilisation.
+fn measured_window(
     wire: &ClaudeWindow,
     draft: &WindowDraft<'_>,
 ) -> Result<QuotaWindow, ProviderError> {
@@ -215,13 +180,11 @@ fn named_limit(
     let group = limit.group.as_deref().or(limit.kind.as_deref());
     let resource = model_id.unwrap_or("account");
     let label = model_label.or(group).unwrap_or("Claude limit").to_owned();
-    // A bucket named "primary" is the provider's own name for this slot, so it
-    // keeps the reported bucket identifier rather than inventing a period name.
     let bucket = bucket.to_owned();
     let draft = WindowDraft {
         provider: ProviderId::Claude,
         pool_id: pool,
-        category: category_for(group),
+        category: limit_category(limit),
         resource,
         resource_label: &label,
         bucket_id: Some(&bucket),
@@ -230,7 +193,7 @@ fn named_limit(
         duration_seconds: duration_for(group),
         received_at,
     };
-    let boundary = limit.resets_at.as_ref().and_then(decode::reset_instant);
+    let boundary = limit.reset().and_then(decode::reset_instant);
     let Some(reported) = limit.percent.as_ref() else {
         return draft.build(
             Measurement::Unavailable(UnavailableReason::NotReported),
@@ -380,7 +343,7 @@ fn scale(extra: &ClaudeExtraUsage) -> Option<u8> {
 /// The currency the amounts are in, when the payload names a usable one.
 fn currency(extra: &ClaudeExtraUsage) -> Option<CurrencyCode> {
     match extra.currency.as_deref() {
-        Some(text) => CurrencyCode::new(text.trim().to_uppercase()).ok(),
+        Some(text) => CurrencyCode::new(text.trim().to_ascii_uppercase()).ok(),
         None => CurrencyCode::new(DEFAULT_CURRENCY).ok(),
     }
 }

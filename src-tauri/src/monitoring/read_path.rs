@@ -13,7 +13,7 @@ use quota_domain::snapshot::MonitoringState;
 
 use super::policy;
 use super::worker::publish_snapshot;
-use super::{REMOTE_TIMEOUT, RefreshRequest, RuntimeState};
+use super::{REMOTE_TIMEOUT, RefreshReason, RefreshRequest, RuntimeState};
 
 pub(super) async fn perform_read(
     state: &RuntimeState,
@@ -56,6 +56,7 @@ pub(super) async fn next_read_at(
         .cloned()?;
     Some(policy::next_read_at(&policy::ReadSchedule {
         policy: &policy,
+        last_attempt: entry.stored.last_attempt_at,
         last_success: entry.stored.last_success_at,
         valid_until: entry
             .stored
@@ -86,11 +87,16 @@ pub(super) async fn resolve_read_target(
         return Ok(None);
     }
     let binding = entry.binding.clone();
-    let Some(next_read_at) = next_read_at(state, &entry).await else {
-        return Ok(None);
-    };
-    if next_read_at > now(state) {
-        return Ok(None);
+    // A scheduled or lifecycle-driven request waits for the account's due time.
+    // A refresh the person asked for is explicit, so it runs now; the policy
+    // still bounds how often the account reads itself.
+    if request.reason != RefreshReason::UserRequested {
+        let Some(next_read_at) = next_read_at(state, &entry).await else {
+            return Ok(None);
+        };
+        if next_read_at > now(state) {
+            return Ok(None);
+        }
     }
     let adapter = state
         .providers
@@ -108,12 +114,52 @@ pub(super) async fn resolve_read_target(
     {
         return Ok(None);
     }
+    // Every eligibility check has passed, so this is a real read. The floor is
+    // stamped now, after the decision, so a check that decided not to read
+    // leaves the account's schedule untouched.
+    let entry = stamp_dispatch_floor(state, request).await?;
     Ok(Some(ReadTarget {
         entry,
         binding,
         adapter,
         scope,
     }))
+}
+
+/// Records when this account may next be read, and returns its stamped entry.
+///
+/// It is a floor, not the final schedule: an accepted commit recomputes it from
+/// the policy and the reading it just took.
+async fn stamp_dispatch_floor(
+    state: &RuntimeState,
+    request: &RefreshRequest,
+) -> Result<quota_core::accounts::RegisteredAccount, String> {
+    let now = state.clock.now();
+    let _commit = state.commit.lock().await;
+    let mut registry = state.registry.write().await;
+    let Some(entry) = registry.get(&request.account_id).cloned() else {
+        return Err("account_removed_before_dispatch".to_owned());
+    };
+    let minimum = {
+        let policies = state.policies.read().await;
+        policies
+            .iter()
+            .find(|policy| policy.provider_id == entry.binding.provider_id)
+            .map_or_else(
+                || chrono::Duration::seconds(300),
+                |policy| {
+                    chrono::Duration::from_std(policy.strategy.minimum_interval())
+                        .unwrap_or_default()
+                },
+            )
+    };
+    registry
+        .record_dispatch(&request.account_id, now, Some(now + minimum))
+        .map_err(|error| error.to_string())?;
+    registry
+        .get(&request.account_id)
+        .cloned()
+        .ok_or_else(|| "account_removed_before_dispatch".to_owned())
 }
 
 /// Reads one binding with a timeout, recording a failure when none arrives.

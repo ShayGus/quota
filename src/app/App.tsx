@@ -60,6 +60,9 @@ const settingsActions: SettingsActions = {
     launch(actions.openUsagePage(accountId));
   },
   beginConnection: (request) => actions.beginConnection(request),
+  clearConnectionAttempt: (attemptId) => {
+    actions.clearConnectionAttempt(attemptId);
+  },
   reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));

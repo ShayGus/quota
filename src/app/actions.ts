@@ -10,12 +10,14 @@ import {
   type AccountId,
   type AttemptRef,
   type BeginConnectionRequest,
+  type ConnectionAttemptAccepted,
+  type ConnectionAttemptId,
   type OverviewMode,
   type Preferences,
   type RefreshReason,
 } from "../generated/bindings";
 import { reportAsync } from "../shared/ipc/report";
-import { acceptAttempt, getRendererState } from "../shared/state/store";
+import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
 
 /** The renderer's command surface. Every function awaits its own failure path. */
 export const actions = {
@@ -46,7 +48,9 @@ export const actions = {
     await reportAsync(commands.disconnectAccount({ id: accountId }));
   },
   /** Begins a connection attempt and records the backend-issued identity. */
-  async beginConnection(request: BeginConnectionRequest): Promise<AttemptRef | null> {
+  async beginConnection(
+    request: BeginConnectionRequest,
+  ): Promise<ConnectionAttemptAccepted | null> {
     const accepted = await reportAsync(commands.beginConnection(request));
     if (accepted === null) {
       return null;
@@ -56,7 +60,16 @@ export const actions = {
       revision: 0,
       progress: { kind: "started" },
     });
-    return accepted.attempt_ref;
+    return accepted;
+  },
+  /**
+   * Forgets a finished connection attempt once its result is on screen.
+   *
+   * Only a terminal progress value is dropped, so an attempt that is still
+   * running is never forgotten while it is still working.
+   */
+  clearConnectionAttempt(attemptId: ConnectionAttemptId): void {
+    clearAttempt(attemptId);
   },
   /**
    * Re-verifies one account under a new connection generation.

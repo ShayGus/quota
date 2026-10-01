@@ -1,0 +1,5 @@
+{
+  "_note": "Synthetic fixture. No value here came from a real account.",
+  "plan_type": "business",
+  "credits": { "has_credits": true, "balance": "100", "unlimited": false }
+}

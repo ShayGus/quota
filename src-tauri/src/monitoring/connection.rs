@@ -1,6 +1,7 @@
 //! Cancellable connection discovery, verification, and account persistence.
 
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use quota_contracts::CommandError;
 use quota_contracts::commands::BeginConnectionRequest;
@@ -15,16 +16,61 @@ use tokio::sync::watch;
 use super::worker::publish_snapshot;
 use super::{MonitoringRuntime, REMOTE_TIMEOUT, RuntimeState};
 
+/// Emits one attempt's progress under a revision that only moves forward.
+///
+/// The renderer accepts only a strictly newer revision for an attempt, so the
+/// number comes from one counter rather than being spelled out at each call
+/// site. A terminal result then never reuses a revision an earlier progress
+/// value already used, which is what let a real failure be dropped as stale.
+#[derive(Debug)]
+pub(super) struct AttemptReporter {
+    revision: AtomicU32,
+}
+
+impl AttemptReporter {
+    /// A reporter whose first revision is one, matching the first event.
+    pub(super) fn new() -> Self {
+        Self {
+            revision: AtomicU32::new(1),
+        }
+    }
+
+    /// Emits one progress value under a fresh revision.
+    pub(super) async fn emit(
+        &self,
+        state: &RuntimeState,
+        attempt_id: &ConnectionAttemptId,
+        progress: ConnectionProgress,
+    ) {
+        let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
+        let event =
+            crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
+                app_instance_id,
+                attempt_id: attempt_id.clone(),
+                attempt_revision: self.revision.fetch_add(1, Ordering::Relaxed),
+                progress,
+            });
+        let _ = event.emit_to(&state.app, "settings");
+    }
+}
+
 pub(super) async fn run_connection_attempt(
     runtime: MonitoringRuntime,
     adapter: Arc<dyn ProviderAdapter>,
     request: BeginConnectionRequest,
     attempt_id: ConnectionAttemptId,
     mut cancelled: watch::Receiver<bool>,
+    reporter: Arc<AttemptReporter>,
 ) -> Result<(), CommandError> {
-    let Some(candidates) =
-        discover_connection_candidates(&runtime, &adapter, &request, &attempt_id, &mut cancelled)
-            .await?
+    let Some(candidates) = discover_connection_candidates(
+        &runtime,
+        &adapter,
+        &request,
+        &attempt_id,
+        &mut cancelled,
+        &reporter,
+    )
+    .await?
     else {
         return Ok(());
     };
@@ -36,7 +82,6 @@ pub(super) async fn run_connection_attempt(
         });
     }
 
-    let mut progress_revision = 1_u32;
     for candidate in candidates {
         if *cancelled.borrow() {
             return Ok(());
@@ -54,16 +99,15 @@ pub(super) async fn run_connection_attempt(
             return Ok(());
         };
         commit_candidate(&runtime, candidate, &request, ids, read, &cancelled).await?;
-        progress_revision = progress_revision.saturating_add(1);
-        emit_connection_progress(
-            &runtime.state,
-            &attempt_id,
-            progress_revision,
-            ConnectionProgress::Verified {
-                state: ConnectionState::Connected,
-            },
-        )
-        .await;
+        reporter
+            .emit(
+                &runtime.state,
+                &attempt_id,
+                ConnectionProgress::Verified {
+                    state: ConnectionState::Connected,
+                },
+            )
+            .await;
     }
     publish_snapshot(&runtime.state)
         .await
@@ -81,8 +125,11 @@ async fn discover_connection_candidates(
     request: &BeginConnectionRequest,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
+    reporter: &AttemptReporter,
 ) -> Result<Option<Vec<quota_core::ports::DiscoveredAccount>>, CommandError> {
-    emit_connection_progress(&runtime.state, attempt_id, 1, ConnectionProgress::Started).await;
+    reporter
+        .emit(&runtime.state, attempt_id, ConnectionProgress::Started)
+        .await;
     let discovered = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
         result = tokio::time::timeout(REMOTE_TIMEOUT, adapter.discover_accounts()) => {
@@ -297,20 +344,4 @@ fn core_command_error(error: quota_core::CoreError) -> CommandError {
             owner: owner.into(),
         },
     }
-}
-
-pub(super) async fn emit_connection_progress(
-    state: &RuntimeState,
-    attempt_id: &ConnectionAttemptId,
-    attempt_revision: u32,
-    progress: ConnectionProgress,
-) {
-    let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
-    let event = crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
-        app_instance_id,
-        attempt_id: attempt_id.clone(),
-        attempt_revision,
-        progress,
-    });
-    let _ = event.emit_to(&state.app, "settings");
 }

@@ -66,9 +66,8 @@ fn spawn_supervised_read(workers: &mut JoinSet<()>, state: RuntimeState, request
     workers.spawn(async move {
         let permit = permits.acquire_owned().await;
         if let Ok(permit) = permit {
-            // The floor is recorded before the remote read, so a write that
-            // fails afterwards cannot leave the account due again immediately.
-            stamp_dispatch_floor(&state, &request).await;
+            // Eligibility is decided inside the read, and only a read that is
+            // really going out stamps the account's schedule.
             let result = perform_read(&state, &request).await;
             drop(permit);
             if let Err(error) = result {
@@ -77,39 +76,6 @@ fn spawn_supervised_read(workers: &mut JoinSet<()>, state: RuntimeState, request
         }
         state.pending.lock().await.remove(&request.account_id);
     });
-}
-
-/// Records when this account may next be read, before any remote work starts.
-///
-/// It is a floor, not the final schedule: an accepted commit recomputes it from
-/// the policy and the reading it just took.
-pub(super) async fn stamp_dispatch_floor(state: &RuntimeState, request: &RefreshRequest) {
-    let now = state.clock.now();
-    let _commit = state.commit.lock().await;
-    let mut registry = state.registry.write().await;
-    let Some(entry) = registry.get(&request.account_id).cloned() else {
-        return;
-    };
-    let minimum = {
-        let policies = state.policies.read().await;
-        policies
-            .iter()
-            .find(|policy| policy.provider_id == entry.binding.provider_id)
-            .map_or_else(
-                || chrono::Duration::seconds(300),
-                |policy| {
-                    chrono::Duration::from_std(policy.strategy.minimum_interval())
-                        .unwrap_or_default()
-                },
-            )
-    };
-    let floor = now + minimum;
-    let _ = registry.record_attempt(
-        &request.account_id,
-        entry.stored.fetch_state,
-        now,
-        Some(floor),
-    );
 }
 
 /// Logs a supervised worker that finished on its own.

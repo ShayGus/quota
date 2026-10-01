@@ -6,6 +6,7 @@
 //! account identity the reading is refused, because an unverified identity must
 //! not be invented.
 
+pub(crate) mod fixed;
 pub(crate) mod mapping;
 pub(crate) mod wire;
 
@@ -53,6 +54,7 @@ const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
 const BETA_HEADER: &str = "oauth-2025-04-20";
 
 /// The account identity the profile route proved, plus its display form.
+#[derive(Clone, Debug)]
 struct VerifiedProfile {
     /// The account identifier the source reported. This is the verified identity.
     account_uuid: String,
@@ -64,6 +66,14 @@ struct VerifiedProfile {
 #[derive(Debug)]
 pub(crate) struct ClaudeAdapter {
     http: Arc<ProviderHttp>,
+    /// The profile the last credential proved, keyed by a fingerprint of the
+    /// token that proved it.
+    ///
+    /// Connecting asks the profile route once and then reads usage, so without
+    /// this every connection attempt would ask twice. A different token is a
+    /// different cache key, so a re-login is never answered from a stale
+    /// profile, and the token itself is never stored beside its fingerprint.
+    verified: tokio::sync::Mutex<Option<(u64, VerifiedProfile)>>,
 }
 
 impl ClaudeAdapter {
@@ -71,6 +81,7 @@ impl ClaudeAdapter {
     pub(crate) fn new() -> Result<Self, ProviderError> {
         Ok(Self {
             http: Arc::new(ProviderHttp::new()?),
+            verified: tokio::sync::Mutex::new(None),
         })
     }
 
@@ -93,6 +104,7 @@ impl ClaudeAdapter {
                 url,
                 headers: &headers,
                 deadline: context.deadline,
+                response_headers: &[],
             })
             .await?;
         if let Some(failure) = classify_status(reply.status, reply.retry_after) {
@@ -102,11 +114,21 @@ impl ClaudeAdapter {
     }
 
     /// Reads and validates the account identity from the profile route.
+    ///
+    /// The result is remembered against a fingerprint of the token that proved
+    /// it, so connecting asks once instead of asking during discovery and again
+    /// during the read. A different token never reads a cached answer.
     async fn verified_profile(
         &self,
         credential: &ClaudeCredential,
         context: ReadContext,
     ) -> Result<VerifiedProfile, ProviderError> {
+        let key = decode::fingerprint(credential.token.expose());
+        if let Some((cached, profile)) = self.verified.lock().await.as_ref()
+            && *cached == key
+        {
+            return Ok(profile.clone());
+        }
         let body = self.get_route(PROFILE_URL, credential, context).await?;
         let profile: wire::ClaudeProfile =
             serde_json::from_value(body).map_err(|_| ProviderError::UnsupportedSchema {
@@ -125,7 +147,7 @@ impl ClaudeAdapter {
             .email
             .as_deref()
             .map_or_else(|| account_uuid.clone(), masked_address);
-        Ok(VerifiedProfile {
+        let profile = VerifiedProfile {
             identity: VerifiedIdentity {
                 principal_label,
                 workspace_label: profile.organization.and_then(|org| org.name),
@@ -133,7 +155,9 @@ impl ClaudeAdapter {
                 source: SourceKind::ObservedWebEndpoint,
             },
             account_uuid,
-        })
+        };
+        *self.verified.lock().await = Some((key, profile.clone()));
+        Ok(profile)
     }
     /// Performs one read at the credential, HTTP, and decoding boundary.
     ///
