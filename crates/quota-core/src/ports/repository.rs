@@ -176,6 +176,21 @@ pub trait PreferenceRepository: Send + Sync {
     ) -> Result<PresentationPreferences, RepositoryError>;
 }
 
+/// Durable application-wide monitoring state.
+#[async_trait]
+pub trait MonitoringRepository: Send + Sync {
+    /// Loads the durable state, using `Running` only when no row exists.
+    async fn load_monitoring_state(
+        &self,
+    ) -> Result<quota_domain::snapshot::MonitoringState, RepositoryError>;
+
+    /// Saves the user's confirmed pause or resume choice.
+    async fn save_monitoring_state(
+        &self,
+        state: &quota_domain::snapshot::MonitoringState,
+    ) -> Result<(), RepositoryError>;
+}
+
 /// A durable owner could not be reached.
 #[derive(Debug, thiserror::Error)]
 #[error("durable owner `{owner}` failed: {reason}")]

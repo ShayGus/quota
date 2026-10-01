@@ -7,9 +7,12 @@
 
 mod support;
 
-use quota_core::ports::{AccountRepository as AccountPort, HistoryRepository as HistoryPort};
+use quota_core::ports::{
+    AccountRepository as AccountPort, HistoryRepository as HistoryPort, MonitoringRepository,
+};
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::ids::{AccountId, ConnectionId};
+use quota_domain::snapshot::MonitoringState;
 use quota_persistence::SqliteRepositories;
 use quota_persistence::ports::{SqliteAccountPortAdapter, SqliteHistoryPortAdapter};
 use support::{TempDir, account, at, connection, migrated, window};
@@ -148,5 +151,25 @@ async fn history_port_deletes_only_the_selected_account() {
             .unwrap()
             .len(),
         1
+    );
+}
+
+#[tokio::test]
+async fn monitoring_state_defaults_once_and_then_round_trips() {
+    let directory = TempDir::new("monitoring-port");
+    let pool = migrated(&directory).await;
+    let repositories = SqliteRepositories::new(pool);
+    let port = quota_persistence::ports::SqliteMonitoringPortAdapter::new(repositories);
+
+    assert_eq!(
+        MonitoringState::Running,
+        port.load_monitoring_state().await.unwrap()
+    );
+    port.save_monitoring_state(&MonitoringState::Paused)
+        .await
+        .unwrap();
+    assert_eq!(
+        MonitoringState::Paused,
+        port.load_monitoring_state().await.unwrap()
     );
 }

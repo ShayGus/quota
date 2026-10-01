@@ -4,6 +4,7 @@
 //! binds them to the repositories in this crate, so the desktop host can inject
 //! a concrete durable owner without the core importing SQL or a plugin.
 pub mod account;
+pub mod monitoring;
 pub mod preferences;
 use crate::sqlite::{BackoffRecord, SqliteRepositories};
 use async_trait::async_trait;
@@ -12,6 +13,7 @@ use quota_core::ports::{BackoffRepository as BackoffPort, BackoffState, Reposito
 use quota_domain::polling::LimitScope;
 
 pub use account::{SqliteAccountPortAdapter, SqliteHistoryPortAdapter};
+pub use monitoring::SqliteMonitoringPortAdapter;
 pub use preferences::PresentationPreferencesPort;
 
 /// Maps a persistence failure onto the port error, naming the durable owner.
