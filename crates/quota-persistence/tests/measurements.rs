@@ -10,10 +10,21 @@
 
 mod support;
 
+use chrono::{DateTime, Utc};
 use quota_domain::ids::{AccountId, DefinitionVersion, QuotaWindowId};
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_persistence::SqliteRepositories;
 use support::TempDir;
+
+/// One fixed instant, so a fixture reading is reproducible.
+fn now() -> DateTime<Utc> {
+    "2026-10-01T12:00:00Z".parse().unwrap()
+}
+
+use quota_domain::preferences::{
+    NotificationPolicy, NotificationThresholds, OperationalPreferences,
+    OperationalPrivacyPreferences, QuietHours,
+};
 
 /// An account with a connection, ready to persist readings against.
 async fn seeded(directory: &TempDir) -> (sqlx::SqlitePool, SqliteRepositories) {
@@ -294,5 +305,89 @@ async fn a_removed_window_is_swept_when_the_whole_set_is_written() {
             .unwrap()
             .is_none(),
         "the removed window keeps no current reading"
+    );
+}
+
+/// Counts the history rows held for one account.
+async fn history_rows(pool: &sqlx::SqlitePool, account_id: &AccountId) -> i64 {
+    sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM measurement_history WHERE account_id = ?")
+        .bind(account_id.as_str())
+        .fetch_one(pool)
+        .await
+        .unwrap()
+}
+
+#[tokio::test]
+async fn opting_out_of_local_history_stops_new_history_rows() {
+    let directory = TempDir::new("history-opt-out");
+    let (pool, repositories) = seeded(&directory).await;
+    let account_id = AccountId::new("acct-1").unwrap();
+
+    // The switch is turned off and saved before any reading arrives.
+    let saved = OperationalPreferences {
+        revision: 2,
+        notifications: NotificationPolicy {
+            enabled: false,
+            thresholds: NotificationThresholds {
+                low_percent: 20.0,
+                critical_percent: 10.0,
+                hysteresis_percent: 3.0,
+            },
+            recovery_enabled: false,
+            quiet_hours: QuietHours::Never,
+        },
+        privacy: OperationalPrivacyPreferences {
+            retain_history: false,
+            export_identities: false,
+        },
+        polling: vec![],
+    };
+    // A reading with history on proves this test can fail: the same write must
+    // land a history row before the switch is off, and must not after.
+    let with_history = OperationalPreferences {
+        privacy: OperationalPrivacyPreferences {
+            retain_history: true,
+            export_identities: false,
+        },
+        ..saved.clone()
+    };
+    repositories
+        .operational_preferences()
+        .save(&with_history)
+        .await
+        .unwrap();
+    repositories
+        .measurements()
+        .persist_readings(
+            &account_id,
+            &[support::window("w-0", "pool-0", 70.0, now())],
+        )
+        .await
+        .unwrap();
+    assert_eq!(history_rows(&pool, &account_id).await, 1);
+
+    repositories
+        .operational_preferences()
+        .save(&saved)
+        .await
+        .unwrap();
+
+    // A changed reading arrives. The current measurement is kept; the opted-out
+    // history row must not be written.
+    repositories
+        .measurements()
+        .persist_readings(
+            &account_id,
+            &[support::window("w-1", "pool-1", 42.0, now())],
+        )
+        .await
+        .unwrap();
+
+    // The opted-out reading adds nothing. Rows written before the switch was off
+    // stay: turning retention off is not a deletion of what was already kept.
+    assert_eq!(
+        history_rows(&pool, &account_id).await,
+        1,
+        "an opted-out reading was still retained durably"
     );
 }

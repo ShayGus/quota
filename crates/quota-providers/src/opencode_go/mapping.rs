@@ -214,4 +214,26 @@ mod tests {
         let remaining = measurement.remaining_percent().expect("a percentage");
         assert!((remaining.value() - 37.5).abs() < f64::EPSILON);
     }
+
+    #[test]
+    fn the_documented_reset_in_sec_spelling_yields_a_boundary() {
+        let envelope: crate::opencode_go::wire::OpenCodeGoEnvelope =
+            serde_json::from_value(serde_json::json!({
+                "rollingUsage": { "percent": 28, "resetInSec": 3600 }
+            }))
+            .expect("the documented payload decodes");
+        let pool = QuotaPoolId::new("pool-1").expect("a pool id");
+        let received_at = DateTime::from_timestamp(1_700_000_000, 0).expect("an instant");
+        let decoded = decode(&envelope, &pool, received_at).expect("the usage decodes");
+        let rolling = decoded
+            .windows
+            .iter()
+            .find(|window| window.category == QuotaCategory::Session)
+            .expect("the rolling window exists");
+        assert_eq!(
+            rolling.boundary.map(|boundary| boundary.at),
+            Some(received_at + chrono::Duration::seconds(3600)),
+            "the reported replenishment time was dropped"
+        );
+    }
 }

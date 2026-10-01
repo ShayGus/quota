@@ -22,6 +22,7 @@ import {
 } from "../../shared/format/duration";
 import { Icon } from "../../shared/ui/Icon";
 import { Ring } from "../../shared/ui/Meter";
+import { freshnessCaption, readingState } from "../overview/freshness";
 import { statusOf } from "../overview/status";
 
 /** The time zone used for exact boundary times. */
@@ -46,16 +47,21 @@ const ROLE_WORDS: Record<QuotaWindow["metric_role"], string> = {
 /** One window card: its reading, its boundary, and what it covers. */
 function WindowCard({
   window,
+  account,
   now,
   selected,
   onSelect,
 }: {
   readonly window: QuotaWindow;
+  readonly account: AccountSnapshot;
   readonly now: number;
   readonly selected: boolean;
   readonly onSelect: (windowId: QuotaWindow["id"]) => void;
 }): JSX.Element {
-  const severity = severityOf(window.measurement);
+  // The same freshness the overview uses, so a window that has gone stale or
+  // whose boundary has passed cannot look healthy here (spec 6, AC-15).
+  const state = readingState(account, window, now);
+  const severity = state === "current" ? severityOf(window.measurement) : "stale";
   const value = formatRemaining(window.measurement);
   const hasValue = hasReading(window.measurement);
   return (
@@ -73,7 +79,7 @@ function WindowCard({
         fraction={arcFraction(window.measurement)}
         severity={severity}
         label={value}
-        caption={hasValue ? "left" : "no reading"}
+        caption={hasValue ? freshnessCaption(state) : "no reading"}
       />
       <p className="limit-card__boundary">
         {window.boundary === null
@@ -150,6 +156,7 @@ export function AccountDetail({
             <WindowCard
               key={window.id}
               window={window}
+              account={account}
               now={now}
               selected={window.id === selectedWindow}
               onSelect={setSelectedWindow}

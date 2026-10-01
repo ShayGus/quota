@@ -143,6 +143,34 @@ describe("the remaining-allowance label", () => {
     };
     expect(formatRemaining(measurement)).toBe("60% · 30.00 USD");
   });
+
+  it("keeps the amount when the percentage rounds away to almost nothing", () => {
+    const almostGone = {
+      kind: "money" as const,
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: 9975,
+        remaining_minor_units: 25,
+        limit_minor_units: 10000,
+      },
+    };
+    expect(formatRemaining(almostGone)).toBe("<1% · 0.25 USD");
+  });
+
+  it("keeps the amount when nothing remains", () => {
+    const spent = {
+      kind: "money" as const,
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: 10000,
+        remaining_minor_units: 0,
+        limit_minor_units: 10000,
+      },
+    };
+    expect(formatRemaining(spent)).toBe("0% · 0.00 USD");
+  });
 });
 
 describe("severity", () => {

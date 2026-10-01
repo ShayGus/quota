@@ -360,3 +360,54 @@ fn removing_an_unrelated_limit_does_not_rename_an_unchanged_allowance() {
             .collect::<Vec<_>>()
     );
 }
+
+/// Decodes one inline payload and returns the extra-usage window's measurement.
+fn extra_usage_measurement(extra_usage: &str) -> Measurement {
+    let payload = format!(
+        r#"{{"limits":[{{"percent":50,"group":"five_hour","resets_at":"2026-09-30T12:00:00Z"}}],
+            "extra_usage":{extra_usage}}}"#
+    );
+    let outcome =
+        decode_offline(ProviderId::Claude, &payload, "claude-local", received_at()).unwrap();
+    outcome
+        .windows
+        .iter()
+        .find(|window| window.metric_role == MetricRole::ExtraSpendCap)
+        .map_or_else(
+            || panic!("the extra-usage window is missing"),
+            |window| window.measurement.clone(),
+        )
+}
+
+#[test]
+fn a_fractional_decimal_places_is_rejected_rather_than_truncated() {
+    let measurement =
+        extra_usage_measurement(r#"{"monthlyLimit":5000,"usedCredits":1000,"decimalPlaces":2.5}"#);
+    assert_eq!(
+        measurement,
+        Measurement::Unavailable(UnavailableReason::InvalidResponse),
+        "a fractional scale was silently truncated into a complete measurement"
+    );
+}
+
+#[test]
+fn an_unusable_used_amount_invalidates_the_window_rather_than_reading_as_absent() {
+    let measurement =
+        extra_usage_measurement(r#"{"monthlyLimit":5000,"usedCredits":"not-a-number"}"#);
+    assert_eq!(
+        measurement,
+        Measurement::Unavailable(UnavailableReason::InvalidResponse),
+        "an invalid amount was collapsed into absence"
+    );
+}
+
+#[test]
+fn an_unusable_limit_invalidates_the_window_too() {
+    let measurement =
+        extra_usage_measurement(r#"{"monthlyLimit":"not-a-number","usedCredits":1000}"#);
+    assert_eq!(
+        measurement,
+        Measurement::Unavailable(UnavailableReason::InvalidResponse),
+        "an invalid limit was collapsed into absence"
+    );
+}

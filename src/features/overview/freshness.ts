@@ -67,6 +67,13 @@ export function readingState(
   if (deadline !== null && deadline <= now) {
     return "stale";
   }
+  // A boundary that has passed means the period this reading described is over.
+  // Provider windows normally carry no valid_until, so without this the ring
+  // stays healthy while the countdown beside it already says the window is due.
+  const boundary = window.boundary ? instantOf(window.boundary.at) : null;
+  if (boundary !== null && boundary <= now) {
+    return "stale";
+  }
   return accountReadingsAreStale(account) ? "stale" : "current";
 }
 

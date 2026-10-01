@@ -93,23 +93,24 @@ export function formatRemaining(measurement: Measurement): string {
   if (percent === null || !Number.isFinite(percent)) {
     return nativeAmount(measurement);
   }
+  // A money amount keeps its own amount at every percentage, including none and
+  // below one: the amount is known even when the percentage rounds to nothing,
+  // and dropping it there would hide a cap's real remaining value (AC-06).
+  const withAmount = (label: string): string => {
+    if (measurement.kind !== "money") {
+      return label;
+    }
+    const amount = nativeAmount(measurement);
+    return amount === "No reading" || amount === label ? label : `${label} · ${amount}`;
+  };
   if (percent <= 0) {
-    return "0%";
+    return withAmount("0%");
   }
   if (percent < 1) {
-    return "<1%";
+    return withAmount("<1%");
   }
   const clamped = Math.min(100, percent);
-  const label = `${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`;
-  // Money keeps its own amount beside the percentage, so a cap expressed in
-  // minor units is never hidden behind a percentage alone (spec 5.2, AC-06).
-  if (measurement.kind === "money") {
-    const amount = nativeAmount(measurement);
-    if (amount !== "No reading" && amount !== label) {
-      return `${label} · ${amount}`;
-    }
-  }
-  return label;
+  return withAmount(`${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`);
 }
 
 /**
