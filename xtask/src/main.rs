@@ -112,10 +112,10 @@ Options:
   --root <path>        read the tree at <path> instead of this repository. The
                        gates use it for their own tests.
 
-The bindings check reads the source instead of compiling it, because compiling
-tauri-specta would make the gate as slow as a full build. It reads the
-#[tauri::command] function names and the event struct names under
-src-tauri/src/ipc and compares them with bindings.ts in both
-directions. CI runs the same command. docs/exceptions.md records this deviation."
+The bindings check runs the exporter and compares what it generates with the
+committed file, byte for byte, so a stale bindings.ts cannot pass. The exporter
+lives in the host crate because only it can run tauri-specta, so the check
+compiles and runs src-tauri/tests/bindings.rs. It never opens a window or reads
+an account. CI runs the same command."
     );
 }
