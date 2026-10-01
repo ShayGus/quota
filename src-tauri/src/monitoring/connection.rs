@@ -53,7 +53,7 @@ pub(super) async fn run_connection_attempt(
         else {
             return Ok(());
         };
-        commit_candidate(&runtime, candidate, &request, ids, read).await?;
+        commit_candidate(&runtime, candidate, &request, ids, read, &cancelled).await?;
         progress_revision = progress_revision.saturating_add(1);
         emit_connection_progress(
             &runtime.state,
@@ -188,6 +188,7 @@ async fn commit_candidate(
     request: &BeginConnectionRequest,
     ids: CandidateIds,
     read: quota_core::ports::QuotaRead,
+    cancelled: &watch::Receiver<bool>,
 ) -> Result<(), CommandError> {
     let now = runtime.state.clock.now();
     let stored = quota_core::ports::StoredAccount {
@@ -226,6 +227,12 @@ async fn commit_candidate(
     // Serialize duplicate check plus durable insert across connection attempts,
     // but never hold the account-registry lock across a database await.
     let _connection_gate = runtime.connection_gate.lock().await;
+    // Cancellation is decided under the same gate the insert takes, so a
+    // cancellation acknowledged while this waited cannot be followed by an
+    // account that appears anyway.
+    if *cancelled.borrow() {
+        return Err(CommandError::Cancelled);
+    }
     if runtime
         .state
         .registry
@@ -239,21 +246,23 @@ async fn commit_candidate(
             reason: "this verified account and quota pool are already connected".into(),
         });
     }
-    runtime
-        .state
-        .accounts
-        .upsert_account(stored)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.to_owned(),
-        })?;
-    let registration = {
-        let mut registry = runtime.state.registry.write().await;
-        registry.register(new_account).map(|_| ())
+    // The registry assigns the authoritative ordinal, so the account is
+    // registered before it is written: persisting first stored ordinal zero and
+    // left the stable tie-break order to chance on the next restart.
+    let mut registry = runtime.state.registry.write().await;
+    let registered = match registry.register(new_account) {
+        Ok(entry) => entry.stored.clone(),
+        Err(error) => return Err(core_command_error(error)),
     };
-    if let Err(error) = registration {
-        let _ = runtime.state.accounts.remove_account(&ids.account_id).await;
-        return Err(core_command_error(error));
+    drop(registry);
+    if let Err(error) = runtime.state.accounts.upsert_account(registered).await {
+        // The account is only durable if this succeeded, so the registration it
+        // made is withdrawn rather than left in memory alone.
+        let mut registry = runtime.state.registry.write().await;
+        let _ = registry.remove(&ids.account_id);
+        return Err(CommandError::PersistenceUnavailable {
+            owner: error.owner.to_owned(),
+        });
     }
     Ok(())
 }

@@ -251,6 +251,11 @@ impl MonitoringRuntime {
         &self,
         attempt_id: &ConnectionAttemptId,
     ) -> Result<(), quota_contracts::CommandError> {
+        // Taken before the flag is set and before Cancelled is reported, so an
+        // attempt that is already committing finishes first and is reported as
+        // verified rather than cancelled, and one that has not reached the gate
+        // sees the flag and stops.
+        let _connection_gate = self.connection_gate.lock().await;
         let cancel = self.attempts.lock().await.remove(attempt_id);
         let Some(cancel) = cancel else {
             return Err(quota_contracts::CommandError::Cancelled);
