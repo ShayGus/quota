@@ -3,11 +3,47 @@
 //! Floating and tray anchoring are separate from geometry and from topmost.
 //! Dragging a tray-anchored view detaches it to floating without enabling
 //! topmost, and changing topmost moves nothing.
+//!
+//! Only the overview may open at launch. The settings window is created hidden
+//! and stays hidden until a person opens it, so the saved-state plugin must not
+//! own visibility: see `restored_state_flags`.
 
 use quota_contracts::CommandError;
 use tauri::{AppHandle, Manager, WebviewWindow};
+use tauri_plugin_window_state::StateFlags;
 
 use quota_domain::preferences::OverviewMode;
+
+/// The window state the saved-state plugin may restore.
+///
+/// `StateFlags::VISIBLE` is deliberately absent. The plugin shows every window
+/// it holds no saved state for, and re-shows any window that was visible when
+/// the app last exited, so keeping the flag can open the settings window beside
+/// the overview at launch. Visibility belongs to the host: the setup hook
+/// shows the overview, and the overview control or the tray menu shows the
+/// settings window.
+///
+/// `StateFlags::DECORATIONS` is absent for the same reason. The saved overview
+/// mode owns the window chrome.
+#[must_use]
+pub fn restored_state_flags() -> StateFlags {
+    StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED
+}
+
+/// Shows and focuses the overview, the only window a launch opens.
+///
+/// # Errors
+///
+/// Returns the native error when the overview window is missing or the
+/// operating system refuses the request.
+pub fn activate_overview(app: &AppHandle) -> tauri::Result<()> {
+    let overview = app
+        .get_webview_window("overview")
+        .ok_or(tauri::Error::WindowNotFound)?;
+    overview.show()?;
+    overview.set_focus()?;
+    Ok(())
+}
 
 /// Returns a host window and maps native details to a safe command error.
 pub fn get(app: &AppHandle, label: &'static str) -> Result<WebviewWindow, CommandError> {
@@ -249,6 +285,18 @@ impl OverviewWindowController {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_saved_state_plugin_never_owns_window_visibility() {
+        // The plugin defaults to every flag, visibility included, and it shows
+        // any window it holds no saved state for. That default is what opened
+        // the settings window beside the overview on every launch.
+        assert!(StateFlags::default().contains(StateFlags::VISIBLE));
+        let flags = restored_state_flags();
+        assert!(!flags.contains(StateFlags::VISIBLE));
+        assert!(!flags.contains(StateFlags::DECORATIONS));
+        assert!(flags.contains(StateFlags::SIZE | StateFlags::POSITION | StateFlags::MAXIMIZED));
+    }
 
     #[test]
     fn topmost_starts_off_and_is_independent_of_everything_else() {

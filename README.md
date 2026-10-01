@@ -36,8 +36,11 @@ bun tauri dev
 ```
 
 `bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust host,
-and opens the window. Closing a window hides it while monitoring continues. Use Quit from
-the tray menu, or press Ctrl-C in the terminal, to stop the application.
+and opens only the overview. Open Settings with the overview's settings button or the tray
+menu's Settings action; it stays hidden at launch even if it was open when you last quit.
+Launching Quota again brings the running overview forward. Closing a window hides it while
+monitoring continues. Use Quit from the tray menu, or press Ctrl-C in the terminal, to
+stop the application.
 
 To produce a release build:
 

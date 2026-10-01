@@ -187,10 +187,13 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
     }
 }
 
-/// Shows the settings window, creating it if this launch has not yet.
+/// Shows and focuses the settings window.
 ///
-/// The renderer asks the host rather than creating a webview itself, so window
-/// labels, permissions and geometry stay owned on one side.
+/// The window is created hidden at launch and stays hidden until this command
+/// or the tray menu runs, so the settings surface never opens beside the
+/// overview on its own. The renderer asks the host rather than creating a
+/// webview itself, so window labels, permissions and geometry stay owned on
+/// one side.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_settings_window(state: State<'_, AppState>) -> Result<(), CommandError> {
