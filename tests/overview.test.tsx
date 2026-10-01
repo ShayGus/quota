@@ -97,7 +97,7 @@ describe("the presentation order", () => {
         account("low", "claude", 2, [quotaWindow("w", "session", percent(3))], {
           rank: 3,
         }),
-        account("middle", "cline_pass", 3, [quotaWindow("w", "session", percent(41))], {
+        account("middle", "open_code_go", 3, [quotaWindow("w", "session", percent(41))], {
           rank: 41,
         }),
       ]),
@@ -117,7 +117,7 @@ describe("the presentation order", () => {
         account("beta", "claude", 2, [quotaWindow("w", "session", percent(50))], {
           rank: 50,
         }),
-        account("alpha", "cline_pass", 2, [quotaWindow("w", "session", percent(50))], {
+        account("alpha", "open_code_go", 2, [quotaWindow("w", "session", percent(50))], {
           rank: 50,
         }),
       ]),
@@ -456,7 +456,7 @@ describe("freshness", () => {
       snapshot("instance-1", 1, [
         account(
           "partial",
-          "cline_pass",
+          "open_code_go",
           1,
           [
             quotaWindow("session-window", "session", percent(68)),

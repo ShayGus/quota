@@ -37,7 +37,6 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_window::set_overview_always_on_top,
             commands_window::fit_overview_to_accounts,
             commands_window::reset_overview_position,
-            commands_window::activate_overview,
             commands_window::open_provider_usage_page,
         ])
         .events(tauri_specta::collect_events![

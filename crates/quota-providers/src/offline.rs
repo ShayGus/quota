@@ -108,7 +108,7 @@ pub fn decode_offline(
                 })?;
             opencode_go::mapping::decode(&envelope, &pool, received_at)?
         }
-        ProviderId::ClinePass | ProviderId::Fixture => {
+        ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {
                 detail: "this build has no offline decoder for that provider".to_owned(),
             });
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn a_provider_without_a_decoder_is_explicitly_unsupported() {
-        let result = decode_offline(ProviderId::ClinePass, "{}", "seed", Utc::now());
+        let result = decode_offline(ProviderId::Fixture, "{}", "seed", Utc::now());
         assert!(matches!(
             result,
             Err(ProviderError::UnsupportedSchema { .. })

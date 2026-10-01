@@ -41,7 +41,7 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
             reports_monthly_window: true,
             minimum_interval_seconds: 300,
         },
-        ProviderId::ClinePass | ProviderId::Fixture => ProviderCapabilities {
+        ProviderId::Fixture => ProviderCapabilities {
             provider_id,
             cardinality: quota_domain::account::AccountCardinality::SingleProfile,
             supports_app_owned_authorization: false,
@@ -334,22 +334,22 @@ async fn install_managed_state(
         .await?;
         seeded
     };
-    let state = AppState::new(
-        app.clone(),
+    let state = AppState::new(crate::state::AppStateParts {
+        app: app.clone(),
         app_instance_id,
         registry,
         builder,
-        repositories.accounts.clone(),
-        repositories.backoff.clone(),
-        repositories.history.clone(),
-        repositories.preferences.clone(),
-        repositories.operational_preferences.clone(),
+        accounts: repositories.accounts.clone(),
+        backoff: repositories.backoff.clone(),
+        history: repositories.history.clone(),
+        preference_repository: repositories.preferences.clone(),
+        operational_preferences: repositories.operational_preferences.clone(),
         initial_preferences,
-        repositories.monitoring.clone(),
-        documents.monitoring_state,
+        monitoring_repository: repositories.monitoring.clone(),
+        monitoring_state: documents.monitoring_state,
         policies,
-        providers.clone(),
-    );
+        providers: providers.clone(),
+    });
     app.manage(state);
     let native = app
         .get_webview_window("overview")

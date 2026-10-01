@@ -70,12 +70,7 @@ impl AccountRegistry {
             .into_iter()
             .map(|stored| {
                 let binding = binding_from_connection(
-                    &stored.connection.id,
-                    stored.connection.generation,
-                    stored.connection.provider_id,
-                    stored.connection.principal_id.clone(),
-                    stored.connection.workspace_id.clone(),
-                    stored.connection.entitlement_id.clone(),
+                    &stored.connection,
                     stored.connection.profile_label.clone(),
                 );
                 let account_id = stored.account_id.clone();
@@ -136,15 +131,7 @@ impl AccountRegistry {
         stored.connection_ordinal = self.next_ordinal;
         stored.monitoring_enabled = new_account.monitoring_enabled;
         self.next_ordinal = self.next_ordinal.saturating_add(1);
-        let binding = binding_from_connection(
-            &stored.connection.id,
-            stored.connection.generation,
-            stored.connection.provider_id,
-            stored.connection.principal_id.clone(),
-            stored.connection.workspace_id.clone(),
-            stored.connection.entitlement_id.clone(),
-            new_account.profile_label,
-        );
+        let binding = binding_from_connection(&stored.connection, new_account.profile_label);
         let account_id = new_account.account_id;
         let entry = RegisteredAccount { stored, binding };
         Ok(self.accounts.entry(account_id).or_insert(entry))
@@ -314,23 +301,21 @@ impl AccountRegistry {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+/// The read binding a stored account implies.
+///
+/// It is derived from the connection summary, so the binding and the summary
+/// cannot disagree about which login, provider or generation they describe.
 fn binding_from_connection(
-    connection_id: &quota_domain::ids::ConnectionId,
-    generation: u32,
-    provider_id: quota_domain::provider::ProviderId,
-    principal_id: Option<quota_domain::ids::ProviderPrincipalId>,
-    workspace_id: Option<quota_domain::ids::WorkspaceId>,
-    entitlement_id: Option<quota_domain::ids::EntitlementId>,
+    connection: &quota_domain::account::ConnectionSummary,
     profile_label: Option<String>,
 ) -> ConnectionBinding {
     ConnectionBinding {
-        connection_id: connection_id.clone(),
-        generation,
-        provider_id,
-        principal_id,
-        workspace_id,
-        entitlement_id,
+        connection_id: connection.id.clone(),
+        generation: connection.generation,
+        provider_id: connection.provider_id,
+        principal_id: connection.principal_id.clone(),
+        workspace_id: connection.workspace_id.clone(),
+        entitlement_id: connection.entitlement_id.clone(),
         profile_label,
     }
 }

@@ -107,12 +107,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_provider_without_a_compiled_adapter_is_not_offered() {
-        let registry = registry();
-        assert!(registry.provider(ProviderId::ClinePass).is_none());
-    }
-
     #[cfg(feature = "test-fixtures")]
     #[test]
     fn the_fixture_adapter_is_offered_when_the_feature_is_on() {

@@ -10,7 +10,6 @@ use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::ProviderId;
 use tauri::{LogicalSize, PhysicalPosition, State};
 
-use crate::platform::tray::{TrayActivation, activation_for};
 use crate::platform::window::{self, OverviewWindowState as WindowModelState};
 use crate::state::AppState;
 
@@ -168,26 +167,6 @@ pub async fn reset_overview_position(
     controller.set_visible(visible);
     controller.detach_to_floating();
     let confirmed = controller.record_geometry_change();
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(window_state_response(confirmed))
-}
-
-/// Raises or shows the overview in response to a tray activation.
-#[tauri::command]
-#[specta::specta]
-pub async fn activate_overview(
-    state: State<'_, AppState>,
-    repeated_click: bool,
-) -> Result<WindowStateResponse, CommandError> {
-    let mut controller = state.window.lock().await;
-    let native = window::get(&state.app, "overview")?;
-    let visible = native
-        .is_visible()
-        .map_err(|_| window::failed("read_window_visibility"))?;
-    let activation = activation_for(controller.state().mode, visible, repeated_click);
-    let show = matches!(activation, TrayActivation::Show | TrayActivation::Raise);
-    let confirmed = window::set_visible(&state.app, "overview", show, show)?;
-    let confirmed = controller.set_visible(confirmed);
     window::publish_state(&state.app, &state.app_instance_id, confirmed);
     Ok(window_state_response(confirmed))
 }

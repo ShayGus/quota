@@ -80,8 +80,6 @@ export const commands = {
 	fitOverviewToAccounts: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_to_accounts")),
 	/**  Restores a position known to be inside a surviving monitor's work area. */
 	resetOverviewPosition: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("reset_overview_position")),
-	/**  Raises or shows the overview in response to a tray activation. */
-	activateOverview: (repeatedClick: boolean) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("activate_overview", { repeatedClick })),
 	/**
 	 *  Opens one allowlisted provider usage page in the external browser.
 	 * 
@@ -797,8 +795,6 @@ export type ProviderId =
 "codex" | 
 /**  Claude subscription usage. */
 "claude" | 
-/**  `ClinePass` subscription windows. */
-"cline_pass" | 
 /**  `OpenCode` `Go`, the provider reached through a local `OpenCode` Go agent. */
 "open_code_go" | 
 /**
