@@ -19,6 +19,7 @@ import { AppHeader } from "./AppHeader";
 import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
 import { useTheme } from "./useTheme";
+import { displayName } from "../shared/format/alias";
 
 /**
  * Which surface the overview window is showing.
@@ -129,6 +130,11 @@ function QuotaWindow(): JSX.Element {
           <FeatureBoundary surface="account details">
             <AccountDetail
               account={account}
+              label={displayName(
+                state.preferences,
+                state.snapshot?.accounts ?? [],
+                account,
+              )}
               now={now}
               onBack={() => {
                 setView({ name: "overview" });

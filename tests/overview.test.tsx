@@ -11,12 +11,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import { Overview, REORDER_IDLE_MS } from "../src/features/overview/Overview";
 import type { RendererState } from "../src/shared/state/types";
-import { applyPendingOrder, getRendererState } from "../src/shared/state/store";
+import {
+  applyPendingOrder,
+  acceptPreferences,
+  getRendererState,
+} from "../src/shared/state/store";
 import { acceptSnapshot } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
 import {
   account,
   percent,
+  preferences,
   snapshot,
   unavailable,
   window as quotaWindow,
@@ -531,5 +536,45 @@ describe("freshness", () => {
     expect(screen.getAllByText("Not reported").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Model X weekly: 0%").length).toBeGreaterThan(0);
     expect(screen.getAllByText("Partial reading").length).toBeGreaterThan(0);
+  });
+});
+
+describe("the privacy alias setting", () => {
+  /** Two accounts whose displayed order differs from their identity order. */
+  function twoAccounts(): void {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("zulu", "codex", 1, [quotaWindow("w", "session", percent(80))], {
+          rank: 80,
+        }),
+        account("alpha", "claude", 2, [quotaWindow("w", "session", percent(10))], {
+          rank: 10,
+        }),
+      ]),
+    );
+    applyPendingOrder();
+  }
+
+  it("shows each account's own name when aliases are off", () => {
+    acceptPreferences(preferences());
+    twoAccounts();
+    render(<Harness />);
+    expect(screen.getByText("zulu")).toBeTruthy();
+    expect(screen.getByText("alpha")).toBeTruthy();
+  });
+
+  it("replaces each name with its own stable label when aliases are on", () => {
+    acceptPreferences(
+      preferences({
+        privacy: { ...preferences().privacy, alias_mode: "stable_aliases" },
+      }),
+    );
+    twoAccounts();
+    render(<Harness />);
+    expect(screen.queryByText("zulu")).toBeNull();
+    expect(screen.queryByText("alpha")).toBeNull();
+    // Distinct labels, not one shared "Hidden account".
+    expect(screen.getByText("Account 1")).toBeTruthy();
+    expect(screen.getByText("Account 2")).toBeTruthy();
   });
 });

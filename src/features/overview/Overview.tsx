@@ -15,6 +15,7 @@ import type { RendererState } from "../../shared/state/types";
 import { useNow } from "../../shared/ui/useNow";
 import { AccountColumns, AccountRow } from "./AccountRow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
+import { displayName } from "../../shared/format/alias";
 import { needsAttention } from "./status";
 
 /** How long the list must be idle before a staged order is applied. */
@@ -149,6 +150,7 @@ export function Overview({
       <AccountRow
         key={entry.account.account_id}
         account={entry.account}
+        label={displayName(state.preferences, accounts, entry.account)}
         style={style}
         now={now}
         onOpen={onOpenAccount}

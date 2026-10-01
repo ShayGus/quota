@@ -34,12 +34,15 @@ export function AccountRow({
   now,
   onOpen,
   onReconnect,
+  label,
 }: {
   readonly account: AccountSnapshot;
   readonly style: IndicatorStyle;
   readonly now: number;
   readonly onOpen: (accountId: AccountSnapshot["account_id"]) => void;
   readonly onReconnect: (accountId: AccountSnapshot["account_id"]) => void;
+  /** The name to show: the account's own, or its alias under the privacy setting. */
+  readonly label: string;
 }): JSX.Element {
   const status = statusOf(account);
   const lastSuccess = instantOf(account.last_success_at);
@@ -56,12 +59,12 @@ export function AccountRow({
     <article
       className={`account-row${account.order.kind === "unranked" ? " account-row--unknown" : ""}`}
       data-account-id={account.account_id}
-      aria-label={`${account.nickname}, ${account.provider_id}, ${age}`}
+      aria-label={`${label}, ${account.provider_id}, ${age}`}
     >
       <button
         type="button"
         className="identity identity--button"
-        aria-label={`Details for ${account.nickname}`}
+        aria-label={`Details for ${label}`}
         onClick={() => {
           onOpen(account.account_id);
         }}
@@ -73,7 +76,7 @@ export function AccountRow({
           {PROVIDER_MARKS[account.provider_id]}
         </span>
         <span className="identity__copy">
-          <span className="identity__name">{account.nickname}</span>
+          <span className="identity__name">{label}</span>
           <span className="identity__meta">
             {account.provider_id}
             {workspace != null ? ` · ${workspace}` : ""}
@@ -108,7 +111,7 @@ export function AccountRow({
           <button
             type="button"
             className="text-button"
-            aria-label={`Reconnect ${account.nickname}`}
+            aria-label={`Reconnect ${label}`}
             onClick={() => {
               onReconnect(account.account_id);
             }}

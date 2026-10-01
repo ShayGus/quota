@@ -66,3 +66,15 @@ generates. Nothing else differs.
 | Rationale         | A local smoke check cannot establish packaged behaviour across target operating systems           |
 | Review date       | 2026-10-01                                                                                        |
 | Removal condition | Complete the target-platform and packaged-runtime acceptance cases recorded by the evidence owner |
+
+## 5. `RUSTSEC-2024-0429`, unsound `glib` iterator implementations
+
+| Field             | Value |
+| ----------------- | ----- |
+| Rule              | Deny every advisory the RustSec database reports, including the informational classes |
+| Deviation         | `deny.toml` ignores `RUSTSEC-2024-0429` |
+| Owner             | Rust maintainer |
+| Scope             | The `glib 0.18.5` copy reached through Tauri's Linux GTK backend, on Linux builds only |
+| Rationale         | `VariantStrIter` passes an immutable reference where the C function needs a mutable one, so optimisation can drop the write and leave a null pointer that the iterator then dereferences. The fix is in `glib` 0.20, which arrives with the gtk-rs 0.20 series. That series is not reachable here: Tauri 2.12 pins its Linux stack to gtk-rs 0.18, and no published Tauri release moves to 0.20. Raising the workspace MSRV does not help, because the constraint is Tauri's dependency range rather than the compiler. Quota never calls `VariantStrIter`; the code is reached only if GTK iterates a `GVariant` string, which this application does not do. |
+| Review date       | 2026-10-01 |
+| Removal condition | Adopt `glib` 0.20 as soon as a published Tauri release pulls in the gtk-rs 0.20 stack. Remove the ignore in the same change that lands that upgrade, and re-run `cargo deny check advisories` to confirm no other advisory is hiding behind it. |

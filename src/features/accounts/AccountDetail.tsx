@@ -90,10 +90,13 @@ export function AccountDetail({
   account,
   now,
   onBack,
+  label,
 }: {
   readonly account: AccountSnapshot;
   readonly now: number;
   readonly onBack: () => void;
+  /** The name to show: the account's own, or its alias under the privacy setting. */
+  readonly label: string;
 }): JSX.Element {
   const [selectedWindow, setSelectedWindow] = useState<QuotaWindow["id"] | null>(
     account.windows[0]?.id ?? null,
@@ -113,7 +116,7 @@ export function AccountDetail({
       ? "no current reading"
       : formatRemaining(controlling.measurement);
   return (
-    <section className="detail" aria-label={`Account details for ${account.nickname}`}>
+    <section className="detail" aria-label={`Account details for ${label}`}>
       <div className="detail__back">
         <button type="button" className="back-button" onClick={onBack}>
           <Icon name="arrow-left" size={13} />
@@ -123,7 +126,7 @@ export function AccountDetail({
       </div>
       <div className="detail__identity">
         <div>
-          <h2>{account.nickname}</h2>
+          <h2>{label}</h2>
           <p>
             {account.provider_id}
             {account.identity?.workspace_label != null
