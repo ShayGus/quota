@@ -1,0 +1,120 @@
+# Pull-request and main-branch checks for Quota.
+#
+# Every `uses:` below is pinned to a full 40-character commit SHA. A tag or a
+# branch can be moved by its owner, so a pinned SHA is the only form that makes
+# an action's code immutable. The comment above each pin names the action and
+# the release the SHA came from, so an update is a deliberate edit.
+#
+# No `run:` step interpolates event text. Titles, branch names, and issue bodies
+# are attacker-controlled on a pull request; putting them in a shell command
+# turns a data value into executed code. Steps read repository files only.
+
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+# The default token permission is read-only. Nothing in this workflow needs to
+# write to the repository, and none of these steps needs a secret.
+permissions:
+  contents: read
+
+# A new push to the same branch makes the previous run pointless. Cancel it.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # rust-toolchain.toml pins the compiler, and rustup installs it and the
+      # listed components on first use. No CI step repeats the version, so the
+      # toolchain cannot drift between the file and this workflow.
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain
+
+      # Swatinem/rust-cache v2.9.2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace --locked
+
+      - name: Documentation
+        run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+
+      - name: Architecture gate
+        run: cargo xtask check-architecture
+
+      - name: Release gate
+        run: cargo xtask check-release
+
+      - name: Generated binding drift
+        run: cargo xtask bindings --check
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        # The desktop package currently carries its own pnpm lockfile. When the
+        # root pnpm workspace file lands, change this to the repository root and
+        # keep the same commands.
+        working-directory: apps/desktop
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # pnpm/action-setup v6.1.0. The version matches the client that produced
+      # apps/desktop/pnpm-lock.yaml. It is written here rather than read from
+      # package.json because that manifest does not declare `packageManager`;
+      # update this, the lockfile, and package.json in one change.
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413
+        with:
+          version: 11.1.1
+
+      # actions/setup-node v7.0.0. Node 24 is the current LTS line. It is
+      # written here for the same reason as the pnpm version above.
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: "24"
+          cache: pnpm
+          cache-dependency-path: apps/desktop/pnpm-lock.yaml
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Format check
+        run: pnpm format:check
+
+      - name: Test
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build

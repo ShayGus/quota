@@ -1,0 +1,46 @@
+{
+  "name": "@quota/desktop",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "//": "Dependency versions were resolved with `npm view <pkg> version` on 2026-10-01 and pinned exactly (spec 7.6). Resolved: react/react-dom/@types/react/@types/react-dom 19.3.0; vite 8.3.1; @vitejs/plugin-react 6.1.1; typescript 6.0.3 (newest release that typescript-eslint 8.71.0 accepts: its peer range is >=4.8.4 <6.1.0, and TypeScript 7.0.2 is outside it); typescript-eslint 8.71.0; eslint 10.11.0; @eslint/js 10.0.1; eslint-plugin-react-hooks 7.1.1; globals 17.12.0; prettier 3.9.9; vitest 5.0.3; jsdom 30.1.1; @testing-library/react 16.3.3; @testing-library/dom 10.4.2; @testing-library/user-event 14.6.7; @testing-library/jest-dom 7.0.1; @types/node 26.6.3; @tauri-apps/api 2.12.1; react-compiler preset @rolldown/plugin-babel 0.2.4 with babel-plugin-react-compiler 1.0.0 and @babel/core 7.29.7 (the 8.0 line ships declarations that do not satisfy skipLibCheck:false).",
+  "//workspace": "This package is a standalone pnpm project: it needs no workspace file. The repository-root pnpm-workspace.yaml is owned by another agent; if it exists when you install, run `pnpm install` from that root instead of from this directory.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint .",
+    "format:check": "prettier --check .",
+    "format": "prettier --write .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "2.12.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@babel/core": "7.29.7",
+    "@eslint/js": "10.0.1",
+    "@rolldown/plugin-babel": "0.2.4",
+    "@testing-library/dom": "10.4.2",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@testing-library/user-event": "14.6.7",
+    "@types/node": "26.6.3",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "babel-plugin-react-compiler": "1.0.0",
+    "eslint": "10.11.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "globals": "17.12.0",
+    "jsdom": "30.1.1",
+    "prettier": "3.9.9",
+    "typescript": "6.0.3",
+    "typescript-eslint": "8.71.0",
+    "vite": "8.3.1",
+    "vitest": "5.0.3"
+  }
+}

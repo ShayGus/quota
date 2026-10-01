@@ -1,0 +1,59 @@
+# cargo-deny policy for Quota.
+#
+# Run it as:
+#   cargo deny check advisories bans licenses sources
+#
+# The weekly dependencies workflow runs advisories, licences, and sources. The
+# bans section is advisory today: see the multiple-versions comment below.
+
+[graph]
+# Check the targets this project actually builds. A target that is never shipped
+# cannot usefully fail the gate.
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "x86_64-pc-windows-msvc",
+    "aarch64-apple-darwin",
+]
+
+[advisories]
+# Deny every advisory the RustSec database reports, including the informational
+# classes: yanked releases, unmaintained crates, and unsound code.
+vulnerability = "deny"
+unmaintained = "all"
+unsound = "all"
+yanked = "deny"
+# No advisory is ignored. An exception belongs in docs/exceptions.md with an
+# owner, a scope, and a review date before it is added here.
+ignore = []
+
+[bans]
+# Duplicate crate versions are reported, not fatal. Tauri, SQLx, and the
+# Specta release-candidate stack legitimately pin more than one major version of
+# a shared dependency, and a hard failure would push the real finding under an
+# allow list that grows with every release. The weekly dependencies workflow
+# prints the duplicates so a reviewer can decide.
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+# Only crates.io is trusted. This workspace's own path dependencies carry no
+# registry source and are allowed implicitly.
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []
+
+[licenses]
+# Require high confidence before inferring a licence from file text.
+confidence-threshold = 0.93
+# Everything else is denied. Adding a licence here is a deliberate review act.
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Unicode-3.0",
+    "BSD-3-Clause",
+    "ISC",
+    "MPL-2.0",
+]
+exceptions = []

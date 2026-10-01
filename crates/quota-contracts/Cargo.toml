@@ -1,0 +1,21 @@
+[package]
+name = "quota-contracts"
+description = "Rust-owned Serde and Specta IPC contracts for the Quota desktop host."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+quota-domain = { workspace = true }
+serde = { workspace = true }
+specta = { workspace = true, features = ["derive"] }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

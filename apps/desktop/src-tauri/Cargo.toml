@@ -1,0 +1,45 @@
+[package]
+name = "quota-desktop"
+description = "Tauri desktop host for Quota: composition, typed IPC, and OS adapters."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+default-run = "quota"
+
+[lib]
+name = "quota_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[[bin]]
+name = "quota"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { workspace = true }
+
+[dependencies]
+quota-contracts = { workspace = true }
+quota-core = { workspace = true }
+quota-domain = { workspace = true }
+quota-persistence = { workspace = true, features = ["tauri-plugins"] }
+quota-providers = { workspace = true, features = ["test-fixtures"] }
+chrono = { workspace = true }
+serde = { workspace = true }
+specta = { workspace = true, features = ["derive"] }
+tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-notification = { workspace = true }
+tauri-plugin-opener = { workspace = true }
+tauri-plugin-positioner = { workspace = true }
+tauri-plugin-single-instance = { workspace = true }
+tauri-specta = { workspace = true, features = ["derive", "typescript"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing = { workspace = true }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+uuid = { workspace = true }
+
+[lints]
+workspace = true

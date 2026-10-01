@@ -1,0 +1,83 @@
+[workspace]
+members = ["crates/*", "apps/desktop/src-tauri", "xtask"]
+resolver = "3"
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.90.0"
+publish = false
+license = "MIT"
+repository = "https://github.com/ShayGus/quota"
+homepage = "https://github.com/ShayGus/quota"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+unused_must_use = "deny"
+unreachable_pub = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+unfulfilled_lint_expectations = "warn"
+missing_docs = "warn"
+
+[workspace.lints.rustdoc]
+broken_intra_doc_links = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+module_name_repetitions = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+dbg_macro = "deny"
+await_holding_lock = "deny"
+await_holding_refcell_ref = "deny"
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+undocumented_unsafe_blocks = "deny"
+used_underscore_binding = "deny"
+
+[workspace.dependencies]
+quota-contracts = { path = "crates/quota-contracts" }
+async-trait = "0.1.92"
+quota-core = { path = "crates/quota-core" }
+quota-domain = { path = "crates/quota-domain" }
+quota-persistence = { path = "crates/quota-persistence" }
+quota-providers = { path = "crates/quota-providers" }
+
+chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde", "std"] }
+proptest = "1.11.0"
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.151"
+specta = "=2.0.0-rc.25"
+specta-serde = "0.0.12"
+specta-typescript = "0.0.12"
+sqlx = { version = "0.8.6", default-features = false, features = [
+  "sqlite",
+  "runtime-tokio",
+  "macros",
+  "json",
+  "uuid",
+  "time",
+] }
+tauri = { version = "2.12.1", features = [] }
+tauri-build = { version = "2.7.1", features = [] }
+tauri-plugin-notification = "2.5.0"
+tauri-plugin-opener = "2.7.0"
+tauri-plugin-positioner = "2.4.0"
+tauri-plugin-single-instance = "2.5.1"
+tauri-plugin-sql = { version = "2.5.0", features = ["sqlite"] }
+tauri-plugin-store = "2.5.0"
+tauri-plugin-window-state = "2.5.0"
+tauri-specta = "=2.0.0-rc.25"
+thiserror = "2.0.21"
+tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
+tracing = "0.1.44"
+uuid = { version = "1.26.1", features = ["serde", "v4"] }
+
+[profile.release]
+panic = "unwind"
+overflow-checks = true

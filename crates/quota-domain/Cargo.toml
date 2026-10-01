@@ -1,0 +1,22 @@
+[package]
+name = "quota-domain"
+description = "Validated domain values for Quota: identities, quota windows, measurements, ranking."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+uuid = { workspace = true }
+specta = { workspace = true, features = ["chrono", "derive"] }
+
+[dev-dependencies]
+proptest = { workspace = true }
+serde_json = { workspace = true }
+[lints]
+workspace = true
