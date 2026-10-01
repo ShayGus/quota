@@ -25,6 +25,8 @@ use tokio::sync::{Semaphore, mpsc, watch};
 use connection::emit_connection_progress;
 
 mod connection;
+mod policy;
+mod read_path;
 mod worker;
 
 const QUEUE_CAPACITY: usize = 64;
@@ -70,6 +72,10 @@ struct RuntimeState {
     clock: Arc<SystemClock>,
     permits: Arc<Semaphore>,
     pending: Arc<tokio::sync::Mutex<HashSet<AccountId>>>,
+    /// Serialises every change that reads the registry, mutates it, writes it
+    /// durably and publishes it. Without it a delayed write can resurrect an
+    /// account a disconnect removed, or overwrite a concurrent rename.
+    commit: Arc<tokio::sync::Mutex<()>>,
 }
 
 /// A handle for user refresh and orderly shutdown.
@@ -129,6 +135,7 @@ impl MonitoringRuntime {
             clock: Arc::new(SystemClock),
             permits: Arc::new(Semaphore::new(MAX_REMOTE_READS)),
             pending: Arc::new(tokio::sync::Mutex::new(HashSet::new())),
+            commit: Arc::new(tokio::sync::Mutex::new(())),
         };
         let runtime = Self {
             sender,
