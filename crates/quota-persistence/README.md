@@ -5,20 +5,10 @@ document codec for presentation preferences.
 
 ## What this crate owns
 
-Two durable owners, and nothing else.
-
-| State                                                   | Owner                    | Module                                |
-| ------------------------------------------------------- | ------------------------ | ------------------------------------- |
-| Connections, accounts, pool bindings                    | SQLite                   | `sqlite::AccountRepository`           |
-| Latest validated readings and optional history          | SQLite                   | `sqlite::MeasurementRepository`       |
-| Scoped retry deadlines and rate limits                  | SQLite                   | `sqlite::BackoffRepository`           |
-| Alert episodes and the notification outbox              | SQLite                   | `sqlite::AlertRepository`             |
-| Theme, density, indicator, window mode, topmost, launch | versioned store document | `store::PresentationPreferencesCodec` |
-
-Native window geometry belongs to `tauri-plugin-window-state`, and app-owned secrets
-belong to the operating-system secure store. Neither is represented here, and no table,
-column, or store key in this crate holds a token, a cookie, an authorization header, or a
-credential locator.
+[The architecture ownership table](../../docs/architecture.md#persisted-state-ownership)
+owns the Store, SQLite, native geometry, and credential boundaries. This crate implements
+the Store document codec and SQLite repositories; it stores no token, cookie,
+authorization header, or credential locator.
 
 ## One pool, one migration owner
 
@@ -55,15 +45,11 @@ journal, `synchronous = FULL`, `foreign_keys = ON`, and a busy timeout bounded t
 The ordered list is hand-written (`sqlite::MIGRATIONS`), not `sqlx::migrate!`. The
 reasons, in order of weight:
 
-1. The whole schema is one file, and `sqlx::migrate!` derives its version numbers from
-   file names while this crate records them under the numbers it declares in
-   `schema_migrations`. One list makes the recorded version and the applied statements
-   visibly the same value.
+1. `sqlx::migrate!` derives version numbers from file names, while this crate explicitly
+   declares each version beside its embedded SQL in `sqlite::MIGRATIONS`. That list is the
+   owner of migration order and recorded versions.
 2. The statements are embedded with `include_str!`, so a shipped binary cannot migrate
    against a file other than the one that was tested.
-3. `sqlx::migrate!` needs `sqlx-cli` to prepare its cache for offline builds. This
-   workspace has no `sqlx` binary and no prepared cache, so the hand-rolled list is also
-   the only option that works here.
 
 Each migration runs as one transaction. A failure rolls the migration back whole and
 leaves the previous version recorded, so the next start retries it in full. A version
@@ -122,9 +108,9 @@ never touches `accounts`, `alert_episodes`, `notification_outbox`, or `refresh_b
 
 ## Tests
 
-`tests/sqlite_repositories.rs` runs against real migrated on-disk SQLite files in
-temporary directories. It covers migration idempotency on reopen, foreign-key enforcement,
-per-connection settings verification, account-delete isolation between two accounts of one
-provider, one-transaction reading writes, history coalescing, scoped backoff and
-`is_rate_limited_now`, episode and outbox deduplication, and the corrupt/newer
+The SQLite integration tests under `tests/` run against real migrated on-disk files in
+temporary directories. They cover migration idempotency on reopen, foreign-key
+enforcement, per-connection settings verification, account-delete isolation between two
+accounts of one provider, one-transaction reading writes, history coalescing, scoped
+backoff and `is_rate_limited_now`, episode and outbox deduplication, and the corrupt/newer
 store-document round trips.

@@ -1,7 +1,7 @@
 //! Repository automation. Run through `cargo xtask <command>`.
-//! Subcommands are static gates: they read files and print violations. None of
-//! them compiles another crate, contacts the network, or starts the app. The
-//! Tauri CLI does that, through `bun tauri dev`.
+//! Architecture and release checks inspect repository files. The bindings
+//! check delegates to the desktop exporter test; see [`bindings`]. Application
+//! launch belongs to the Tauri CLI through `bun tauri dev`.
 
 #![forbid(unsafe_code)]
 
@@ -91,7 +91,7 @@ fn root() -> PathBuf {
         .map_or_else(|| PathBuf::from("."), PathBuf::from)
 }
 
-/// Prints the command list and the reason `bindings` cannot run `tauri-specta`.
+/// Prints the command list and options.
 fn usage() {
     println!(
         "\

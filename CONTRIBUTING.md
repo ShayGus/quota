@@ -15,8 +15,8 @@ cd the repository root && bun install --frozen-lockfile && cd ../..
 cargo build --workspace --locked
 ```
 
-`rust-toolchain.toml` pins Rust 1.97.1 with the `clippy` and `rustfmt` components. Do not
-edit the version in a workflow file; it lives in that one file, so it cannot drift.
+`rust-toolchain.toml` owns the compiler pin and the required components. Do not edit the
+version in a workflow file; it lives in that one file, so it cannot drift.
 
 ## 2. Verify the versions
 
@@ -27,9 +27,8 @@ cargo deny check advisories licenses sources
 cargo update --workspace --dry-run    # what could move inside existing ranges
 ```
 
-Compare what you see with `docs/dependencies.md`. That file records the resolved Rust and
-npm versions, the MSRV, the two compatibility holds (the Specta release candidate and the
-SQLx 0.8 line), and how each version was verified.
+`docs/dependencies.md` points to the version owners and explains the declared minimum Rust
+version and the two compatibility holds: the Specta release candidate and SQLx 0.8.
 
 For the frontend, read `the repository root/bun.lock` after
 `bun install --frozen-lockfile`. Do not upgrade a dependency as a side effect of another

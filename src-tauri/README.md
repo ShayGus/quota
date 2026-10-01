@@ -4,8 +4,8 @@ The Tauri desktop host for Quota.
 
 This package is an outer composition layer. It maps domain results onto the typed IPC
 contracts in `quota-contracts`, mounts the Tauri Specta registry, and owns the native
-window, tray, notification, and secret adapters. It holds no quota rules of its own; every
-rule lives in `quota-domain` or `quota-core`.
+window and tray adapters and registers the notification plugin. It holds no quota rules of
+its own; every rule lives in `quota-domain` or `quota-core`.
 
 ## Layout
 
@@ -18,7 +18,7 @@ rule lives in `quota-domain` or `quota-core`.
 | `src/ipc/commands.rs` | Thin `#[tauri::command]` handlers.                                   |
 | `src/ipc/events.rs`   | `tauri_specta::Event` wrappers and the typed emit path.              |
 | `src/ipc/bindings.rs` | The one registry used both to mount handlers and to export bindings. |
-| `src/platform/`       | Tray, overview window, notifications, secret storage.                |
+| `src/platform/`       | Tray and overview window adapters.                                   |
 
 ## Security model
 
@@ -34,7 +34,7 @@ when one appears.
 
 ## Build status
 
-This package compiles on this machine. The `WebKitGTK` development packages and
-`pkg-config` were installed on 2026-10-01, and the crate now builds, lints, and tests
-locally. CI still compiles it on a clean runner, which is what proves the declared package
-set is complete. See `docs/exceptions.md`.
+[Acceptance mapping](../docs/acceptance.md) owns the local build and launch evidence and
+its native verification limits.
+[README.md](../README.md#developer-setup-from-a-clean-checkout) lists the native build
+prerequisites.

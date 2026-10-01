@@ -7,77 +7,41 @@ versions come from the npm registry and are committed in
 
 ## Toolchain
 
-| Tool                               | Version | Where declared                                                | How verified                                                                                                                                                                                        |
-| ---------------------------------- | ------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust compiler                      | 1.97.1  | `rust-toolchain.toml`, with `clippy` and `rustfmt` components | `rustc --version` on the build machine                                                                                                                                                              |
-| Tested minimum Rust version (MSRV) | 1.90.0  | `[workspace.package] rust-version` in `Cargo.toml`            | Chosen for edition 2024 support. Every crate inherits it with `rust-version.workspace = true`, so the gate in `cargo xtask check-architecture` fails if a member drops it.                          |
-| Cargo resolver                     | 3       | `[workspace] resolver`                                        | Required by a virtual workspace on edition 2024                                                                                                                                                     |
-| Bun                                | 1.3.14  | `.bun-version`, read by `oven-sh/setup-bun` in CI             | The client that produced `bun.lock`; the specification listed pnpm and the captain changed the project to Bun. Bun replaces Node.js as the script runner, so no separate Node version is installed. |
+[`rust-toolchain.toml`](../rust-toolchain.toml) owns the compiler pin and required
+components. [`Cargo.toml`](../Cargo.toml) owns the declared minimum Rust version and
+resolver. Workspace members inherit that minimum; inheritance alone does not demonstrate
+that the complete dependency graph builds with it. CI uses the pinned compiler.
+
+[`.bun-version`](../.bun-version) owns the Bun version used by CI. Bun produced the
+frontend lockfile and replaces Node.js as the script runner. The package-manager decision
+is recorded in
+[the exception register](exceptions.md#3-deviations-from-the-stock-tauri-template).
 
 ## Rust dependencies
 
-Read from `Cargo.lock`. `tauri-plugin-window-state` is declared in the workspace but is
-not yet a dependency of any package, so it has no lock entry.
+The committed [`Cargo.lock`](../Cargo.lock) owns resolved versions; workspace and package
+manifests own requirements and enabled features. Inspect the desktop dependency graph with
+`cargo tree -p quota-desktop --locked`. This includes the window-state plugin, which the
+host registers during bootstrap.
 
-| Crate                          | Resolved    | Requirement in the workspace manifest                           | How verified                                                                                                          |
-| ------------------------------ | ----------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| `tauri`                        | 2.12.1      | `2.12.1`                                                        | Lockfile entry plus `crates.io` version listing                                                                       |
-| `tauri-build`                  | 2.7.1       | `2.7.1`                                                         | Same                                                                                                                  |
-| `tauri-plugin-notification`    | 2.5.0       | `2.5.0`                                                         | Same                                                                                                                  |
-| `tauri-plugin-opener`          | 2.7.0       | `2.7.0`                                                         | Same                                                                                                                  |
-| `tauri-plugin-positioner`      | 2.4.0       | `2.4.0`                                                         | Same                                                                                                                  |
-| `tauri-plugin-single-instance` | 2.5.1       | `2.5.1`                                                         | Same                                                                                                                  |
-| `tauri-plugin-sql`             | 2.5.0       | `2.5.0`, `sqlite` feature                                       | Same, and `crates.io` dependency metadata                                                                             |
-| `tauri-plugin-store`           | 2.5.0       | `2.5.0`                                                         | Same                                                                                                                  |
-| `tauri-plugin-window-state`    | —           | `2.5.0`                                                         | Declared only; no package depends on it yet                                                                           |
-| `tauri-specta`                 | 2.0.0-rc.25 | `=2.0.0-rc.25`                                                  | Exact pin, see the prerelease exception below                                                                         |
-| `specta`                       | 2.0.0-rc.25 | `=2.0.0-rc.25`                                                  | Same                                                                                                                  |
-| `specta-typescript`            | 0.0.12      | `0.0.12`                                                        | Lockfile entry                                                                                                        |
-| `specta-serde`                 | 0.0.12      | `0.0.12`                                                        | Lockfile entry                                                                                                        |
-| `sqlx`                         | 0.8.6       | `0.8.6`, `sqlite`/`runtime-tokio`/`macros`/`json`/`uuid`/`time` | Lockfile entry; see the SQLx pin below                                                                                |
-| `libsqlite3-sys`               | 0.30.1      | transitive, through `sqlx-sqlite`                               | Lockfile entry. Compiled against the system SQLite; the linked engine version must be recorded at release (spec 13.6) |
-| `chrono`                       | 0.4.45      | `0.4.45`, `clock`/`serde`/`std`                                 | Lockfile entry                                                                                                        |
-| `serde`                        | 1.0.229     | `1.0.229`, `derive`                                             | Lockfile entry                                                                                                        |
-| `serde_json`                   | 1.0.151     | `1.0.151`                                                       | Lockfile entry                                                                                                        |
-| `thiserror`                    | 2.0.21      | `2.0.21`                                                        | Lockfile entry. `1.0.69` also resolves as a transitive version for crates that have not moved                         |
-| `tokio`                        | 1.53.1      | `1.53.1`, minimal feature sets per crate                        | Lockfile entry                                                                                                        |
-| `tracing`                      | 0.1.44      | `0.1.44`                                                        | Lockfile entry                                                                                                        |
-| `uuid`                         | 1.26.1      | `1.26.1`, `serde`/`v4`                                          | Lockfile entry                                                                                                        |
-| `proptest`                     | 1.11.0      | `1.11.0` (dev only)                                             | Lockfile entry                                                                                                        |
-| `tracing-subscriber`           | 0.3.20      | `0.3.20`, `env-filter`/`fmt`                                    | Declared by `quota-desktop`                                                                                           |
+`libsqlite3-sys` is transitive through `sqlx-sqlite`; the linked engine version must be
+recorded from the shipping artifact at release (spec 13.6), rather than inferred from the
+crate version.
 
 `cargo deny check advisories licenses sources` runs weekly against this set. See
 `deny.toml` for the approved licence list and the allowed registry.
 
 ## npm dependencies
 
-Read from `the repository root/package.json`; each version was checked with
-`npm view <package> version`.
+[`package.json`](../package.json) owns direct dependency pins; [`bun.lock`](../bun.lock)
+owns the resolved frontend graph.
 
-| Package                            | Resolved | Note                                                                                                                     |
-| ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `react`, `react-dom`               | 19.3.0   | Major 19 is fixed by the specification                                                                                   |
-| `@types/react`, `@types/react-dom` | 19.3.0   | Matched to the runtime release                                                                                           |
-| `typescript`                       | 6.0.3    | Newest release `typescript-eslint` 8.71.0 accepts. Its peer range is `>=4.8.4 <6.1.0`, so TypeScript 7.0.2 is outside it |
-| `typescript-eslint`                | 8.71.0   | Type-aware flat configuration                                                                                            |
-| `eslint`                           | 10.11.0  |                                                                                                                          |
-| `@eslint/js`                       | 10.0.1   |                                                                                                                          |
-| `eslint-plugin-react-hooks`        | 7.1.1    | Includes the React Compiler diagnostics                                                                                  |
-| `globals`                          | 17.12.0  |                                                                                                                          |
-| `prettier`                         | 3.9.9    | The single formatter                                                                                                     |
-| `vite`                             | 8.3.1    |                                                                                                                          |
-| `@vitejs/plugin-react`             | 6.1.1    | 6.x and later, so the React Compiler preset comes from `@rolldown/plugin-babel`                                          |
-| `@rolldown/plugin-babel`           | 0.2.4    |                                                                                                                          |
-| `babel-plugin-react-compiler`      | 1.0.0    | Compiler 1.0, stable                                                                                                     |
-| `@babel/core`                      | 8.0.6    |                                                                                                                          |
-| `vitest`                           | 5.0.3    |                                                                                                                          |
-| `jsdom`                            | 30.1.1   |                                                                                                                          |
-| `@testing-library/react`           | 16.3.3   |                                                                                                                          |
-| `@testing-library/dom`             | 10.4.2   |                                                                                                                          |
-| `@testing-library/user-event`      | 14.6.7   |                                                                                                                          |
-| `@testing-library/jest-dom`        | 7.0.1    |                                                                                                                          |
-| `@types/node`                      | 26.6.3   | Tooling project only                                                                                                     |
-| `@tauri-apps/api`                  | 2.12.1   | Matched to the `tauri` 2.12.1 crate                                                                                      |
+React 19 is fixed by the specification. TypeScript must stay inside the installed
+`typescript-eslint` peer range. The renderer's React Compiler runs through
+`@vitejs/plugin-react`'s `compiler` option and `oxc-transform-react`, as configured in
+[`vite.config.ts`](../vite.config.ts). The Babel route was rejected because
+`@rolldown/plugin-babel` 0.2.4's declarations failed with `skipLibCheck: false` against
+both evaluated Babel type stacks. It is not a dependency of this application.
 
 ## Prerelease exception: the Specta v2 release candidate
 

@@ -9,29 +9,31 @@ Layers named below: `domain` (`crates/quota-domain`), `core` (`crates/quota-core
 `providers` (`crates/quota-providers`), `persistence` (`crates/quota-persistence`),
 `contracts` (`crates/quota-contracts`), `host` (`src-tauri`), `ui` (`src`).
 
-The native desktop host has not been compiled or run on this machine. The WSL image lacks
-`libdbus-1-dev`, WebKitGTK development packages, and `pkg-config`. Some host and UI code
-and tests now exist, but native runtime evidence is still unverified. CI installs the
-Linux packages and runs the first host build.
+The recorded local evidence covers compilation, strict linting, tests, and a WSLg launch
+on 2026-10-01 showing ten fictional sample accounts with 19 readings. The Tauri native
+build dependencies were installed for that run, and the window used software rendering.
+This smoke check does not establish live-provider, tray, notification, or packaged-runtime
+acceptance. Windows and macOS runs, Windows installers, Linux packaging, and the 72-hour
+ten-account soak remain unverified. CI installs the Linux dependencies on a clean runner.
 
 ## AC-01 to AC-14: normalisation and presentation
 
-| ID    | Layer      | Evidence                                                                                      | Status                                                                    |
-| ----- | ---------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| AC-01 | domain     | `percent::Percent::from_used_percent`; unit tests in `crates/quota-domain/src/percent.rs`     | implemented                                                               |
-| AC-02 | domain     | `quota::window` window semantics; independent windows carry independent measurements          | implemented                                                               |
-| AC-03 | domain     | `quota::window::QuotaCategory`; a missing category is absent, never synthesised               | implemented                                                               |
-| AC-04 | domain     | `quota::measurement::UnavailableReason`; a missing field becomes an unavailable measurement   | implemented                                                               |
-| AC-05 | domain     | `quota::money::MoneyMeasurement`; extra spend is a distinct role, not an included allowance   | implemented                                                               |
-| AC-06 | domain     | `quota::measurement::QuantityMeasurement`; a bare amount has no denominator and no percentage | implemented                                                               |
-| AC-07 | domain     | `quota::window::Enforcement`; unlimited is its own state                                      | implemented                                                               |
-| AC-08 | domain     | `Percent::is_just_above_zero`                                                                 | implemented                                                               |
-| AC-09 | domain     | `quota::window` not-entitled state; no division by a zero limit                               | implemented                                                               |
-| AC-10 | domain     | `Percent` keeps the original evidence; `arc_fraction` clamps only the drawn arc               | implemented                                                               |
-| AC-11 | core, host | Shared supervised polling with bounded concurrency; core tests and host worker source         | partially: source is implemented; the native host has not compiled or run |
-| AC-12 | domain     | one window per scope, so one limit can replenish alone                                        | implemented                                                               |
-| AC-13 | domain     | `quota::window::BoundaryKind` distinguishes a partial replenishment from a reset              | implemented                                                               |
-| AC-14 | providers  | Codex, Claude, and OpenCode Go decoder mappings and provider tests                            | implemented                                                               |
+| ID    | Layer      | Evidence                                                                                      | Status                                                                |
+| ----- | ---------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| AC-01 | domain     | `percent::Percent::from_used_percent`; unit tests in `crates/quota-domain/src/percent.rs`     | implemented                                                           |
+| AC-02 | domain     | `quota::window` window semantics; independent windows carry independent measurements          | implemented                                                           |
+| AC-03 | domain     | `quota::window::QuotaCategory`; a missing category is absent, never synthesised               | implemented                                                           |
+| AC-04 | domain     | `quota::measurement::UnavailableReason`; a missing field becomes an unavailable measurement   | implemented                                                           |
+| AC-05 | domain     | `quota::money::MoneyMeasurement`; extra spend is a distinct role, not an included allowance   | implemented                                                           |
+| AC-06 | domain     | `quota::measurement::QuantityMeasurement`; a bare amount has no denominator and no percentage | implemented                                                           |
+| AC-07 | domain     | `quota::window::Enforcement`; unlimited is its own state                                      | implemented                                                           |
+| AC-08 | domain     | `Percent::is_just_above_zero`                                                                 | implemented                                                           |
+| AC-09 | domain     | `quota::window` not-entitled state; no division by a zero limit                               | implemented                                                           |
+| AC-10 | domain     | `Percent` keeps the original evidence; `arc_fraction` clamps only the drawn arc               | implemented                                                           |
+| AC-11 | core, host | Shared supervised polling with bounded concurrency; core tests and host worker source         | source and local launch exist; sustained native scheduling unverified |
+| AC-12 | domain     | one window per scope, so one limit can replenish alone                                        | implemented                                                           |
+| AC-13 | domain     | `quota::window::BoundaryKind` distinguishes a partial replenishment from a reset              | implemented                                                           |
+| AC-14 | providers  | Codex, Claude, and OpenCode Go decoder mappings and provider tests                            | implemented                                                           |
 
 ## AC-45 to AC-61: UI and windowing
 
@@ -67,9 +69,9 @@ Linux packages and runs the first host build.
 
 ## AC-92 to AC-100: persistence
 
-| ID              | Layer       | Evidence                                                                  | Status                                                               |
-| --------------- | ----------- | ------------------------------------------------------------------------- | -------------------------------------------------------------------- |
-| AC-92 to AC-100 | persistence | Typed Store codec, SQLite repositories, migrations, and persistence tests | partially: storage code and tests exist; the native host has not run |
+| ID              | Layer       | Evidence                                                                  | Status                                                                         |
+| --------------- | ----------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| AC-92 to AC-100 | persistence | Typed Store codec, SQLite repositories, migrations, and persistence tests | storage tests and local launch exist; native persistence acceptance unverified |
 
 ## AC-105 to AC-111: hardening
 
@@ -102,18 +104,13 @@ Linux packages and runs the first host build.
 
 ## Cases with no line above
 
-Every remaining case (AC-15 to AC-44, AC-72 to AC-74, AC-85 to AC-91, AC-101 to AC-104) is
-`not implemented`. They cover live provider credentials, notification delivery, and the
-ten-account soak. Each needs a signed-in provider account or a long-running packaged
-desktop build.
+The remaining cases (AC-15 to AC-44, AC-72 to AC-74, AC-85 to AC-91, AC-101 to AC-104)
+have no acceptance evidence recorded here. They include live provider credentials,
+notification delivery, and the ten-account soak. Existing connector or notification source
+does not establish those cases; verification requires the relevant signed-in provider or
+long-running packaged desktop run.
 
-## What runs today
+## Repository checks
 
-| Command                                                                                       | Meaning                                               |
-| --------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `cargo test --workspace --exclude quota-desktop --locked`                                     | Rust crates that do not need native desktop libraries |
-| `cargo clippy --workspace --exclude quota-desktop --all-targets --locked -- -D warnings`      | Lint policy for the locally buildable Rust crates     |
-| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude quota-desktop --no-deps --locked` | Rust documentation checks without the desktop host    |
-| `cargo xtask check-architecture`                                                              | Package, dependency, file size, and IPC rules         |
-| `cargo xtask check-release`                                                                   | Release feature set, licence allow list, action pins  |
-| `cargo xtask bindings --check`                                                                | The generated bindings, regenerated and diffed        |
+[CONTRIBUTING.md](../CONTRIBUTING.md#3-run-the-checks) owns the check commands. The
+workspace checks include the desktop host; no local host exclusion is required.

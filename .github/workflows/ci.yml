@@ -39,10 +39,8 @@ jobs:
 
       # Tauri on Linux builds against the system WebView, not a bundled engine.
       # Without these development packages the `quota-desktop` package cannot
-      # compile, so the host, its permission manifest, and its capabilities
-      # would never be compiled anywhere. This step is what makes CI the first
-      # real compile of the desktop host. It is the one place a system package
-      # is installed.
+      # compile. Install them explicitly so a clean runner also compiles the
+      # host permission manifest and capabilities.
       - name: Install the Tauri system build dependencies
         run: |
           sudo apt-get update

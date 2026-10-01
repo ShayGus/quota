@@ -3,7 +3,8 @@
 The Rust-owned IPC surface for the Quota desktop host.
 
 This crate contains transport definitions only. It has no business services and no
-credential types, and it depends only on `quota-domain`.
+credential types. Its application-model dependency is `quota-domain`; its transport
+dependencies are declared in `Cargo.toml`.
 
 ## What lives here
 

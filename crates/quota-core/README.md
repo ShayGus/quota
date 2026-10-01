@@ -22,7 +22,7 @@ outside.
 
 - It does not start a second async runtime. The desktop host spawns the supervisor once on
   Tauri's shared runtime and passes the handles in.
-- It does not perform provider I/O. It calls a [`ports::ProviderAdapter`].
+- It does not perform provider I/O. It calls a `ports::ProviderAdapter`.
 - It does not persist. It calls a repository port.
 - It does not guess a quota value. A provider that returns nothing produces
   `FetchOutcome::Partial` or a typed error, never a fabricated zero.

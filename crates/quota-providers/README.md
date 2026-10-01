@@ -179,26 +179,16 @@ stored. Nothing in this crate logs a header, a body, a token, a cookie, an addre
 profile path, or a full URL; every read span records only the provider, an opaque
 connection identity, and a profile label.
 
-The bundled TLS backend is rustls with the `ring` provider, selected explicitly so the
-build needs no system TLS headers and no `cmake`. Only the endpoints named in this file
-are ever contacted, and every request is HTTPS.
+The bundled TLS backend is rustls with the `ring` provider, so the provider transport does
+not require system TLS headers or `cmake`. The desktop host has separate native build
+prerequisites in the root README. Only the endpoints named in this file are ever
+contacted, and every request is HTTPS.
 
 ## Dependencies added by this crate
 
-Versions were resolved from the crates.io sparse index
-(`https://index.crates.io/<a>/<b>/<name>`) on 2026-10-01, and each one resolves to the
-version already pinned in the workspace `Cargo.lock`.
-
-| Dependency | Version | Resolved from                           | Date       |
-| ---------- | ------- | --------------------------------------- | ---------- |
-| `reqwest`  | 0.13.5  | `https://index.crates.io/re/qw/reqwest` | 2026-10-01 |
-| `rustls`   | 0.23.45 | `https://index.crates.io/ru/st/rustls`  | 2026-10-01 |
-
-`reqwest` is used with `default-features = false, features = ["rustls-no-provider"]`;
-`rustls` is used with `default-features = false, features = ["ring", "std", "tls12"]`. The
-default backend (`aws-lc-rs`) needs `cmake`, and the `native-tls` backend needs
-`pkg-config`; neither is installed on this build machine, so the `ring` provider is
-selected deliberately and installed once at process start.
+[The dependency record](../../docs/dependencies.md) points to the authoritative manifests
+and lockfiles. This crate's `Cargo.toml` declares the explicit rustls `ring` backend;
+`http::ProviderHttp` installs that crypto provider once on first use.
 
 ## Tests
 

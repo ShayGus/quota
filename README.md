@@ -1,8 +1,10 @@
 # Quota
 
-Quota is a desktop monitor for AI subscription allowances. It tracks several accounts at
-once, including several accounts from the same provider, and shows how much allowance is
-left in each quota window.
+Quota is a desktop monitor for AI subscription allowances. It tracks accounts across
+Codex, Claude, and OpenCode Go and shows their remaining allowances. Production adapters
+use one local credential profile per provider; see
+[provider connection limits](docs/providers.md). Same-provider account isolation is
+covered by the fictional fixture provider.
 
 The application is Tauri 2 with a Rust backend and a React 19 frontend. Rust owns provider
 access, polling, account identity, quota normalisation, ranking, credentials, durable
@@ -21,16 +23,8 @@ supervisor, and commits readings before it publishes snapshots. SQLite stores ac
 history, backoff, monitoring, notification, operational privacy, and polling state. The
 Tauri Store plugin stores presentation settings.
 
-The React renderer and Tauri host are present. The host compiles, lints, tests, and
-launches on this WSL machine. The Tauri system libraries were installed on 2026-10-01. The
-app opens a window through WSLg; software rendering is used, so the window is correct but
-not GPU-accelerated.
-
-Windows installers, the 72-hour ten-account soak, macOS, and Linux packaging remain
-unverified.
-
-`docs/acceptance.md` maps the specified acceptance cases to a layer and records the
-remaining checks.
+[Acceptance mapping](docs/acceptance.md) owns the native verification status, evidence
+limits, and remaining checks.
 
 ## Run the app
 
@@ -42,7 +36,8 @@ bun tauri dev
 ```
 
 `bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust host,
-and opens the window. Close the window, or press Ctrl-C, to stop it.
+and opens the window. Closing a window hides it while monitoring continues. Use Quit from
+the tray menu, or press Ctrl-C in the terminal, to stop the application.
 
 To produce a release build:
 
@@ -84,9 +79,9 @@ cd ../..
 cargo build --workspace --locked
 ```
 
-`rust-toolchain.toml` pins Rust 1.97.1. The workspace's `rust-version` is 1.90.0, the
-tested minimum. `docs/dependencies.md` lists every resolved version and how it was
-verified.
+`rust-toolchain.toml` owns the compiler pin; `Cargo.toml` owns the declared minimum Rust
+version. [Dependency record](docs/dependencies.md) explains how to inspect the resolved
+versions and compatibility constraints.
 
 ## Commands
 

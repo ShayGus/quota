@@ -18,7 +18,7 @@ quota-desktop (src-tauri) — composition, thin commands, OS adapters
   │      └── quota-core ports + quota-domain
   ├── quota-persistence — typed Store and SQLite repositories, migrations
   │      └── quota-core ports + quota-domain
-  └── platform modules — tray, floating window, notifications, secure storage
+  └── platform modules — tray and floating window
 ```
 
 `xtask` is a build tool. It depends on `quota-domain` and `serde_json` only, and nothing
@@ -51,13 +51,13 @@ Each kind of durable state has exactly one owner. A typed `Preferences` value re
 the renderer is assembled from these owners; it is not an instruction to write the same
 object into three stores.
 
-| State                                                                                                                                                                                                                                                                   | Durable owner                                                | Access path                                                                       |
-| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | --------------------------------------------------------------------------------- |
-| Theme, indicator style, density, window mode, topmost preference, launch preference, privacy alias display mode, and other presentation defaults                                                                                                                        | `tauri-plugin-store`                                         | Rust `PreferenceRepository` over one versioned Serde document                     |
-| Connections, accounts, pool bindings, latest validated measurements and source timestamps, scoped retry deadlines, alert baselines and outbox, enabled or paused state, effective polling policy, notification policy, history retention, and diagnostic-export privacy | `tauri-plugin-sql` with SQLite                               | Rust repositories and explicit transactions over the plugin-managed database      |
-| Eligible native position, size, and maximised state for each persistent window                                                                                                                                                                                          | `tauri-plugin-window-state` behind the mode-aware controller | Native geometry adapter. No competing writes to these fields from Store or SQLite |
-| App-owned tokens or other secret material                                                                                                                                                                                                                               | Operating-system secure storage                              | Rust secret broker only. Never a Store value, never a SQL column                  |
-| Form drafts, hover, temporary search, open menus, and pending presentation order                                                                                                                                                                                        | React memory                                                 | Not durable                                                                       |
+| State                                                                                                                                                                                                                                                                   | Durable owner                   | Access path                                                                   |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------- |
+| Theme, indicator style, density, window mode, topmost preference, launch preference, privacy alias display mode, and other presentation defaults                                                                                                                        | `tauri-plugin-store`            | Rust `PreferenceRepository` over one versioned Serde document                 |
+| Connections, accounts, pool bindings, latest validated measurements and source timestamps, scoped retry deadlines, alert baselines and outbox, enabled or paused state, effective polling policy, notification policy, history retention, and diagnostic-export privacy | `tauri-plugin-sql` with SQLite  | Rust repositories and explicit transactions over the plugin-managed database  |
+| Eligible native position, size, and maximised state for each persistent window                                                                                                                                                                                          | `tauri-plugin-window-state`     | Native plugin lifecycle; explicit changes go through the overview controller  |
+| Future app-owned tokens or other secret material                                                                                                                                                                                                                        | Operating-system secure storage | Reserved boundary; no app-owned authorization or secret broker is implemented |
+| Form drafts, hover, temporary search, open menus, and pending presentation order                                                                                                                                                                                        | React memory                    | Not durable                                                                   |
 
 Two consequences follow.
 
@@ -65,11 +65,10 @@ A setting that must commit atomically with monitoring or alert state belongs in 
 not in the Store. The Store plugin writes a JSON file; it is not a transaction log, and
 enabling autosave does not make it one.
 
-Suggested SQLite tables are `connections`, `accounts`, `account_pool_bindings`,
-`quota_pools`, `quota_windows`, `latest_measurements`, `measurement_history`,
-`alert_episodes`, `notification_outbox`, `refresh_backoff`, `monitoring_preferences`, and
-versioned migration metadata. Presentation preferences and native geometry are not
-duplicated into them.
+The schema is owned by the embedded migrations in
+[`crates/quota-persistence/migrations/`](../crates/quota-persistence/migrations/), ordered
+by `sqlite::MIGRATIONS`. Presentation preferences and native geometry are not duplicated
+into those tables.
 
 ## Trust boundaries
 
@@ -88,13 +87,12 @@ Small records, kept here rather than in separate files:
 - **Workspace graph.** One root Cargo workspace, resolver 3, one `Cargo.lock`, one
   frontend lockfile. Members inherit edition, Rust version, publish flag, and lint levels;
   `cargo xtask check-architecture` fails a member that does not.
-- **Persistence ownership.** The table above. Store holds presentation prefs, SQLite holds
-  transactional state, the window-state plugin holds native geometry, and the OS keychain
-  holds secrets.
+- **Persistence ownership.** The table above owns the durable-state boundaries.
 - **IPC trust model.** Rust-owned DTOs, generated bindings, no generic
   `set_state(key, value)` command, no raw URL, path, or SQL argument.
 - **Release feature set.** Release artifacts are built from an explicit audited feature
   list, never `--all-features`. The `test-fixtures` feature is non-default;
   `cargo xtask check-release` fails when it enters a default set.
-- **Compiler exceptions.** React Compiler 1.0 is integrated through
-  `@rolldown/plugin-babel` for `@vitejs/plugin-react` 6.x. See `docs/exceptions.md`.
+- **React Compiler integration.** See
+  [the dependency record](dependencies.md#npm-dependencies) for the supported integration
+  route and its compatibility constraint.
