@@ -14,6 +14,7 @@ pub mod migrations;
 mod outbox_repository;
 pub mod pool;
 pub mod preferences_repository;
+mod reading_set;
 mod rows;
 mod window_writer;
 

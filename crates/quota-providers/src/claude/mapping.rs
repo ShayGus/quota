@@ -54,12 +54,8 @@ pub(crate) fn decode(
     }
     let mut decoded = DecodedUsage::new();
     if usable_limits(&usage.limits) {
-        for (index, limit) in usage.limits.iter().enumerate() {
-            // An entry without a percentage states nothing about a limit.
-            if limit.percent.is_none() {
-                continue;
-            }
-            decoded.push(named_limit(limit, index, pool, received_at)?);
+        for (limit, bucket) in usable_limits_named(&usage.limits) {
+            decoded.push(named_limit(limit, &bucket, pool, received_at)?);
         }
     } else {
         fixed_windows(usage, pool, received_at, &mut decoded)?;
@@ -73,6 +69,52 @@ pub(crate) fn decode(
 /// Whether the named-limits array is usable and replaces the fixed windows.
 pub(crate) fn usable_limits(limits: &[ClaudeLimit]) -> bool {
     !limits.is_empty() && limits.iter().any(|entry| entry.percent.is_some())
+}
+
+/// The named limits that state a percentage, each with the identity it keeps.
+///
+/// Identity comes from the group and the model scope, so removing an unrelated
+/// entry from the array does not rename an unchanged allowance. Two entries that
+/// genuinely describe the same scope are disambiguated by position, because
+/// otherwise one of them would be dropped silently.
+fn usable_limits_named(limits: &[ClaudeLimit]) -> Vec<(&ClaudeLimit, String)> {
+    let buckets: Vec<String> = limits
+        .iter()
+        // An entry without a percentage states nothing about a limit.
+        .filter(|entry| entry.percent.is_some())
+        .map(semantic_bucket)
+        .collect();
+    let mut seen: usize = 0;
+    let mut named = Vec::new();
+    for (index, entry) in limits.iter().enumerate() {
+        if entry.percent.is_none() {
+            continue;
+        }
+        let bucket = &buckets[index];
+        seen += 1;
+        // Two entries describing the same scope are separated by position, so
+        // neither is dropped.
+        let ambiguous = buckets.iter().filter(|other| *other == bucket).count() > 1;
+        let named_bucket = if ambiguous {
+            format!("{bucket}-{seen}")
+        } else {
+            bucket.clone()
+        };
+        named.push((entry, named_bucket));
+    }
+    named
+}
+
+/// The stable identity of one named limit: its group, qualified by its model.
+fn semantic_bucket(limit: &ClaudeLimit) -> String {
+    let model = limit.scope.as_ref().and_then(|scope| scope.model.as_ref());
+    let model_id = model.and_then(|model| model.id.as_deref());
+    let group = limit.group.as_deref().or(limit.kind.as_deref());
+    let base = decode::identifier(group.unwrap_or_else(|| model_id.unwrap_or("account")));
+    match model_id {
+        Some(model) if group.is_some() => format!("{base}-{}", decode::identifier(model)),
+        _ => base,
+    }
 }
 
 /// Decodes the three fixed windows, keeping the missing ones explicit.
@@ -163,7 +205,7 @@ fn fixed_window(
 /// Builds one named limit, keeping its own group and model scope.
 fn named_limit(
     limit: &ClaudeLimit,
-    index: usize,
+    bucket: &str,
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
 ) -> Result<QuotaWindow, ProviderError> {
@@ -175,7 +217,7 @@ fn named_limit(
     let label = model_label.or(group).unwrap_or("Claude limit").to_owned();
     // A bucket named "primary" is the provider's own name for this slot, so it
     // keeps the reported bucket identifier rather than inventing a period name.
-    let bucket = format!("{}-{index}", decode::identifier(group.unwrap_or(resource)));
+    let bucket = bucket.to_owned();
     let draft = WindowDraft {
         provider: ProviderId::Claude,
         pool_id: pool,

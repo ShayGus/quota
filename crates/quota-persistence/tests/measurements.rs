@@ -257,3 +257,42 @@ async fn a_stored_reading_reports_a_window_that_has_no_reading() {
 
     pool.close().await;
 }
+
+/// A window the provider stops reporting must not come back after a restart.
+#[tokio::test]
+async fn a_removed_window_is_swept_when_the_whole_set_is_written() {
+    let directory = TempDir::new("sweep");
+    let (_pool, repositories) = seeded(&directory).await;
+    let repo = repositories.measurements();
+    let account_id = AccountId::new("acct-1").unwrap();
+    let kept = support::window("win-kept", "pool-1", 55.0, support::at(0));
+    let dropped = support::window("win-dropped", "pool-1", 12.0, support::at(0));
+
+    repo.replace_readings(&account_id, &[kept.clone(), dropped.clone()])
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.windows_for_account(&account_id).await.unwrap().len(),
+        2
+    );
+
+    // The provider now reports only one window.
+    repo.replace_readings(&account_id, std::slice::from_ref(&kept))
+        .await
+        .unwrap();
+
+    let restored = repo.windows_for_account(&account_id).await.unwrap();
+    assert_eq!(
+        restored.len(),
+        1,
+        "the window that is no longer reported must not be restored"
+    );
+    assert_eq!(restored[0].id, kept.id);
+    assert!(
+        repo.latest(&account_id, &dropped.id)
+            .await
+            .unwrap()
+            .is_none(),
+        "the removed window keeps no current reading"
+    );
+}

@@ -197,12 +197,20 @@ fn a_usable_limits_array_replaces_the_fixed_windows() {
         received_at(),
     )
     .unwrap();
+    // Three named limits and three windows: had the fixed set also been decoded,
+    // there would be six. The identities come from each limit's own group and
+    // model scope, so they do not depend on the order of the array.
     assert_eq!(reading.windows.len(), 3);
+    let identities: Vec<&str> = reading
+        .windows
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    assert!(identities.contains(&"five-hour"), "{identities:?}");
+    assert!(identities.contains(&"seven-day"), "{identities:?}");
     assert!(
-        reading
-            .windows
-            .iter()
-            .all(|window| window.provider_bucket_id.as_deref() != Some("five-hour"))
+        identities.iter().any(|id| id.starts_with("seven-day-opus")),
+        "{identities:?}"
     );
     let session = reading.category(QuotaCategory::Session);
     assert_eq!(session.len(), 1);
@@ -317,4 +325,38 @@ fn two_local_accounts_of_one_provider_do_not_share_identity() {
     let second = decode_offline(ProviderId::Claude, &payload, "claude-b", received_at()).unwrap();
     assert_ne!(first.windows[0].pool_id, second.windows[0].pool_id);
     assert_ne!(first.windows[0].id, second.windows[0].id);
+}
+
+/// The identity of a named limit comes from what it says, not where it sits.
+#[test]
+fn removing_an_unrelated_limit_does_not_rename_an_unchanged_allowance() {
+    let full = fixture("claude_limits.json");
+    let before: serde_json::Value = serde_json::from_str(&full).unwrap();
+    let weekly_group = before["limits"][1]["group"].as_str().unwrap().to_owned();
+
+    // Drop the first entry, as a plan that dropped the five-hour limit would.
+    let mut trimmed = before.clone();
+    trimmed["limits"] =
+        serde_json::json!([before["limits"][1].clone(), before["limits"][2].clone()]);
+
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &serde_json::to_string(&trimmed).unwrap(),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+
+    let weekly = reading.category(QuotaCategory::Weekly);
+    let expected = weekly_group.replace('_', "-");
+    assert!(
+        weekly
+            .iter()
+            .any(|window| window.provider_bucket_id.as_deref() == Some(expected.as_str())),
+        "the unchanged weekly allowance keeps its identity: {:?}",
+        weekly
+            .iter()
+            .filter_map(|window| window.provider_bucket_id.clone())
+            .collect::<Vec<_>>()
+    );
 }

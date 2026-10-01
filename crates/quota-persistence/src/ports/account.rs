@@ -182,7 +182,7 @@ impl SqliteAccountPortAdapter {
         }
         self.repositories
             .measurements()
-            .persist_readings(&account.account_id, &account.windows)
+            .replace_readings(&account.account_id, &account.windows)
             .await
             .map(|_| ())
             .map_err(|e| map_error(&e))
@@ -239,7 +239,7 @@ impl AccountPort for SqliteAccountPortAdapter {
     ) -> Result<(), RepositoryError> {
         self.repositories
             .measurements()
-            .persist_readings(account_id, windows)
+            .replace_readings(account_id, windows)
             .await
             .map(|_| ())
             .map_err(|e| map_error(&e))
