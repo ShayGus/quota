@@ -6,10 +6,11 @@
  * while a newer order is waiting (spec 4.1-4.3, spec 17).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
-import { act } from "react";
+import { act, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { Overview, REORDER_IDLE_MS } from "../src/features/overview/Overview";
+import type { OverviewFilter } from "../src/features/overview/OverviewToolbar";
 import type { RendererState } from "../src/shared/state/types";
 import {
   applyPendingOrder,
@@ -30,9 +31,18 @@ import {
 /** Renders the overview against the live store, as the application does. */
 function Harness(): React.ReactElement {
   const state: RendererState = useRendererState();
+  const [filter, setFilter] = useState<OverviewFilter>("all");
+  const [search, setSearch] = useState("");
   return (
     <Overview
       state={state}
+      filter={filter}
+      onFilter={setFilter}
+      search={search}
+      onSearch={setSearch}
+      onFit={() => undefined}
+      onAddAccount={() => undefined}
+      onSavePreferences={() => undefined}
       onOpenAccount={() => undefined}
       onReconnect={() => undefined}
     />
@@ -190,8 +200,8 @@ describe("the needs-checking section", () => {
     expect(rowOrder()).toEqual(["stale", "fresh"]);
     const headings = document.querySelectorAll(".section-separator strong");
     expect([...headings].map((heading) => heading.textContent)).toEqual([
-      "Needs checking",
-      "Least remaining first",
+      "Needs checking · 1",
+      "Ranked accounts",
     ]);
   });
 
@@ -464,7 +474,7 @@ describe("the overview filters", () => {
     render(<Harness />);
     expect(rowOrder()).toEqual(["low", "calm"]);
 
-    const attention = screen.getByRole("button", { name: /needs attention/i });
+    const attention = screen.getByRole("button", { name: /^attention/i });
     expect(attention.textContent).toContain("1");
     act(() => {
       fireEvent.click(attention);

@@ -31,6 +31,7 @@ export function AppHeader({
       : new Set(state.snapshot.accounts.map((account) => account.provider_id)).size;
   const alwaysOnTop = state.preferences?.always_on_top ?? false;
   const mode = state.preferences?.overview_mode ?? "floating";
+  const paused = state.monitoring?.kind === "paused";
   return (
     <header className="shell__header">
       <div className="shell__brand">
@@ -43,32 +44,41 @@ export function AppHeader({
         </div>
       </div>
       <div className="shell__actions">
-        {alwaysOnTop ? (
-          <span className="shell__top-label">
-            <Icon name="pin" size={12} />
-            Always on top
-          </span>
-        ) : null}
+        {alwaysOnTop ? <span className="shell__top-label">Always on top</span> : null}
+        <span className="mode-control">
+          <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
+          {mode === "floating" ? "Floating" : "Tray"}
+        </span>
         <button
           type="button"
           className="icon-button"
           aria-pressed={alwaysOnTop}
           aria-label={alwaysOnTop ? "Turn off always on top" : "Keep the window on top"}
+          title={alwaysOnTop ? "Always on top — on" : "Always on top — off"}
           onClick={() => {
             launch(actions.setAlwaysOnTop(!alwaysOnTop));
           }}
         >
           <Icon name="pin" size={17} />
         </button>
-        <span className="mode-control">
-          <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
-          {mode === "floating" ? "Floating" : "Tray"}
-        </span>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Refresh the readings now"
+          title="Refresh the readings now"
+          disabled={paused}
+          onClick={() => {
+            launch(actions.refresh("user_requested"));
+          }}
+        >
+          <Icon name="refresh" size={17} />
+        </button>
         {view === "overview" ? (
           <button
             type="button"
             className="icon-button"
             aria-label="Open settings"
+            title="Settings"
             onClick={onSettings}
           >
             <Icon name="settings" size={17} />
@@ -78,6 +88,7 @@ export function AppHeader({
             type="button"
             className="icon-button"
             aria-label="Back to the overview"
+            title="Back to the overview"
             onClick={onOverview}
           >
             <Icon name="donut" size={17} />

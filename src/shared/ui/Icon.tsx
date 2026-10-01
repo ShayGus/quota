@@ -19,6 +19,7 @@ export type IconName =
   | "download"
   | "external"
   | "layers"
+  | "list"
   | "link"
   | "moon"
   | "mouse"
@@ -90,6 +91,7 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="M6.1 7a7 7 0 0 1 11.6-2L20 8M4 16l2.3 3A7 7 0 0 0 18 17" />
     </>
   ),
+  list: <path d="M8 5h12M8 12h12M8 19h12M3 5h.1M3 12h.1M3 19h.1" />,
   search: (
     <>
       <circle cx="10" cy="10" r="6" />

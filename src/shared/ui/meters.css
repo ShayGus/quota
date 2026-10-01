@@ -90,6 +90,12 @@
   display: none;
 }
 
+.quota-cell__button .ring__value {
+  font-size: 15px;
+  line-height: 1;
+  letter-spacing: -0.4px;
+}
+
 .bar {
   display: block;
   height: 5px;

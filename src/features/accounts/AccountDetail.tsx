@@ -20,7 +20,9 @@ import {
   formatExactInstant,
   instantOf,
 } from "../../shared/format/duration";
+import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
+import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { Ring } from "../../shared/ui/Meter";
 import { freshnessCaption, readingState } from "../overview/freshness";
 import { statusOf } from "../overview/status";
@@ -35,6 +37,18 @@ const SOURCE_WORDS: Record<QuotaWindow["source"], string> = {
   observed_web_endpoint: "Observed web endpoint",
   local_capture: "Local capture",
   manual: "Entered by hand",
+};
+
+/**
+ * The card title of each standard window. A window outside the standard three
+ * is named by its own scope, because no column name would describe it.
+ */
+const WINDOW_TITLES: Record<QuotaWindow["category"], string | null> = {
+  session: "5-hour",
+  weekly: "Weekly",
+  monthly: "Monthly",
+  daily: null,
+  custom: null,
 };
 
 /** The words for what an allowance represents in the plan. */
@@ -74,7 +88,7 @@ function WindowCard({
         onSelect(window.id);
       }}
     >
-      <h3>{window.scope.label || "Allowance"}</h3>
+      <h3>{WINDOW_TITLES[window.category] ?? (window.scope.label || "Allowance")}</h3>
       <Ring
         fraction={arcFraction(window.measurement)}
         severity={severity}
@@ -86,7 +100,13 @@ function WindowCard({
           ? "No reported reset"
           : formatBoundary(window.boundary, now)}
       </p>
+      <p className="limit-card__instant">
+        {window.boundary === null
+          ? "No reported reset"
+          : formatExactInstant(window.boundary.at, DISPLAY_TIME_ZONE)}
+      </p>
       <p className="limit-card__role">{ROLE_WORDS[window.metric_role]}</p>
+      <p className="limit-card__scope">{window.scope.label || "Allowance"}</p>
     </button>
   );
 }
@@ -131,17 +151,20 @@ export function AccountDetail({
         <span className="eyebrow">Account details</span>
       </div>
       <div className="detail__identity">
-        <div>
-          <h2>{label}</h2>
-          <p>
-            {account.provider_id}
-            {account.identity?.workspace_label != null
-              ? ` · ${account.identity.workspace_label}`
-              : ""}
-            {account.identity?.plan_label != null
-              ? ` · ${account.identity.plan_label}`
-              : ""}
-          </p>
+        <div className="identity">
+          <ProviderMark providerId={account.provider_id} />
+          <div>
+            <h2>{label}</h2>
+            <p>
+              {providerLabel(account.provider_id)}
+              {account.identity?.workspace_label != null
+                ? ` · ${account.identity.workspace_label}`
+                : ""}
+              {account.identity?.plan_label != null
+                ? ` · ${account.identity.plan_label}`
+                : ""}
+            </p>
+          </div>
         </div>
         <span className={`badge badge--${status.tone}`}>
           <Icon name={status.icon} size={11} />
@@ -171,7 +194,7 @@ export function AccountDetail({
         </div>
         <div>
           <dt>Provider</dt>
-          <dd>{account.provider_id}</dd>
+          <dd>{providerLabel(account.provider_id)}</dd>
         </div>
         <div>
           <dt>Workspace</dt>

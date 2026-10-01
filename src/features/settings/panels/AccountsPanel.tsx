@@ -20,6 +20,7 @@ import type {
   Preferences,
 } from "../../../generated/bindings";
 import { formatAge, instantOf } from "../../../shared/format/duration";
+import { providerLabel } from "../../../shared/format/provider";
 import { describeCommandError, launch } from "../../../shared/ipc/report";
 import type { AttemptProgress } from "../../../shared/state/types";
 import { Icon } from "../../../shared/ui/Icon";
@@ -47,7 +48,7 @@ function ManagedAccount({
         <div>
           <span className="account-manage-card__name">{account.nickname}</span>
           <span className="account-manage-card__meta">
-            {account.provider_id}
+            {providerLabel(account.provider_id)}
             {account.identity?.workspace_label != null
               ? ` · ${account.identity.workspace_label}`
               : ""}

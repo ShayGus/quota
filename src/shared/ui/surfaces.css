@@ -104,6 +104,22 @@
   line-height: 1.6;
 }
 
+.limit-card__instant {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+
+.limit-card__scope {
+  align-self: stretch;
+  margin: 4px -12px -14px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+
 .limit-card__role {
   margin: 0;
   font-size: 10px;

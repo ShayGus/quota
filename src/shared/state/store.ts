@@ -18,7 +18,7 @@ import type {
   PersistenceStatus,
   Preferences,
 } from "../../generated/bindings";
-import { applyOrder, canonicalOrder, placeAccounts, type PlacedAccount } from "./order";
+import { canonicalOrder } from "./order";
 import {
   initialRendererState,
   type AttemptProgress,
@@ -166,15 +166,6 @@ export function applyPendingOrder(): void {
     return;
   }
   commit({ ...state, appliedOrder: order, pendingOrder: null });
-}
-
-/** The placed accounts in the order currently on screen. */
-export function visiblePlacements(): readonly PlacedAccount[] {
-  const snapshot = state.snapshot;
-  if (snapshot === null) {
-    return [];
-  }
-  return applyOrder(placeAccounts(snapshot.accounts), state.appliedOrder);
 }
 
 /**

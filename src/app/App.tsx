@@ -8,13 +8,19 @@
 import { useState, type JSX } from "react";
 
 import { AccountDetail } from "../features/accounts/AccountDetail";
-import { Overview } from "../features/overview/Overview";
+import {
+  Overview,
+  overviewPlacements,
+  overviewRows,
+} from "../features/overview/Overview";
+import type { OverviewFilter } from "../features/overview/OverviewToolbar";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
 import type { AccountId } from "../generated/bindings";
 import { launch } from "../shared/ipc/report";
 import { useRendererState } from "../shared/state/useRendererState";
 import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
+import { Icon } from "../shared/ui/Icon";
 import { AppHeader } from "./AppHeader";
 import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
@@ -89,6 +95,10 @@ function QuotaWindow(): JSX.Element {
   // capability may save preferences, so it is the only window that renders it.
   const isSettingsWindow = window.location.hash === "#/settings";
   const [view, setView] = useState<View>({ name: "overview" });
+  // The filter and the search text belong to the window rather than the list,
+  // because the footer states how many accounts the filter leaves visible.
+  const [filter, setFilter] = useState<OverviewFilter>("all");
+  const [search, setSearch] = useState("");
   const now = useNow();
   useTheme(state);
 
@@ -118,6 +128,19 @@ function QuotaWindow(): JSX.Element {
         ) : account === null ? (
           <FeatureBoundary surface="overview">
             <Overview
+              filter={filter}
+              onFilter={setFilter}
+              search={search}
+              onSearch={setSearch}
+              onFit={() => {
+                launch(actions.fitToAccounts());
+              }}
+              onAddAccount={() => {
+                launch(actions.openSettings());
+              }}
+              onSavePreferences={(next) => {
+                launch(actions.savePreferences(next));
+              }}
               state={state}
               onOpenAccount={(accountId) => {
                 setView({ name: "detail", id: accountId });
@@ -146,15 +169,30 @@ function QuotaWindow(): JSX.Element {
           </FeatureBoundary>
         )}
       </main>
-      <WindowFooter />
+      <WindowFooter
+        counts={
+          isSettingsWindow || account !== null
+            ? null
+            : {
+                visible: overviewRows(state, filter, search).length,
+                total: overviewPlacements(state).length,
+              }
+        }
+      />
     </div>
   );
 }
 
-/** The window footer: what the backend is doing, and what it is not. */
-function WindowFooter(): JSX.Element {
+/** The window footer: what the backend is doing, and how much is on screen. */
+function WindowFooter({
+  counts,
+}: {
+  /** How many accounts the filter leaves visible, or `null` off the overview. */
+  readonly counts: { readonly visible: number; readonly total: number } | null;
+}): JSX.Element {
   const state = useRendererState();
   const link = state.link;
+  const paused = state.monitoring?.kind === "paused";
   const label =
     link === "connecting"
       ? "Connecting to Quota"
@@ -162,16 +200,24 @@ function WindowFooter(): JSX.Element {
         ? "Reconciling with Quota"
         : link === "unavailable"
           ? "Quota is not reachable"
-          : state.monitoring?.kind === "paused"
+          : paused
             ? "Paused · last known values"
             : "Monitoring active";
   return (
     <footer className="shell__footer">
-      <span className="shell__state">{label}</span>
+      <span className="shell__state">
+        <Icon name={paused ? "pause" : "shield"} size={13} />
+        {label}
+      </span>
       {state.persistence !== null && state.persistence.kind !== "available" ? (
         <span className="shell__state">
           Local storage{" "}
           {state.persistence.kind === "degraded" ? "degraded" : "needs repair"}
+        </span>
+      ) : null}
+      {counts !== null ? (
+        <span className="shell__count" data-testid="visible-count">
+          {counts.visible} / {counts.total} visible
         </span>
       ) : null}
     </footer>

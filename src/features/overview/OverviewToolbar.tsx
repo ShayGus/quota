@@ -7,31 +7,46 @@
  */
 import { useId, type JSX } from "react";
 
+import type { IndicatorStyle } from "../../generated/bindings";
 import { Icon } from "../../shared/ui/Icon";
 
 /** Which accounts the list shows. */
 export type OverviewFilter = "all" | "attention";
 
-/** The filter and search controls. */
+/** The filter, search, indicator, and window controls. */
 export function OverviewToolbar({
   filter,
   onFilter,
+  searchOpen,
+  onSearchOpen,
   search,
   onSearch,
+  onClearSearch,
   attentionCount,
   allCount,
   orderUpdatePending,
   onApplyOrder,
+  onFit,
+  indicatorStyle,
+  onIndicatorStyle,
 }: {
   readonly filter: OverviewFilter;
   readonly onFilter: (filter: OverviewFilter) => void;
+  /** Whether the search line is open. It stays open until it is dismissed. */
+  readonly searchOpen: boolean;
+  readonly onSearchOpen: (open: boolean) => void;
   readonly search: string;
   readonly onSearch: (search: string) => void;
+  readonly onClearSearch: () => void;
   readonly attentionCount: number;
   readonly allCount: number;
   /** Whether a newer order is waiting for a safe idle point. */
   readonly orderUpdatePending: boolean;
   readonly onApplyOrder: () => void;
+  /** Widens the window so every account and limit is visible at once. */
+  readonly onFit: () => void;
+  readonly indicatorStyle: IndicatorStyle;
+  readonly onIndicatorStyle: (style: IndicatorStyle) => void;
 }): JSX.Element {
   const searchId = useId();
   return (
@@ -56,45 +71,96 @@ export function OverviewToolbar({
                 onFilter("attention");
               }}
             >
-              Needs attention
+              Attention
               <span className="segmented__count"> {attentionCount}</span>
             </button>
           </div>
+          <button
+            type="button"
+            className="toolbar__sort"
+            title={
+              orderUpdatePending
+                ? "Readings changed; row order is held while you interact. Apply the new order now."
+                : "How ordering works"
+            }
+            onClick={() => {
+              if (orderUpdatePending) {
+                onApplyOrder();
+              }
+            }}
+          >
+            <Icon name={orderUpdatePending ? "refresh" : "list"} size={13} />
+            {orderUpdatePending ? "Update order" : "Least remaining first"}
+          </button>
         </div>
         <div className="toolbar__group">
-          <span className="toolbar__sort">
-            <Icon name="chevron-down" size={13} />
-            Least remaining first
-          </span>
-          {orderUpdatePending ? (
+          <button
+            type="button"
+            className="icon-button"
+            aria-pressed={searchOpen}
+            aria-label="Find an account"
+            onClick={() => {
+              onSearchOpen(!searchOpen);
+            }}
+          >
+            <Icon name="search" size={16} />
+          </button>
+          <button
+            type="button"
+            className="button button--small"
+            title="Widen the window to show all accounts and limits"
+            onClick={onFit}
+          >
+            Fit {allCount}
+          </button>
+          <div className="layout-set" role="group" aria-label="Allowance indicators">
             <button
               type="button"
-              className="button button--small"
+              className="icon-button"
+              aria-pressed={indicatorStyle === "ring"}
+              aria-label="Ring indicators"
+              title="Ring indicators"
               onClick={() => {
-                onApplyOrder();
+                onIndicatorStyle("ring");
               }}
             >
-              <Icon name="layers" size={13} />
-              Update order
+              <Icon name="donut" size={15} />
             </button>
-          ) : null}
+            <button
+              type="button"
+              className="icon-button"
+              aria-pressed={indicatorStyle === "bar"}
+              aria-label="Bar indicators"
+              title="Bar indicators"
+              onClick={() => {
+                onIndicatorStyle("bar");
+              }}
+            >
+              <Icon name="list" size={15} />
+            </button>
+          </div>
         </div>
       </div>
-      <div className="search-line">
-        <label className="sr-only" htmlFor={searchId}>
-          Search accounts
-        </label>
-        <Icon name="search" size={15} />
-        <input
-          id={searchId}
-          type="search"
-          value={search}
-          placeholder="Search accounts"
-          onChange={(event) => {
-            onSearch(event.currentTarget.value);
-          }}
-        />
-      </div>
+      {searchOpen ? (
+        <div className="search-line">
+          <label className="sr-only" htmlFor={searchId}>
+            Search accounts
+          </label>
+          <Icon name="search" size={15} />
+          <input
+            id={searchId}
+            type="search"
+            value={search}
+            placeholder="Find provider, nickname, workspace…"
+            onChange={(event) => {
+              onSearch(event.currentTarget.value);
+            }}
+          />
+          <button type="button" className="text-button" onClick={onClearSearch}>
+            Clear
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

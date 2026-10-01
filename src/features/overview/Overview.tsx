@@ -8,10 +8,11 @@
  */
 import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
 
-import type { AccountId, IndicatorStyle } from "../../generated/bindings";
-import { applyOrder, placeAccounts } from "../../shared/state/order";
+import type { AccountId, IndicatorStyle, Preferences } from "../../generated/bindings";
+import { applyOrder, placeAccounts, type PlacedAccount } from "../../shared/state/order";
 import { applyPendingOrder } from "../../shared/state/store";
 import type { RendererState } from "../../shared/state/types";
+import { Icon, Logo } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { AccountColumns, AccountRow } from "./AccountRow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
@@ -22,11 +23,19 @@ import { RefreshNotice } from "../../shared/ui/RefreshNotice";
 /** How long the list must be idle before a staged order is applied. */
 export const REORDER_IDLE_MS = 1200;
 
-/** The section heading and its explanatory sub-label. */
-const SECTION_HEADING: Record<string, readonly [string, string]> = {
-  needs_checking: ["Needs checking", "Not a prediction of exhaustion"],
-  ranked: ["Least remaining first", "Lowest remaining allowance first"],
-  monitoring_off: ["Monitoring off", "Not being checked"],
+/**
+ * The heading each section shows, its sub-label, and whether it names a count.
+ *
+ * The ranked group is the ordinary one, so it is only labelled once something
+ * precedes it: a separator there would name a group the reader can already see.
+ */
+const SECTION_HEADING: Record<
+  string,
+  readonly [heading: string, subLabel: string, countsItself: boolean]
+> = {
+  needs_checking: ["Needs checking", "Unknown is not zero or full", true],
+  ranked: ["Ranked accounts", "Least remaining first", false],
+  monitoring_off: ["Monitoring off", "", true],
 };
 
 /** Whether the pointer or the keyboard focus is inside the account list. */
@@ -84,35 +93,31 @@ function useApplyWhenIdle(
   }, [pending, container, apply]);
 }
 
-/** The overview: every account, its limits, and its state. */
-export function Overview({
-  state,
-  onOpenAccount,
-  onReconnect,
-}: {
-  readonly state: RendererState;
-  readonly onOpenAccount: (accountId: AccountId) => void;
-  readonly onReconnect: (accountId: AccountId) => void;
-}): JSX.Element {
-  const [filter, setFilter] = useState<OverviewFilter>("all");
-  const [search, setSearch] = useState("");
-  // The indicator style is a confirmed preference, so the overview reads it
-  // rather than keeping an unsaved local copy that never reaches the host.
-  const style: IndicatorStyle = state.preferences?.indicator_style ?? "ring";
-  const listRef = useRef<HTMLDivElement | null>(null);
-  const now = useNow();
+/**
+ * The accounts in the order currently on screen.
+ *
+ * The state is handed in rather than read from the store, because the React
+ * Compiler treats an argument-free store read as pure and memoises it for the
+ * life of the component. The footer, which counts from this, would then keep
+ * reporting the accounts of the first render for ever.
+ */
+export function overviewPlacements(state: RendererState): readonly PlacedAccount[] {
+  return applyOrder(placeAccounts(state.snapshot?.accounts ?? []), state.appliedOrder);
+}
 
-  const pending = state.pendingOrder !== null;
-
-  useApplyWhenIdle(listRef, applyPendingOrder, pending);
-
-  // The placements are derived from the snapshot prop and the applied order, so
-  // the render is a pure function of its inputs. Reading module state here would
-  // be invisible to the React Compiler and could be memoized wrongly.
-  const accounts = state.snapshot?.accounts ?? [];
-  const placements = applyOrder(placeAccounts(accounts), state.appliedOrder);
+/**
+ * The accounts the current filter and search text leave on screen.
+ *
+ * The footer counts what the list shows, so both read this one function rather
+ * than each keeping its own copy of the rule.
+ */
+export function overviewRows(
+  state: RendererState,
+  filter: OverviewFilter,
+  search: string,
+): readonly PlacedAccount[] {
   const query = search.trim().toLowerCase();
-  const matches = placements.filter((entry) => {
+  return overviewPlacements(state).filter((entry) => {
     const { account } = entry;
     if (filter === "attention" && !needsAttention(account)) {
       return false;
@@ -130,22 +135,85 @@ export function Overview({
       .toLowerCase();
     return haystack.includes(query);
   });
+}
+
+/** The overview: every account, its limits, and its state. */
+export function Overview({
+  state,
+  filter,
+  onFilter,
+  search,
+  onSearch,
+  onFit,
+  onAddAccount,
+  onSavePreferences,
+  onOpenAccount,
+  onReconnect,
+}: {
+  readonly state: RendererState;
+  readonly filter: OverviewFilter;
+  readonly onFilter: (filter: OverviewFilter) => void;
+  readonly search: string;
+  readonly onSearch: (search: string) => void;
+  /** Widens the window so every account and limit is visible at once. */
+  readonly onFit: () => void;
+  /** Opens the settings surface, where accounts are added. */
+  readonly onAddAccount: () => void;
+  /** Saves the next confirmed preference object. */
+  readonly onSavePreferences: (next: Preferences) => void;
+  readonly onOpenAccount: (accountId: AccountId) => void;
+  readonly onReconnect: (accountId: AccountId) => void;
+}): JSX.Element {
+  const [searchOpen, setSearchOpen] = useState(false);
+  // The indicator style is a confirmed preference, so the overview reads it
+  // rather than keeping an unsaved local copy that never reaches the host.
+  const style: IndicatorStyle = state.preferences?.indicator_style ?? "ring";
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const now = useNow();
+
+  const pending = state.pendingOrder !== null;
+
+  useApplyWhenIdle(listRef, applyPendingOrder, pending);
+
+  // Everything below is derived from the snapshot prop and the applied order, so
+  // the render is a pure function of its inputs. Reading module state here would
+  // be invisible to the React Compiler and could be memoized wrongly.
+  const accounts = state.snapshot?.accounts ?? [];
+  const placements = overviewPlacements(state);
+  const matches = overviewRows(state, filter, search);
   const attentionCount = placements.filter((entry) =>
     needsAttention(entry.account),
   ).length;
+  const uncheckedAbove = matches.some((entry) => entry.section === "needs_checking");
+  const sectionSizes: Record<string, number> = {};
+  for (const entry of matches) {
+    sectionSizes[entry.section] = (sectionSizes[entry.section] ?? 0) + 1;
+  }
 
   let renderedSection: string | null = null;
   const rows: JSX.Element[] = [];
   for (const entry of matches) {
     if (entry.section !== renderedSection) {
       renderedSection = entry.section;
-      const heading = SECTION_HEADING[entry.section] ?? [entry.section, ""];
-      rows.push(
-        <p key={`section-${entry.section}`} className="section-separator">
-          <strong>{heading[0]}</strong>
-          <span>{heading[1]}</span>
-        </p>,
-      );
+      const [heading, subLabel, countsItself] = SECTION_HEADING[entry.section] ?? [
+        entry.section,
+        "",
+        false,
+      ];
+      if (entry.section !== "ranked" || uncheckedAbove) {
+        rows.push(
+          <p
+            key={`section-${entry.section}`}
+            className={`section-separator${entry.section === "needs_checking" ? " section-separator--needs" : ""}`}
+          >
+            <strong>
+              {heading}
+              {countsItself ? ` · ${String(sectionSizes[entry.section] ?? 0)}` : ""}
+            </strong>
+            <span>{subLabel}</span>
+          </p>,
+        );
+      }
     }
     rows.push(
       <AccountRow
@@ -160,26 +228,46 @@ export function Overview({
     );
   }
 
+  if (placements.length === 0) {
+    return (
+      <div className="overview" ref={listRef}>
+        <FirstLaunch onAddAccount={onAddAccount} />
+      </div>
+    );
+  }
+
   return (
     <div className="overview" ref={listRef}>
       <OverviewToolbar
         filter={filter}
-        onFilter={setFilter}
+        onFilter={onFilter}
+        searchOpen={searchOpen}
+        onSearchOpen={setSearchOpen}
         search={search}
-        onSearch={setSearch}
+        onSearch={onSearch}
+        onClearSearch={() => {
+          onSearch("");
+        }}
         attentionCount={attentionCount}
         allCount={placements.length}
         orderUpdatePending={pending}
         onApplyOrder={applyPendingOrder}
+        onFit={onFit}
+        indicatorStyle={style}
+        onIndicatorStyle={(next) => {
+          const preferences = state.preferences;
+          if (preferences !== null) {
+            onSavePreferences({ ...preferences, indicator_style: next });
+          }
+        }}
       />
-      <p className="overview__rule">
-        Position is relative depletion of the lowest known included allowance. It is not a
-        forecast of when an allowance empties.
-      </p>
       <RefreshNotice accounts={accounts} preferences={state.preferences} now={now} />
       {matches.length === 0 ? (
-        <div className="list-note">
-          <span>No account matches the current filter or search text.</span>
+        <div className="empty empty--compact">
+          <h2>
+            {search.length > 0 ? "No matching accounts" : "No accounts need attention"}
+          </h2>
+          <p>Change the filter to return to all subscriptions.</p>
         </div>
       ) : (
         <div className="table">
@@ -187,9 +275,38 @@ export function Overview({
           {rows}
         </div>
       )}
-      <p className="overview__count" data-testid="visible-count">
-        {matches.length} / {placements.length} shown
+    </div>
+  );
+}
+
+/** The first launch: no account yet, so the window explains what it is for. */
+function FirstLaunch({
+  onAddAccount,
+}: {
+  readonly onAddAccount: () => void;
+}): JSX.Element {
+  return (
+    <div className="empty">
+      <div className="empty__art">
+        <Logo size={42} />
+      </div>
+      <h2>
+        Your subscriptions,
+        <br />
+        in one small window.
+      </h2>
+      <p>
+        See what is left in each quota window, when it resets, and how recently it was
+        checked.
       </p>
+      <button
+        type="button"
+        className="button button--primary button--full"
+        onClick={onAddAccount}
+      >
+        <Icon name="plus" size={15} />
+        Add your first account
+      </button>
     </div>
   );
 }
