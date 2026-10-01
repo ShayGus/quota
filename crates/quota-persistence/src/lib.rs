@@ -21,9 +21,11 @@
 #![forbid(unsafe_code)]
 
 pub mod error;
+pub mod ports;
 pub mod sqlite;
 pub mod store;
 
 pub use error::{PersistenceError, PersistenceResult};
+pub use ports::{SqliteBackoffRepository, SqliteRateLimitProbe};
 pub use sqlite::{SqlitePoolSettings, SqliteRepositories};
 pub use store::PresentationPreferencesCodec;

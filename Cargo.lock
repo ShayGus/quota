@@ -3267,6 +3267,7 @@ dependencies = [
 name = "quota-persistence"
 version = "0.1.0"
 dependencies = [
+ "async-trait",
  "chrono",
  "quota-core",
  "quota-domain",
