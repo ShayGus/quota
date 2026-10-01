@@ -100,8 +100,11 @@ pub async fn export_sanitized_diagnostics(
     if destination.trim().is_empty() || destination.len() > 4096 {
         return Err(CommandError::ValidationFailed {
             field: "destination".into(),
-            reason: "the export path is empty or too long".into(),
+            reason: "the export label is empty or too long".into(),
         });
     }
-    crate::bootstrap_helpers::write_diagnostics(&app, &state, &destination).await
+    // The renderer supplies a label, never a path. The host reduces it to a safe
+    // stem and writes inside its own application data directory.
+    let label = crate::bootstrap_helpers::safe_export_label(&destination);
+    crate::bootstrap_helpers::write_diagnostics(&app, &state, &label).await
 }
