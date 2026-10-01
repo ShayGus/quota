@@ -137,6 +137,36 @@ impl AccountRepository {
         rows::require_one(updated, "connections")
     }
 
+    /// Records provider-verified opaque identities for this connection.
+    ///
+    /// Display labels are stored on the account row. These identifiers remain
+    /// opaque and are only used to re-check the binding before accepting a read.
+    ///
+    /// # Errors
+    /// Returns [`PersistenceError::RowRejected`] when the connection does not exist.
+    pub async fn record_verified_binding(
+        &self,
+        connection_id: &ConnectionId,
+        principal_id: Option<&ProviderPrincipalId>,
+        workspace_id: Option<&WorkspaceId>,
+        entitlement_id: Option<&EntitlementId>,
+    ) -> PersistenceResult<()> {
+        let updated = sqlx::query(
+            "UPDATE connections
+                SET principal_id = ?, workspace_id = ?, entitlement_id = ?
+              WHERE id = ?",
+        )
+        .bind(principal_id.map(quota_domain::ids::ProviderPrincipalId::as_str))
+        .bind(workspace_id.map(quota_domain::ids::WorkspaceId::as_str))
+        .bind(entitlement_id.map(quota_domain::ids::EntitlementId::as_str))
+        .bind(connection_id.as_str())
+        .execute(&self.pool)
+        .await
+        .table("connections")?
+        .rows_affected();
+        rows::require_one(updated, "connections")
+    }
+
     /// Advances the connection generation and returns the new value.
     ///
     /// A result produced under an earlier generation can then be rejected on

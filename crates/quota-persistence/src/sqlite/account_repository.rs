@@ -248,6 +248,29 @@ impl AccountRepository {
         rows.iter().map(rows::map_account).collect()
     }
 
+    /// Lists every account in stable connection order.
+    ///
+    /// # Errors
+    /// Returns a typed persistence error when the read fails or a stored row is
+    /// outside this build's vocabulary.
+    pub async fn list_all(&self) -> PersistenceResult<Vec<AccountRecord>> {
+        let rows = sqlx::query(
+            "SELECT a.id, a.connection_id, c.generation, a.provider_id, a.nickname,
+                    a.connection_ordinal, a.monitoring_enabled, a.connection_state,
+                    a.fetch_state, a.last_attempt_at, a.last_success_at,
+                    a.next_attempt_at, a.verified_principal_label,
+                    a.verified_workspace_label, a.verified_plan_label, a.identity_source
+               FROM accounts a
+               JOIN connections c ON c.id = a.connection_id
+              ORDER BY a.connection_ordinal, a.id",
+        )
+        .fetch_all(&self.pool)
+        .await
+        .table("accounts")?;
+
+        rows.iter().map(rows::map_account).collect()
+    }
+
     /// Deletes one account by its primary key, and only its own rows.
     ///
     /// Its latest measurements and its pool bindings follow through

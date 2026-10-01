@@ -10,10 +10,14 @@
 
 use chrono::{DateTime, Utc};
 use quota_domain::Percent;
-use quota_domain::ids::{AccountId, QuotaWindowId};
+use quota_domain::ids::{AccountId, DefinitionVersion, QuotaPoolId, QuotaWindowId, ResourceId};
 use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::Measurement;
-use quota_domain::quota::window::QuotaWindow;
+use quota_domain::quota::scope::QuotaScope;
+use quota_domain::quota::window::{
+    Boundary, BoundaryKind, Completeness, Enforcement, MetricRole, QuotaCategory, QuotaWindow,
+    SourceKind, WindowSemantics,
+};
 use sqlx::{Row, SqlitePool};
 
 use crate::error::{PersistenceError, PersistenceResult, TableContext};
@@ -237,6 +241,228 @@ impl MeasurementRepository {
             })?,
         }))
     }
+
+    /// Reads every current quota window for one account.
+    ///
+    /// Windows without a current measurement are not returned. A provider that
+    /// expected a window but did not report it persists an explicit
+    /// `Unavailable(NotReported)` measurement, so it remains visible without
+    /// inventing a value or timestamp here.
+    ///
+    /// # Errors
+    /// Returns a typed error when any persisted value is malformed or outside
+    /// this build's domain vocabulary.
+    pub async fn windows_for_account(
+        &self,
+        account_id: &AccountId,
+    ) -> PersistenceResult<Vec<QuotaWindow>> {
+        let rows = sqlx::query(
+            "SELECT w.id, w.pool_id, w.provider_bucket_id, w.scope_resource,
+                    w.scope_label, w.category, w.semantics, w.duration_seconds,
+                    w.metric_role, w.enforcement, w.source_kind, w.completeness,
+                    w.definition_version, m.measurement_json, m.period_started_at,
+                    m.boundary_at, m.boundary_kind, m.observed_at, m.received_at,
+                    m.valid_until, m.issues_json
+               FROM latest_measurements m
+               JOIN quota_windows w ON w.id = m.window_id
+              WHERE m.account_id = ?
+              ORDER BY w.category, w.id",
+        )
+        .bind(account_id.as_str())
+        .fetch_all(&self.pool)
+        .await
+        .table("latest_measurements")?;
+
+        rows.iter().map(map_window).collect()
+    }
+}
+
+/// A window's stable definition, separated from its changing measurement.
+struct WindowDefinition {
+    id: QuotaWindowId,
+    pool_id: quota_domain::ids::QuotaPoolId,
+    provider_bucket_id: Option<String>,
+    scope: QuotaScope,
+    category: QuotaCategory,
+    semantics: WindowSemantics,
+    duration: Option<chrono::Duration>,
+    metric_role: MetricRole,
+    enforcement: Enforcement,
+    source: SourceKind,
+    completeness: Completeness,
+    definition_version: DefinitionVersion,
+}
+
+/// A window's latest changing measurement fields.
+struct WindowReading {
+    measurement: Measurement,
+    period_started_at: Option<DateTime<Utc>>,
+    boundary: Option<Boundary>,
+    observed_at: Option<DateTime<Utc>>,
+    received_at: DateTime<Utc>,
+    valid_until: Option<DateTime<Utc>>,
+    issues: Vec<QuotaIssue>,
+}
+
+/// Maps a joined definition and latest-measurement row into the domain window.
+fn map_window(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<QuotaWindow> {
+    let definition = read_definition(row)?;
+    let reading = read_window_reading(row)?;
+    Ok(QuotaWindow {
+        id: definition.id,
+        provider_bucket_id: definition.provider_bucket_id,
+        pool_id: definition.pool_id,
+        scope: definition.scope,
+        category: definition.category,
+        semantics: definition.semantics,
+        duration: definition.duration,
+        metric_role: definition.metric_role,
+        enforcement: definition.enforcement,
+        measurement: reading.measurement,
+        period_started_at: reading.period_started_at,
+        boundary: reading.boundary,
+        observed_at: reading.observed_at,
+        received_at: reading.received_at,
+        valid_until: reading.valid_until,
+        source: definition.source,
+        completeness: definition.completeness,
+        definition_version: definition.definition_version,
+        issues: reading.issues,
+    })
+}
+
+fn read_definition(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<WindowDefinition> {
+    let id = QuotaWindowId::new(row.try_get::<String, _>("id").table("quota_windows")?).map_err(
+        |_| PersistenceError::RowRejected {
+            table: "quota_windows",
+            reason: "a window identity is invalid",
+        },
+    )?;
+    let pool_id = QuotaPoolId::new(row.try_get::<String, _>("pool_id").table("quota_windows")?)
+        .map_err(|_| PersistenceError::RowRejected {
+            table: "quota_windows",
+            reason: "a quota pool identity is invalid",
+        })?;
+    let resource = ResourceId::new(
+        row.try_get::<String, _>("scope_resource")
+            .table("quota_windows")?,
+    )
+    .map_err(|_| PersistenceError::RowRejected {
+        table: "quota_windows",
+        reason: "a resource identity is invalid",
+    })?;
+    let label: String = row.try_get("scope_label").table("quota_windows")?;
+    let scope = QuotaScope::new(resource, label).map_err(|_| PersistenceError::RowRejected {
+        table: "quota_windows",
+        reason: "a scope label is invalid",
+    })?;
+    let duration_seconds: Option<i64> = row.try_get("duration_seconds").table("quota_windows")?;
+    let duration = duration_seconds
+        .map(|seconds| {
+            if seconds < 0 {
+                Err(PersistenceError::RowRejected {
+                    table: "quota_windows",
+                    reason: "a stored duration was negative",
+                })
+            } else {
+                Ok(chrono::Duration::seconds(seconds))
+            }
+        })
+        .transpose()?;
+    let definition_version = u32::try_from(
+        row.try_get::<i64, _>("definition_version")
+            .table("quota_windows")?,
+    )
+    .map(DefinitionVersion)
+    .map_err(|_| PersistenceError::RowRejected {
+        table: "quota_windows",
+        reason: "a definition version is outside the supported range",
+    })?;
+    Ok(WindowDefinition {
+        id,
+        pool_id,
+        provider_bucket_id: row.try_get("provider_bucket_id").table("quota_windows")?,
+        scope,
+        category: decode_column(row, "category", "quota_windows")?,
+        semantics: decode_column(row, "semantics", "quota_windows")?,
+        duration,
+        metric_role: decode_column(row, "metric_role", "quota_windows")?,
+        enforcement: decode_column(row, "enforcement", "quota_windows")?,
+        source: decode_column(row, "source_kind", "quota_windows")?,
+        completeness: decode_column(row, "completeness", "quota_windows")?,
+        definition_version,
+    })
+}
+
+fn read_window_reading(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<WindowReading> {
+    let measurement = read_json_column(row, "measurement_json", "latest_measurements")?;
+    let boundary_at: Option<String> = row.try_get("boundary_at").table("latest_measurements")?;
+    let boundary_kind: Option<String> =
+        row.try_get("boundary_kind").table("latest_measurements")?;
+    let boundary = match (boundary_at, boundary_kind) {
+        (Some(at), Some(kind)) => {
+            let kind: BoundaryKind = serde_json::from_value(serde_json::Value::String(kind))
+                .map_err(|_| PersistenceError::RowRejected {
+                    table: "latest_measurements",
+                    reason: "a boundary kind is outside this build's vocabulary",
+                })?;
+            Some(Boundary {
+                at: codec::parse_instant(&at, "latest_measurements")?,
+                kind,
+            })
+        }
+        (None, None) => None,
+        _ => {
+            return Err(PersistenceError::RowRejected {
+                table: "latest_measurements",
+                reason: "a boundary is missing its time or kind",
+            });
+        }
+    };
+    Ok(WindowReading {
+        measurement,
+        period_started_at: optional_instant(row, "period_started_at")?,
+        boundary,
+        observed_at: optional_instant(row, "observed_at")?,
+        received_at: codec::parse_instant(
+            &row.try_get::<String, _>("received_at")
+                .table("latest_measurements")?,
+            "latest_measurements",
+        )?,
+        valid_until: optional_instant(row, "valid_until")?,
+        issues: read_json_column(row, "issues_json", "latest_measurements")?,
+    })
+}
+
+fn decode_column<T: serde::de::DeserializeOwned>(
+    row: &sqlx::sqlite::SqliteRow,
+    column: &'static str,
+    table: &'static str,
+) -> PersistenceResult<T> {
+    codec::decode(&row.try_get::<String, _>(column).table(table)?, table)
+}
+
+fn read_json_column<T: serde::de::DeserializeOwned>(
+    row: &sqlx::sqlite::SqliteRow,
+    column: &'static str,
+    table: &'static str,
+) -> PersistenceResult<T> {
+    serde_json::from_str(&row.try_get::<String, _>(column).table(table)?).map_err(|_| {
+        PersistenceError::RowRejected {
+            table,
+            reason: "stored JSON is not readable by this build",
+        }
+    })
+}
+
+fn optional_instant(
+    row: &sqlx::sqlite::SqliteRow,
+    column: &'static str,
+) -> PersistenceResult<Option<DateTime<Utc>>> {
+    row.try_get::<Option<String>, _>(column)
+        .table("latest_measurements")?
+        .map(|text| codec::parse_instant(&text, "latest_measurements"))
+        .transpose()
 }
 
 /// Reads the stored observation key for one account and window.

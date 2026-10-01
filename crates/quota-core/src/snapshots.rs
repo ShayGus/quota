@@ -7,7 +7,6 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, Utc};
 
-use quota_domain::account::FetchState;
 use quota_domain::ids::AppInstanceId;
 use quota_domain::ranking::{
     AccountOrder, ORDER_RULE_VERSION, RankingInput, UnrankedOrder, UnrankedReason, compute_order,
@@ -61,7 +60,6 @@ impl SnapshotBuilder {
     ) -> AppSnapshot {
         self.revision = self.revision.saturating_add(1);
         let paused = monitoring_state == &MonitoringState::Paused;
-
         let inputs: Vec<RankingInput<'_>> = registry
             .iter()
             .map(|entry| RankingInput {
@@ -70,7 +68,7 @@ impl SnapshotBuilder {
                 windows: &entry.stored.windows,
                 monitoring_enabled: entry.stored.monitoring_enabled,
                 monitoring_paused: paused,
-                connection_state: entry.stored.connection.state,
+                connection_state: entry.stored.connection_state,
                 now,
             })
             .collect();
@@ -79,7 +77,6 @@ impl SnapshotBuilder {
             .iter()
             .map(|entry| (entry.account_id.clone(), entry.order.clone()))
             .collect();
-
         let accounts: Vec<AccountSnapshot> = registry
             .iter()
             .map(|entry| {
@@ -123,19 +120,14 @@ fn project(entry: &RegisteredAccount) -> AccountSnapshot {
         connection_generation: entry.stored.connection.generation,
         provider_id: entry.stored.connection.provider_id,
         nickname: entry.stored.nickname.clone(),
-        identity: None,
+        identity: entry.stored.identity.clone(),
         connection_ordinal: entry.stored.connection_ordinal,
         monitoring_enabled: entry.stored.monitoring_enabled,
-        connection_state: entry.stored.connection.state,
-        fetch_state: FetchState::Idle,
-        last_attempt_at: None,
-        last_success_at: entry
-            .stored
-            .windows
-            .iter()
-            .map(|window| window.received_at)
-            .max(),
-        next_attempt_at: None,
+        connection_state: entry.stored.connection_state,
+        fetch_state: entry.stored.fetch_state,
+        last_attempt_at: entry.stored.last_attempt_at,
+        last_success_at: entry.stored.last_success_at,
+        next_attempt_at: entry.stored.next_attempt_at,
         windows: entry.stored.windows.clone(),
         expected_but_missing_window_ids: entry.stored.expected_but_missing_window_ids.clone(),
         order: unnamed(),

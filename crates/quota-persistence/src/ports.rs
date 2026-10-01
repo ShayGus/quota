@@ -3,14 +3,16 @@
 //! `quota-core` owns the interfaces the application depends on. This module
 //! binds them to the repositories in this crate, so the desktop host can inject
 //! a concrete durable owner without the core importing SQL or a plugin.
-
+pub mod account;
+pub mod preferences;
+use crate::sqlite::{BackoffRecord, SqliteRepositories};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use quota_core::ports::{BackoffRepository as BackoffPort, BackoffState, RepositoryError};
 use quota_domain::polling::LimitScope;
 
-use crate::sqlite::SqliteRepositories;
-use crate::sqlite::backoff_repository::BackoffRecord;
+pub use account::{SqliteAccountPortAdapter, SqliteHistoryPortAdapter};
+pub use preferences::PresentationPreferencesPort;
 
 /// Maps a persistence failure onto the port error, naming the durable owner.
 fn map_error(error: &crate::PersistenceError) -> RepositoryError {

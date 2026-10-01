@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use chrono::{DateTime, Duration, Utc};
 
-use quota_domain::account::ConnectionSummary;
+use quota_domain::account::{ConnectionState, ConnectionSummary, FetchState, VerifiedIdentity};
 use quota_domain::ids::{AccountId, ConnectionId};
 use quota_domain::polling::LimitScope;
 use quota_domain::preferences::PresentationPreferences;
@@ -22,11 +22,23 @@ pub struct StoredAccount {
     pub nickname: String,
     /// The stable tie-break order.
     pub connection_ordinal: u32,
-    /// Whether the account is monitored.
+    /// Whether the supervisor schedules reads for this account.
     pub monitoring_enabled: bool,
+    /// Where the connection stands.
+    pub connection_state: ConnectionState,
+    /// How the last read attempt went.
+    pub fetch_state: FetchState,
+    /// When the last read attempt ran.
+    pub last_attempt_at: Option<DateTime<Utc>>,
+    /// When a reading was last accepted.
+    pub last_success_at: Option<DateTime<Utc>>,
+    /// When the next read becomes eligible.
+    pub next_attempt_at: Option<DateTime<Utc>>,
+    /// The verified identity, when one was confirmed.
+    pub identity: Option<VerifiedIdentity>,
     /// The account's windows, newest reading per window.
     pub windows: Vec<QuotaWindow>,
-    /// Windows expected but not reported.
+    /// Windows the provider expected to report but did not.
     pub expected_but_missing_window_ids: Vec<quota_domain::ids::QuotaWindowId>,
 }
 
