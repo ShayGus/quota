@@ -105,22 +105,3 @@ pub async fn export_sanitized_diagnostics(
     }
     crate::bootstrap_helpers::write_diagnostics(&app, &state, &destination).await
 }
-
-/// The notification and privacy policy the renderer currently displays.
-#[tauri::command]
-#[specta::specta]
-pub async fn notification_and_privacy_policy() -> (NotificationPolicy, PrivacyPolicy) {
-    (
-        NotificationPolicy {
-            enabled: true,
-            thresholds: Default::default(),
-            quiet_hours: quota_contracts::preferences::QuietHours::Never,
-            recovery_enabled: true,
-        },
-        PrivacyPolicy {
-            alias_mode: Default::default(),
-            retain_history: true,
-            export_identities: false,
-        },
-    )
-}

@@ -165,13 +165,6 @@ pub fn app_instance_id() -> AppInstanceId {
     AppInstanceId::generate()
 }
 
-/// The overview mode this build opens with before any preference is restored.
-#[tauri::command]
-#[specta::specta]
-pub fn default_overview_mode() -> OverviewMode {
-    OverviewMode::Floating
-}
-
 impl From<quota_domain::account::ConnectionState> for FetchState {
     fn from(state: quota_domain::account::ConnectionState) -> Self {
         match state {

@@ -27,6 +27,8 @@ function accountReadingsAreStale(account: AccountSnapshot): boolean {
   if (!account.monitoring_enabled) {
     return true;
   }
+  // Every variant is named, so a new one added to the contract fails to compile
+  // here rather than silently reading as current.
   switch (account.connection_state) {
     case "never_connected":
     case "connecting":
@@ -34,7 +36,7 @@ function accountReadingsAreStale(account: AccountSnapshot): boolean {
     case "unsupported":
     case "disconnected":
       return true;
-    default:
+    case "connected":
       break;
   }
   if (account.order.kind === "ranked") {
@@ -45,7 +47,12 @@ function accountReadingsAreStale(account: AccountSnapshot): boolean {
     case "reset_pending":
     case "monitoring_paused":
       return true;
-    default:
+    case "disabled":
+    case "incomplete":
+    case "native_units_only":
+    case "no_included_allowance":
+    case "reconnect_required":
+    case "unlimited_only":
       return false;
   }
 }

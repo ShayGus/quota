@@ -89,16 +89,3 @@ pub async fn reconnect_account(
     let _ = connection_id;
     Ok(ConnectionAttemptId::generate().as_str().len() as u64)
 }
-
-/// The local accounts this instance knows about.
-#[tauri::command]
-#[specta::specta]
-pub async fn known_accounts(state: State<'_, AppState>) -> Vec<AccountId> {
-    state
-        .registry
-        .read()
-        .await
-        .iter()
-        .map(|entry| entry.account_id().clone())
-        .collect()
-}

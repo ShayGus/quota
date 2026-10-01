@@ -1,0 +1,156 @@
+/**
+ * The settings surface: the navigation rail, setting rows, switches, the
+ * privacy card, and the account management cards.
+ */
+
+.detail {
+  padding: 0 16px 16px;
+}
+
+.detail__back {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 0;
+}
+
+.back-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.back-button:hover {
+  color: var(--accent);
+}
+
+.eyebrow {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.detail__identity {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0 16px;
+}
+
+.detail__identity h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.detail__identity p {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.detail__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  margin-bottom: 15px;
+}
+
+.limit-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  text-align: center;
+}
+
+.limit-card--selected {
+  border-color: var(--accent);
+}
+
+.limit-card h3 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.limit-card .ring {
+  width: 96px;
+  height: 96px;
+}
+
+.limit-card .ring__value {
+  font-size: 25px;
+}
+
+.limit-card .ring__caption {
+  font-size: 10px;
+}
+
+.limit-card__boundary {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+.limit-card__role {
+  margin: 0;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.detail__list {
+  margin: 0;
+  padding: 2px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--surface);
+}
+
+.detail__list > div {
+  display: grid;
+  grid-template-columns: 145px minmax(0, 1fr);
+  gap: 13px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.detail__list > div:last-child {
+  border-bottom: 0;
+}
+
+.detail__list dt {
+  color: var(--muted);
+}
+
+.detail__list dd {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.note {
+  margin: 13px 0 0;
+  padding: 11px 12px;
+  border-radius: 8px;
+  background: var(--surface-3);
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--muted);
+}

@@ -8,9 +8,12 @@
  *
  * That command cannot run in this environment (no `webkit2gtk`, no
  * `pkg-config`, so the desktop host does not build), so this copy was written by
- * hand once, from `crates/quota-contracts/src/` and
- * `crates/quota-domain/src/`. It is a mirror, not a second contract: when the
- * host's Specta registry exists, regenerate this file and delete the note.
+ * hand, from `crates/quota-contracts/src/`, `crates/quota-domain/src/`, and the
+ * host's own handler signatures under `src-tauri/src/ipc/`. Command argument
+ * shapes and wire argument names are taken from the handlers themselves, so
+ * `cargo xtask bindings --check` finds every command name it scans for. It is a
+ * mirror, not a second contract: regenerate this file when the host's Specta
+ * registry is exported, and delete this note.
  *
  * Two mirror rules that the exporter must also honour:
  *  - Identifier newtypes are branded, so passing a `ConnectionRef` where an
@@ -402,10 +405,45 @@ export interface PrivacyPolicy {
   readonly export_identities: boolean;
 }
 
+/** Separate validated intervals for each display and power mode. */
+export interface FixedIntervalPolicy {
+  readonly visible_seconds: number;
+  readonly background_seconds: number;
+  readonly battery_saver_seconds: number;
+  readonly minimum_seconds: number;
+}
+
+/** Bounds and signals for an adaptive strategy. */
+export interface AdaptivePolicy {
+  readonly minimum_seconds: number;
+  readonly maximum_seconds: number;
+  readonly step_seconds: number;
+}
+
+/** A notification source plus its verification interval. */
+export interface EventAssistedPolicy {
+  readonly minimum_seconds: number;
+  readonly verification_seconds: number;
+}
+
+/** Base polling plus a bounded verification near a reported boundary. */
+export interface BoundaryAwarePolicy {
+  readonly base: FixedIntervalPolicy;
+  readonly boundary_grace_seconds: number;
+  readonly max_boundary_attempts: number;
+}
+
+/** How often an adapter wants to be read. */
+export type PollingStrategy =
+  | { readonly kind: "fixed_interval"; readonly settings: FixedIntervalPolicy }
+  | { readonly kind: "adaptive"; readonly settings: AdaptivePolicy }
+  | { readonly kind: "event_assisted"; readonly settings: EventAssistedPolicy }
+  | { readonly kind: "boundary_aware"; readonly settings: BoundaryAwarePolicy };
+
 /** A typed polling policy attached to one provider. */
 export interface ProviderPollingPolicy {
   readonly provider_id: ProviderId;
-  readonly strategy: unknown;
+  readonly strategy: PollingStrategy;
   readonly request_timeout_seconds: number;
   readonly helper_timeout_seconds: number;
   readonly backoff_minutes: readonly number[];
@@ -523,20 +561,17 @@ export interface ConnectionAttemptAccepted {
 export interface SetAccountEnabledRequest {
   readonly account_ref: AccountRef;
   readonly enabled: boolean;
-  readonly expected_revision: number;
 }
 
 /** Arguments for renaming one account. */
 export interface RenameAccountRequest {
   readonly account_ref: AccountRef;
   readonly nickname: string;
-  readonly expected_revision: number;
 }
 
 /** Arguments for disconnecting one account. */
 export interface DisconnectAccountRequest {
   readonly account_ref: AccountRef;
-  readonly expected_revision: number;
 }
 
 /** Arguments for cancelling a live connection attempt. */
@@ -546,20 +581,13 @@ export interface CancelConnectionRequest {
 
 /** Arguments for starting or stopping scheduled reads. */
 export interface SetMonitoringStateRequest {
-  readonly running: boolean;
-  readonly expected_revision: number;
+  readonly paused: boolean;
 }
 
 /** Arguments for an explicit refresh. */
 export interface RefreshAccountsRequest {
   readonly selection: AccountSelection;
   readonly reason: RefreshReason;
-}
-
-/** A window mode change requested by the renderer. */
-export interface WindowModeChangeRequest {
-  readonly mode: OverviewMode;
-  readonly expected_revision: number;
 }
 
 /** A confirmed mode change, or the state that was actually reached. */
@@ -573,24 +601,52 @@ export type WindowModeChange =
 /** Arguments for the always-on-top preference. */
 export interface SetOverviewAlwaysOnTopRequest {
   readonly always_on_top: boolean;
-  readonly expected_revision: number;
 }
 
 /** Arguments for a preferences change. */
 export interface UpdatePreferencesRequest {
   readonly preferences: Preferences;
-  readonly expected_revision: number;
 }
 
-/** Arguments for opening one provider's usage page in the external browser. */
+/** Arguments for opening one provider's usage page in the external browser.
+ *
+ * The renderer names a provider, never a URL: the host owns the address. */
 export interface OpenProviderUsagePageRequest {
-  readonly account_ref: AccountRef;
+  readonly provider_id: ProviderId;
 }
 
 /** Arguments for dropping retained local history. */
 export interface ClearLocalHistoryRequest {
-  readonly account_ref: AccountRef | null;
-  readonly expected_revision: number;
+  readonly account_ref: AccountRef;
+}
+
+/** Arguments for writing a sanitized diagnostic export.
+ *
+ * The destination is resolved by the host's native adapter. The renderer never
+ * supplies a path. */
+export interface ExportSanitizedDiagnosticsRequest {
+  readonly destination: string;
+}
+
+/** Arguments for reading one account's last fetch state. */
+export interface GetConnectionProgressRequest {
+  readonly account_ref: AccountRef;
+}
+
+/** Arguments for raising or showing the overview from a tray activation. */
+export interface ActivateOverviewRequest {
+  readonly repeated_click: boolean;
+}
+
+/** Arguments for renewing one account's credential. */
+export interface ReconnectAccountRequest {
+  readonly account_ref: AccountRef;
+}
+
+/** Arguments for replacing one provider's effective polling policy. */
+export interface SetPollingPreferencesRequest {
+  readonly provider_id: ProviderId;
+  readonly policy: ProviderPollingPolicy;
 }
 
 /** The label and size of a completed sanitized diagnostic export. */
@@ -1238,6 +1294,69 @@ export function parseSnapshot(value: unknown): AppSnapshot | null {
   };
 }
 
+/** Reads one provider's polling policy. */
+function parsePollingPolicy(value: unknown): ProviderPollingPolicy | null {
+  const source = nested(value);
+  const provider = oneOf(source["provider_id"], PROVIDERS);
+  if (provider === null) {
+    return null;
+  }
+  const raw = nested(source["strategy"]);
+  const settings = nested(raw["settings"]);
+  const fixed = (input: Record<string, unknown>): FixedIntervalPolicy => ({
+    visible_seconds: count(input["visible_seconds"]),
+    background_seconds: count(input["background_seconds"]),
+    battery_saver_seconds: count(input["battery_saver_seconds"]),
+    minimum_seconds: count(input["minimum_seconds"]),
+  });
+  let strategy: PollingStrategy;
+  switch (text(raw["kind"])) {
+    case "fixed_interval":
+      strategy = { kind: "fixed_interval", settings: fixed(settings) };
+      break;
+    case "adaptive":
+      strategy = {
+        kind: "adaptive",
+        settings: {
+          minimum_seconds: count(settings["minimum_seconds"]),
+          maximum_seconds: count(settings["maximum_seconds"]),
+          step_seconds: count(settings["step_seconds"]),
+        },
+      };
+      break;
+    case "event_assisted":
+      strategy = {
+        kind: "event_assisted",
+        settings: {
+          minimum_seconds: count(settings["minimum_seconds"]),
+          verification_seconds: count(settings["verification_seconds"]),
+        },
+      };
+      break;
+    case "boundary_aware":
+      strategy = {
+        kind: "boundary_aware",
+        settings: {
+          base: fixed(nested(settings["base"])),
+          boundary_grace_seconds: count(settings["boundary_grace_seconds"]),
+          max_boundary_attempts: count(settings["max_boundary_attempts"]),
+        },
+      };
+      break;
+    default:
+      return null;
+  }
+  return {
+    provider_id: provider,
+    strategy,
+    request_timeout_seconds: count(source["request_timeout_seconds"]),
+    helper_timeout_seconds: count(source["helper_timeout_seconds"]),
+    backoff_minutes: list(source["backoff_minutes"]).map(count),
+    max_concurrent_remote_reads: count(source["max_concurrent_remote_reads"]),
+    version: count(source["version"]),
+  };
+}
+
 /** Reads the confirmed preference aggregate. */
 export function parsePreferences(value: unknown): Preferences | null {
   const source = nested(value);
@@ -1297,17 +1416,9 @@ export function parsePreferences(value: unknown): Preferences | null {
       retain_history: flag(privacy["retain_history"]),
       export_identities: flag(privacy["export_identities"]),
     },
-    polling: list(source["polling"]).map((entry) => {
-      const policy = nested(entry);
-      return {
-        provider_id: oneOf(policy["provider_id"], PROVIDERS) ?? "fixture",
-        strategy: policy["strategy"],
-        request_timeout_seconds: count(policy["request_timeout_seconds"]),
-        helper_timeout_seconds: count(policy["helper_timeout_seconds"]),
-        backoff_minutes: list(policy["backoff_minutes"]).map(count),
-        max_concurrent_remote_reads: count(policy["max_concurrent_remote_reads"]),
-        version: count(policy["version"]),
-      };
+    polling: list(source["polling"]).flatMap((entry) => {
+      const policy = parsePollingPolicy(entry);
+      return policy === null ? [] : [policy];
     }),
   };
 }
@@ -1461,11 +1572,11 @@ type ResultReader<T> = (value: unknown) => T | null;
  */
 async function call<T>(
   command: string,
-  args: Record<string, unknown>,
+  args: object,
   read: ResultReader<T>,
 ): Promise<Invocation<T>> {
   try {
-    const decoded = await invoke<unknown>(command, args);
+    const decoded = await invoke<unknown>(command, { ...args });
     const result = read(decoded);
     if (result === null) {
       return { transportError: { code: "malformed_response", detail: command } };
@@ -1486,12 +1597,9 @@ async function call<T>(
 }
 
 /** Runs a command whose success payload carries no value. */
-async function callVoid(
-  command: string,
-  args: Record<string, unknown>,
-): Promise<Invocation<null>> {
+async function callVoid(command: string, args: object): Promise<Invocation<null>> {
   try {
-    await invoke<unknown>(command, args);
+    await invoke<unknown>(command, { ...args });
     return { ok: null };
   } catch (reason: unknown) {
     const error = parseCommandError(reason);
@@ -1573,15 +1681,6 @@ function readRegisteredProvider(value: unknown): RegisteredProvider | null {
   };
 }
 
-/** Reads the diagnostic-export summary. */
-function readDiagnosticExport(value: unknown): DiagnosticExport | null {
-  const source = nested(value);
-  const label = text(source["destination_label"]);
-  return label.length === 0
-    ? null
-    : { destination_label: label, byte_count: count(source["byte_count"]) };
-}
-
 /** Reads the current snapshot and the revision to reconcile against. */
 export function getSnapshot(): Promise<Invocation<SnapshotResponse>> {
   return call("get_snapshot", {}, readSnapshotResponse);
@@ -1634,6 +1733,39 @@ export function cancelConnection(
   return callVoid("cancel_connection", { request });
 }
 
+/** Reads how the last read for one account went. */
+export function getConnectionProgress(
+  request: GetConnectionProgressRequest,
+): Promise<Invocation<FetchState>> {
+  return call("get_connection_progress", request, (value) => {
+    const state = typeof value === "string" ? value : "";
+    return FETCH_STATES.find((candidate) => candidate === state) ?? null;
+  });
+}
+
+/** Renews one account's credential and reports the new generation. */
+export function reconnectAccount(
+  request: ReconnectAccountRequest,
+): Promise<Invocation<number>> {
+  return call("reconnect_account", request, (value) =>
+    typeof value === "number" && Number.isFinite(value) ? value : null,
+  );
+}
+
+/** Replaces one provider's effective polling policy. */
+export function setPollingPreferences(
+  request: SetPollingPreferencesRequest,
+): Promise<Invocation<ProviderPollingPolicy>> {
+  return call("set_polling_preferences", request, parsePollingPolicy);
+}
+
+/** Raises or shows the overview after a tray activation. */
+export function activateOverview(
+  request: ActivateOverviewRequest,
+): Promise<Invocation<OverviewWindowState>> {
+  return call("activate_overview", request, parseWindowState);
+}
+
 /** Lists the compiled adapters and what each declares. */
 export function listProviderCapabilities(): Promise<
   Invocation<readonly RegisteredProvider[]>
@@ -1657,16 +1789,16 @@ export function listProviderCapabilities(): Promise<
 
 /** Moves the overview between floating and tray mode. */
 export function setOverviewMode(
-  request: WindowModeChangeRequest,
+  mode: OverviewMode,
 ): Promise<Invocation<WindowModeChange>> {
-  return call("set_overview_mode", { request }, readWindowModeChange);
+  return call("set_overview_mode", { mode }, readWindowModeChange);
 }
 
 /** Sets the independent always-on-top preference. */
 export function setOverviewAlwaysOnTop(
   request: SetOverviewAlwaysOnTopRequest,
 ): Promise<Invocation<OverviewWindowState>> {
-  return call("set_overview_always_on_top", { request }, parseWindowState);
+  return call("set_overview_always_on_top", request, parseWindowState);
 }
 
 /** Widens the overview to fit every account within the work area. */
@@ -1683,26 +1815,30 @@ export function resetOverviewPosition(): Promise<Invocation<OverviewWindowState>
 export function updatePreferences(
   request: UpdatePreferencesRequest,
 ): Promise<Invocation<Preferences>> {
-  return call("update_preferences", { request }, parsePreferences);
+  return call("update_preferences", request, parsePreferences);
 }
 
 /** Opens one provider's usage page in the external browser. */
 export function openProviderUsagePage(
   request: OpenProviderUsagePageRequest,
 ): Promise<Invocation<null>> {
-  return callVoid("open_provider_usage_page", { request });
+  return callVoid("open_provider_usage_page", request);
 }
 
-/** Drops retained local history for one account, or for every account. */
+/** Drops retained local history for one account. */
 export function clearLocalHistory(
   request: ClearLocalHistoryRequest,
 ): Promise<Invocation<null>> {
-  return callVoid("clear_local_history", { request });
+  return callVoid("clear_local_history", request);
 }
 
-/** Writes a sanitized diagnostic export. */
-export function exportSanitizedDiagnostics(): Promise<Invocation<DiagnosticExport>> {
-  return call("export_sanitized_diagnostics", {}, readDiagnosticExport);
+/** Writes a sanitized diagnostic export and reports where it went. */
+export function exportSanitizedDiagnostics(
+  request: ExportSanitizedDiagnosticsRequest,
+): Promise<Invocation<string>> {
+  return call("export_sanitized_diagnostics", request, (value) =>
+    typeof value === "string" && value.length > 0 ? value : null,
+  );
 }
 
 /* --------------------------------------------------------------- listeners */

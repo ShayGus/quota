@@ -38,8 +38,10 @@ export interface SettingsActions {
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;
   readonly disconnectAccount: (accountId: AccountId) => void;
   readonly openUsagePage: (accountId: AccountId) => void;
-  readonly clearHistory: (accountId: AccountId | null) => void;
-  readonly exportDiagnostics: () => void;
+  /** Drops retained history for one account. The host has no all-accounts clear. */
+  readonly clearHistory: (accountId: AccountId) => void;
+  /** Writes a diagnostic export to the destination the host will validate. */
+  readonly exportDiagnostics: (destination: string) => void;
 }
 
 /** The settings surface. */

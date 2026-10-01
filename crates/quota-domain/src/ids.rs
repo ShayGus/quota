@@ -28,7 +28,7 @@ macro_rules! validated_id {
             ///
             /// # Errors
             /// Returns [`DomainError::InvalidIdentifier`] for empty or blank text, and
-            /// [`DomainError::TooLong`] beyond [`MAX_ID_LEN`].
+            /// [`DomainError::TooLong`] beyond `MAX_ID_LEN`.
             pub fn new(raw: impl Into<String>) -> Result<Self, DomainError> {
                 let raw = raw.into();
                 if raw.trim().is_empty() {

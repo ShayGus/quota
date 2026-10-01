@@ -15,25 +15,25 @@ use quota_contracts::{
 use tauri_specta::Event;
 
 /// The primary quota and account update channel.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct SnapshotUpdated(pub SnapshotUpdatedPayload);
 
 /// Progress of one connection attempt.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct ConnectionProgressChanged(pub ConnectionProgressChangedPayload);
 
 /// Emitted after a preference save succeeds, never before.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct PreferencesChanged(pub PreferencesChangedPayload);
 
 /// Whether the supervisor is scheduling reads.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct MonitoringStateChanged(pub MonitoringStateChangedPayload);
 
 /// Confirmed native overview window state, or a typed native failure.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct OverviewWindowStateChanged(pub OverviewWindowStateChangedPayload);
 
 /// Durable storage availability.
-#[derive(Debug, Clone, Event)]
+#[derive(Debug, Clone, tauri_specta::Event)]
 pub struct PersistenceStatusChanged(pub PersistenceStatusChangedPayload);

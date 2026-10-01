@@ -5,7 +5,7 @@
  * never one repeated word (AC-72). Local history and export identity are
  * separate choices.
  */
-import type { JSX } from "react";
+import { useId, useState, type JSX } from "react";
 
 import type { Preferences, PrivacyAliasMode } from "../../../generated/bindings";
 import { Icon } from "../../../shared/ui/Icon";
@@ -18,6 +18,58 @@ const ALIAS_MODES: readonly (readonly [PrivacyAliasMode, string])[] = [
   ["off", "Show account labels"],
   ["stable_aliases", "Stable aliases"],
 ];
+
+/**
+ * The diagnostic export row.
+ *
+ * The destination is chosen by the person and validated by the host. This window
+ * never invents a path, and the export contains no tokens, no cookies, and no
+ * provider payloads.
+ */
+function DiagnosticExportRow({
+  actions,
+}: {
+  readonly actions: SettingsActions;
+}): JSX.Element {
+  const id = useId();
+  const [destination, setDestination] = useState("quota-diagnostics.json");
+  const usable = destination.trim().length > 0;
+  return (
+    <div className="setting-row">
+      <div>
+        <label className="setting-row__label" htmlFor={id}>
+          Diagnostic export
+        </label>
+        <p>
+          Writes a sanitized report through the backend. Off by default it excludes
+          account identities. Tokens, cookies, and provider payloads are never included.
+        </p>
+      </div>
+      <span className="setting-row__actions">
+        <input
+          id={id}
+          type="text"
+          value={destination}
+          maxLength={120}
+          onChange={(event) => {
+            setDestination(event.currentTarget.value);
+          }}
+        />
+        <button
+          type="button"
+          className="button button--small"
+          disabled={!usable}
+          onClick={() => {
+            actions.exportDiagnostics(destination.trim());
+          }}
+        >
+          <Icon name="download" size={13} />
+          Export
+        </button>
+      </span>
+    </div>
+  );
+}
 
 /** The privacy settings panel. */
 export function PrivacyPanel({
@@ -84,37 +136,7 @@ export function PrivacyPanel({
           />
         }
       />
-      <SettingRow
-        label="Diagnostic export"
-        description="Writes a sanitized report through the backend. The destination is chosen by the system, never by this window."
-        control={
-          <button
-            type="button"
-            className="button button--small"
-            onClick={() => {
-              actions.exportDiagnostics();
-            }}
-          >
-            <Icon name="download" size={13} />
-            Export diagnostics
-          </button>
-        }
-      />
-      <SettingRow
-        label="Clear local history"
-        description="Drops retained history for every account. Active account bindings and retry state are kept."
-        control={
-          <button
-            type="button"
-            className="button button--small button--danger"
-            onClick={() => {
-              actions.clearHistory(null);
-            }}
-          >
-            Clear history
-          </button>
-        }
-      />
+      <DiagnosticExportRow actions={actions} />
     </>
   );
 }

@@ -31,16 +31,6 @@ import {
 import { reportAsync } from "../shared/ipc/report";
 import { acceptAttempt, getRendererState } from "../shared/state/store";
 
-/** The revision the renderer believes is current for preferences. */
-function preferenceRevision(): number {
-  return getRendererState().preferences?.revision ?? 0;
-}
-
-/** The revision the renderer believes is current for account state. */
-function accountRevision(): number {
-  return getRendererState().snapshot?.revision ?? 0;
-}
-
 /** The renderer's command surface. Every function awaits its own failure path. */
 export const actions = {
   /** Requests an explicit read. The backend coalesces repeated requests. */
@@ -48,39 +38,20 @@ export const actions = {
     await reportAsync(refreshAccounts({ selection: { kind: "all" }, reason }));
   },
   /** Starts or stops scheduled reads. */
-  async setMonitoring(running: boolean): Promise<void> {
-    await reportAsync(
-      setMonitoringState({ running, expected_revision: accountRevision() }),
-    );
+  async setMonitoring(paused: boolean): Promise<void> {
+    await reportAsync(setMonitoringState({ paused }));
   },
   /** Enables or disables one account. */
   async setAccountEnabled(accountId: AccountId, enabled: boolean): Promise<void> {
-    await reportAsync(
-      setAccountEnabled({
-        account_ref: { id: accountId },
-        enabled,
-        expected_revision: accountRevision(),
-      }),
-    );
+    await reportAsync(setAccountEnabled({ account_ref: { id: accountId }, enabled }));
   },
   /** Renames one account. The nickname is presentation only. */
   async renameAccount(accountId: AccountId, nickname: string): Promise<void> {
-    await reportAsync(
-      renameAccount({
-        account_ref: { id: accountId },
-        nickname,
-        expected_revision: accountRevision(),
-      }),
-    );
+    await reportAsync(renameAccount({ account_ref: { id: accountId }, nickname }));
   },
   /** Disconnects one account, leaving its same-provider siblings alone. */
   async disconnectAccount(accountId: AccountId): Promise<void> {
-    await reportAsync(
-      disconnectAccount({
-        account_ref: { id: accountId },
-        expected_revision: accountRevision(),
-      }),
-    );
+    await reportAsync(disconnectAccount({ account_ref: { id: accountId } }));
   },
   /** Begins a connection attempt and records the backend-issued identity. */
   async beginConnection(request: BeginConnectionRequest): Promise<AttemptRef | null> {
@@ -101,9 +72,7 @@ export const actions = {
   },
   /** Moves the overview between floating and tray mode. */
   async setOverviewMode(mode: OverviewMode): Promise<void> {
-    const result = await reportAsync(
-      setOverviewMode({ mode, expected_revision: preferenceRevision() }),
-    );
+    const result = await reportAsync(setOverviewMode(mode));
     if (result !== null && result.kind === "refused") {
       // The platform refused. The previous state stands, and the reason is typed.
       await this.setAlwaysOnTop(getRendererState().preferences?.always_on_top ?? false);
@@ -111,12 +80,7 @@ export const actions = {
   },
   /** Sets the independent always-on-top preference. It changes nothing else. */
   async setAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
-    await reportAsync(
-      setOverviewAlwaysOnTop({
-        always_on_top: alwaysOnTop,
-        expected_revision: preferenceRevision(),
-      }),
-    );
+    await reportAsync(setOverviewAlwaysOnTop({ always_on_top: alwaysOnTop }));
   },
   /** Widens the overview to fit every account within the work area. */
   async fitToAccounts(): Promise<void> {
@@ -128,28 +92,24 @@ export const actions = {
   },
   /** Saves the whole preference object. The confirmed object arrives by event. */
   async savePreferences(next: Preferences): Promise<void> {
-    await reportAsync(
-      updatePreferences({
-        preferences: next,
-        expected_revision: preferenceRevision(),
-      }),
-    );
+    await reportAsync(updatePreferences({ preferences: next }));
   },
   /** Opens one provider's usage page in the external browser. */
   async openUsagePage(accountId: AccountId): Promise<void> {
-    await reportAsync(openProviderUsagePage({ account_ref: { id: accountId } }));
+    const provider = getRendererState().snapshot?.accounts.find(
+      (account) => account.account_id === accountId,
+    )?.provider_id;
+    if (provider === undefined) {
+      return;
+    }
+    await reportAsync(openProviderUsagePage({ provider_id: provider }));
   },
-  /** Drops retained local history for one account, or for every account. */
-  async clearHistory(accountId: AccountId | null): Promise<void> {
-    await reportAsync(
-      clearLocalHistory({
-        account_ref: accountId === null ? null : { id: accountId },
-        expected_revision: accountRevision(),
-      }),
-    );
+  /** Drops retained local history for one account. */
+  async clearHistory(accountId: AccountId): Promise<void> {
+    await reportAsync(clearLocalHistory({ account_ref: { id: accountId } }));
   },
-  /** Writes a sanitized diagnostic export. */
-  async exportDiagnostics(): Promise<void> {
-    await reportAsync(exportSanitizedDiagnostics());
+  /** Writes a sanitized diagnostic export to a host-resolved destination. */
+  async exportDiagnostics(destination: string): Promise<void> {
+    await reportAsync(exportSanitizedDiagnostics({ destination }));
   },
 };

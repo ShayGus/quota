@@ -1,0 +1,93 @@
+/**
+ * The reading cell: one allowance column inside an account row.
+ */
+
+.quota-cell {
+  min-width: 0;
+}
+
+.quota-cell__mobile-label {
+  display: none;
+  font-size: 9px;
+  color: var(--muted);
+  margin: 3px 0 3px 4px;
+}
+
+.quota-cell__button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 0 3px;
+  border-radius: 7px;
+  text-align: left;
+}
+
+.quota-cell__button:hover {
+  background: var(--surface-3);
+}
+
+.quota-cell__absent {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 6px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.quota-cell__absent b {
+  font-weight: 400;
+  font-size: 15px;
+}
+
+.quota-cell__time {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.quota-cell__time small {
+  font-size: 9px;
+  line-height: 12px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.quota-cell__time strong {
+  font-size: 11px;
+  line-height: 14px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.quota-cell__bar {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  min-height: 39px;
+  justify-content: center;
+}
+
+.quota-cell__bar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.quota-cell__bar-top strong {
+  font-size: 13px;
+  font-weight: 620;
+  font-variant-numeric: tabular-nums;
+}
+
+.quota-cell__bar-top small {
+  font-size: 10px;
+  color: var(--muted);
+}

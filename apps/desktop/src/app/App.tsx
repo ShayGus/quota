@@ -58,8 +58,8 @@ const settingsActions: SettingsActions = {
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
   },
-  exportDiagnostics: () => {
-    launch(actions.exportDiagnostics());
+  exportDiagnostics: (destination) => {
+    launch(actions.exportDiagnostics(destination));
   },
 };
 

@@ -50,10 +50,7 @@ describe("transport failure versus domain error", () => {
     // an Error, so the rejection is deliberately a plain object here.
     const refusal = { kind: "reconnect_required" } as const;
     answer = () => Promise.reject(refusal); // eslint-disable-line @typescript-eslint/prefer-promise-reject-errors -- the carrier rejects with the serialized error value, not an Error
-    const result = await disconnectAccount({
-      account_ref: { id: "a1" as AccountId },
-      expected_revision: 3,
-    });
+    const result = await disconnectAccount({ account_ref: { id: "a1" as AccountId } });
     expect("error" in result).toBe(true);
     expect("transportError" in result).toBe(false);
     if ("error" in result) {
@@ -63,10 +60,7 @@ describe("transport failure versus domain error", () => {
 
   it("reports a carrier that answered nothing at all as a transport failure", async () => {
     answer = () => Promise.reject(new Error("connection refused"));
-    const result = await disconnectAccount({
-      account_ref: { id: "a1" as AccountId },
-      expected_revision: 3,
-    });
+    const result = await disconnectAccount({ account_ref: { id: "a1" as AccountId } });
     expect("transportError" in result).toBe(true);
     expect("error" in result).toBe(false);
     if ("transportError" in result) {
@@ -111,18 +105,10 @@ describe("transport failure versus domain error", () => {
       seen.push({ command, args });
       return Promise.resolve(null);
     };
-    await setAccountEnabled({
-      account_ref: { id: "a1" as AccountId },
-      enabled: false,
-      expected_revision: 9,
-    });
+    await setAccountEnabled({ account_ref: { id: "a1" as AccountId }, enabled: false });
     expect(seen[0]?.command).toBe("set_account_enabled");
     expect(seen[0]?.args).toEqual({
-      request: {
-        account_ref: { id: "a1" },
-        enabled: false,
-        expected_revision: 9,
-      },
+      request: { account_ref: { id: "a1" }, enabled: false },
     });
   });
 });
@@ -134,18 +120,16 @@ describe("the tagged identifier types", () => {
       // @ts-expect-error a ConnectionRef is not an AccountRef: the tags make the
       // mistake a compile error rather than a runtime account mix-up.
       account_ref: connection,
-      expected_revision: 1,
     };
-    expect(request.expected_revision).toBe(1);
+    expect(request.account_ref).toBe(connection);
   });
 
   it("refuses to pass a bare string where an account reference is required", () => {
     const request: Parameters<typeof disconnectAccount>[0] = {
       // @ts-expect-error a raw identifier is not a tagged reference.
       account_ref: "a1",
-      expected_revision: 1,
     };
-    expect(request.expected_revision).toBe(1);
+    expect(request.account_ref).toBe("a1");
   });
 
   it("accepts a correctly tagged account reference", () => {
