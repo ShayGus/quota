@@ -37,6 +37,29 @@ jobs:
         with:
           persist-credentials: false
 
+      # Tauri on Linux builds against the system WebView, not a bundled engine.
+      # Without these development packages the `quota-desktop` package cannot
+      # compile, so the host, its permission manifest, and its capabilities
+      # would never be compiled anywhere. This step is what makes CI the first
+      # real compile of the desktop host. It is the one place a system package
+      # is installed.
+      - name: Install the Tauri system build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget
+          pkg-config --exists webkit2gtk-4.1
+
       # rust-toolchain.toml pins the compiler, and rustup installs it and the
       # listed components on first use. No CI step repeats the version, so the
       # toolchain cannot drift between the file and this workflow.
@@ -45,6 +68,12 @@ jobs:
 
       # Swatinem/rust-cache v2.9.2
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+
+      # Named on its own so a failure says which package broke. `cargo clippy`
+      # and `cargo test` below also cover it, but only after every other package
+      # has built, which hides the real cause behind a wall of output.
+      - name: Desktop host compiles
+        run: cargo build --locked -p quota-desktop
 
       - name: Format
         run: cargo fmt --all -- --check
