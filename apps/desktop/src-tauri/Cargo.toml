@@ -25,7 +25,7 @@ quota-contracts = { workspace = true }
 quota-core = { workspace = true }
 quota-domain = { workspace = true }
 quota-persistence = { workspace = true, features = ["tauri-plugins"] }
-quota-providers = { workspace = true, features = ["test-fixtures"] }
+quota-providers = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 specta = { workspace = true, features = ["derive"] }

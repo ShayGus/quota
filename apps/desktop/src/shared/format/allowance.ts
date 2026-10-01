@@ -4,8 +4,12 @@
  * One rule: a reading is either a number, or it is not. Nothing here turns a
  * missing reading into `0%` or into a full ring, because an unknown value is
  * not zero and not 100 (spec 3.4, spec 4.2, AC-08).
+ *
+ * A count or an amount with no denominator is shown in its own unit and never
+ * gains an invented percentage. An amount that has a denominator keeps both the
+ * percentage and the amount (spec 5.2, AC-06).
  */
-import type { Measurement, Percent } from "../../generated/bindings";
+import type { Measurement, Percent, QuotaUnit } from "../../generated/bindings";
 
 /** How a reading should be drawn and labelled. */
 export type Severity = "good" | "warn" | "danger" | "stale" | "pending";
@@ -53,6 +57,15 @@ const UNAVAILABLE_WORDS: Record<string, string> = {
   not_applicable: "Not applicable",
 };
 
+/** The words for the unit a counted allowance is expressed in. */
+const UNIT_WORDS: Record<QuotaUnit["kind"], string> = {
+  requests: "requests",
+  tokens: "tokens",
+  messages: "messages",
+  credits: "credits",
+  custom: "",
+};
+
 /**
  * The label for one reading.
  *
@@ -61,6 +74,10 @@ const UNAVAILABLE_WORDS: Record<string, string> = {
  * can never read as zero (AC-08), and one decimal place at the top of the range
  * so a near-full value cannot read as a false `100%`. A reading with no number
  * keeps words and never acquires a percentage (AC-07).
+ *
+ * A count or an amount with no percentage denominator is shown in its own unit
+ * instead, because the amount is known even when the percentage is not
+ * (spec 5.2, AC-06).
  */
 export function formatRemaining(measurement: Measurement): string {
   if (measurement.kind === "unlimited") {
@@ -74,7 +91,7 @@ export function formatRemaining(measurement: Measurement): string {
   }
   const percent = remainingPercent(measurement);
   if (percent === null || !Number.isFinite(percent)) {
-    return "No reading";
+    return nativeAmount(measurement);
   }
   if (percent <= 0) {
     return "0%";
@@ -83,7 +100,71 @@ export function formatRemaining(measurement: Measurement): string {
     return "<1%";
   }
   const clamped = Math.min(100, percent);
-  return `${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`;
+  const label = `${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`;
+  // Money keeps its own amount beside the percentage, so a cap expressed in
+  // minor units is never hidden behind a percentage alone (spec 5.2, AC-06).
+  if (measurement.kind === "money") {
+    const amount = nativeAmount(measurement);
+    if (amount !== "No reading" && amount !== label) {
+      return `${label} · ${amount}`;
+    }
+  }
+  return label;
+}
+
+/**
+ * The reading in its own unit, for a measurement that has no percentage.
+ *
+ * A count shows its count and its unit; an amount shows its value, its currency
+ * and its scale. An amount whose percentages are known is still shown this way
+ * when the percentage alone would hide it.
+ */
+function nativeAmount(measurement: Measurement): string {
+  switch (measurement.kind) {
+    case "percentage":
+      return "No reading";
+    case "quantity": {
+      const { remaining, used } = measurement.value;
+      const amount = remaining ?? used;
+      if (amount === null) {
+        return "No reading";
+      }
+      const { unit } = measurement.value;
+      const label = unit.kind === "custom" ? unit.symbol : UNIT_WORDS[unit.kind];
+      if (label.length === 0) {
+        return "No reading";
+      }
+      return `${formatNumber(amount, measurement.value.precision)} ${label}`;
+    }
+    case "money": {
+      const { currency, scale, remaining_minor_units: remaining } = measurement.value;
+      if (remaining === null) {
+        return "No reading";
+      }
+      return `${formatNumber(remaining / 10 ** scale, scale)} ${currency}`;
+    }
+    case "unlimited":
+    case "not_entitled":
+    case "unavailable":
+      return "No reading";
+  }
+}
+
+/** One number, at the provider's own precision, from an untrusted payload. */
+function formatNumber(value: number, precision: number): string {
+  const places =
+    Number.isInteger(precision) && precision >= 0 ? Math.min(precision, 9) : 0;
+  return value.toFixed(places);
+}
+
+/**
+ * Whether a measurement shows a value at all.
+ *
+ * A count or an amount with no denominator shows its own number, so a caption
+ * under it must not claim there is no reading (spec 5.2, AC-06).
+ */
+export function hasReading(measurement: Measurement): boolean {
+  return formatRemaining(measurement) !== "No reading";
 }
 
 /** The severity of a reading. Only a real number can be low or critical. */

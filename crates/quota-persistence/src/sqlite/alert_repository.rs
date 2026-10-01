@@ -10,7 +10,6 @@
 
 use chrono::{DateTime, Utc};
 use quota_domain::ids::{AccountId, QuotaWindowId};
-use serde::{Deserialize, Serialize};
 use sqlx::{Row, SqlitePool};
 
 use crate::error::{PersistenceError, PersistenceResult, TableContext};
@@ -19,19 +18,10 @@ use crate::sqlite::rows;
 
 /// The severity an episode was opened at.
 ///
-/// The thresholds behind these levels are a supervisor policy, not a storage
-/// concern; storage records which level an episode belongs to so one level can
-/// re-arm independently of the others.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum AlertLevel {
-    /// The allowance is running low.
-    Low,
-    /// The allowance is nearly exhausted.
-    Critical,
-    /// The allowance is exhausted.
-    Exhausted,
-}
+/// The thresholds behind these levels are a supervisor policy, and the
+/// supervisor owns the vocabulary. Storage keeps the supervisor's own type so a
+/// stored level can never drift from the level the supervisor produced.
+pub use quota_core::ports::AlertLevel;
 
 /// The identity of one alert episode.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -107,7 +97,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         opened_at: DateTime<Utc>,
     ) -> PersistenceResult<bool> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let changed = sqlx::query(
             "INSERT INTO alert_episodes (
                  account_id, window_id, definition_version, level, opened_at, armed_at, closed_at
@@ -137,7 +127,7 @@ impl AlertRepository {
     /// # Errors
     /// Returns a typed persistence error when the read fails.
     pub async fn is_open(&self, key: &EpisodeKey) -> PersistenceResult<bool> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let open: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?
@@ -161,7 +151,7 @@ impl AlertRepository {
     /// # Errors
     /// Returns a typed persistence error when the read fails.
     pub async fn is_armed(&self, key: &EpisodeKey) -> PersistenceResult<bool> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let armed: Option<i64> = sqlx::query_scalar(
             "SELECT 1 FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?
@@ -186,7 +176,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         armed_at: DateTime<Utc>,
     ) -> PersistenceResult<()> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let updated = sqlx::query(
             "UPDATE alert_episodes
                 SET armed_at = ?
@@ -218,7 +208,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         closed_at: DateTime<Utc>,
     ) -> PersistenceResult<bool> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let updated = sqlx::query(
             "UPDATE alert_episodes
                 SET closed_at = ?
@@ -249,7 +239,7 @@ impl AlertRepository {
     /// # Errors
     /// Returns [`PersistenceError::RowRejected`] when no episode exists for the key.
     pub async fn episode(&self, key: &EpisodeKey) -> PersistenceResult<AlertEpisode> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let row = sqlx::query(
             "SELECT opened_at, armed_at, closed_at FROM alert_episodes
               WHERE account_id = ? AND window_id = ? AND definition_version = ? AND level = ?",
@@ -293,13 +283,13 @@ pub(crate) struct EpisodeParts {
 
 impl EpisodeParts {
     /// Splits an episode key into its stored columns.
-    pub(crate) fn of(key: &EpisodeKey) -> PersistenceResult<Self> {
-        Ok(Self {
+    pub(crate) fn of(key: &EpisodeKey) -> Self {
+        Self {
             account_id: key.account_id.as_str().to_owned(),
             window_id: key.window_id.as_str().to_owned(),
             version: i64::from(key.definition_version),
-            level: codec::encode(&key.level, "alert_episodes")?,
-        })
+            level: key.level.as_str().to_owned(),
+        }
     }
 }
 /// Renders the outbox deduplication key for an episode.
@@ -312,7 +302,7 @@ pub(crate) fn outbox_key(key: &EpisodeKey) -> PersistenceResult<String> {
             key.account_id.as_str(),
             key.window_id.as_str(),
             key.definition_version,
-            key.level
+            key.level.as_str()
         ]),
         "notification_outbox",
     )

@@ -86,7 +86,7 @@ describe("the remaining-allowance label", () => {
     expect(formatRemaining(measurement)).toBe("60%");
   });
 
-  it("leaves a count without a denominator in its native state", () => {
+  it("shows a count without a denominator as its own amount, not as a percentage", () => {
     const measurement = {
       kind: "quantity" as const,
       value: {
@@ -97,11 +97,25 @@ describe("the remaining-allowance label", () => {
         limit: null,
       },
     };
-    expect(formatRemaining(measurement)).toBe("No reading");
+    expect(formatRemaining(measurement)).toBe("340 requests");
     expect(remainingPercent(measurement)).toBeNull();
   });
 
-  it("keeps an amount with no cap from becoming a percentage", () => {
+  it("shows a credit balance that has no cap, in credits", () => {
+    const measurement = {
+      kind: "quantity" as const,
+      value: {
+        unit: { kind: "credits" as const },
+        precision: 0,
+        used: null,
+        remaining: 340,
+        limit: null,
+      },
+    };
+    expect(formatRemaining(measurement)).toBe("340 credits");
+  });
+
+  it("keeps an amount and its currency when there is no cap", () => {
     const measurement = {
       kind: "money" as const,
       value: {
@@ -112,7 +126,22 @@ describe("the remaining-allowance label", () => {
         limit_minor_units: null,
       },
     };
+    expect(formatRemaining(measurement)).toBe("30.00 USD");
     expect(remainingPercent(measurement)).toBeNull();
+  });
+
+  it("keeps a capped amount's own value beside its percentage", () => {
+    const measurement = {
+      kind: "money" as const,
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: 2000,
+        remaining_minor_units: 3000,
+        limit_minor_units: 5000,
+      },
+    };
+    expect(formatRemaining(measurement)).toBe("60% · 30.00 USD");
   });
 });
 

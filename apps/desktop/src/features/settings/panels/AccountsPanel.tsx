@@ -11,7 +11,6 @@ import { useState, type JSX } from "react";
 import type { AccountSnapshot } from "../../../generated/bindings";
 import { formatAge, instantOf } from "../../../shared/format/duration";
 import { Icon } from "../../../shared/ui/Icon";
-import { STATUS_ICON } from "../statusIcons";
 import type { SettingsActions } from "../Settings";
 import { statusOf } from "../../overview/status";
 
@@ -57,7 +56,7 @@ function ManagedAccount({
         <div>
           <dt>State</dt>
           <dd>
-            <Icon name={STATUS_ICON[status.icon]} size={11} />
+            <Icon name={status.icon} size={11} />
             {status.text}
           </dd>
         </div>

@@ -3268,6 +3268,7 @@ name = "quota-persistence"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "quota-core",
  "quota-domain",
  "serde",
  "serde_json",

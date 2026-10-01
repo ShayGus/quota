@@ -16,6 +16,7 @@ default = []
 tauri-plugins = ["dep:tauri", "dep:tauri-plugin-sql", "dep:tauri-plugin-store"]
 
 [dependencies]
+quota-core = { workspace = true }
 quota-domain = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }

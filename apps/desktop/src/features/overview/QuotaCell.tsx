@@ -15,7 +15,7 @@ import type {
 import {
   arcFraction,
   formatRemaining,
-  remainingPercent,
+  hasReading,
   severityOf,
 } from "../../shared/format/allowance";
 import { formatBoundary } from "../../shared/format/duration";
@@ -51,20 +51,20 @@ export function windowFor(account: AccountSnapshot, column: Column): QuotaWindow
 
 /** The words under one ring, from what the reading actually is. */
 function captionOf(window: QuotaWindow, state: ReadingState): string {
-  if (remainingPercent(window.measurement) === null) {
-    switch (window.measurement.kind) {
-      case "unlimited":
-        return "unlimited";
-      case "not_entitled":
-        return "not included";
-      case "unavailable":
-      case "percentage":
-      case "quantity":
-      case "money":
-        return "no reading";
-    }
+  if (hasReading(window.measurement)) {
+    return freshnessCaption(state);
   }
-  return freshnessCaption(state);
+  switch (window.measurement.kind) {
+    case "unlimited":
+      return "unlimited";
+    case "not_entitled":
+      return "not included";
+    case "unavailable":
+    case "percentage":
+    case "quantity":
+    case "money":
+      return "no reading";
+  }
 }
 
 /** The accessible name of one quota cell. */

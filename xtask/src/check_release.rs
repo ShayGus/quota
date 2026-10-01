@@ -18,6 +18,7 @@ const USES_KEY: &str = "uses:";
 pub(crate) fn run(root: &Path) -> Outcome {
     let mut outcome = Outcome::default();
     cargo_manifest::check_release_features(root, &mut outcome);
+    cargo_manifest::check_dependency_feature_selection(root, &mut outcome);
     check_deny_config(root, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);

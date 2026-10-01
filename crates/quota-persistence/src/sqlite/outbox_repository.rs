@@ -25,7 +25,7 @@ impl AlertRepository {
         key: &EpisodeKey,
         created_at: DateTime<Utc>,
     ) -> PersistenceResult<bool> {
-        let parts = EpisodeParts::of(key)?;
+        let parts = EpisodeParts::of(key);
         let episode_key = outbox_key(key)?;
 
         let inserted = sqlx::query(

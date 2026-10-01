@@ -196,3 +196,60 @@ fn check_provider_features(root: &Path, outcome: &mut Outcome) {
         );
     }
 }
+
+/// Reports a first-party dependency declaration that enables a test-only
+/// feature on `quota-providers`.
+///
+/// `check_release_features` reads only `default = [...]` declarations, so a
+/// feature selected from a dependent's dependency table would pass it. This
+/// reads the other half: an ordinary build of the desktop host must not compile
+/// the fixture adapter, which is reachable only through `quota-providers`'
+/// non-default `test-fixtures` feature.
+pub(crate) fn check_dependency_feature_selection(root: &Path, outcome: &mut Outcome) {
+    let mut inspected = 0;
+    for manifest in scan::files_with_extension(root, "toml")
+        .into_iter()
+        .filter(|path| path.file_name().is_some_and(|name| name == "Cargo.toml"))
+    {
+        let Ok(text) = scan::read(&manifest) else {
+            continue;
+        };
+        let document = Document::parse(&text);
+        for entry in document.all() {
+            // A dev-dependency is a test-only route to the feature and is the
+            // audited way to reach the fixture adapter, so it is not a finding.
+            if !toml::is_dependency_table(&entry.table) || entry.table.contains("dev-") {
+                continue;
+            }
+            if dependency_package(&entry.key, &entry.value).as_deref() != Some("quota-providers") {
+                continue;
+            }
+            inspected += 1;
+            for feature in TEST_FEATURES {
+                if !entry.value.contains(feature) {
+                    continue;
+                }
+                outcome.fail(
+                    scan::relative(root, &manifest),
+                    entry.line,
+                    format!(
+                        "`{}` enables the test-only `{feature}` feature on `quota-providers`; an ordinary build must not compile the fixture adapter",
+                        entry.key
+                    ),
+                );
+            }
+        }
+    }
+    outcome.note(format!(
+        "{inspected} quota-providers dependency declaration(s)"
+    ));
+}
+
+/// Returns the package a dependency key names, following a `package = "..."` rename.
+fn dependency_package(key: &str, value: &str) -> Option<String> {
+    let key = key.trim().trim_matches('"');
+    if key == "quota-providers" {
+        return Some(key.to_string());
+    }
+    package_rename(value)
+}

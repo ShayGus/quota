@@ -11,7 +11,7 @@ import type { AccountSnapshot, QuotaWindow } from "../../generated/bindings";
 import {
   arcFraction,
   formatRemaining,
-  remainingPercent,
+  hasReading,
   severityOf,
 } from "../../shared/format/allowance";
 import {
@@ -58,7 +58,7 @@ function WindowCard({
 }): JSX.Element {
   const severity = severityOf(window.measurement);
   const value = formatRemaining(window.measurement);
-  const percent = remainingPercent(window.measurement);
+  const hasValue = hasReading(window.measurement);
   return (
     <button
       type="button"
@@ -74,7 +74,7 @@ function WindowCard({
         fraction={arcFraction(window.measurement)}
         severity={severity}
         label={value}
-        caption={percent === null ? "no reading" : "left"}
+        caption={hasValue ? "left" : "no reading"}
       />
       <p className="limit-card__boundary">
         {window.boundary === null

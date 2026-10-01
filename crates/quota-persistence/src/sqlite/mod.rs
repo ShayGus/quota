@@ -23,13 +23,15 @@ use serde::de::DeserializeOwned;
 use crate::error::{PersistenceError, PersistenceResult};
 
 pub use account_repository::{AccountRecord, AccountRepository, NewAccount};
-pub use alert_repository::{AlertLevel, AlertRepository, EpisodeKey};
+pub use alert_repository::{AlertRepository, EpisodeKey};
 pub use backoff_repository::{BackoffRecord, BackoffRepository};
 pub use connection_repository::{ConnectionRecord, NewConnection};
 pub use history_repository::HistoryEntry;
 pub use measurement_repository::{MeasurementRepository, StoredMeasurement};
 pub use migrations::run_migrations;
 pub use pool::{SqlitePoolSettings, open_pool, verify_pool_settings};
+/// The supervisor's own severity vocabulary, re-exported for storage callers.
+pub use quota_core::ports::AlertLevel;
 
 /// The four typed repositories over one shared pool.
 #[derive(Clone, Debug)]
