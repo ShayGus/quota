@@ -78,6 +78,16 @@ tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
 tracing = "0.1.44"
 uuid = { version = "1.26.1", features = ["serde", "v4"] }
 
+# The dev profile is what CI and every local gate run. Line tables keep
+# backtraces readable while dropping the bulk of the DWARF that made a cold
+# desktop build write gigabytes. Third-party dependencies carry no debug info
+# at all; they are never the thing being debugged.
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+
 [profile.release]
 panic = "unwind"
 overflow-checks = true

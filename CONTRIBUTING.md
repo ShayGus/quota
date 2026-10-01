@@ -60,6 +60,40 @@ pnpm typecheck && pnpm lint && pnpm format:check && pnpm test && pnpm build
 CI runs exactly these commands. If a command passes locally and fails in CI, the
 difference is the environment, not the command.
 
+### Measured times
+
+Measured on this machine, 32 cores, dev profile, warm tree. These are here so a
+slow run can be compared against a known baseline rather than guessed at.
+
+| Command | Warm | Cold, desktop package |
+|---|---|---|
+| `cargo fmt --all -- --check` | 0.5 s | — |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings` | 0.7 s | 79.6 s |
+| `cargo test --workspace --locked` | 8.1 s | — |
+| `cargo xtask check-architecture` | 0.2 s | — |
+| `cargo xtask check-release` | 0.3 s | — |
+| `cargo xtask bindings --check` | 0.2 s | — |
+| `pnpm typecheck` | 20.8 s | — |
+| `pnpm lint` | 9.1 s | — |
+| `pnpm test` | 3.2 s | — |
+| `pnpm build` | 1.4 s | — |
+
+The cold desktop build compiles 645 units and is bound by its dependency tree,
+not by linking: the final link alone is 6.1 s of the 79.6 s. Installing `lld`
+or `mold` would therefore buy about 5 s and was deliberately not done.
+
+Two profile settings carry the weight, in the root `Cargo.toml`:
+
+- `[profile.dev] debug = "line-tables-only"` and `[profile.dev.package."*"] debug = false`.
+  Before, a cold desktop build wrote 5.7 GB of artifacts; after, 2.6 GB. Cold
+  build time went from 88.8 s to 79.6 s.
+- Incremental compilation is left on. Turning it off was measured, not assumed:
+  an edit to `quota-core` followed by a rebuild went from 6.5 s to 13.2 s, which
+  doubles the most repeated operation in a fix round.
+
+None of these settings weaken a gate. Backtraces stay line-accurate, every check
+in the two blocks above runs unchanged, and the test count is unaffected.
+
 ## 4. Generated bindings
 
 Rust is the contract source of truth. Commands and events are Rust structs and
