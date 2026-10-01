@@ -11,7 +11,7 @@ Prerequisites: `rustup`, and [Bun](https://bun.sh) for the frontend.
 git clone https://github.com/ShayGus/quota.git
 cd quota
 rustup show active-toolchain          # installs the pinned compiler on first use
-cd the repository root && bun install --frozen-lockfile && cd ../..
+bun install --frozen-lockfile          # the repository root is the frontend package
 cargo build --workspace --locked
 ```
 

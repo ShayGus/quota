@@ -70,10 +70,9 @@ cd quota
 #    rust-toolchain.toml and installs the exact version listed there.
 rustup show active-toolchain
 
-# 2. The frontend toolchain. The desktop package carries its own lockfile.
-cd the repository root
+# 2. The frontend toolchain. The repository root is the frontend package, so
+#    the lockfile and the install are both here.
 bun install --frozen-lockfile
-cd ../..
 
 # 3. The Rust build.
 cargo build --workspace --locked
@@ -98,10 +97,13 @@ Run every check from the repository root.
 | `cargo xtask bindings --check`                                        | `src/generated/bindings.ts` against the Rust IPC layer                                                                        |
 | `cargo deny check advisories licenses sources`                        | Advisories, licence allow list, allowed sources                                                                               |
 
-The frontend checks run in `the repository root`:
+`cargo deny` is not a workspace tool, so install it once with `cargo install cargo-deny`
+before that line runs locally. CI runs the same check through
+`EmbarkStudios/cargo-deny-action`, pinned by commit in `.github/workflows/`.
+
+The frontend checks run from the repository root, which is the frontend package:
 
 ```bash
-cd the repository root
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
 ```
 
