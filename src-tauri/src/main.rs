@@ -1,10 +1,8 @@
-//! Desktop entrypoint. Composition and lifecycle live in the library.
+//! Desktop entry point. Composition and lifecycle live in the library.
 
-#![forbid(unsafe_code)]
+// Prevents additional console window on Windows in release, DO NOT REMOVE!!
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    if let Err(error) = quota_desktop_lib::run() {
-        eprintln!("quota failed to start: {error}");
-        std::process::exit(1);
-    }
+    quota_desktop_lib::run();
 }

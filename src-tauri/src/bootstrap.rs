@@ -389,7 +389,7 @@ async fn install_managed_state(
 ///
 /// Returns the backend message when the Tauri host cannot start.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-pub fn run() -> Result<(), String> {
+pub fn start() -> Result<(), String> {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()

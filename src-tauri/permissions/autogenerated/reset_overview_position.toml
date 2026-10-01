@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-reset-overview-position"
+description = "Enables the reset_overview_position command without any pre-configured scope."
+commands.allow = ["reset_overview_position"]
+
+[[permission]]
+identifier = "deny-reset-overview-position"
+description = "Denies the reset_overview_position command without any pre-configured scope."
+commands.deny = ["reset_overview_position"]

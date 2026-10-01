@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-fit-overview-to-accounts"
+description = "Enables the fit_overview_to_accounts command without any pre-configured scope."
+commands.allow = ["fit_overview_to_accounts"]
+
+[[permission]]
+identifier = "deny-fit-overview-to-accounts"
+description = "Denies the fit_overview_to_accounts command without any pre-configured scope."
+commands.deny = ["fit_overview_to_accounts"]
