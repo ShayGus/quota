@@ -1,0 +1,41 @@
+# Per-repository no-mistakes configuration for Quota.
+
+commands:
+  prepare: bun install --frozen-lockfile
+
+  # The static gates. No command is dropped, replaced, or made advisory.
+  lint: >-
+    cargo fmt --all -- --check &&
+    cargo clippy --workspace --all-targets --locked -- -D warnings &&
+    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked &&
+    cargo xtask check-architecture &&
+    cargo xtask check-release &&
+    cargo xtask bindings --check &&
+    bun run typecheck &&
+    bun run lint &&
+    bun run format:check
+
+  # The gates that execute code.
+  test: >-
+    cargo build --locked -p quota-desktop &&
+    cargo test --workspace --locked &&
+    bun run test &&
+    bun run build
+
+test:
+  instructions: |
+    The pipeline owns execution of commands.prepare, commands.test, and
+    commands.lint. Use the recorded command results as evidence; do not rerun
+    those commands or run lint gates during evidence collection. Do not explore
+    the tree, invent extra checks, or read source files to decide what to run.
+    Do not launch the native app or a dev server.
+
+    Repository-local dependency preparation is allowed through commands.prepare.
+    Cold Cargo compilation is allowed when this worktree has no build cache.
+    Prefer existing target/ and node_modules caches. Never run cargo clean,
+    delete target/, or point CARGO_TARGET_DIR somewhere new. Never install
+    anything outside the repository, use sudo, or install system packages.
+
+    Report the available command results with their exit codes and wall-clock
+    times. A failure is reported, not retried, worked around, or fixed: record
+    it and stop. Leave lint execution to the pipeline's later Lint step.
