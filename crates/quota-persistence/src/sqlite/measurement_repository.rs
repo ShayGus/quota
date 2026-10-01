@@ -72,75 +72,34 @@ impl MeasurementRepository {
         account_id: &AccountId,
         window: &QuotaWindow,
     ) -> PersistenceResult<bool> {
-        let remaining = window.measurement.remaining_percent().map(Percent::value);
-        let received_at = codec::instant(window.received_at);
-
-        let mut transaction = self.pool.begin().await.table("latest_measurements")?;
-
-        upsert_window(&mut transaction, account_id, window).await?;
-
-        let previous = read_previous(&mut transaction, account_id, window).await?;
-        let unchanged = coalesces(previous, window);
-
-        sqlx::query(
-            "INSERT INTO latest_measurements (
-                 account_id, window_id, measurement_kind, measurement_json,
-                 period_started_at, boundary_at, boundary_kind, observed_at,
-                 received_at, valid_until, issues_json
-             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-             ON CONFLICT (account_id, window_id) DO UPDATE SET
-                 measurement_kind = excluded.measurement_kind,
-                 measurement_json = excluded.measurement_json,
-                 period_started_at = excluded.period_started_at,
-                 boundary_at = excluded.boundary_at,
-                 boundary_kind = excluded.boundary_kind,
-                 observed_at = excluded.observed_at,
-                 received_at = excluded.received_at,
-                 valid_until = excluded.valid_until,
-                 issues_json = excluded.issues_json",
-        )
-        .bind(account_id.as_str())
-        .bind(window.id.as_str())
-        .bind(measurement_kind(&window.measurement))
-        .bind(codec::json(&window.measurement, "latest_measurements")?)
-        .bind(window.period_started_at.map(codec::instant))
-        .bind(window.boundary.map(|boundary| codec::instant(boundary.at)))
-        .bind(
-            window
-                .boundary
-                .map(|boundary| codec::encode(&boundary.kind, "latest_measurements"))
-                .transpose()?,
-        )
-        .bind(window.observed_at.map(codec::instant))
-        .bind(&received_at)
-        .bind(window.valid_until.map(codec::instant))
-        .bind(codec::json(&window.issues, "latest_measurements")?)
-        .execute(&mut *transaction)
-        .await
-        .table("latest_measurements")?;
-
-        let observed_at = window
-            .observed_at
-            .map_or_else(|| received_at.clone(), codec::instant);
-
-        if !unchanged {
-            sqlx::query(
-                "INSERT INTO measurement_history (
-                     account_id, window_id, remaining_percent, observed_at, received_at
-                 ) VALUES (?, ?, ?, ?, ?)",
-            )
-            .bind(account_id.as_str())
-            .bind(window.id.as_str())
-            .bind(remaining)
-            .bind(observed_at)
-            .bind(&received_at)
-            .execute(&mut *transaction)
+        self.persist_readings(account_id, std::slice::from_ref(window))
             .await
-            .table("measurement_history")?;
-        }
+            .map(|history_rows| history_rows != 0)
+    }
 
+    /// Writes every window from one accepted provider response atomically.
+    ///
+    /// The current measurements and any changed history rows commit together.
+    /// A failure leaves the previous complete account snapshot intact.
+    ///
+    /// # Returns
+    /// The number of history rows written.
+    ///
+    /// # Errors
+    /// Returns a typed persistence error when any window cannot be stored.
+    pub async fn persist_readings(
+        &self,
+        account_id: &AccountId,
+        windows: &[QuotaWindow],
+    ) -> PersistenceResult<usize> {
+        let mut transaction = self.pool.begin().await.table("latest_measurements")?;
+        let mut history_rows = 0;
+        for window in windows {
+            history_rows +=
+                usize::from(persist_window(&mut transaction, account_id, window).await?);
+        }
         transaction.commit().await.table("latest_measurements")?;
-        Ok(!unchanged)
+        Ok(history_rows)
     }
 
     /// Reports whether the stored reading already holds this exact observation.
@@ -465,6 +424,76 @@ fn optional_instant(
         .transpose()
 }
 
+/// Writes one window inside the caller's transaction.
+async fn persist_window(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+    account_id: &AccountId,
+    window: &QuotaWindow,
+) -> PersistenceResult<bool> {
+    let remaining = window.measurement.remaining_percent().map(Percent::value);
+    let received_at = codec::instant(window.received_at);
+    upsert_window(transaction, account_id, window).await?;
+    let unchanged = coalesces(
+        read_previous(transaction, account_id, window).await?,
+        window,
+    );
+    sqlx::query(
+        "INSERT INTO latest_measurements (
+             account_id, window_id, measurement_kind, measurement_json,
+             period_started_at, boundary_at, boundary_kind, observed_at,
+             received_at, valid_until, issues_json
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (account_id, window_id) DO UPDATE SET
+             measurement_kind = excluded.measurement_kind,
+             measurement_json = excluded.measurement_json,
+             period_started_at = excluded.period_started_at,
+             boundary_at = excluded.boundary_at,
+             boundary_kind = excluded.boundary_kind,
+             observed_at = excluded.observed_at,
+             received_at = excluded.received_at,
+             valid_until = excluded.valid_until,
+             issues_json = excluded.issues_json",
+    )
+    .bind(account_id.as_str())
+    .bind(window.id.as_str())
+    .bind(measurement_kind(&window.measurement))
+    .bind(codec::json(&window.measurement, "latest_measurements")?)
+    .bind(window.period_started_at.map(codec::instant))
+    .bind(window.boundary.map(|boundary| codec::instant(boundary.at)))
+    .bind(
+        window
+            .boundary
+            .map(|boundary| codec::encode(&boundary.kind, "latest_measurements"))
+            .transpose()?,
+    )
+    .bind(window.observed_at.map(codec::instant))
+    .bind(&received_at)
+    .bind(window.valid_until.map(codec::instant))
+    .bind(codec::json(&window.issues, "latest_measurements")?)
+    .execute(&mut **transaction)
+    .await
+    .table("latest_measurements")?;
+
+    if !unchanged {
+        let observed_at = window
+            .observed_at
+            .map_or_else(|| received_at.clone(), codec::instant);
+        sqlx::query(
+            "INSERT INTO measurement_history (
+                 account_id, window_id, remaining_percent, observed_at, received_at
+             ) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(account_id.as_str())
+        .bind(window.id.as_str())
+        .bind(remaining)
+        .bind(observed_at)
+        .bind(&received_at)
+        .execute(&mut **transaction)
+        .await
+        .table("measurement_history")?;
+    }
+    Ok(!unchanged)
+}
 /// Reads the stored observation key for one account and window.
 async fn read_previous(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,

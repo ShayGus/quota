@@ -89,15 +89,14 @@ impl SqliteAccountPortAdapter {
         }
         Ok(accounts)
     }
-}
 
-#[async_trait]
-impl AccountPort for SqliteAccountPortAdapter {
-    async fn load_accounts(&self) -> Result<Vec<StoredAccount>, RepositoryError> {
-        self.stored_accounts().await
+    async fn store_account(&self, account: StoredAccount) -> Result<(), RepositoryError> {
+        self.store_connection(&account).await?;
+        self.store_account_row(&account).await?;
+        self.store_windows(&account).await
     }
 
-    async fn upsert_account(&self, account: StoredAccount) -> Result<(), RepositoryError> {
+    async fn store_connection(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
         let connection = &account.connection;
         let new_connection = NewConnection {
             id: connection.id.clone(),
@@ -125,12 +124,14 @@ impl AccountPort for SqliteAccountPortAdapter {
                 connection.entitlement_id.as_ref(),
             )
             .await
-            .map_err(|e| map_error(&e))?;
+            .map_err(|e| map_error(&e))
+    }
 
+    async fn store_account_row(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
         let new_account = NewAccount {
             id: account.account_id.clone(),
-            connection_id: connection.id.clone(),
-            provider_id: connection.provider_id,
+            connection_id: account.connection.id.clone(),
+            provider_id: account.connection.provider_id,
             nickname: account.nickname.clone(),
             connection_ordinal: account.connection_ordinal,
         };
@@ -163,14 +164,39 @@ impl AccountPort for SqliteAccountPortAdapter {
                 .await
                 .map_err(|e| map_error(&e))?;
         }
+        Ok(())
+    }
+
+    async fn store_windows(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
         for window in &account.windows {
             self.repositories
-                .measurements()
-                .persist_reading(&account.account_id, window)
+                .accounts()
+                .bind_pool(
+                    &account.account_id,
+                    &window.pool_id,
+                    account.connection.provider_id,
+                    false,
+                )
                 .await
                 .map_err(|e| map_error(&e))?;
         }
-        Ok(())
+        self.repositories
+            .measurements()
+            .persist_readings(&account.account_id, &account.windows)
+            .await
+            .map(|_| ())
+            .map_err(|e| map_error(&e))
+    }
+}
+
+#[async_trait]
+impl AccountPort for SqliteAccountPortAdapter {
+    async fn load_accounts(&self) -> Result<Vec<StoredAccount>, RepositoryError> {
+        self.stored_accounts().await
+    }
+
+    async fn upsert_account(&self, account: StoredAccount) -> Result<(), RepositoryError> {
+        self.store_account(account).await
     }
 
     async fn set_enabled(
@@ -211,16 +237,12 @@ impl AccountPort for SqliteAccountPortAdapter {
         windows: &[quota_domain::quota::window::QuotaWindow],
         _observed_at: Option<DateTime<Utc>>,
     ) -> Result<(), RepositoryError> {
-        // Each window is an independent durable fact. A failure stops publication;
-        // already committed windows remain truthful and can be reconciled on restart.
-        for window in windows {
-            self.repositories
-                .measurements()
-                .persist_reading(account_id, window)
-                .await
-                .map_err(|e| map_error(&e))?;
-        }
-        Ok(())
+        self.repositories
+            .measurements()
+            .persist_readings(account_id, windows)
+            .await
+            .map(|_| ())
+            .map_err(|e| map_error(&e))
     }
 
     async fn snapshot_of(

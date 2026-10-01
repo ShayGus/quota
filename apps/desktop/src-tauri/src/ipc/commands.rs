@@ -1,17 +1,16 @@
 //! Thin command handlers.
 //!
-//! A handler validates its arguments, calls one narrow service, and maps the
-//! result onto the typed contract. It holds no quota rule, starts no worker,
-//! and never blocks on a provider.
+//! Handlers validate scope, call one application service or durable port, and
+//! return committed state. Refresh commands enter the one shared supervisor.
 
+use quota_contracts::CommandError;
+use quota_contracts::RegisteredProvider;
 use quota_contracts::commands::{AccountSelection, RefreshReason, SnapshotResponse};
 use quota_contracts::refs::AccountRef;
-use quota_contracts::{CommandError, RegisteredProvider};
 use quota_domain::account::FetchState;
-use quota_domain::ids::{AccountId, AppInstanceId};
-use quota_domain::preferences::OverviewMode;
+use quota_domain::ids::AccountId;
 use quota_domain::provider::ProviderId;
-use quota_domain::snapshot::{AppSnapshot, MonitoringState, PersistenceStatus};
+use quota_domain::snapshot::{AppSnapshot, PersistenceStatus};
 use tauri::State;
 
 use crate::state::AppState;
@@ -23,18 +22,18 @@ use crate::state::AppState;
 #[tauri::command]
 #[specta::specta]
 pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse, CommandError> {
-    let builder = state.snapshots.lock().await;
+    let monitoring = state.monitoring_state.read().await.clone();
     let registry = state.registry.read().await;
-    let snapshot: AppSnapshot = builder.build(
+    let snapshot: AppSnapshot = state.snapshots.lock().await.build(
         &registry,
-        &MonitoringState::Running,
+        &monitoring,
         &PersistenceStatus::Available,
         state.clock.now(),
     );
     Ok(SnapshotResponse { snapshot })
 }
 
-/// Lists every provider this build knows about, including ones with no compiled adapter.
+/// Lists every provider this build knows about, including unavailable adapters.
 #[tauri::command]
 #[specta::specta]
 pub fn list_provider_capabilities() -> Vec<RegisteredProvider> {
@@ -48,9 +47,7 @@ pub fn list_provider_capabilities() -> Vec<RegisteredProvider> {
         .collect()
 }
 
-/// Requests a refresh through the shared scheduler.
-///
-/// The selection is scoped; there is no generic key, path, or action argument.
+/// Requests a refresh through the shared provider scheduler.
 #[tauri::command]
 #[specta::specta]
 pub async fn refresh_accounts(
@@ -58,60 +55,107 @@ pub async fn refresh_accounts(
     selection: AccountSelection,
     reason: RefreshReason,
 ) -> Result<Vec<AccountId>, CommandError> {
-    let registry = state.registry.read().await;
-    let chosen: Vec<AccountId> = match &selection {
-        AccountSelection::All => registry
-            .iter()
-            .map(|entry| entry.account_id().clone())
-            .collect(),
-        AccountSelection::Listed { account_refs } => {
-            let mut ids = Vec::with_capacity(account_refs.len());
-            for reference in account_refs {
-                let id = reference.into_id();
-                if registry.get(&id).is_none() {
-                    return Err(CommandError::AccountNotFound);
+    let chosen = {
+        let registry = state.registry.read().await;
+        match selection {
+            AccountSelection::All => registry
+                .iter()
+                .filter(|entry| entry.stored.monitoring_enabled)
+                .map(|entry| entry.account_id().clone())
+                .collect(),
+            AccountSelection::Listed { account_refs } => {
+                let mut ids = Vec::with_capacity(account_refs.len());
+                for reference in account_refs {
+                    let id = reference.into_id();
+                    if registry.get(&id).is_none() {
+                        return Err(CommandError::AccountNotFound);
+                    }
+                    ids.push(id);
                 }
-                ids.push(id);
+                ids
             }
-            ids
         }
     };
-    let _ = reason;
-    Ok(chosen)
+    let reason = match reason {
+        RefreshReason::UserRequested => crate::monitoring::RefreshReason::UserRequested,
+        RefreshReason::Scheduled => crate::monitoring::RefreshReason::Scheduled,
+        RefreshReason::BoundaryVerification => {
+            crate::monitoring::RefreshReason::BoundaryVerification
+        }
+        RefreshReason::OverviewOpened => crate::monitoring::RefreshReason::OverviewOpened,
+        RefreshReason::Resumed => crate::monitoring::RefreshReason::Resumed,
+    };
+    state.monitor.refresh(chosen, reason).await
 }
 
-/// Pauses or resumes monitoring.
+/// Pauses or resumes monitoring and persists the user's choice first.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_monitoring_state(
     state: State<'_, AppState>,
     paused: bool,
-) -> Result<MonitoringState, CommandError> {
-    let registry = state.registry.read().await;
-    if registry.is_empty() && paused {
-        return Err(CommandError::Validation {
-            field: "monitoring".into(),
-            reason: "no accounts are connected".into(),
-        });
-    }
-    Ok(if paused {
-        MonitoringState::Paused
+) -> Result<quota_domain::snapshot::MonitoringState, CommandError> {
+    let next = if paused {
+        quota_domain::snapshot::MonitoringState::Paused
     } else {
-        MonitoringState::Running
-    })
+        quota_domain::snapshot::MonitoringState::Running
+    };
+    state
+        .monitoring_repository
+        .save_monitoring_state(&next)
+        .await
+        .map_err(|error| CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        })?;
+    *state.monitoring_state.write().await = next.clone();
+    if !paused {
+        state
+            .monitor
+            .request_all(crate::monitoring::RefreshReason::Resumed)
+            .await?;
+    }
+    Ok(next)
 }
 
-/// Enables or disables monitoring for one account.
+/// Enables or disables monitoring for one account, then commits that value.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_account_enabled(
     state: State<'_, AppState>,
     request: quota_contracts::SetAccountEnabledRequest,
 ) -> Result<(), CommandError> {
-    let mut registry = state.registry.write().await;
-    registry
-        .set_enabled(request.account_ref.id(), request.enabled)
-        .map_err(map_core_error)
+    let account_id = request.account_ref.id().clone();
+    let mut stored = state
+        .registry
+        .read()
+        .await
+        .get(&account_id)
+        .map(|entry| entry.stored.clone())
+        .ok_or(CommandError::AccountNotFound)?;
+    stored.monitoring_enabled = request.enabled;
+    state
+        .accounts
+        .upsert_account(stored)
+        .await
+        .map_err(|error| CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        })?;
+    state
+        .registry
+        .write()
+        .await
+        .set_enabled(&account_id, request.enabled)
+        .map_err(map_core_error)?;
+    if request.enabled {
+        state
+            .monitor
+            .refresh(
+                [account_id],
+                crate::monitoring::RefreshReason::UserRequested,
+            )
+            .await?;
+    }
+    Ok(())
 }
 
 /// Changes one account's display name without touching its identity or rank.
@@ -122,9 +166,34 @@ pub async fn rename_account(
     account_ref: AccountRef,
     nickname: String,
 ) -> Result<(), CommandError> {
-    let mut registry = state.registry.write().await;
-    registry
-        .rename(account_ref.id(), nickname)
+    let account_id = account_ref.into_id();
+    let nickname = nickname.trim().to_owned();
+    if nickname.is_empty() || nickname.chars().count() > quota_domain::account::MAX_NICKNAME_LEN {
+        return Err(CommandError::ValidationFailed {
+            field: "nickname".into(),
+            reason: "the nickname is blank or too long".into(),
+        });
+    }
+    let mut stored = state
+        .registry
+        .read()
+        .await
+        .get(&account_id)
+        .map(|entry| entry.stored.clone())
+        .ok_or(CommandError::AccountNotFound)?;
+    stored.nickname.clone_from(&nickname);
+    state
+        .accounts
+        .upsert_account(stored)
+        .await
+        .map_err(|error| CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        })?;
+    state
+        .registry
+        .write()
+        .await
+        .rename(&account_id, nickname)
         .map_err(map_core_error)
 }
 
@@ -137,51 +206,43 @@ pub async fn disconnect_account(
     state: State<'_, AppState>,
     account_ref: AccountRef,
 ) -> Result<(), CommandError> {
-    let mut registry = state.registry.write().await;
-    registry
-        .remove(account_ref.id())
+    let account_id = account_ref.into_id();
+    state
+        .accounts
+        .remove_account(&account_id)
+        .await
+        .map_err(|error| CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        })?;
+    state
+        .registry
+        .write()
+        .await
+        .remove(&account_id)
         .map(|_| ())
         .map_err(map_core_error)
 }
 
-/// Reports the fetch state the application last recorded for one account.
+/// Reads the last fetch state for one immutable account identity.
 #[tauri::command]
 #[specta::specta]
 pub async fn get_connection_progress(
     state: State<'_, AppState>,
     account_ref: AccountRef,
 ) -> Result<FetchState, CommandError> {
-    let registry = state.registry.read().await;
-    registry
+    state
+        .registry
+        .read()
+        .await
         .get(account_ref.id())
-        .map(|entry| entry.stored.connection.state.into())
+        .map(|entry| entry.stored.fetch_state)
         .ok_or(CommandError::AccountNotFound)
-}
-
-/// The application instance identity this build publishes under.
-#[tauri::command]
-#[specta::specta]
-pub fn app_instance_id() -> AppInstanceId {
-    AppInstanceId::generate()
-}
-
-impl From<quota_domain::account::ConnectionState> for FetchState {
-    fn from(state: quota_domain::account::ConnectionState) -> Self {
-        match state {
-            quota_domain::account::ConnectionState::NeverConnected => Self::Idle,
-            quota_domain::account::ConnectionState::Connecting => Self::Fetching,
-            quota_domain::account::ConnectionState::Connected => Self::Idle,
-            quota_domain::account::ConnectionState::ReauthenticationRequired => Self::Error,
-            quota_domain::account::ConnectionState::Unsupported => Self::Error,
-            quota_domain::account::ConnectionState::Disconnected => Self::Idle,
-        }
-    }
 }
 
 fn map_core_error(error: quota_core::CoreError) -> CommandError {
     match error {
-        quota_core::CoreError::AccountNotFound(_) => CommandError::AccountNotFound,
-        quota_core::CoreError::ConnectionNotFound(_) => CommandError::AccountNotFound,
+        quota_core::CoreError::AccountNotFound(_)
+        | quota_core::CoreError::ConnectionNotFound(_) => CommandError::AccountNotFound,
         quota_core::CoreError::ReconnectRequired => CommandError::ReconnectRequired,
         quota_core::CoreError::StaleResult => CommandError::RevisionConflict {
             expected: 0,
@@ -191,7 +252,7 @@ fn map_core_error(error: quota_core::CoreError) -> CommandError {
             field: field.into(),
             reason: reason.into(),
         },
-        quota_core::CoreError::Provider(provider) => match provider {
+        quota_core::CoreError::Provider(error) => match error {
             quota_core::ProviderError::Authentication => CommandError::ReconnectRequired,
             quota_core::ProviderError::Authorization => CommandError::PermissionDenied {
                 window_label: "provider".into(),
@@ -200,8 +261,8 @@ fn map_core_error(error: quota_core::CoreError) -> CommandError {
                 code: other.diagnostic_code().to_owned(),
             },
         },
-        quota_core::CoreError::Persistence { .. } => CommandError::PersistenceUnavailable {
-            owner: "sqlite".into(),
+        quota_core::CoreError::Persistence { owner } => CommandError::PersistenceUnavailable {
+            owner: owner.into(),
         },
     }
 }

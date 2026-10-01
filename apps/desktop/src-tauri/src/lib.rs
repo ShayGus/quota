@@ -7,6 +7,7 @@
 
 #![forbid(unsafe_code)]
 #![doc = include_str!("../README.md")]
+pub mod monitoring;
 
 pub mod bootstrap;
 pub mod bootstrap_helpers;

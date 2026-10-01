@@ -4,6 +4,7 @@
 //! read belongs to. It performs no I/O; every call goes through a repository
 //! port that the host injects.
 
+use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
 
 use quota_domain::account::MAX_NICKNAME_LEN;
@@ -219,6 +220,93 @@ impl AccountRegistry {
         Ok(())
     }
 
+    /// Stores the provider-verified display identity for one account.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn set_identity(
+        &mut self,
+        account_id: &AccountId,
+        identity: quota_domain::account::VerifiedIdentity,
+    ) -> Result<(), CoreError> {
+        self.entry_mut(account_id)?.stored.identity = Some(identity);
+        Ok(())
+    }
+
+    /// Records the result time and fetch state for one account.
+    ///
+    /// An accepted reading updates `last_success_at`; an error preserves the
+    /// previous success time and records its next eligible instant.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn record_attempt(
+        &mut self,
+        account_id: &AccountId,
+        state: quota_domain::account::FetchState,
+        attempted_at: DateTime<Utc>,
+        next_attempt_at: Option<DateTime<Utc>>,
+    ) -> Result<(), CoreError> {
+        let entry = self.entry_mut(account_id)?;
+        entry.stored.fetch_state = state;
+        entry.stored.last_attempt_at = Some(attempted_at);
+        entry.stored.next_attempt_at = next_attempt_at;
+        if state == quota_domain::account::FetchState::Idle {
+            entry.stored.last_success_at = Some(attempted_at);
+        }
+        Ok(())
+    }
+
+    /// Updates the binding generation for every account on one connection.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::ConnectionNotFound`] when the connection has no
+    /// account in this registry.
+    pub fn set_generation(
+        &mut self,
+        connection_id: &quota_domain::ids::ConnectionId,
+        generation: u64,
+    ) -> Result<(), CoreError> {
+        let mut found = false;
+        for entry in self.accounts.values_mut() {
+            if &entry.stored.connection.id == connection_id {
+                entry.stored.connection.generation = generation;
+                entry.binding.generation = generation;
+                found = true;
+            }
+        }
+        if found {
+            Ok(())
+        } else {
+            Err(CoreError::ConnectionNotFound(connection_id.clone()))
+        }
+    }
+
+    /// Updates the connection state for every account on one connection.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::ConnectionNotFound`] when the connection has no
+    /// account in this registry.
+    pub fn set_connection_state(
+        &mut self,
+        connection_id: &quota_domain::ids::ConnectionId,
+        state: quota_domain::account::ConnectionState,
+    ) -> Result<(), CoreError> {
+        let mut found = false;
+        for entry in self.accounts.values_mut() {
+            if &entry.stored.connection.id == connection_id {
+                entry.stored.connection.state = state;
+                entry.stored.connection_state = state;
+                found = true;
+            }
+        }
+        if found {
+            Ok(())
+        } else {
+            Err(CoreError::ConnectionNotFound(connection_id.clone()))
+        }
+    }
+
     fn entry_mut(&mut self, account_id: &AccountId) -> Result<&mut RegisteredAccount, CoreError> {
         self.accounts
             .get_mut(account_id)
@@ -248,10 +336,23 @@ fn binding_from_connection(
 }
 
 fn same_entitlement(left: &StoredAccount, right: &StoredAccount) -> bool {
-    left.connection.provider_id == right.connection.provider_id
-        && left.connection.principal_id == right.connection.principal_id
-        && left.connection.workspace_id == right.connection.workspace_id
-        && left.connection.entitlement_id == right.connection.entitlement_id
+    if left.connection.provider_id != right.connection.provider_id {
+        return false;
+    }
+    let left_has_verified_identity = left.connection.principal_id.is_some()
+        || left.connection.workspace_id.is_some()
+        || left.connection.entitlement_id.is_some();
+    let right_has_verified_identity = right.connection.principal_id.is_some()
+        || right.connection.workspace_id.is_some()
+        || right.connection.entitlement_id.is_some();
+    if left_has_verified_identity || right_has_verified_identity {
+        return left.connection.principal_id == right.connection.principal_id
+            && left.connection.workspace_id == right.connection.workspace_id
+            && left.connection.entitlement_id == right.connection.entitlement_id;
+    }
+    // Sources without identity fields (OpenCode Go) can only be distinguished
+    // by their local credential profile label.
+    left.connection.profile_label == right.connection.profile_label
 }
 
 /// Loads the registry from durable state.

@@ -1,22 +1,27 @@
 //! Composition and lifecycle registration.
 //!
-//! Registration order matters: the single-instance plugin is registered first so
-//! a second launch is routed to an allowlisted activation action before any
-//! persistence or scheduler side effect can happen twice.
+//! The single-instance plugin is registered first. Persistence is restored
+//! before the monitor starts, and the monitor starts once on Tauri's shared
+//! Tokio runtime. A second launch can only activate the existing overview.
 
-use tauri::Manager;
+use std::sync::Arc;
 
+use quota_core::ports::{
+    AccountRepository, BackoffRepository, HistoryRepository, MonitoringRepository,
+    PreferenceRepository,
+};
 use quota_domain::ids::AppInstanceId;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
+use tauri::Manager;
+use tauri_plugin_store::StoreExt;
 
+use crate::bootstrap_helpers::PREFERENCES_SCHEMA_VERSION;
 use crate::ipc::bindings;
 use crate::state::AppState;
 
-/// The provider capabilities this build declares.
+/// Declared capability data for one provider identifier.
 ///
-/// Every entry is a declaration, not a claim of verified support. A provider
-/// with no compiled adapter still appears here so the renderer can show an
-/// explicit unsupported state instead of silently omitting it.
+/// A declaration does not claim that a live account was verified.
 #[must_use]
 pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
     match provider_id {
@@ -55,10 +60,7 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
     }
 }
 
-/// Whether a provider has an adapter compiled into this build.
-///
-/// The fixture adapter exists only under the non-default `test-fixtures`
-/// feature, so a release build reports it as not compiled.
+/// Whether the production build contains an adapter for this provider.
 #[must_use]
 pub const fn is_compiled(provider_id: ProviderId) -> bool {
     matches!(
@@ -67,14 +69,106 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
     )
 }
 
-/// Builds the managed state and mounts the typed IPC registry.
-fn build_state(app: &tauri::AppHandle) -> Result<tauri::State<'static, AppState>, String> {
-    let registry = quota_core::AccountRegistry::new();
+/// Creates and restores every durable owner before polling starts.
+async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
+    let data_dir = app
+        .path()
+        .app_config_dir()
+        .map_err(|_| "app_config_dir_unavailable")?;
+    std::fs::create_dir_all(&data_dir).map_err(|_| "app_config_dir_create_failed")?;
+    let database_path = data_dir.join("quota.sqlite");
+    let settings = quota_persistence::SqlitePoolSettings::default();
+    let pool = quota_persistence::sqlite::open_pool(&database_path, settings)
+        .await
+        .map_err(|error| format!("sqlite_open:{error}"))?;
+    quota_persistence::sqlite::run_migrations(&pool)
+        .await
+        .map_err(|_| "sqlite_migration_failed")?;
+    quota_persistence::sqlite::verify_pool_settings(&pool, &settings)
+        .await
+        .map_err(|_| "sqlite_connection_settings_failed")?;
+
+    // The SQL plugin owns the lifecycle registry. Insert the already-configured
+    // pool there so plugin shutdown closes this exact pool; do not open a second
+    // migration owner through a renderer command.
+    app.state::<tauri_plugin_sql::DbInstances>()
+        .0
+        .write()
+        .await
+        .insert(
+            "sqlite:quota".to_owned(),
+            tauri_plugin_sql::DbPool::Sqlite(pool.clone()),
+        );
+    let repositories = quota_persistence::SqliteRepositories::new(pool);
+
+    let account_repository: Arc<dyn AccountRepository> = Arc::new(
+        quota_persistence::ports::SqliteAccountPortAdapter::new(repositories.clone()),
+    );
+    let backoff_repository: Arc<dyn BackoffRepository> = Arc::new(
+        quota_persistence::ports::SqliteBackoffRepository::new(repositories.clone()),
+    );
+    let history_repository: Arc<dyn HistoryRepository> = Arc::new(
+        quota_persistence::ports::SqliteHistoryPortAdapter::new(repositories.clone()),
+    );
+    let monitoring_repository: Arc<dyn MonitoringRepository> = Arc::new(
+        quota_persistence::ports::SqliteMonitoringPortAdapter::new(repositories.clone()),
+    );
+
+    let store = app
+        .store("preferences.json")
+        .map_err(|_| "preferences_store_open_failed")?;
+    let document_store = quota_persistence::store::plugin::PluginDocumentStore::new(store);
+    let codec = quota_persistence::PresentationPreferencesCodec::new(document_store);
+    let preference_repository: Arc<dyn PreferenceRepository> = Arc::new(
+        quota_persistence::ports::PresentationPreferencesPort::new(codec),
+    );
+
+    let stored_accounts = account_repository
+        .load_accounts()
+        .await
+        .map_err(|error| format!("accounts_restore:{}", error.owner))?;
+    let registry = quota_core::AccountRegistry::from_stored(stored_accounts);
+    let monitoring_state = monitoring_repository
+        .load_monitoring_state()
+        .await
+        .map_err(|error| format!("monitoring_restore:{}", error.owner))?;
+    let presentation_preferences = preference_repository
+        .load()
+        .await
+        .map_err(|error| format!("preferences_restore:{}", error.owner))?;
+    if presentation_preferences.schema_version != PREFERENCES_SCHEMA_VERSION {
+        return Err("preferences_schema_unsupported".to_owned());
+    }
+
+    let providers = Arc::new(
+        quota_providers::ProviderRegistry::production()
+            .map_err(|error| format!("provider_registry:{}", error.diagnostic_code()))?,
+    );
+    let policies = providers
+        .registered()
+        .into_iter()
+        .filter_map(|provider_id| {
+            providers
+                .provider(provider_id)
+                .map(|adapter| adapter.policy())
+        })
+        .collect();
     let builder = quota_core::SnapshotBuilder::new(AppInstanceId::generate());
-    let state =
-        AppState::new(registry, builder).map_err(|error| error.diagnostic_code().to_owned())?;
+    let state = AppState::new(
+        app.clone(),
+        registry,
+        builder,
+        account_repository,
+        backoff_repository,
+        history_repository,
+        preference_repository,
+        monitoring_repository,
+        monitoring_state,
+        policies,
+        providers,
+    );
     app.manage(state);
-    Ok(app.state::<AppState>())
+    Ok(())
 }
 
 /// Starts the desktop host.
@@ -88,11 +182,8 @@ pub fn run() {
         .with_target(false)
         .init();
 
-    let builder = bindings::registry();
-
+    let registry = bindings::registry();
     tauri::Builder::default()
-        // Registered first: a second launch must not run migrations or start a
-        // second scheduler. Its arguments are treated as untrusted data.
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_webview_window("overview") {
                 let _ = window.show();
@@ -100,18 +191,20 @@ pub fn run() {
             }
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(
-            tauri_plugin_sql::Builder::default()
-                .add_migrations("sqlite:quota", quota_persistence::migrations())
-                .build(),
-        )
+        .plugin(tauri_plugin_sql::Builder::default().build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_positioner::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_notification::init())
-        .invoke_handler(builder.mount_events())
-        .setup(|app| {
-            build_state(app.handle())?;
+        .invoke_handler(registry.invoke_handler())
+        .setup(move |app| {
+            registry.mount_events(app);
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(error) = initialize_backend(handle).await {
+                    tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
+                }
+            });
             Ok(())
         })
         .run(tauri::generate_context!())
