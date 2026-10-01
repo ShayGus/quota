@@ -4,9 +4,7 @@ use std::sync::Arc;
 
 use quota_contracts::CommandError;
 use quota_contracts::commands::BeginConnectionRequest;
-use quota_contracts::events::{
-    ConnectionProgress, ConnectionProgressChanged as ConnectionProgressPayload,
-};
+use quota_contracts::events::{ConnectionProgress, ConnectionProgressChangedPayload};
 use quota_core::clock::Clock;
 use quota_core::ports::{ProviderAdapter, ProviderError};
 use quota_domain::account::ConnectionState;
@@ -38,7 +36,7 @@ pub(super) async fn run_connection_attempt(
         });
     }
 
-    let mut progress_revision = 1_u64;
+    let mut progress_revision = 1_u32;
     for candidate in candidates {
         if *cancelled.borrow() {
             return Ok(());
@@ -295,11 +293,11 @@ fn core_command_error(error: quota_core::CoreError) -> CommandError {
 pub(super) async fn emit_connection_progress(
     state: &RuntimeState,
     attempt_id: &ConnectionAttemptId,
-    attempt_revision: u64,
+    attempt_revision: u32,
     progress: ConnectionProgress,
 ) {
     let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
-    let event = crate::ipc::events::ConnectionProgressChanged(ConnectionProgressPayload {
+    let event = crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
         app_instance_id,
         attempt_id: attempt_id.clone(),
         attempt_revision,

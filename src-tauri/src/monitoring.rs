@@ -257,7 +257,7 @@ impl MonitoringRuntime {
     pub async fn reconnect_account(
         &self,
         account_id: &AccountId,
-    ) -> Result<u64, quota_contracts::CommandError> {
+    ) -> Result<u32, quota_contracts::CommandError> {
         let connection_id = self
             .state
             .registry

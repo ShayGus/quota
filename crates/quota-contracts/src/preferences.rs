@@ -32,7 +32,7 @@ pub struct WindowModeChangeRequest {
     /// The mode to move to.
     pub mode: OverviewMode,
     /// The preference revision the caller believes is current.
-    pub expected_revision: u64,
+    pub expected_revision: u32,
 }
 
 /// The confirmed preference aggregate.
@@ -41,7 +41,7 @@ pub struct Preferences {
     /// The wire schema version.
     pub schema_version: u32,
     /// Monotonic within one installation.
-    pub revision: u64,
+    pub revision: u32,
     /// The colour scheme.
     pub theme: Theme,
     /// Row density.

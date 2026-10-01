@@ -31,11 +31,11 @@ export function window(
   } = {},
 ): QuotaWindow {
   return {
-    id: id as QuotaWindow["id"],
+    id: id,
     provider_bucket_id: null,
-    pool_id: "pool-1" as QuotaWindow["pool_id"],
+    pool_id: "pool-1",
     scope: {
-      resource: "resource" as QuotaWindow["scope"]["resource"],
+      resource: "resource",
       label: options.label ?? "Subscription",
     },
     category,
@@ -95,8 +95,8 @@ export function account(
 ): AccountSnapshot {
   const rank = options.rank === undefined ? null : options.rank;
   return {
-    account_id: id as AccountSnapshot["account_id"],
-    connection_id: `${id}-connection` as AccountSnapshot["connection_id"],
+    account_id: id,
+    connection_id: `${id}-connection`,
     connection_generation: 1,
     provider_id: provider,
     nickname: options.nickname ?? id,
@@ -128,7 +128,7 @@ export function account(
             kind: "ranked",
             value: {
               remaining_percent: rank,
-              controlling_window_id: (windows[0]?.id ?? "w") as QuotaWindow["id"],
+              controlling_window_id: windows[0]?.id ?? "w",
               scope_label: windows[0]?.scope.label ?? "Subscription",
               rule_version: 1,
             },
@@ -146,7 +146,7 @@ export function snapshot(
 ): AppSnapshot {
   return {
     schema_version: 1,
-    app_instance_id: instance as AppSnapshot["app_instance_id"],
+    app_instance_id: instance,
     revision,
     generated_at: "2026-10-01T12:00:00.000Z",
     monitoring_state: monitoring,

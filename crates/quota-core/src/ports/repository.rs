@@ -116,7 +116,7 @@ pub trait AccountRepository: Send + Sync {
     ) -> Result<(), RepositoryError>;
 
     /// Increments a connection generation and returns the new value.
-    async fn bump_generation(&self, connection_id: &ConnectionId) -> Result<u64, RepositoryError>;
+    async fn bump_generation(&self, connection_id: &ConnectionId) -> Result<u32, RepositoryError>;
 
     /// Removes one account and only its own rows.
     async fn remove_account(&self, account_id: &AccountId) -> Result<(), RepositoryError>;

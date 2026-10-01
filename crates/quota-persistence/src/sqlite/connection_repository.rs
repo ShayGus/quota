@@ -27,7 +27,7 @@ pub struct ConnectionRecord {
     /// Who holds the credential.
     pub credential_ownership: CredentialOwnership,
     /// Incremented on every reconnect, so late results can be rejected.
-    pub generation: u64,
+    pub generation: u32,
     /// Optional adapter profile label.
     pub profile_label: Option<String>,
     /// What the adapter supports.
@@ -174,7 +174,7 @@ impl AccountRepository {
     ///
     /// # Errors
     /// Returns [`PersistenceError::RowRejected`] when no such connection exists.
-    pub async fn bump_generation(&self, connection_id: &ConnectionId) -> PersistenceResult<u64> {
+    pub async fn bump_generation(&self, connection_id: &ConnectionId) -> PersistenceResult<u32> {
         let mut transaction = self.pool.begin().await.table("connections")?;
 
         let updated =
@@ -193,7 +193,7 @@ impl AccountRepository {
             .table("connections")?;
 
         transaction.commit().await.table("connections")?;
-        u64::try_from(generation).map_err(|_| PersistenceError::RowRejected {
+        u32::try_from(generation).map_err(|_| PersistenceError::RowRejected {
             table: "connections",
             reason: "a stored generation was negative",
         })

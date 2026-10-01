@@ -145,14 +145,14 @@ where
     }
 }
 
-/// Reads a non-negative integer column as `u64`.
+/// Reads a non-negative counter column as `u32`.
 fn counter(
     row: &sqlx::sqlite::SqliteRow,
     column: &'static str,
     table: &'static str,
-) -> PersistenceResult<u64> {
+) -> PersistenceResult<u32> {
     let value: i64 = row.try_get(column).table(table)?;
-    u64::try_from(value).map_err(|_| negative(table, "a stored counter was negative"))
+    u32::try_from(value).map_err(|_| negative(table, "a stored counter was negative"))
 }
 
 /// Reads an optional RFC 3339 column.

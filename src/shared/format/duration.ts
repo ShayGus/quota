@@ -4,7 +4,10 @@
  * A countdown shown on screen is a label. It never refills a quota, changes
  * freshness, changes rank, or schedules a request (spec 7.8).
  */
-import type { Boundary, BoundaryKind, DateTime } from "../../generated/bindings";
+import type { Boundary, BoundaryKind } from "../../generated/bindings";
+
+/** An instant as it crosses the wire: RFC 3339 UTC text. */
+export type DateTime = string;
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;

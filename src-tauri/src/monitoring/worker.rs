@@ -1,6 +1,6 @@
 //! Shared refresh coordinator and supervised read workers.
 
-use quota_contracts::events::SnapshotUpdated as SnapshotUpdatedPayload;
+use quota_contracts::events::SnapshotUpdatedPayload;
 use quota_core::clock::Clock;
 use quota_core::ports::ProviderError;
 use quota_domain::account::{ConnectionState, FetchState};

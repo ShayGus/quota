@@ -31,7 +31,7 @@ pub struct PollContext {
     /// The connection the account belongs to.
     pub connection_id: ConnectionId,
     /// The generation the decision belongs to.
-    pub generation: u64,
+    pub generation: u32,
     /// The account's monitoring switch.
     pub monitoring_enabled: bool,
     /// Whether the user paused monitoring application-wide.

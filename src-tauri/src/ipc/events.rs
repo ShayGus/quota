@@ -6,11 +6,9 @@
 //! name are the same word.
 
 use quota_contracts::{
-    ConnectionProgressChanged as ConnectionProgressChangedPayload,
-    MonitoringStateChanged as MonitoringStateChangedPayload,
-    OverviewWindowStateChanged as OverviewWindowStateChangedPayload,
-    PersistenceStatusChanged as PersistenceStatusChangedPayload,
-    PreferencesChanged as PreferencesChangedPayload, SnapshotUpdated as SnapshotUpdatedPayload,
+    ConnectionProgressChangedPayload, MonitoringStateChangedPayload,
+    OverviewWindowStateChangedPayload, PersistenceStatusChangedPayload, PreferencesChangedPayload,
+    SnapshotUpdatedPayload,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;

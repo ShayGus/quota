@@ -45,9 +45,9 @@ pub enum CommandError {
     /// The caller's expected revision does not match the stored one.
     RevisionConflict {
         /// The revision the caller believed was current.
-        expected: u64,
+        expected: u32,
         /// The revision the backend actually holds.
-        actual: u64,
+        actual: u32,
     },
     /// A durable owner could not be reached.
     PersistenceUnavailable {

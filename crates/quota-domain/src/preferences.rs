@@ -159,7 +159,7 @@ impl Default for OperationalPrivacyPreferences {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Type)]
 pub struct OperationalPreferences {
     /// Revision shared with the presentation document.
-    pub revision: u64,
+    pub revision: u32,
     /// Notification policy.
     pub notifications: NotificationPolicy,
     /// History retention and diagnostic export choices.
@@ -174,7 +174,7 @@ pub struct PresentationPreferences {
     /// The document schema version.
     pub schema_version: u32,
     /// Monotonic within one stored document.
-    pub revision: u64,
+    pub revision: u32,
     /// The colour scheme.
     pub theme: Theme,
     /// Row density.
@@ -215,7 +215,7 @@ impl Default for PresentationPreferences {
 
 impl PresentationPreferences {
     /// Bumps the revision and stamps the current schema version.
-    pub fn advance(&mut self) -> u64 {
+    pub fn advance(&mut self) -> u32 {
         self.schema_version = PREFERENCES_SCHEMA_VERSION;
         self.revision = self.revision.saturating_add(1);
         self.revision

@@ -88,7 +88,7 @@ pub struct ConnectionBinding {
     /// The connection.
     pub connection_id: ConnectionId,
     /// Its generation, incremented on every reconnect.
-    pub generation: u64,
+    pub generation: u32,
     /// The provider.
     pub provider_id: ProviderId,
     /// The verified principal, when known.
@@ -221,7 +221,7 @@ pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
 mod tests {
     use super::*;
 
-    fn binding(generation: u64) -> ConnectionBinding {
+    fn binding(generation: u32) -> ConnectionBinding {
         ConnectionBinding {
             connection_id: ConnectionId::new("c1").unwrap(),
             generation,

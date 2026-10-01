@@ -15,8 +15,8 @@ import type {
   OverviewWindowState,
   PersistenceStatus,
   Preferences,
-  TransportFailure,
 } from "../../generated/bindings";
+import type { TransportFailure } from "../ipc/report";
 
 /** How far the renderer has got with the backend. */
 export type LinkState = "connecting" | "live" | "reconciling" | "unavailable";

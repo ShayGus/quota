@@ -22,10 +22,13 @@ pub struct MoneyMeasurement {
     /// Number of decimal places in one major unit, for example 2 for cents.
     pub scale: u8,
     /// Amount consumed, when the provider reported it.
+    #[specta(type = f64)]
     pub used_minor_units: Option<i64>,
     /// Amount still available, when the provider reported it.
+    #[specta(type = f64)]
     pub remaining_minor_units: Option<i64>,
     /// The cap itself, when the provider reported one.
+    #[specta(type = f64)]
     pub limit_minor_units: Option<i64>,
 }
 

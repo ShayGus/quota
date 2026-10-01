@@ -45,7 +45,7 @@ pub struct AccountSnapshot {
     /// The connection that authorises this account.
     pub connection_id: ConnectionId,
     /// The connection generation this reading belongs to.
-    pub connection_generation: u64,
+    pub connection_generation: u32,
     /// The provider adapter.
     pub provider_id: ProviderId,
     /// The user-chosen display name. Presentation only.
@@ -82,7 +82,7 @@ pub struct AppSnapshot {
     /// Which application instance produced this snapshot.
     pub app_instance_id: AppInstanceId,
     /// Monotonic within one instance.
-    pub revision: u64,
+    pub revision: u32,
     /// When this snapshot was built.
     pub generated_at: DateTime<Utc>,
     /// Whether reads are being scheduled.

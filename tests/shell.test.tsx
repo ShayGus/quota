@@ -99,7 +99,7 @@ describe("the always-on-top control", () => {
     // Tauri names command arguments after the Rust parameter, so the request
     // struct travels under the `request` key.
     expect(commandsMatching("set_overview_always_on_top")[0]?.args).toEqual({
-      always_on_top: true,
+      alwaysOnTop: true,
     });
     // The pin sends nothing else. The only other call is the one-time snapshot
     // reconciliation every window performs at mount.

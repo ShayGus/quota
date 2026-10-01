@@ -33,7 +33,7 @@ pub fn to_presentation(preferences: &Preferences) -> PresentationPreferences {
 
 /// Maps SQLite-owned settings out of the renderer aggregate.
 #[must_use]
-pub fn to_operational(preferences: &Preferences, revision: u64) -> OperationalPreferences {
+pub fn to_operational(preferences: &Preferences, revision: u32) -> OperationalPreferences {
     OperationalPreferences {
         revision,
         notifications: preferences.notifications,

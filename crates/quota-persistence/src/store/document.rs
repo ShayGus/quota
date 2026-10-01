@@ -102,7 +102,7 @@ impl<S: PreferenceDocumentStore> PresentationPreferencesCodec<S> {
     /// Returns [`PersistenceError::BackupFailed`] when the previous document
     /// could not be preserved, and [`PersistenceError::StoreUnavailable`] when
     /// the store itself fails.
-    pub fn save(&self, preferences: &mut PresentationPreferences) -> PersistenceResult<u64> {
+    pub fn save(&self, preferences: &mut PresentationPreferences) -> PersistenceResult<u32> {
         if let Some(previous) = self.store.read(Self::LIVE_KEY)? {
             self.preserve(&previous)?;
         }

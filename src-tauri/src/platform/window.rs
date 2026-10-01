@@ -99,7 +99,7 @@ pub fn publish_state(
     state: OverviewWindowState,
 ) {
     let event = crate::ipc::events::OverviewWindowStateChanged(
-        quota_contracts::OverviewWindowStateChanged {
+        quota_contracts::OverviewWindowStateChangedPayload {
             app_instance_id: app_instance_id.clone(),
             state: quota_contracts::events::OverviewWindowState::Confirmed {
                 mode: state.mode,
@@ -136,7 +136,7 @@ pub struct OverviewWindowState {
     /// Whether it is currently shown.
     pub visible: bool,
     /// Incremented on every confirmed change, so a renderer can order updates.
-    pub geometry_revision: u64,
+    pub geometry_revision: u32,
 }
 
 impl Default for OverviewWindowState {

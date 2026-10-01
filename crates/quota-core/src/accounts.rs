@@ -265,7 +265,7 @@ impl AccountRegistry {
     pub fn set_generation(
         &mut self,
         connection_id: &quota_domain::ids::ConnectionId,
-        generation: u64,
+        generation: u32,
     ) -> Result<(), CoreError> {
         let mut found = false;
         for entry in self.accounts.values_mut() {
@@ -317,7 +317,7 @@ impl AccountRegistry {
 #[allow(clippy::too_many_arguments)]
 fn binding_from_connection(
     connection_id: &quota_domain::ids::ConnectionId,
-    generation: u64,
+    generation: u32,
     provider_id: quota_domain::provider::ProviderId,
     principal_id: Option<quota_domain::ids::ProviderPrincipalId>,
     workspace_id: Option<quota_domain::ids::WorkspaceId>,

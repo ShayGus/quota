@@ -23,8 +23,8 @@ import { statusOf } from "./status";
 const PROVIDER_MARKS: Record<ProviderId, string> = {
   codex: ">_",
   claude: "\u2733",
-  clinepass: "C_",
-  opencode_go: "GO",
+  cline_pass: "C_",
+  open_code_go: "GO",
   fixture: "FX",
 };
 

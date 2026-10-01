@@ -66,7 +66,7 @@ pub struct SetAccountEnabledRequest {
     /// Whether it should be monitored.
     pub enabled: bool,
     /// The preference revision the caller believes is current.
-    pub expected_revision: u64,
+    pub expected_revision: u32,
 }
 
 /// The accepted outcome of a connection attempt.

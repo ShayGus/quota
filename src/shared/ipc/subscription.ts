@@ -2,22 +2,22 @@
  * The lifecycle of one webview's subscription to the backend.
  *
  * The snapshot store is filled by:
- *  1. registering every typed event listener;
+ *  1. registering every typed event listener through the generated bindings;
  *  2. then requesting the snapshot once (spec 7.9).
  *
  * If the component unmounts while registration is still pending, the listeners
  * that do arrive are unsubscribed immediately, so Strict Mode's mount/unmount
  * pair leaves exactly one active subscription (AC-85).
  */
-import { attachEventHandlers, getSnapshot } from "../../generated/bindings";
-import { reportTransportFailure } from "./report";
+import { commands, events } from "../../generated/bindings";
+import { reportCommandError, reportTransportFailure } from "./report";
 import {
   acceptAttempt,
   acceptMonitoring,
+  acceptNativeWindow,
   acceptPersistence,
   acceptPreferences,
   acceptSnapshot,
-  acceptNativeWindow,
   setFailure,
   setLink,
 } from "../state/store";
@@ -30,38 +30,45 @@ import {
  * contract; this function cannot observe its own cancellation.
  */
 export async function startSnapshotSubscription(): Promise<() => void> {
-  const unlisten = await attachEventHandlers({
-    onSnapshotUpdated: (payload) => {
+  const detaches = await Promise.all([
+    events.snapshotUpdated.listen((event) => {
+      const payload = event.payload;
       acceptSnapshot(payload.snapshot);
       setFailure(null);
-    },
-    onConnectionProgressChanged: (payload) => {
+    }),
+    events.connectionProgressChanged.listen((event) => {
+      const payload = event.payload;
       acceptAttempt({
         attemptId: payload.attempt_id,
         revision: payload.attempt_revision,
         progress: payload.progress,
       });
-    },
-    onPreferencesChanged: (payload) => {
+    }),
+    events.preferencesChanged.listen((event) => {
+      const payload = event.payload;
       acceptPreferences(payload.preferences);
-    },
-    onMonitoringStateChanged: (payload) => {
+    }),
+    events.monitoringStateChanged.listen((event) => {
+      const payload = event.payload;
       acceptMonitoring(payload.monitoring_state);
-    },
-    onOverviewWindowStateChanged: (payload) => {
+    }),
+    events.overviewWindowStateChanged.listen((event) => {
+      const payload = event.payload;
       acceptNativeWindow(payload.state);
-    },
-    onPersistenceStatusChanged: (payload) => {
+    }),
+    events.persistenceStatusChanged.listen((event) => {
+      const payload = event.payload;
       acceptPersistence(payload.status);
-    },
-  });
+    }),
+  ]);
+
   let stopped = false;
   return () => {
     if (stopped) {
       return;
     }
     stopped = true;
-    for (const detach of unlisten) {
+    for (const detach of detaches) {
       detach();
     }
   };
@@ -78,16 +85,19 @@ export async function startSnapshotSubscription(): Promise<() => void> {
  */
 export async function reconcileSnapshot(): Promise<void> {
   setLink("reconciling");
-  const result = await getSnapshot();
-  if ("transportError" in result) {
-    reportTransportFailure(result.transportError);
-    return;
+  try {
+    const result = await commands.getSnapshot();
+    if (result.status === "error") {
+      reportCommandError(result.error);
+      setLink("unavailable");
+      return;
+    }
+    acceptSnapshot(result.data.snapshot);
+    setFailure(null);
+  } catch (error) {
+    reportTransportFailure({
+      code: "unavailable",
+      detail: error instanceof Error ? error.name : "command rejected",
+    });
   }
-  if ("error" in result) {
-    setFailure({ kind: "domain", error: result.error });
-    setLink("unavailable");
-    return;
-  }
-  acceptSnapshot(result.ok.snapshot);
-  setFailure(null);
 }

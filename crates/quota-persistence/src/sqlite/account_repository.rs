@@ -40,7 +40,7 @@ pub struct AccountRecord {
     /// The connection that authorises this account.
     pub connection_id: ConnectionId,
     /// The connection generation this row belongs to.
-    pub generation: u64,
+    pub generation: u32,
     /// The compiled provider adapter.
     pub provider_id: ProviderId,
     /// The user-chosen display name. Presentation only.

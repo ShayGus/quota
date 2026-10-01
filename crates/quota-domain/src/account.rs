@@ -103,7 +103,7 @@ pub struct ConnectionSummary {
     /// Who holds the credential.
     pub credential_ownership: CredentialOwnership,
     /// Incremented on every reconnect, so late results can be rejected.
-    pub generation: u64,
+    pub generation: u32,
     /// Optional adapter profile label.
     pub profile_label: Option<String>,
     /// What the adapter supports.

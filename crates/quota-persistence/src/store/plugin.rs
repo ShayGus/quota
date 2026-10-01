@@ -76,7 +76,7 @@ impl<R: Runtime> StorePreferencesRepository<R> {
     ///
     /// # Errors
     /// As [`PresentationPreferencesCodec::save`].
-    pub fn save(&self, preferences: &mut PresentationPreferences) -> PersistenceResult<u64> {
+    pub fn save(&self, preferences: &mut PresentationPreferences) -> PersistenceResult<u32> {
         self.codec.save(preferences)
     }
 }

@@ -37,6 +37,6 @@ pub async fn cancel_connection(
 pub async fn reconnect_account(
     state: State<'_, AppState>,
     account_ref: AccountRef,
-) -> Result<u64, CommandError> {
+) -> Result<u32, CommandError> {
     state.monitor.reconnect_account(account_ref.id()).await
 }

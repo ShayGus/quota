@@ -214,7 +214,7 @@ impl AccountPort for SqliteAccountPortAdapter {
     async fn bump_generation(
         &self,
         connection_id: &quota_domain::ids::ConnectionId,
-    ) -> Result<u64, RepositoryError> {
+    ) -> Result<u32, RepositoryError> {
         self.repositories
             .accounts()
             .bump_generation(connection_id)

@@ -21,8 +21,9 @@ pub use commands::{
 };
 pub use errors::CommandError;
 pub use events::{
-    ConnectionProgressChanged, MonitoringStateChanged, OverviewWindowStateChanged,
-    PersistenceStatusChanged, PreferencesChanged, SnapshotUpdated,
+    ConnectionProgressChangedPayload, MonitoringStateChangedPayload,
+    OverviewWindowStateChangedPayload, PersistenceStatusChangedPayload, PreferencesChangedPayload,
+    SnapshotUpdatedPayload,
 };
 pub use preferences::{NotificationPolicy, NotificationThresholds, Preferences, PrivacyPolicy};
 pub use refs::{AccountRef, AttemptRef, ConnectionRef};

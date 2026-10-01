@@ -19,7 +19,7 @@ pub struct ScheduledRead {
     /// The account to read.
     pub account_id: AccountId,
     /// The binding generation the read belongs to.
-    pub generation: u64,
+    pub generation: u32,
     /// The earliest instant the read may start.
     pub not_before: DateTime<Utc>,
     /// Why the read was scheduled, for diagnostics.

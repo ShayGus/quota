@@ -44,7 +44,7 @@ impl OperationalPreferencesRepository {
             .try_get("polling_policies_json")
             .map_err(|_| invalid_row("polling policies"))?;
         Ok(OperationalPreferences {
-            revision: u64::try_from(revision).map_err(|_| invalid_row("revision"))?,
+            revision: u32::try_from(revision).map_err(|_| invalid_row("revision"))?,
             notifications: serde_json::from_str(&notifications_json)
                 .map_err(|_| invalid_row("notification policy"))?,
             privacy: serde_json::from_str(&privacy_json)
@@ -59,7 +59,7 @@ impl OperationalPreferencesRepository {
         &self,
         preferences: &OperationalPreferences,
     ) -> PersistenceResult<OperationalPreferences> {
-        let revision = i64::try_from(preferences.revision).map_err(|_| invalid_row("revision"))?;
+        let revision = i64::from(preferences.revision);
         let notifications = serde_json::to_string(&preferences.notifications).map_err(|_| {
             PersistenceError::QueryFailed {
                 table: "monitoring_preferences",

@@ -17,11 +17,11 @@ use crate::preferences::Preferences;
 
 /// The primary quota and account update channel.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
-pub struct SnapshotUpdated {
+pub struct SnapshotUpdatedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// The snapshot revision, monotonic within the instance.
-    pub revision: u64,
+    pub revision: u32,
     /// The wire schema version of `snapshot`.
     pub schema_version: u32,
     /// The complete, sanitized snapshot.
@@ -52,35 +52,35 @@ pub enum ConnectionProgress {
 
 /// Progress of one connection attempt.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct ConnectionProgressChanged {
+pub struct ConnectionProgressChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// The attempt this progress belongs to.
     pub attempt_id: ConnectionAttemptId,
     /// Monotonic within one attempt.
-    pub attempt_revision: u64,
+    pub attempt_revision: u32,
     /// The typed progress state.
     pub progress: ConnectionProgress,
 }
 
 /// Emitted after a preference save succeeds, never before.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
-pub struct PreferencesChanged {
+pub struct PreferencesChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// The confirmed preference revision.
-    pub preference_revision: u64,
+    pub preference_revision: u32,
     /// The confirmed preferences.
     pub preferences: Preferences,
 }
 
 /// Whether the supervisor is scheduling reads.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct MonitoringStateChanged {
+pub struct MonitoringStateChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// Monotonic within one instance.
-    pub monitoring_revision: u64,
+    pub monitoring_revision: u32,
     /// The confirmed state.
     pub monitoring_state: MonitoringState,
 }
@@ -98,7 +98,7 @@ pub enum OverviewWindowState {
         /// Whether the window is currently shown.
         visible: bool,
         /// The geometry revision, incremented on every confirmed change.
-        geometry_revision: u64,
+        geometry_revision: u32,
     },
     /// The platform refused or failed the operation. The previous state stands.
     Failed {
@@ -109,7 +109,7 @@ pub enum OverviewWindowState {
 
 /// A change to the native overview window.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct OverviewWindowStateChanged {
+pub struct OverviewWindowStateChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// The confirmed state or failure.
@@ -118,7 +118,7 @@ pub struct OverviewWindowStateChanged {
 
 /// Durable storage availability, with no file contents or credential references.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
-pub struct PersistenceStatusChanged {
+pub struct PersistenceStatusChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,
     /// The current status.
@@ -140,7 +140,7 @@ mod tests {
     #[test]
     fn snapshot_update_carries_the_instance_and_revision() {
         let instance = AppInstanceId::new("instance-1").unwrap();
-        let event = SnapshotUpdated {
+        let event = SnapshotUpdatedPayload {
             app_instance_id: instance.clone(),
             revision: 7,
             schema_version: 1,

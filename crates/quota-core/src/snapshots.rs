@@ -21,7 +21,7 @@ use crate::accounts::{AccountRegistry, RegisteredAccount};
 #[derive(Debug)]
 pub struct SnapshotBuilder {
     app_instance_id: AppInstanceId,
-    revision: u64,
+    revision: u32,
 }
 
 impl SnapshotBuilder {
@@ -42,7 +42,7 @@ impl SnapshotBuilder {
 
     /// The revision most recently published.
     #[must_use]
-    pub const fn revision(&self) -> u64 {
+    pub const fn revision(&self) -> u32 {
         self.revision
     }
 
