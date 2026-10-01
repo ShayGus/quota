@@ -32,7 +32,7 @@ specta = { workspace = true, features = ["derive"] }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-opener = { workspace = true }
-tauri-plugin-positioner = { workspace = true }
+tauri-plugin-positioner = { workspace = true, features = ["tray-icon"] }
 tauri-plugin-single-instance = { workspace = true }
 tauri-specta = { workspace = true, features = ["derive", "typescript"] }
 thiserror = { workspace = true }

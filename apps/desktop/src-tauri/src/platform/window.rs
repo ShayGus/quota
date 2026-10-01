@@ -4,7 +4,125 @@
 //! Dragging a tray-anchored view detaches it to floating without enabling
 //! topmost, and changing topmost moves nothing.
 
+use quota_contracts::CommandError;
+use tauri::{AppHandle, Manager, WebviewWindow};
+
 use quota_domain::preferences::OverviewMode;
+
+/// Returns a host window and maps native details to a safe command error.
+pub fn get(app: &AppHandle, label: &'static str) -> Result<WebviewWindow, CommandError> {
+    app.get_webview_window(label)
+        .ok_or_else(|| CommandError::NativeOperationFailed {
+            operation: "get_window".into(),
+            reason: "the native window is not available".into(),
+        })
+}
+
+/// Maps a native error without exposing paths or platform details.
+pub fn failed(operation: &'static str) -> CommandError {
+    CommandError::NativeOperationFailed {
+        operation: operation.into(),
+        reason: "the operating system rejected the window request".into(),
+    }
+}
+
+/// Applies and confirms visibility through the native window API.
+pub fn set_visible(
+    app: &AppHandle,
+    label: &'static str,
+    visible: bool,
+    focus: bool,
+) -> Result<bool, CommandError> {
+    let window = get(app, label)?;
+    if visible {
+        window.show().map_err(|_| failed("show_window"))?;
+        if focus {
+            window.set_focus().map_err(|_| failed("focus_window"))?;
+        }
+    } else {
+        window.hide().map_err(|_| failed("hide_window"))?;
+    }
+    window
+        .is_visible()
+        .map_err(|_| failed("read_window_visibility"))
+}
+
+/// Keeps both configured windows alive when the user closes them.
+pub fn install_close_handlers(app: &AppHandle) {
+    for label in ["overview", "settings"] {
+        let Some(native) = app.get_webview_window(label) else {
+            continue;
+        };
+        let app = app.clone();
+        let native_for_event = native.clone();
+        native.on_window_event(move |event| match event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
+                api.prevent_close();
+                let _ = native_for_event.hide();
+                if label == "overview" {
+                    if let Some(state) = app.try_state::<crate::state::AppState>() {
+                        let controller = state.window.clone();
+                        let app = app.clone();
+                        let app_instance_id = state.app_instance_id.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let confirmed = controller.lock().await.set_visible(false);
+                            let _ = publish_state(&app, &app_instance_id, confirmed);
+                        });
+                    }
+                }
+            }
+            tauri::WindowEvent::Focused(false) if label == "overview" => {
+                if let Some(state) = app.try_state::<crate::state::AppState>() {
+                    let controller = state.window.clone();
+                    let app = app.clone();
+                    let app_instance_id = state.app_instance_id.clone();
+                    tauri::async_runtime::spawn(async move {
+                        if controller.lock().await.state().mode == OverviewMode::Tray
+                            && set_visible(&app, "overview", false, false) == Ok(false)
+                        {
+                            let confirmed = controller.lock().await.set_visible(false);
+                            let _ = publish_state(&app, &app_instance_id, confirmed);
+                        }
+                    });
+                }
+            }
+            _ => {}
+        });
+    }
+}
+
+/// Publishes confirmed native state to both renderer windows.
+pub fn publish_state(
+    app: &AppHandle,
+    app_instance_id: &quota_domain::ids::AppInstanceId,
+    state: OverviewWindowState,
+) {
+    use tauri_specta::Event;
+
+    let event = crate::ipc::events::OverviewWindowStateChanged(
+        quota_contracts::OverviewWindowStateChanged {
+            app_instance_id: app_instance_id.clone(),
+            state: quota_contracts::events::OverviewWindowState::Confirmed {
+                mode: state.mode,
+                always_on_top: state.always_on_top,
+                visible: state.visible,
+                geometry_revision: state.geometry_revision,
+            },
+        },
+    );
+    if event.emit_to(app, "overview").is_err() {
+        tracing::warn!(
+            code = "overview_window_event_failed",
+            "window state event was not delivered"
+        );
+    }
+    if event.emit_to(app, "settings").is_err() {
+        tracing::warn!(
+            code = "settings_window_event_failed",
+            "window state event was not delivered"
+        );
+    }
+}
 
 /// The confirmed native state of the overview window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -84,6 +202,12 @@ impl OverviewWindowController {
         self.set_mode(OverviewMode::Floating)
     }
 
+    /// Records a confirmed size or position change.
+    pub fn record_geometry_change(&mut self) -> OverviewWindowState {
+        self.bump();
+        self.state
+    }
+
     fn bump(&mut self) {
         self.state.geometry_revision = self.state.geometry_revision.saturating_add(1);
     }
@@ -120,5 +244,16 @@ mod tests {
         let mut controller = OverviewWindowController::new();
         let first = controller.set_always_on_top(false).geometry_revision;
         assert_eq!(controller.set_always_on_top(false).geometry_revision, first);
+    }
+
+    #[test]
+    fn confirmed_geometry_change_increments_the_revision() {
+        let mut controller = OverviewWindowController::new();
+        let before = controller.state();
+        let after = controller.record_geometry_change();
+        assert_eq!(after.geometry_revision, before.geometry_revision + 1);
+        assert_eq!(after.mode, before.mode);
+        assert_eq!(after.visible, before.visible);
+        assert_eq!(after.always_on_top, before.always_on_top);
     }
 }

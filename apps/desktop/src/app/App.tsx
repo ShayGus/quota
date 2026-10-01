@@ -76,7 +76,9 @@ export function App(): JSX.Element {
 /** The window. */
 function QuotaWindow(): JSX.Element {
   const state = useRendererState();
-  const [view, setView] = useState<View>({ name: "overview" });
+  const [view, setView] = useState<View>(() =>
+    window.location.hash === "#/settings" ? { name: "settings" } : { name: "overview" },
+  );
   const now = useNow();
   useTheme(state);
 

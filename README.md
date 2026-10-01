@@ -15,35 +15,37 @@ target while an update is applied.
 
 ## Status
 
-This repository is at the foundation stage. The domain model is written, and the
-repository gates, the dependency record, and the CI workflows exist. The
-following are **not** implemented yet:
+The desktop app now has production provider adapters for Codex, Claude, and
+OpenCode Go. It restores account and monitoring state from SQLite, starts one
+shared bounded refresh supervisor, and commits readings before it publishes
+snapshots. Account, history, backoff, and monitoring repositories use SQLite.
+Presentation settings use the Tauri Store plugin.
 
-- the provider adapters (`quota-providers` is a stub) and therefore every live
-  reading;
-- the application services beyond their types (`quota-core` has the scheduler
-  and account types, no running supervisor);
-- persistence (`quota-persistence` holds only `lib.rs`);
-- the desktop host and the renderer;
-- Windows installers, the 72-hour ten-account soak, macOS, and Linux packaging.
+The React renderer and Tauri host are present. The native host source has not
+compiled or run on this WSL machine. The local image lacks `libdbus-1-dev`,
+WebKitGTK development files, and `pkg-config`. CI installs these packages and
+runs the first host build.
 
-`docs/acceptance.md` maps every specified acceptance case to a layer and marks
-the unimplemented ones with a reason. It is the honest status list.
+Saved notification, privacy, and polling preferences are not yet complete.
+Windows installers, the 72-hour ten-account soak, macOS, and Linux packaging
+also remain unverified.
 
-## The desktop host is not buildable on this machine
-
-`apps/desktop/src-tauri` has **not** been compiled or run here. Building a Tauri
-host needs the `webkit2gtk` development packages and `pkg-config`, and this Linux
-machine has neither. Do not read a green Rust check as evidence that the desktop
-application works. Nothing about the tray, the floating window, native
-notifications, or the packaged installer has been observed.
-
-The Rust library crates and `xtask` are ordinary Rust. They are formatted, linted,
-and tested on this machine.
+`docs/acceptance.md` maps the specified acceptance cases to a layer and records
+the remaining checks.
 
 ## Developer setup from a clean checkout
 
 Prerequisites: `rustup`, and a Node.js toolchain with `pnpm` for the frontend.
+
+On Ubuntu, install the Tauri build packages before `cargo build`:
+
+```bash
+sudo apt-get update
+sudo apt-get install --no-install-recommends -y \
+  build-essential curl file libayatana-appindicator3-dev libdbus-1-dev \
+  librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf \
+  pkg-config wget
+```
 
 ```bash
 git clone https://github.com/ShayGus/quota.git

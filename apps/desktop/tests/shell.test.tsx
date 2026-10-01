@@ -55,6 +55,7 @@ const mutatingCommands = (): readonly string[] =>
 
 beforeEach(() => {
   invoked.length = 0;
+  window.location.hash = "";
 });
 
 describe("the colour scheme", () => {
@@ -139,5 +140,15 @@ describe("a render failure", () => {
     // Accounts are still present in the store, and no polling was restarted.
     expect(screen.getAllByText("72%").length).toBeGreaterThan(0);
     expect(commandsMatching("refresh_accounts")).toHaveLength(0);
+  });
+});
+
+describe("the settings window route", () => {
+  it("opens settings when the native window starts at #/settings", () => {
+    window.location.hash = "#/settings";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    expect(screen.getByLabelText("Quota settings")).toBeTruthy();
   });
 });

@@ -153,9 +153,11 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
                 .map(|adapter| adapter.policy())
         })
         .collect();
-    let builder = quota_core::SnapshotBuilder::new(AppInstanceId::generate());
+    let app_instance_id = AppInstanceId::generate();
+    let builder = quota_core::SnapshotBuilder::new(app_instance_id.clone());
     let state = AppState::new(
         app.clone(),
+        app_instance_id,
         registry,
         builder,
         account_repository,
@@ -167,7 +169,14 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
         policies,
         providers,
     );
-    app.manage(state);
+    if let Some(native) = app.get_webview_window("overview") {
+        let visible = native.is_visible().unwrap_or(false);
+        app.state::<AppState>()
+            .window
+            .lock()
+            .await
+            .set_visible(visible);
+    }
     Ok(())
 }
 
@@ -200,6 +209,13 @@ pub fn run() {
         .setup(move |app| {
             registry.mount_events(app);
             let handle = app.handle().clone();
+            crate::platform::tray::install(&handle)?;
+            crate::platform::window::install_close_handlers(&handle);
+            let overview = app.get_webview_window("overview").ok_or_else(|| {
+                std::io::Error::other("the overview window is missing")
+            })?;
+            overview.show()?;
+            overview.set_focus()?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = initialize_backend(handle).await {
                     tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");

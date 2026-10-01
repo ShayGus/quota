@@ -21,6 +21,10 @@ use crate::platform::window::OverviewWindowController;
 /// The durable owners and native handles the commands reach.
 #[derive(Clone)]
 pub struct AppState {
+    /// The identity shared by this process's snapshots and events.
+    pub app_instance_id: quota_domain::ids::AppInstanceId,
+    /// The native app handle for window and tray operations.
+    pub app: tauri::AppHandle,
     /// The account registry, owned by the application core.
     pub registry: Arc<tokio::sync::RwLock<AccountRegistry>>,
     /// The snapshot builder and its revision counter.
@@ -58,6 +62,7 @@ impl AppState {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         app: tauri::AppHandle,
+        app_instance_id: quota_domain::ids::AppInstanceId,
         registry: AccountRegistry,
         builder: SnapshotBuilder,
         accounts: Arc<dyn AccountRepository>,
@@ -74,7 +79,7 @@ impl AppState {
         let monitoring_state = Arc::new(tokio::sync::RwLock::new(monitoring_state));
         let policies = Arc::new(tokio::sync::RwLock::new(policies));
         let monitor = MonitoringRuntime::start(
-            app,
+            app.clone(),
             registry.clone(),
             snapshots.clone(),
             accounts.clone(),
@@ -84,7 +89,8 @@ impl AppState {
             providers,
         );
         Self {
-            registry,
+            app,
+            app_instance_id,
             snapshots,
             clock: Arc::new(SystemClock),
             window: Arc::new(tokio::sync::Mutex::new(OverviewWindowController::new())),
