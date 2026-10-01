@@ -48,6 +48,37 @@ pub fn set_visible(
         .map_err(|_| failed("read_window_visibility"))
 }
 
+/// Applies the window chrome the mode implies.
+///
+/// Decorations and taskbar presence need no tray geometry, so this is safe to
+/// call at startup, before the tray icon has reported where it is.
+pub fn apply_mode_chrome(native: &WebviewWindow, mode: OverviewMode) -> Result<(), CommandError> {
+    let (decorations, skip_taskbar) = match mode {
+        OverviewMode::Tray => (false, true),
+        OverviewMode::Floating => (true, false),
+    };
+    native
+        .set_decorations(decorations)
+        .map_err(|_| failed("set_window_decorations"))?;
+    native
+        .set_skip_taskbar(skip_taskbar)
+        .map_err(|_| failed("set_taskbar_visibility"))?;
+    Ok(())
+}
+
+/// Anchors the window beside the tray icon.
+///
+/// The positioner only learns where the icon is from a tray event, so this
+/// fails until one has arrived. Callers that run at startup treat the failure as
+/// deferred work rather than a failure.
+pub fn anchor_to_tray(app: &AppHandle) -> Result<(), CommandError> {
+    use tauri_plugin_positioner::{Position, WindowExt};
+    let native = get(app, "overview")?;
+    native
+        .move_window_constrained(Position::TrayBottomCenter)
+        .map_err(|_| failed("anchor_tray_window"))
+}
+
 /// Keeps both configured windows alive when the user closes them.
 pub fn install_close_handlers(app: &AppHandle) {
     for label in ["overview", "settings"] {

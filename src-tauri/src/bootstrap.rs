@@ -371,7 +371,17 @@ async fn install_managed_state(
     let mut controller = state.window.lock().await;
     controller.set_always_on_top(confirmed_topmost);
     controller.set_visible(visible);
+    let saved_mode = state.preferences_state.read().await.overview_mode;
+    controller.set_mode(saved_mode);
     drop(controller);
+    // The saved mode's chrome needs no tray geometry, so it applies now. The
+    // anchor waits for the first tray event, which is when the positioner
+    // learns where the icon is.
+    crate::platform::window::apply_mode_chrome(&native, saved_mode)
+        .map_err(|_| "window_mode_chrome_restore_failed")?;
+    if saved_mode == quota_domain::preferences::OverviewMode::Tray {
+        let _ = crate::platform::window::anchor_to_tray(app);
+    }
     // One refresh through the shared supervisor fills each seeded account's
     // reading by the ordinary read path.
     #[cfg(feature = "sample-data")]

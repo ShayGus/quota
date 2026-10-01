@@ -13,8 +13,6 @@ use tauri::{LogicalSize, PhysicalPosition, State};
 use crate::platform::window::{self, OverviewWindowState as WindowModelState};
 use crate::state::AppState;
 
-use tauri_plugin_positioner::{Position, WindowExt};
-
 /// Moves the overview between floating and tray anchoring.
 #[tauri::command]
 #[specta::specta]
@@ -23,23 +21,9 @@ pub async fn set_overview_mode(
     mode: OverviewMode,
 ) -> Result<WindowModeChange, CommandError> {
     let native = window::get(&state.app, "overview")?;
+    window::apply_mode_chrome(&native, mode)?;
     if mode == OverviewMode::Tray {
-        native
-            .move_window_constrained(Position::TrayBottomCenter)
-            .map_err(|_| window::failed("anchor_tray_window"))?;
-        native
-            .set_decorations(false)
-            .map_err(|_| window::failed("set_window_decorations"))?;
-        native
-            .set_skip_taskbar(true)
-            .map_err(|_| window::failed("set_taskbar_visibility"))?;
-    } else {
-        native
-            .set_decorations(true)
-            .map_err(|_| window::failed("set_window_decorations"))?;
-        native
-            .set_skip_taskbar(false)
-            .map_err(|_| window::failed("set_taskbar_visibility"))?;
+        window::anchor_to_tray(&state.app)?;
     }
     let mut controller = state.window.lock().await;
     let confirmed = controller.set_mode(mode);
@@ -167,6 +151,13 @@ pub async fn reset_overview_position(
     controller.set_visible(visible);
     controller.detach_to_floating();
     let confirmed = controller.record_geometry_change();
+    drop(controller);
+    // Detaching is a mode change, so the preference it produced is saved rather
+    // than left for the next restart to undo.
+    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+        preferences.overview_mode = OverviewMode::Floating;
+    })
+    .await?;
     window::publish_state(&state.app, &state.app_instance_id, confirmed);
     Ok(window_state_response(confirmed))
 }

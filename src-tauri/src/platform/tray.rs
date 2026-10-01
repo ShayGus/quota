@@ -69,6 +69,20 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .on_tray_icon_event(move |tray, event| {
             let app = tray.app_handle();
             tauri_plugin_positioner::on_tray_event(app, &event);
+            // This event carries the tray geometry a deferred startup anchor was
+            // waiting for, so a saved Tray mode is completed here if not before.
+            // The lock is only inspected here, never held, so a busy controller
+            // defers the anchor to the next tray event instead of stalling the
+            // main thread behind an in-flight read.
+            let mut deferred = false;
+            if let Some(state) = app.try_state::<crate::state::AppState>()
+                && let Ok(controller) = state.window.try_lock()
+            {
+                deferred = controller.state().mode == quota_domain::preferences::OverviewMode::Tray;
+            }
+            if deferred {
+                let _ = window::anchor_to_tray(app);
+            }
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
