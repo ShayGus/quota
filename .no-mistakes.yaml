@@ -1,12 +1,12 @@
 # Per-repository no-mistakes configuration for Quota.
 #
 # The pipeline runs the project's own gates. The command strings below are the
-# commands .github/workflows/ci.yml runs as `run:` gate steps, in CI's order and
-# with CI's flags, so a validation run proves what CI proves. CI's one extra
-# step, `cargo build --locked -p quota-desktop`, needs the test agent's launch
-# check instead. README.md "Commands" and CONTRIBUTING.md section 3 own those
-# lists: change this file in the same commit that changes them. Nothing here
-# weakens a gate.
+# commands .github/workflows/ci.yml runs as `run:` gate steps, with CI's exact
+# flags, grouped by kind rather than in CI's order, so a validation run proves
+# what CI proves. CI's one extra gate step, `cargo build --locked -p quota-desktop`,
+# needs the test agent's launch check instead. README.md "Commands" and
+# CONTRIBUTING.md section 3 own those lists: change this file in the same commit
+# that changes them. Nothing here weakens a gate.
 
 commands:
   # The static gates. No command is dropped, replaced, or made advisory.
@@ -57,13 +57,24 @@ test:
     it. This host has no window capture, so the log line and the HTTP response
     are the evidence; report them as such instead of claiming a screenshot.
 
+    The dev server uses a fixed port, 1420. If it reports "Port 1420 is already
+    in use", the port belongs to another process, not to this repository: never
+    kill it and never retry on 1420. Name the process holding it, pick a free
+    port, and run the same check there:
+
+      bun tauri dev --config '{"build":{"devUrl":"http://localhost:PORT","beforeDevCommand":"bun run dev -- --port PORT --strictPort"}}'
+
+    Measured here: the host compiles 645 units in 9.8 s and the dev server
+    answers 200, so a launch check costs about two minutes, not a budget.
+
     Reuse the warm `target/` directory and the installed `node_modules`. Never
     run `cargo clean`, delete `target/`, point `CARGO_TARGET_DIR` somewhere
     new, or rebuild from scratch. Install nothing: `bun install`,
     `cargo install`, and `cargo deny` are out of scope because the
-    dependencies are already present. CONTRIBUTING.md "Measured times" holds
-    the warm baseline for every command; a command far above its baseline
-    means the build cache was lost, not that the code is slow.
+    dependencies are already present. Measured warm on a 32-core machine:
+    `commands.lint` runs in 39 to 45 s and `commands.test` in 15 s. A gate
+    that takes minutes means the build cache was lost, not that the code is
+    slow.
 
     Run each command once and report the exact command, its exit code, and its
     wall-clock time. A failure is reported, not retried, not worked around, and
