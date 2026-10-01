@@ -1,22 +1,22 @@
 # Exception register
 
-Every deviation from a lint, dependency, file-size, or safety rule, with an
-owner, a rationale, a scope, a review date, and the condition that removes it.
-Specification section 7.10 requires this record.
+Every deviation from a lint, dependency, file-size, or safety rule, with an owner, a
+rationale, a scope, a review date, and the condition that removes it. Specification
+section 7.10 requires this record.
 
-Owner values name a role, not a person, because the project is small and roles
-outlive individuals.
+Owner values name a role, not a person, because the project is small and roles outlive
+individuals.
 
 ## 1. `allow-unwrap-in-tests = true`
 
-| Field | Value |
-|---|---|
-| Rule | Production code denies `unwrap` and `expect` |
-| Deviation | `clippy.toml` sets `allow-unwrap-in-tests = true` |
-| Owner | Rust maintainer |
-| Scope | Unit tests inside `#[cfg(test)]` modules, and the whole integration test files that opt in with a file-level `#[expect]` |
-| Rationale | A fixture built inline is clearer as `AccountId::new("a").unwrap()` than as a propagation chain. The allowance does not reach any shipped path: `unwrap_used` stays `deny` for library code, so no production call can panic this way. |
-| Review date | 2026-10-01 |
+| Field             | Value                                                                                                                                                                                                                                                                                      |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Rule              | Production code denies `unwrap` and `expect`                                                                                                                                                                                                                                               |
+| Deviation         | `clippy.toml` sets `allow-unwrap-in-tests = true`                                                                                                                                                                                                                                          |
+| Owner             | Rust maintainer                                                                                                                                                                                                                                                                            |
+| Scope             | Unit tests inside `#[cfg(test)]` modules, and the whole integration test files that opt in with a file-level `#[expect]`                                                                                                                                                                   |
+| Rationale         | A fixture built inline is clearer as `AccountId::new("a").unwrap()` than as a propagation chain. The allowance does not reach any shipped path: `unwrap_used` stays `deny` for library code, so no production call can panic this way.                                                     |
+| Review date       | 2026-10-01                                                                                                                                                                                                                                                                                 |
 | Removal condition | Never for unit tests. Integration tests under `tests/` already carry an explicit, file-scoped `#[expect(clippy::unwrap_used, reason = "...")]`, and their reasons are real; a blanket allow would hide an unfulfilled expectation, which `unfulfilled_lint_expectations = "warn"` reports. |
 
 `allow-panic-in-tests = true` is the same decision for a deliberate panic test.
@@ -24,39 +24,45 @@ outlive individuals.
 
 ## 2. `tauri-specta` and `specta` 2.0.0-rc.25 prerelease pin
 
-| Field | Value |
-|---|---|
-| Rule | Use current compatible published dependencies; pin pre-1.0 and release-candidate members of a compatibility set exactly |
-| Deviation | `tauri-specta` and `specta` resolve to the release candidate `2.0.0-rc.25`, not a stable release |
-| Owner | Rust maintainer |
-| Scope | The generated IPC surface only: `quota-contracts` derives, the desktop host's registry, and `apps/desktop/src/generated/bindings.ts` |
-| Rationale | There is no stable `tauri-specta` 2.x. Tauri Specta's compatibility table pairs Tauri 2 with Specta 2 and Tauri Specta 2, and every published member of that pair is a release candidate. The specification rejects Specta v1, so the release candidate is the only route that satisfies both the compatibility table and the version requirement. Both members are pinned with `=`, and `specta-typescript` and `specta-serde` are pinned to 0.0.12. |
-| Review date | 2026-10-01 |
-| Removal condition | Adopt stable `tauri-specta` 2.x and `specta` 2.x when they are published. The four packages move together, in the same change that regenerates the bindings. |
+| Field             | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rule              | Use current compatible published dependencies; pin pre-1.0 and release-candidate members of a compatibility set exactly                                                                                                                                                                                                                                                                                                                               |
+| Deviation         | `tauri-specta` and `specta` resolve to the release candidate `2.0.0-rc.25`, not a stable release                                                                                                                                                                                                                                                                                                                                                      |
+| Owner             | Rust maintainer                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Scope             | The generated IPC surface only: `quota-contracts` derives, the desktop host's registry, and `src/generated/bindings.ts`                                                                                                                                                                                                                                                                                                                  |
+| Rationale         | There is no stable `tauri-specta` 2.x. Tauri Specta's compatibility table pairs Tauri 2 with Specta 2 and Tauri Specta 2, and every published member of that pair is a release candidate. The specification rejects Specta v1, so the release candidate is the only route that satisfies both the compatibility table and the version requirement. Both members are pinned with `=`, and `specta-typescript` and `specta-serde` are pinned to 0.0.12. |
+| Review date       | 2026-10-01                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Removal condition | Adopt stable `tauri-specta` 2.x and `specta` 2.x when they are published. The four packages move together, in the same change that regenerates the bindings.                                                                                                                                                                                                                                                                                          |
 
-## 3. `bindings.ts` is a checked-in, hand-maintained mirror
+## 3. Deviations from the stock Tauri template
 
-| Field | Value |
-|---|---|
-| Rule | `apps/desktop/src/generated/bindings.ts` is generated by `tauri-specta` from the Rust registry |
-| Deviation | The file is checked in and maintained by hand, and its agreement with Rust is enforced by `cargo xtask bindings --check` instead of by regeneration |
-| Owner | Rust maintainer |
-| Scope | `apps/desktop/src/generated/bindings.ts`, and the `bindings` subcommand of `xtask` |
-| Rationale | `tauri-specta` cannot be compiled on this Linux build machine: it needs `webkit2gtk` development packages and `pkg-config`, and the machine has neither. The exporter therefore cannot run here, and CI runs on the same image family. `cargo xtask bindings --check` reads the `#[tauri::command]` function names and the event struct names under `apps/desktop/src-tauri/src/ipc/`, asserts each appears in `bindings.ts`, and asserts the mirror invents no command or event name the Rust side does not define. The check is a real gate in both directions, and it is weaker than generation: it compares names, not field types. |
-| Review date | 2026-10-01 |
-| Removal condition | Regenerate with `tauri-specta` on a machine with the Tauri native dependencies installed, then replace the name comparison with a byte comparison of the regenerated file. |
+The application follows the official Tauri project structure: `package.json`,
+`index.html`, `vite.config.ts`, the tsconfig files and `src/` at the repository
+root, with `src-tauri/` beside them, managed by `@tauri-apps/cli` through Bun.
+Everything below is a place where the specification forced a difference from
+what `bun create tauri-app` generates. Nothing else differs.
 
-The `bindings --check` subcommand prints this reason in `cargo xtask --help`. The
-CI job `rust` runs the command.
+| Deviation | Stock template | This project | Why, and the specification section |
+|---|---|---|---|
+| The Rust project is a workspace member | `src-tauri/` is its own workspace root with its own `Cargo.lock` | `src-tauri/` is a member of the root workspace beside `crates/*` and `xtask`, with one root `Cargo.lock` | The specification requires shared domain, contract, core, provider and persistence crates, which cannot be siblings of a second independent workspace. Spec 7.1, 7.2. |
+| `build.rs` builds an application-command manifest | `tauri_build::build()` | `tauri_build::try_build(Attributes::new().app_manifest(...))` listing every command | The specification requires each custom command to be permission-gated rather than callable from any window. This is the documented way to generate those permissions. Spec 8.2. |
+| `capabilities/` holds two named files | `capabilities/default.json` | `overview-capability.json` and `settings-capability.json`, with a `permissions/` directory | The specification separates least privilege per window: the overview may not save preferences, the settings window may not move the window. One default file could not express that. Spec 8.2, 8.4. |
+| Two windows | one window | `overview` and `settings` | The specification separates the account overview from settings, and the permissions differ. Spec 7.9, 8.4. |
+| Five tsconfig files | `tsconfig.json` and `tsconfig.node.json` | `tsconfig.base.json`, `.app.json`, `.node.json`, `.test.json` and a solution file | The specification requires strict TypeScript with no Node globals reaching the renderer, and a separate project for the test environment. Two files cannot separate three compilation environments. Spec 7.8.1. |
+| `vite.config.ts` adds the React Compiler | `react()` | `react({ compiler: { logDiagnostics: true } })` | The specification requires React Compiler, and `plugin-react` 6.x exposes it only through this option. Spec 7.8.4. |
+| `src/generated/bindings.ts` is generated and checked in | the template has no bindings file | machine output from `tauri-specta`, regenerated by `src-tauri/tests/bindings.rs` and compared by `cargo xtask bindings --check` | The specification requires the renderer to consume generated typed commands and events so a wire mismatch is impossible. Spec 7.8.3, 8.3. |
+| `xtask/` exists | the template has no Rust tooling crate | a workspace member running the architecture, release and bindings gates | The specification defines repository gates that the Tauri CLI does not provide. Spec 7.10. |
+| CI installs Linux native packages | CI runs `tauri build` with no system setup | the `rust` job installs the WebKitGTK, AppIndicator, dbus, librsvg, libxdo and patchelf development packages | Tauri on Linux builds against the system WebView, so the host cannot compile without them. Spec 7.10. |
+| Package manager is Bun | the template uses npm | Bun, pinned in `.bun-version` | The specification listed pnpm; the captain changed the project to Bun. Recorded as the one deviation made by decision rather than by specification. |
 
-## 4. The desktop host has no local evidence
+## 4. The desktop host has local evidence, but not on Windows or macOS
 
-| Field | Value |
-|---|---|
-| Rule | Native behaviour is tested in packaged applications on real target operating systems |
-| Deviation | `quota-desktop` has not been compiled or run on this machine, so the host, the tray, the window controller, the notification path, and every native acceptance case have no local evidence |
-| Owner | Release engineer |
-| Scope | `apps/desktop/src-tauri/**` and every acceptance case whose layer is `host` or `ui` in `docs/acceptance.md` |
-| Rationale | Building the Tauri host requires `webkit2gtk` development packages and `pkg-config`. Neither is installed, and this task forbids installing system packages. The Rust library crates are ordinary Rust and are checked, linted, and tested on this machine; the host binary is not. |
-| Review date | 2026-10-01 |
-| Removal condition | Compile and run the host on a machine with the Tauri prerequisites, then run the native acceptance cases there. Windows installer work, the 72-hour soak, macOS, and Linux packaging are later stages, not part of this one. |
+| Field             | Value                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rule              | Native behaviour is tested in packaged applications on real target operating systems                                                                                                                                                                                                                                                                        |
+| Deviation         | `quota-desktop` compiles, lints, tests and launches on this WSL machine through `bun tauri dev`, but no Windows or macOS host has been built or run, so the tray, the window controller, the notification path, the credential paths on those systems, and every native acceptance case on them have no evidence                                                                                                                                   |
+| Owner             | Release engineer                                                                                                                                                                                                                                                                                                                                          |
+| Scope             | `src-tauri/**` and every acceptance case whose layer is `host` or `ui` in `docs/acceptance.md`                                                                                                                                                                                                 |
+| Rationale         | The Tauri system libraries were installed on 2026-10-01, so the host builds here and the window opens under WSLg with software rendering. Windows and macOS need their own run, and the Windows credential paths in `crates/quota-providers/src/credentials.rs` are unverified there. |
+| Review date       | 2026-10-01                                                                                                                                                                                                                                                                                                                                                  |
+| Removal condition | Build and run the host on Windows and macOS, then run the native acceptance cases there. Windows installer work, the 72-hour soak, and Linux packaging are later stages, not part of this one.                                                                                                                                                       |
