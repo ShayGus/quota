@@ -14,7 +14,8 @@ use std::time::Duration as StdDuration;
 
 use quota_persistence::PersistenceError;
 use quota_persistence::sqlite::{
-    SqlitePoolSettings, open_pool, run_migrations, verify_pool_settings,
+    OperationalPreferencesRepository, SqlitePoolSettings, open_pool, run_migrations,
+    verify_pool_settings,
 };
 use support::TempDir;
 
@@ -44,9 +45,54 @@ async fn migrations_are_idempotent_on_reopen() {
             .await
             .unwrap();
 
-    assert_eq!(versions, vec![1]);
+    assert_eq!(versions, vec![1, 2]);
     assert_eq!(versions, again, "a reopen must not re-record a version");
     second.close().await;
+}
+
+#[tokio::test]
+async fn operational_preferences_migration_preserves_monitoring_and_adds_defaults() {
+    let directory = TempDir::new("preferences-upgrade");
+    let pool = open_pool(&directory.database(), SqlitePoolSettings::default())
+        .await
+        .unwrap();
+    sqlx::query(
+        "CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)",
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    sqlx::raw_sql(include_str!("../migrations/0001_initial.sql"))
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO schema_migrations (version, applied_at) VALUES (1, ?)")
+        .bind("2026-01-01T00:00:00Z")
+        .execute(&pool)
+        .await
+        .unwrap();
+    sqlx::query("INSERT INTO monitoring_preferences (id, monitoring_state) VALUES (1, 'paused')")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    run_migrations(&pool).await.unwrap();
+
+    let state: String =
+        sqlx::query_scalar("SELECT monitoring_state FROM monitoring_preferences WHERE id = 1")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let preferences = OperationalPreferencesRepository::new(pool.clone())
+        .load()
+        .await
+        .unwrap();
+    assert_eq!(state, "paused");
+    assert_eq!(
+        preferences,
+        quota_domain::preferences::OperationalPreferences::default()
+    );
+    pool.close().await;
 }
 
 #[tokio::test]

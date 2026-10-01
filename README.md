@@ -15,20 +15,20 @@ target while an update is applied.
 
 ## Status
 
-The desktop app now has production provider adapters for Codex, Claude, and
+The desktop app has production provider adapters for Codex, Claude, and
 OpenCode Go. It restores account and monitoring state from SQLite, starts one
 shared bounded refresh supervisor, and commits readings before it publishes
-snapshots. Account, history, backoff, and monitoring repositories use SQLite.
-Presentation settings use the Tauri Store plugin.
+snapshots. SQLite stores account, history, backoff, monitoring, notification,
+operational privacy, and polling state. The Tauri Store plugin stores
+presentation settings.
 
-The React renderer and Tauri host are present. The native host source has not
-compiled or run on this WSL machine. The local image lacks `libdbus-1-dev`,
-WebKitGTK development files, and `pkg-config`. CI installs these packages and
-runs the first host build.
+The React renderer and Tauri host are present. The source includes the tray menu,
+window controls, and settings route. The native host has not compiled or run on
+this WSL machine. The local image lacks `libdbus-1-dev`, WebKitGTK development
+files, and `pkg-config`. CI installs these packages and runs the first host build.
 
-Saved notification, privacy, and polling preferences are not yet complete.
 Windows installers, the 72-hour ten-account soak, macOS, and Linux packaging
-also remain unverified.
+remain unverified.
 
 `docs/acceptance.md` maps the specified acceptance cases to a layer and records
 the remaining checks.

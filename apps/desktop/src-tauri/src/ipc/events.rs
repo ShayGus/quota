@@ -26,6 +26,31 @@ pub struct ConnectionProgressChanged(pub ConnectionProgressChangedPayload);
 #[derive(Debug, Clone, tauri_specta::Event)]
 pub struct PreferencesChanged(pub PreferencesChangedPayload);
 
+/// Publishes a preference aggregate after every durable owner confirms its save.
+pub fn publish_preferences(
+    app: &tauri::AppHandle,
+    app_instance_id: &quota_domain::ids::AppInstanceId,
+    preferences: &quota_contracts::preferences::Preferences,
+) {
+    let event = PreferencesChanged(PreferencesChangedPayload {
+        app_instance_id: app_instance_id.clone(),
+        preference_revision: preferences.revision,
+        preferences: preferences.clone(),
+    });
+    if event.emit_to(app, "overview").is_err() {
+        tracing::warn!(
+            code = "overview_preferences_event_failed",
+            "preference event was not delivered"
+        );
+    }
+    if event.emit_to(app, "settings").is_err() {
+        tracing::warn!(
+            code = "settings_preferences_event_failed",
+            "preference event was not delivered"
+        );
+    }
+}
+
 /// Whether the supervisor is scheduling reads.
 #[derive(Debug, Clone, tauri_specta::Event)]
 pub struct MonitoringStateChanged(pub MonitoringStateChangedPayload);

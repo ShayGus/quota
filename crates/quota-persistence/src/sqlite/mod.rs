@@ -13,6 +13,7 @@ pub mod measurement_repository;
 pub mod migrations;
 mod outbox_repository;
 pub mod pool;
+pub mod preferences_repository;
 mod rows;
 mod window_writer;
 
@@ -30,10 +31,10 @@ pub use history_repository::HistoryEntry;
 pub use measurement_repository::{MeasurementRepository, StoredMeasurement};
 pub use migrations::run_migrations;
 pub use pool::{SqlitePoolSettings, open_pool, verify_pool_settings};
+pub use preferences_repository::OperationalPreferencesRepository;
 /// The supervisor's own severity vocabulary, re-exported for storage callers.
 pub use quota_core::ports::AlertLevel;
-
-/// The four typed repositories over one shared pool.
+/// The typed repositories over one shared pool.
 #[derive(Clone, Debug)]
 pub struct SqliteRepositories {
     pool: sqlx::SqlitePool,
@@ -41,6 +42,7 @@ pub struct SqliteRepositories {
     measurements: MeasurementRepository,
     backoff: BackoffRepository,
     alerts: AlertRepository,
+    operational_preferences: OperationalPreferencesRepository,
 }
 
 impl SqliteRepositories {
@@ -52,6 +54,7 @@ impl SqliteRepositories {
             measurements: MeasurementRepository::new(pool.clone()),
             backoff: BackoffRepository::new(pool.clone()),
             alerts: AlertRepository::new(pool.clone()),
+            operational_preferences: OperationalPreferencesRepository::new(pool.clone()),
             pool,
         }
     }
@@ -84,6 +87,12 @@ impl SqliteRepositories {
     #[must_use]
     pub fn alerts(&self) -> &AlertRepository {
         &self.alerts
+    }
+
+    /// The notification, operational privacy, and polling preference repository.
+    #[must_use]
+    pub fn operational_preferences(&self) -> &OperationalPreferencesRepository {
+        &self.operational_preferences
     }
 }
 

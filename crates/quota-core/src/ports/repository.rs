@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use quota_domain::account::{ConnectionState, ConnectionSummary, FetchState, VerifiedIdentity};
 use quota_domain::ids::{AccountId, ConnectionId};
 use quota_domain::polling::LimitScope;
-use quota_domain::preferences::PresentationPreferences;
+use quota_domain::preferences::{OperationalPreferences, PresentationPreferences};
 use quota_domain::quota::window::QuotaWindow;
 use quota_domain::snapshot::AccountSnapshot;
 
@@ -174,6 +174,19 @@ pub trait PreferenceRepository: Send + Sync {
         &self,
         preferences: &PresentationPreferences,
     ) -> Result<PresentationPreferences, RepositoryError>;
+}
+
+/// Monitoring, notification, and retained-data preferences owned by `SQLite`.
+#[async_trait]
+pub trait OperationalPreferencesRepository: Send + Sync {
+    /// Loads the confirmed operational settings.
+    async fn load(&self) -> Result<OperationalPreferences, RepositoryError>;
+
+    /// Saves all operational settings in one durable update.
+    async fn save(
+        &self,
+        preferences: &OperationalPreferences,
+    ) -> Result<OperationalPreferences, RepositoryError>;
 }
 
 /// Durable application-wide monitoring state.

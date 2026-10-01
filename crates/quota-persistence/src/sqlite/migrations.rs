@@ -1,12 +1,9 @@
 //! Ordered, embedded, transactional migrations.
 //!
-//! A hand-rolled ordered list is used instead of `sqlx::migrate!`. The whole
-//! schema is one file, `sqlx::migrate!` derives its version numbers from file
-//! names while this schema records them in `schema_migrations` under the
-//! numbers this crate declares, and the list makes the recorded version and the
-//! applied statements visibly the same value. Applied statements are compiled
-//! into the binary, so a shipped build cannot migrate against a different file
-//! than the one that was tested.
+//! A hand-rolled ordered list is used instead of `sqlx::migrate!`. This crate
+//! declares every version and embeds each SQL file in the binary. File names do
+//! not define versions, so the list keeps the recorded version and applied SQL
+//! visibly aligned. A shipped build cannot migrate against another file.
 
 use sqlx::{Executor, SqlitePool, Transaction};
 
@@ -16,14 +13,23 @@ use crate::sqlite::codec;
 /// The version the initial migration records.
 pub const INITIAL_VERSION: u32 = 1;
 
+/// The version that adds the durable operational settings columns.
+pub const OPERATIONAL_PREFERENCES_VERSION: u32 = 2;
+
 /// Every migration, in application order.
 ///
 /// Each entry is `(version, statements)`. A statement list is executed as one
-/// transaction; either the whole migration is recorded, or nothing of it is.
-pub const MIGRATIONS: &[(u32, &str)] = &[(
-    INITIAL_VERSION,
-    include_str!("../../migrations/0001_initial.sql"),
-)];
+/// transaction; either the whole migration is recorded, or nothing of it.
+pub const MIGRATIONS: &[(u32, &str)] = &[
+    (
+        INITIAL_VERSION,
+        include_str!("../../migrations/0001_initial.sql"),
+    ),
+    (
+        OPERATIONAL_PREFERENCES_VERSION,
+        include_str!("../../migrations/0002_operational_preferences.sql"),
+    ),
+];
 
 /// Applies every migration that `schema_migrations` does not already record.
 ///

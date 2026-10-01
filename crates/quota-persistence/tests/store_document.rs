@@ -10,7 +10,10 @@
 
 mod support;
 
-use quota_domain::preferences::{PREFERENCES_SCHEMA_VERSION, PresentationPreferences, Theme};
+use quota_domain::preferences::{
+    Density, IndicatorStyle, LaunchBehavior, OverviewMode, PREFERENCES_SCHEMA_VERSION,
+    PresentationPreferences, PrivacyAliasMode, Theme,
+};
 use quota_persistence::{PersistenceError, PresentationPreferencesCodec};
 use support::{FailingStore, LIVE_KEY, MemoryStore, RECOVERY_KEY};
 
@@ -29,10 +32,16 @@ fn the_store_round_trips_a_preferences_document() {
 
     let mut updated = defaults.clone();
     updated.theme = Theme::Dark;
+    updated.density = Density::Comfortable;
+    updated.indicator_style = IndicatorStyle::Bar;
+    updated.overview_mode = OverviewMode::Tray;
+    updated.always_on_top = true;
+    updated.launch_behavior = LaunchBehavior::RestoreLastMode;
+    updated.privacy_alias_mode = PrivacyAliasMode::StableAliases;
+    updated.reduce_motion = true;
     assert_eq!(codec.save(&mut updated).unwrap(), 1);
     assert_eq!(updated.revision, 1);
-    assert_eq!(codec.load().unwrap().theme, Theme::Dark);
-    assert_eq!(codec.load().unwrap().revision, 1);
+    assert_eq!(codec.load().unwrap(), updated);
 
     // A second save advances the revision again, and the caller's value carries
     // the same revision that was stored.

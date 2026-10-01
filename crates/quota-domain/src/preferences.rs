@@ -77,6 +77,97 @@ pub enum PrivacyAliasMode {
     StableAliases,
 }
 
+/// Default thresholds, expressed as remaining percentage.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct NotificationThresholds {
+    /// Remaining percentage at which the allowance is called low.
+    pub low_percent: f64,
+    /// Remaining percentage at which the allowance is called critical.
+    pub critical_percent: f64,
+    /// How far past a threshold a reading must recover before it re-arms.
+    pub hysteresis_percent: f64,
+}
+
+impl Default for NotificationThresholds {
+    fn default() -> Self {
+        Self {
+            low_percent: 20.0,
+            critical_percent: 10.0,
+            hysteresis_percent: 3.0,
+        }
+    }
+}
+
+/// When notifications may be shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case", tag = "kind", content = "window")]
+pub enum QuietHours {
+    /// Notifications are always permitted.
+    Never,
+    /// Notifications are suppressed inside a daily UTC window.
+    DailyUtc {
+        /// Minutes from midnight when quiet hours start.
+        from_minute: u16,
+        /// Minutes from midnight when quiet hours end.
+        to_minute: u16,
+    },
+}
+
+/// What the user wants to be told.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct NotificationPolicy {
+    /// Whether notifications are enabled at all.
+    pub enabled: bool,
+    /// The downward thresholds.
+    pub thresholds: NotificationThresholds,
+    /// When notifications are suppressed.
+    pub quiet_hours: QuietHours,
+    /// Whether recovery notifications are sent separately.
+    pub recovery_enabled: bool,
+}
+
+impl Default for NotificationPolicy {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            thresholds: NotificationThresholds::default(),
+            quiet_hours: QuietHours::Never,
+            recovery_enabled: true,
+        }
+    }
+}
+
+/// Operational privacy choices stored with monitoring settings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct OperationalPrivacyPreferences {
+    /// Whether normalized local history is retained.
+    pub retain_history: bool,
+    /// Whether diagnostic export includes account labels.
+    pub export_identities: bool,
+}
+
+impl Default for OperationalPrivacyPreferences {
+    fn default() -> Self {
+        Self {
+            retain_history: true,
+            export_identities: false,
+        }
+    }
+}
+
+/// Settings owned by `SQLite` because they affect monitoring and retained data.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, Type)]
+pub struct OperationalPreferences {
+    /// Revision shared with the presentation document.
+    pub revision: u64,
+    /// Notification policy.
+    pub notifications: NotificationPolicy,
+    /// History retention and diagnostic export choices.
+    pub privacy: OperationalPrivacyPreferences,
+    /// Effective per-provider polling policies.
+    pub polling: Vec<crate::polling::ProviderPollingPolicy>,
+}
+
 /// A named, non-transactional presentation preference.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct PresentationPreferences {

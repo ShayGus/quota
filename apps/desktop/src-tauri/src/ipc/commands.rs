@@ -32,6 +32,8 @@ pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse
     );
     let native_window = state.window.lock().await.state();
     crate::platform::window::publish_state(&state.app, &state.app_instance_id, native_window);
+    let preferences = state.preferences_state.read().await.clone();
+    crate::ipc::events::publish_preferences(&state.app, &state.app_instance_id, &preferences);
     Ok(SnapshotResponse { snapshot })
 }
 

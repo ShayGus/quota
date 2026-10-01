@@ -55,8 +55,8 @@ to write the same object into three stores.
 
 | State | Durable owner | Access path |
 |---|---|---|
-| Theme, indicator style, density, window mode, topmost preference, launch preference, and other presentation defaults | `tauri-plugin-store` | Rust `PreferencesRepository` over one versioned Serde document |
-| Connections, accounts, pool bindings, latest validated measurements and source timestamps, scoped retry deadlines, alert baselines and outbox, enabled or paused state, effective polling policy, notification policy, privacy and history policy | `tauri-plugin-sql` with SQLite | Rust repositories and explicit transactions over the plugin-managed database |
+| Theme, indicator style, density, window mode, topmost preference, launch preference, privacy alias display mode, and other presentation defaults | `tauri-plugin-store` | Rust `PreferenceRepository` over one versioned Serde document |
+| Connections, accounts, pool bindings, latest validated measurements and source timestamps, scoped retry deadlines, alert baselines and outbox, enabled or paused state, effective polling policy, notification policy, history retention, and diagnostic-export privacy | `tauri-plugin-sql` with SQLite | Rust repositories and explicit transactions over the plugin-managed database |
 | Eligible native position, size, and maximised state for each persistent window | `tauri-plugin-window-state` behind the mode-aware controller | Native geometry adapter. No competing writes to these fields from Store or SQLite |
 | App-owned tokens or other secret material | Operating-system secure storage | Rust secret broker only. Never a Store value, never a SQL column |
 | Form drafts, hover, temporary search, open menus, and pending presentation order | React memory | Not durable |

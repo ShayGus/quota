@@ -1,18 +1,19 @@
 # Acceptance mapping
 
 Which layer implements each specified acceptance case, and where its evidence
-lives. `not implemented` means the case has no code or no test yet; the reason
-is given. This file is a record, not a claim that every case passes.
+lives. `not implemented` means there is no source implementation. A source
+implementation does not prove native runtime behaviour. This file records
+evidence; it does not claim that every case passes.
 
 Layers named below: `domain` (`crates/quota-domain`), `core` (`crates/quota-core`),
 `providers` (`crates/quota-providers`), `persistence` (`crates/quota-persistence`),
 `contracts` (`crates/quota-contracts`), `host` (`apps/desktop/src-tauri`), `ui`
 (`apps/desktop/src`).
 
-The native desktop host has never been compiled or run on this machine: it needs
-`webkit2gtk` development packages and `pkg-config`, and neither is installed.
-Every case whose evidence would come from the host or the UI is therefore
-`not implemented` here, and no build or run is claimed for it.
+The native desktop host has not been compiled or run on this machine. The WSL
+image lacks `libdbus-1-dev`, WebKitGTK development packages, and `pkg-config`.
+Some host and UI code and tests now exist, but native runtime evidence is still
+unverified. CI installs the Linux packages and runs the first host build.
 
 ## AC-01 to AC-14: normalisation and presentation
 
@@ -28,16 +29,16 @@ Every case whose evidence would come from the host or the UI is therefore
 | AC-08 | domain | `Percent::is_just_above_zero` | implemented |
 | AC-09 | domain | `quota::window` not-entitled state; no division by a zero limit | implemented |
 | AC-10 | domain | `Percent` keeps the original evidence; `arc_fraction` clamps only the drawn arc | implemented |
-| AC-11 | core | `scheduler` boundary handling | partially: decision types exist, no supervisor run on this machine |
+| AC-11 | core, host | Shared supervised polling with bounded concurrency; core tests and host worker source | partially: source is implemented; the native host has not compiled or run |
 | AC-12 | domain | one window per scope, so one limit can replenish alone | implemented |
 | AC-13 | domain | `quota::window::BoundaryKind` distinguishes a partial replenishment from a reset | implemented |
-| AC-14 | providers | provider decoders must leave a missing `resets_at` absent | not implemented: no provider decoder is written yet |
+| AC-14 | providers | Codex, Claude, and OpenCode Go decoder mappings and provider tests | implemented |
 
 ## AC-45 to AC-61: UI and windowing
 
 | ID | Layer | Evidence | Status |
 |---|---|---|---|
-| AC-45 to AC-61 | ui, host | native window and overview behaviour | not implemented: the desktop host and renderer cannot be built or run on this machine |
+| AC-45 to AC-61 | ui, host | `apps/desktop/src` renderer and `apps/desktop/src-tauri/src/platform` window code | source implemented; native runtime unverified |
 
 ## AC-62 to AC-71: multi-account and scheduling
 
@@ -49,7 +50,7 @@ Every case whose evidence would come from the host or the UI is therefore
 | AC-65 | domain | `QuotaPoolId` is a separate identity from the account | implemented |
 | AC-66 | core | per-connection failure state; siblings are unaffected | implemented |
 | AC-67 | core | `scheduler::ReadBudget` is shared scope state | implemented |
-| AC-68 to AC-71 | ui, host | text scaling, native topmost, and single scheduler behaviour in the real application | not implemented: no runnable desktop build on this machine |
+| AC-68 to AC-71 | ui, host | Text scaling, topmost control, and one shared supervisor in source | source implemented; native runtime unverified |
 
 ## AC-75 to AC-84: scaffold, gates, and IPC
 
@@ -60,39 +61,39 @@ Every case whose evidence would come from the host or the UI is therefore
 | AC-77 | xtask | the same gate fails on a file over 400 code lines and on a forbidden dependency edge | implemented |
 | AC-78 | docs | `docs/dependencies.md` records resolved versions and how each was verified | implemented |
 | AC-79 | docs, xtask | `=2.0.0-rc.25` pins both release candidates; a mismatch fails the build, not a check | partially: the pin is in place; no update test exists |
-| AC-80 | xtask | `cargo xtask bindings --check` fails on drift | partially: the command exists and reports the files it compares, but the IPC layer and the mirror do not exist yet |
-| AC-81 | xtask, ui | the raw-IPC and duplicate-model rules in `check-architecture` | partially: the rules run; there is no renderer code to scan yet |
+| AC-80 | xtask, ui | `cargo xtask bindings --check`; current Rust commands and events are mirrored | implemented |
+| AC-81 | xtask, ui | `check-architecture` scans raw IPC calls and duplicate models in the renderer | implemented |
 | AC-82 | domain, contracts | validated constructors plus Serde round-trip tests | implemented |
-| AC-83, AC-84 | ui | snapshot revision handling in the renderer | not implemented: no renderer exists yet |
+| AC-83, AC-84 | ui | snapshot revision handling and subscription tests in the renderer | implemented |
 
 ## AC-92 to AC-100: persistence
 
 | ID | Layer | Evidence | Status |
 |---|---|---|---|
-| AC-92 to AC-100 | persistence | typed Store codec and typed SQLite repositories | not implemented: `crates/quota-persistence` holds only `lib.rs` at this stage |
+| AC-92 to AC-100 | persistence | Typed Store codec, SQLite repositories, migrations, and persistence tests | partially: storage code and tests exist; the native host has not run |
 
 ## AC-105 to AC-111: hardening
 
 | ID | Layer | Evidence | Status |
 |---|---|---|---|
 | AC-105 | domain | private fields with validating constructors on every identifier and measurement; deserialisation goes through the constructor | implemented |
-| AC-106 | core, xtask | no process environment mutation; the architecture gate rejects the pattern when it appears | partially: the rule exists, and the core is written this way, but nothing is executed |
+| AC-106 | core, xtask | no process environment mutation; the architecture gate rejects the pattern when it appears | implemented; core tests run locally |
 | AC-107 | CI, clippy.toml | `unfulfilled_lint_expectations = "warn"` with `-D warnings`; `clippy.toml` allows panic and expect only in recognised test contexts | implemented |
 | AC-108 | CI | `[profile.release] panic = "unwind"` in the root manifest | partially: the profile is set; the desktop release profile has not been built |
 | AC-109 | xtask | `cargo xtask check-release` rejects a test-only feature in the default set | implemented |
-| AC-110, AC-111 | ui | strict TypeScript projects and the typed lint configuration | not implemented: no renderer code exists yet |
+| AC-110, AC-111 | ui | strict TypeScript projects and the typed lint configuration | implemented; typecheck and lint pass locally |
 
 ## AC-112 to AC-142
 
 | ID | Layer | Evidence | Status |
 |---|---|---|---|
-| AC-112 | contracts | exhaustive typed unions; a new variant breaks handwritten matches | partially: the contract types exist, the UI that consumes them does not |
-| AC-113 | domain, ui | nullish handling that preserves a real zero | not implemented: the renderer does not exist |
-| AC-114 | xtask | `bindings --check` after an exporter upgrade | not implemented: the exporter cannot be compiled on this machine, see `docs/exceptions.md` |
-| AC-115 to AC-130 | ui, host | renderer lifecycle, React Strict Mode, ACL, CSP, and navigation | not implemented: no runnable desktop build on this machine |
-| AC-131, AC-132 | persistence | pooled connection settings and the linked SQLite version | not implemented: no repository code and no packaged artifact yet |
-| AC-133, AC-134 | persistence | crash, checkpoint, and backup recovery | not implemented: no repository code yet |
-| AC-135 | core | reconciled non-idempotent mutation | partially: the attempt identity type exists; no service implements it |
+| AC-112 | contracts, ui | exhaustive typed unions and renderer matches | implemented in source; native runtime unverified |
+| AC-113 | domain, ui | nullish handling that preserves a real zero | implemented; renderer tests run locally |
+| AC-114 | xtask | `bindings --check` after an exporter upgrade | not implemented: no exporter upgrade test exists |
+| AC-115 to AC-130 | ui, host | renderer lifecycle, React Strict Mode, ACL, CSP, and navigation | source implemented; native runtime unverified |
+| AC-131, AC-132 | persistence | pooled connection settings and the linked SQLite version | partially: pool settings are tested; no packaged artifact exists |
+| AC-133, AC-134 | persistence | crash, checkpoint, and backup recovery | partially: Store recovery tests exist; SQLite crash recovery is unverified |
+| AC-135 | core, host | reconciled non-idempotent mutation and connection-generation checks | source and core tests exist; native runtime unverified |
 | AC-136, AC-137 | host, CI | native WebDriver lane and shipping-artifact inspection | not implemented: neither the driver lane nor the artifact exists |
 | AC-138 | domain | property tests in `crates/quota-domain/tests/ranking.rs` reject shared globals | implemented |
 | AC-139 | persistence | SQLx offline metadata drift | not implemented: no query metadata yet |
@@ -104,17 +105,16 @@ Every case whose evidence would come from the host or the UI is therefore
 
 Every remaining case (AC-15 to AC-44, AC-72 to AC-74, AC-85 to AC-91, AC-101 to
 AC-104) is `not implemented`. They cover live provider credentials, notification
-delivery, the native tray and window controller, the ten-account soak, and the
-renderer's subscription lifecycle. Each needs either a signed-in provider
-account, a packaged desktop build, or a real operating-system session, and none
-of those exists in this stage.
+delivery, and the ten-account soak. Each needs a signed-in provider account or
+a long-running packaged desktop build.
 
 ## What runs today
 
 | Command | Meaning |
 |---|---|
-| `cargo test -p quota-domain --locked` | Domain arithmetic, invariants, and ranking |
-| `cargo clippy --workspace --all-targets --locked -- -D warnings` | Lint policy for every crate that compiles |
+| `cargo test --workspace --exclude quota-desktop --locked` | Rust crates that do not need native desktop libraries |
+| `cargo clippy --workspace --exclude quota-desktop --all-targets --locked -- -D warnings` | Lint policy for the locally buildable Rust crates |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude quota-desktop --no-deps --locked` | Rust documentation checks without the desktop host |
 | `cargo xtask check-architecture` | Package, dependency, file size, and IPC rules |
 | `cargo xtask check-release` | Release feature set, licence allow list, action pins |
 | `cargo xtask bindings --check` | The checked-in mirror against the Rust IPC layer |

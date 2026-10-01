@@ -15,6 +15,6 @@ pub use provider::{
 pub use publisher::{NativeError, PublishError, SnapshotPublisher, WindowController};
 pub use repository::{
     AccountRepository, AlertEpisode, AlertLevel, BackoffRepository, BackoffState,
-    HistoryRepository, MonitoringRepository, PreferenceRepository, RepositoryError, StoredAccount,
-    default_history_retention,
+    HistoryRepository, MonitoringRepository, OperationalPreferencesRepository,
+    PreferenceRepository, RepositoryError, StoredAccount, default_history_retention,
 };

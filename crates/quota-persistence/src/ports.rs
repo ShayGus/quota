@@ -5,6 +5,7 @@
 //! a concrete durable owner without the core importing SQL or a plugin.
 pub mod account;
 pub mod monitoring;
+pub mod operational_preferences;
 pub mod preferences;
 use crate::sqlite::{BackoffRecord, SqliteRepositories};
 use async_trait::async_trait;
@@ -14,6 +15,7 @@ use quota_domain::polling::LimitScope;
 
 pub use account::{SqliteAccountPortAdapter, SqliteHistoryPortAdapter};
 pub use monitoring::SqliteMonitoringPortAdapter;
+pub use operational_preferences::SqliteOperationalPreferencesPortAdapter;
 pub use preferences::PresentationPreferencesPort;
 
 /// Maps a persistence failure onto the port error, naming the durable owner.

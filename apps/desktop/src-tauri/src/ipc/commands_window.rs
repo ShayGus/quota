@@ -44,15 +44,18 @@ pub async fn set_overview_mode(
     }
     let mut controller = state.window.lock().await;
     let confirmed = controller.set_mode(mode);
+    drop(controller);
+    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+        preferences.overview_mode = mode;
+    })
+    .await?;
     window::publish_state(&state.app, &state.app_instance_id, confirmed);
     Ok(WindowModeChange::Applied(confirmed.mode))
 }
 
-/// Changes only the native topmost flag.
+/// Changes the native topmost flag and saves the same confirmed preference.
 ///
-/// The specification forbids changing geometry, mode, visibility, or
-/// monitoring here. The controller enforces that by construction: this handler
-/// touches `always_on_top` and nothing else.
+/// It does not change geometry, mode, visibility, monitoring, or account order.
 #[tauri::command]
 #[specta::specta]
 pub async fn set_overview_always_on_top(
@@ -72,6 +75,11 @@ pub async fn set_overview_always_on_top(
     }
     let mut controller = state.window.lock().await;
     let confirmed = controller.set_always_on_top(always_on_top);
+    drop(controller);
+    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+        preferences.always_on_top = always_on_top;
+    })
+    .await?;
     window::publish_state(&state.app, &state.app_instance_id, confirmed);
     Ok(window_state_response(confirmed))
 }

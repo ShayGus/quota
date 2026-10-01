@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use quota_core::ports::{
     AccountRepository, BackoffRepository, HistoryRepository, MonitoringRepository,
-    PreferenceRepository,
+    OperationalPreferencesRepository, PreferenceRepository,
 };
 use quota_domain::ids::AppInstanceId;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
@@ -113,6 +113,11 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
     let monitoring_repository: Arc<dyn MonitoringRepository> = Arc::new(
         quota_persistence::ports::SqliteMonitoringPortAdapter::new(repositories.clone()),
     );
+    let operational_preferences_repository: Arc<dyn OperationalPreferencesRepository> = Arc::new(
+        quota_persistence::ports::SqliteOperationalPreferencesPortAdapter::new(
+            repositories.clone(),
+        ),
+    );
 
     let store = app
         .store("preferences.json")
@@ -132,6 +137,10 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
         .load_monitoring_state()
         .await
         .map_err(|error| format!("monitoring_restore:{}", error.owner))?;
+    let operational_preferences = operational_preferences_repository
+        .load()
+        .await
+        .map_err(|error| format!("operational_preferences_restore:{}", error.owner))?;
     let presentation_preferences = preference_repository
         .load()
         .await
@@ -144,7 +153,7 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
         quota_providers::ProviderRegistry::production()
             .map_err(|error| format!("provider_registry:{}", error.diagnostic_code()))?,
     );
-    let policies = providers
+    let default_policies = providers
         .registered()
         .into_iter()
         .filter_map(|provider_id| {
@@ -152,7 +161,27 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
                 .provider(provider_id)
                 .map(|adapter| adapter.policy())
         })
+        .collect::<Vec<_>>();
+    let mut displayed_policies = default_policies.clone();
+    for saved in &operational_preferences.polling {
+        if let Some(current) = displayed_policies
+            .iter_mut()
+            .find(|current| current.provider_id == saved.provider_id)
+        {
+            *current = saved.clone();
+        } else {
+            displayed_policies.push(saved.clone());
+        }
+    }
+    let policies = displayed_policies
+        .iter()
+        .filter(|policy| providers.provider(policy.provider_id).is_some())
+        .cloned()
         .collect();
+    let mut confirmed_operational = operational_preferences;
+    confirmed_operational.polling = displayed_policies;
+    let initial_preferences =
+        crate::bootstrap_helpers::from_persisted(&presentation_preferences, &confirmed_operational);
     let app_instance_id = AppInstanceId::generate();
     let builder = quota_core::SnapshotBuilder::new(app_instance_id.clone());
     let state = AppState::new(
@@ -164,19 +193,33 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
         backoff_repository,
         history_repository,
         preference_repository,
+        operational_preferences_repository,
+        initial_preferences,
         monitoring_repository,
         monitoring_state,
         policies,
         providers,
     );
-    if let Some(native) = app.get_webview_window("overview") {
-        let visible = native.is_visible().unwrap_or(false);
-        app.state::<AppState>()
-            .window
-            .lock()
-            .await
-            .set_visible(visible);
+    let native = app
+        .get_webview_window("overview")
+        .ok_or_else(|| "overview_window_missing".to_owned())?;
+    let state = app.state::<AppState>();
+    let always_on_top = state.preferences_state.read().await.always_on_top;
+    native
+        .set_always_on_top(always_on_top)
+        .map_err(|_| "window_topmost_restore_failed")?;
+    let confirmed_topmost = native
+        .is_always_on_top()
+        .map_err(|_| "window_topmost_read_failed")?;
+    if confirmed_topmost != always_on_top {
+        return Err("window_topmost_confirmation_failed".to_owned());
     }
+    let visible = native
+        .is_visible()
+        .map_err(|_| "window_visibility_read_failed")?;
+    let mut controller = state.window.lock().await;
+    controller.set_always_on_top(confirmed_topmost);
+    controller.set_visible(visible);
     Ok(())
 }
 

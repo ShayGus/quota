@@ -9,7 +9,7 @@ use quota_core::accounts::AccountRegistry;
 use quota_core::clock::SystemClock;
 use quota_core::ports::{
     AccountRepository, BackoffRepository, HistoryRepository, MonitoringRepository,
-    PreferenceRepository,
+    OperationalPreferencesRepository, PreferenceRepository,
 };
 use quota_core::snapshots::SnapshotBuilder;
 use quota_domain::polling::ProviderPollingPolicy;
@@ -41,6 +41,12 @@ pub struct AppState {
     pub history: Arc<dyn HistoryRepository>,
     /// Non-transactional presentation preferences.
     pub preferences: Arc<dyn PreferenceRepository>,
+    /// SQLite-owned notification, privacy, and polling settings.
+    pub operational_preferences: Arc<dyn OperationalPreferencesRepository>,
+    /// Serializes writes across the two preference owners.
+    pub preferences_write: Arc<tokio::sync::Mutex<()>>,
+    /// The last aggregate confirmed by both durable owners.
+    pub preferences_state: Arc<tokio::sync::RwLock<quota_contracts::Preferences>>,
     /// Durable application-wide monitoring state.
     pub monitoring_repository: Arc<dyn MonitoringRepository>,
     /// Confirmed monitoring state shared with the supervisor.
@@ -68,7 +74,9 @@ impl AppState {
         accounts: Arc<dyn AccountRepository>,
         backoff: Arc<dyn BackoffRepository>,
         history: Arc<dyn HistoryRepository>,
-        preferences: Arc<dyn PreferenceRepository>,
+        preference_repository: Arc<dyn PreferenceRepository>,
+        operational_preferences: Arc<dyn OperationalPreferencesRepository>,
+        initial_preferences: quota_contracts::Preferences,
         monitoring_repository: Arc<dyn MonitoringRepository>,
         monitoring_state: MonitoringState,
         policies: Vec<ProviderPollingPolicy>,
@@ -77,7 +85,8 @@ impl AppState {
         let registry = Arc::new(tokio::sync::RwLock::new(registry));
         let snapshots = Arc::new(tokio::sync::Mutex::new(builder));
         let monitoring_state = Arc::new(tokio::sync::RwLock::new(monitoring_state));
-        let policies = Arc::new(tokio::sync::RwLock::new(policies));
+        let preferences_state = Arc::new(tokio::sync::RwLock::new(initial_preferences));
+        let preferences_write = Arc::new(tokio::sync::Mutex::new(()));
         let monitor = MonitoringRuntime::start(
             app.clone(),
             registry.clone(),
@@ -97,7 +106,10 @@ impl AppState {
             accounts,
             backoff,
             history,
-            preferences,
+            preferences: preference_repository,
+            operational_preferences,
+            preferences_write,
+            preferences_state,
             monitoring_repository,
             monitoring_state,
             policies,

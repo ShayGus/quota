@@ -5,7 +5,9 @@
 
 use quota_contracts::CommandError;
 use quota_contracts::preferences::Preferences;
-use quota_domain::preferences::PresentationPreferences;
+use quota_domain::preferences::{
+    OperationalPreferences, OperationalPrivacyPreferences, PresentationPreferences,
+};
 use quota_domain::provider::ProviderId;
 use tauri::Manager;
 
@@ -29,31 +31,43 @@ pub fn to_presentation(preferences: &Preferences) -> PresentationPreferences {
     }
 }
 
-/// Maps the typed store document back onto the renderer aggregate.
+/// Maps SQLite-owned settings out of the renderer aggregate.
 #[must_use]
-pub fn from_presentation(stored: &PresentationPreferences) -> Preferences {
+pub fn to_operational(preferences: &Preferences, revision: u64) -> OperationalPreferences {
+    OperationalPreferences {
+        revision,
+        notifications: preferences.notifications,
+        privacy: OperationalPrivacyPreferences {
+            retain_history: preferences.privacy.retain_history,
+            export_identities: preferences.privacy.export_identities,
+        },
+        polling: preferences.polling.clone(),
+    }
+}
+
+/// Assembles the renderer aggregate from its two durable owners.
+#[must_use]
+pub fn from_persisted(
+    presentation: &PresentationPreferences,
+    operational: &OperationalPreferences,
+) -> Preferences {
     Preferences {
         schema_version: PREFERENCES_SCHEMA_VERSION,
-        revision: stored.revision,
-        theme: stored.theme,
-        density: stored.density,
-        indicator_style: stored.indicator_style,
-        overview_mode: stored.overview_mode,
-        always_on_top: stored.always_on_top,
-        launch_behavior: stored.launch_behavior,
-        reduce_motion: stored.reduce_motion,
-        notifications: quota_contracts::preferences::NotificationPolicy {
-            enabled: true,
-            thresholds: Default::default(),
-            quiet_hours: quota_contracts::preferences::QuietHours::Never,
-            recovery_enabled: true,
-        },
+        revision: presentation.revision.max(operational.revision),
+        theme: presentation.theme,
+        density: presentation.density,
+        indicator_style: presentation.indicator_style,
+        overview_mode: presentation.overview_mode,
+        always_on_top: presentation.always_on_top,
+        launch_behavior: presentation.launch_behavior,
+        reduce_motion: presentation.reduce_motion,
+        notifications: operational.notifications,
         privacy: quota_contracts::preferences::PrivacyPolicy {
-            alias_mode: stored.privacy_alias_mode,
-            retain_history: true,
-            export_identities: false,
+            alias_mode: presentation.privacy_alias_mode,
+            retain_history: operational.privacy.retain_history,
+            export_identities: operational.privacy.export_identities,
         },
-        polling: Vec::new(),
+        polling: operational.polling.clone(),
     }
 }
 
