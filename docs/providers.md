@@ -106,3 +106,25 @@ display text, and it does not invent a value. Specifically:
   never fabricated zeros;
 - the documented multi-bucket representation takes precedence over a legacy single-bucket
   view, and the two are never shown as duplicates.
+
+## Not implemented: multi-profile discovery
+
+Quota does not scan for accounts. It does not read a browser profile, decrypt a cookie,
+walk a WSL distribution, or run a prompt-based probe to find a signed-in session. A person
+names the provider and the profile they want, and the connector asks that one source.
+
+This is the specification's own boundary, not a shortcut. Spec 7.10 excludes "automatic
+cookie decryption, browser-profile scanning, challenge bypasses, and prompt-based CLI
+probes" from version 1, and spec 7.9 requires WSL profiles to be selected explicitly
+rather than found by a scan. Both rules point the same way.
+
+Where an external client owns refresh-token rotation, Quota does not rotate or overwrite
+that token either. It delegates through the owning interface, asks the person to reconnect
+through that client, or takes its own authorization.
+
+What is present instead is the declaration each adapter owes the rest of the application:
+`ProviderCapabilities.cardinality` states whether a provider permits independent
+simultaneous accounts, a single externally owned profile, or several workspaces under one
+authorization. The domain and the renderer handle all three, so a person may monitor
+several accounts from one provider. What is missing is the automatic finding of those
+accounts, which the specification does not ask for.
