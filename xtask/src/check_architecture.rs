@@ -12,11 +12,8 @@ const FILE_LIMIT: usize = 400;
 /// Raw IPC entry points the renderer may only reach through generated code.
 const RAW_IPC: [&str; 3] = ["invoke(", "listen(", "emit("];
 
-/// Prefixes under `apps/desktop/src/` that may call IPC directly.
-const IPC_EXEMPT_PREFIXES: [&str; 2] = [
-    "apps/desktop/src/generated/",
-    "apps/desktop/src/shared/ipc/",
-];
+/// Prefixes under `src/` that may call IPC directly.
+const IPC_EXEMPT_PREFIXES: [&str; 2] = ["src/generated/", "src/shared/ipc/"];
 
 /// Trees that must not carry a second copy of the IPC model.
 const IPC_OWNER_TREES: [&str; 2] = ["crates/quota-contracts/src/", "crates/quota-domain/src/"];
@@ -66,9 +63,9 @@ fn check_source_size(root: &Path, path: &Path, outcome: &mut Outcome) {
 
 /// Reports raw IPC calls in renderer code outside the audited boundary.
 fn check_raw_ipc(root: &Path, outcome: &mut Outcome) {
-    let directory = root.join("apps/desktop/src");
+    let directory = root.join("src");
     if !directory.is_dir() {
-        outcome.note("apps/desktop/src does not exist yet; raw IPC scan skipped".to_string());
+        outcome.note("src does not exist yet; raw IPC scan skipped".to_string());
         return;
     }
     let mut inspected = 0;
