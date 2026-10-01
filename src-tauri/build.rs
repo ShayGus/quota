@@ -26,6 +26,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "fit_overview_to_accounts",
         "reset_overview_position",
         "open_provider_usage_page",
+        "open_settings_window",
         "clear_local_history",
         "export_sanitized_diagnostics",
     ]);

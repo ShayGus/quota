@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings-capability",
-  "description": "The settings window. It may manage accounts and preferences. It cannot change native window geometry, which is owned by the overview controller.",
+  "description": "The settings window. It manages accounts and preferences, and it drives the overview window's mode, topmost flag, geometry and usage pages. It may not read the account snapshot for ranking beyond what the shared commands return.",
   "windows": ["settings"],
   "permissions": [
     "core:default",
@@ -19,6 +19,12 @@
     "allow-rename-account",
     "allow-disconnect-account",
     "allow-clear-local-history",
-    "allow-export-sanitized-diagnostics"
+    "allow-export-sanitized-diagnostics",
+    "allow-set-overview-mode",
+    "allow-set-overview-always-on-top",
+    "allow-fit-overview-to-accounts",
+    "allow-reset-overview-position",
+    "allow-open-provider-usage-page",
+    "allow-open-settings-window"
   ]
 }

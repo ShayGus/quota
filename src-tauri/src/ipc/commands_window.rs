@@ -186,3 +186,20 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
         geometry_revision: state.geometry_revision,
     }
 }
+
+/// Shows the settings window, creating it if this launch has not yet.
+///
+/// The renderer asks the host rather than creating a webview itself, so window
+/// labels, permissions and geometry stay owned on one side.
+#[tauri::command]
+#[specta::specta]
+pub async fn open_settings_window(state: State<'_, AppState>) -> Result<(), CommandError> {
+    let native = window::get(&state.app, "settings")?;
+    native
+        .show()
+        .map_err(|_| window::failed("show_settings_window"))?;
+    native
+        .set_focus()
+        .map_err(|_| window::failed("focus_settings_window"))?;
+    Ok(())
+}

@@ -58,6 +58,16 @@ export const actions = {
     });
     return accepted.attempt_ref;
   },
+  /**
+   * Re-verifies one account under a new connection generation.
+   *
+   * This is the real reconnect: the backend bumps the generation and queues a
+   * fresh verified read, so it is not the same as opening the account's detail
+   * view.
+   */
+  async reconnectAccount(accountId: AccountId): Promise<void> {
+    await reportAsync(commands.reconnectAccount({ id: accountId }));
+  },
   /** Cancels one live attempt. Cancellation is a deliberate result, not a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {
     await reportAsync(commands.cancelConnection(attempt));
@@ -85,6 +95,10 @@ export const actions = {
   /** Saves the whole preference object. The confirmed object arrives by event. */
   async savePreferences(next: Preferences): Promise<void> {
     await reportAsync(commands.updatePreferences(next));
+  },
+  /** Shows the settings window, which is the only window that renders settings. */
+  async openSettings(): Promise<void> {
+    await reportAsync(commands.openSettingsWindow());
   },
   /** Opens one provider's usage page in the external browser. */
   async openUsagePage(accountId: AccountId): Promise<void> {

@@ -87,6 +87,13 @@ export const commands = {
 	 *  address. An unknown provider is refused rather than guessed.
 	 */
 	openProviderUsagePage: (providerId: ProviderId) => typedError<null, CommandError>(__TAURI_INVOKE("open_provider_usage_page", { providerId })),
+	/**
+	 *  Shows the settings window, creating it if this launch has not yet.
+	 * 
+	 *  The renderer asks the host rather than creating a webview itself, so window
+	 *  labels, permissions and geometry stay owned on one side.
+	 */
+	openSettingsWindow: () => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window")),
 };
 
 /** Events */

@@ -10,6 +10,7 @@ import { useState, type JSX } from "react";
 
 import type { AccountSnapshot } from "../../../generated/bindings";
 import { formatAge, instantOf } from "../../../shared/format/duration";
+import { launch } from "../../../shared/ipc/report";
 import { Icon } from "../../../shared/ui/Icon";
 import type { SettingsActions } from "../Settings";
 import { statusOf } from "../../overview/status";
@@ -115,6 +116,15 @@ function ManagedAccount({
         </button>
         <button
           type="button"
+          className="text-button"
+          onClick={() => {
+            launch(actions.reconnectAccount(account.account_id));
+          }}
+        >
+          Reconnect
+        </button>
+        <button
+          type="button"
           className="text-button text-button--danger"
           onClick={() => {
             actions.disconnectAccount(account.account_id);
@@ -124,6 +134,93 @@ function ManagedAccount({
         </button>
       </div>
     </article>
+  );
+}
+
+/** The providers a person can connect, as the contract spells them. */
+const CONNECTABLE_PROVIDERS = ["codex", "claude", "open_code_go"] as const;
+
+/**
+ * Starts a connection for one provider.
+ *
+ * A refusal is reported rather than swallowed. The common one is a credential
+ * profile that is already connected, and a person who pressed Connect needs to
+ * know that is why nothing appeared.
+ */
+function ConnectAccount({ actions }: { readonly actions: SettingsActions }): JSX.Element {
+  const [provider, setProvider] =
+    useState<(typeof CONNECTABLE_PROVIDERS)[number]>("codex");
+  const [nickname, setNickname] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [refusal, setRefusal] = useState<string | null>(null);
+
+  const connect = async (): Promise<void> => {
+    setStarting(true);
+    setRefusal(null);
+    try {
+      const accepted = await actions.beginConnection({
+        provider_id: provider,
+        nickname: nickname.trim() === "" ? provider : nickname.trim(),
+        profile_label: null,
+      });
+      if (accepted === null) {
+        setRefusal(
+          "That provider could not be connected. Its credential profile may already be connected.",
+        );
+      } else {
+        setNickname("");
+      }
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  return (
+    <form
+      className="connect-account"
+      onSubmit={(event) => {
+        event.preventDefault();
+        connect().catch(() => {
+          // The refusal is already reported in the panel below the form.
+        });
+      }}
+    >
+      <label className="control-label" htmlFor="connect-provider">
+        Add an account
+      </label>
+      <div className="connect-account__row">
+        <select
+          id="connect-provider"
+          value={provider}
+          onChange={(event) => {
+            setProvider(event.target.value as (typeof CONNECTABLE_PROVIDERS)[number]);
+          }}
+        >
+          {CONNECTABLE_PROVIDERS.map((id) => (
+            <option key={id} value={id}>
+              {id.replace(/_/g, " ")}
+            </option>
+          ))}
+        </select>
+        <input
+          type="text"
+          value={nickname}
+          placeholder="Label (optional)"
+          aria-label="Label for the new account"
+          onChange={(event) => {
+            setNickname(event.target.value);
+          }}
+        />
+        <button type="submit" className="button" disabled={starting}>
+          {starting ? "Connecting..." : "Connect"}
+        </button>
+      </div>
+      {refusal !== null ? (
+        <p className="note" role="status">
+          {refusal}
+        </p>
+      ) : null}
+    </form>
   );
 }
 
@@ -142,6 +239,7 @@ export function AccountsPanel({
       <>
         <h3 className="settings__title">Accounts</h3>
         <p className="note">No account is monitored yet.</p>
+        <ConnectAccount actions={actions} />
       </>
     );
   }
@@ -152,6 +250,7 @@ export function AccountsPanel({
         Separate identities, including several subscriptions with the same provider.
         Disconnecting one account does not affect its siblings.
       </p>
+      <ConnectAccount actions={actions} />
       {accounts.map((account) => (
         <ManagedAccount
           key={account.account_id}

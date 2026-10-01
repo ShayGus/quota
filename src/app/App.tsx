@@ -20,11 +20,14 @@ import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
 import { useTheme } from "./useTheme";
 
-/** Which surface the window is showing. */
+/**
+ * Which surface the overview window is showing.
+ *
+ * Settings has no entry here: it belongs to its own window, whose capability is
+ * the only one that may save preferences. The overview asks the host to show it.
+ */
 type View =
-  | { readonly name: "overview" }
-  | { readonly name: "detail"; readonly id: AccountId }
-  | { readonly name: "settings" };
+  { readonly name: "overview" } | { readonly name: "detail"; readonly id: AccountId };
 
 /** The settings actions, wired to the typed commands. */
 const settingsActions: SettingsActions = {
@@ -55,6 +58,8 @@ const settingsActions: SettingsActions = {
   openUsagePage: (accountId) => {
     launch(actions.openUsagePage(accountId));
   },
+  beginConnection: (request) => actions.beginConnection(request),
+  reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
   },
@@ -76,9 +81,10 @@ export function App(): JSX.Element {
 /** The window. */
 function QuotaWindow(): JSX.Element {
   const state = useRendererState();
-  const [view, setView] = useState<View>(() =>
-    window.location.hash === "#/settings" ? { name: "settings" } : { name: "overview" },
-  );
+  // The settings window is opened with this hash and is the only window whose
+  // capability may save preferences, so it is the only window that renders it.
+  const isSettingsWindow = window.location.hash === "#/settings";
+  const [view, setView] = useState<View>({ name: "overview" });
   const now = useNow();
   useTheme(state);
 
@@ -94,14 +100,14 @@ function QuotaWindow(): JSX.Element {
         state={state}
         view={view.name}
         onSettings={() => {
-          setView({ name: "settings" });
+          launch(actions.openSettings());
         }}
         onOverview={() => {
           setView({ name: "overview" });
         }}
       />
       <main className="shell__main">
-        {view.name === "settings" ? (
+        {isSettingsWindow ? (
           <FeatureBoundary surface="settings">
             <Settings state={state} actions={settingsActions} />
           </FeatureBoundary>
@@ -113,7 +119,9 @@ function QuotaWindow(): JSX.Element {
                 setView({ name: "detail", id: accountId });
               }}
               onReconnect={(accountId) => {
-                setView({ name: "detail", id: accountId });
+                // Reconnecting re-verifies the credential under a new generation.
+                // Opening the detail view is a different thing and does not do it.
+                launch(actions.reconnectAccount(accountId));
               }}
             />
           </FeatureBoundary>

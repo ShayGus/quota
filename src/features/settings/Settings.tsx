@@ -7,7 +7,13 @@
  */
 import { useState, type JSX } from "react";
 
-import type { AccountId, AccountSnapshot, Preferences } from "../../generated/bindings";
+import type {
+  AccountId,
+  AccountSnapshot,
+  AttemptRef,
+  BeginConnectionRequest,
+  Preferences,
+} from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
 import { Icon, type IconName } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
@@ -38,6 +44,17 @@ export interface SettingsActions {
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;
   readonly disconnectAccount: (accountId: AccountId) => void;
   readonly openUsagePage: (accountId: AccountId) => void;
+  /**
+   * Starts a connection attempt for one provider and returns the backend's
+   * attempt identity, or `null` when the attempt was refused. A refusal is shown
+   * rather than swallowed, because a duplicate credential profile is the most
+   * common one.
+   */
+  readonly beginConnection: (
+    request: BeginConnectionRequest,
+  ) => Promise<AttemptRef | null>;
+  /** Re-verifies one account under a new connection generation. */
+  readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
   /** Drops retained history for one account. The host has no all-accounts clear. */
   readonly clearHistory: (accountId: AccountId) => void;
   /** Writes a diagnostic export to the destination the host will validate. */
