@@ -12,7 +12,7 @@ use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::{Measurement, QuantityMeasurement, UnavailableReason};
-use quota_domain::quota::units::{DecimalPrecision, QuotaUnit};
+use quota_domain::quota::units::QuotaUnit;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
 
 use crate::codex::wire::{CodexCredits, CodexEnvelope, CodexWindow};

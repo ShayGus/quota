@@ -1,7 +1,7 @@
 //! Typed failures for durable state.
 //!
 //! Every variant carries only structured context, and no variant can carry a
-//! row value: the SQLite schema has no credential column, and a rejected row is
+//! row value: the `SQLite` schema has no credential column, and a rejected row is
 //! described by its table and a fixed reason instead of by its content.
 
 use sqlx::error::ErrorKind;
@@ -28,7 +28,7 @@ pub enum PersistenceError {
     },
     /// The database refused a write because a constraint was violated.
     ///
-    /// SQLite does not report a constraint name through SQLx, so this field
+    /// `SQLite` does not report a constraint name through `SQLx`, so this field
     /// carries the table the refused write addressed.
     #[error("`{constraint}` rejected the write: an integrity constraint was violated")]
     IntegrityViolation {

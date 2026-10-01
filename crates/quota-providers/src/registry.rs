@@ -89,7 +89,11 @@ mod tests {
     #[test]
     fn every_real_provider_has_exactly_one_compiled_adapter() {
         let registry = registry();
-        for id in [ProviderId::Codex, ProviderId::Claude, ProviderId::OpenCodeGo] {
+        for id in [
+            ProviderId::Codex,
+            ProviderId::Claude,
+            ProviderId::OpenCodeGo,
+        ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);
         }

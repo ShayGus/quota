@@ -43,17 +43,29 @@ mod tests {
 
     #[test]
     fn a_click_raises_a_covered_floating_window_instead_of_hiding_it() {
-        assert_eq!(activation_for(OverviewMode::Floating, true, false), TrayActivation::Raise);
+        assert_eq!(
+            activation_for(OverviewMode::Floating, true, false),
+            TrayActivation::Raise
+        );
     }
 
     #[test]
     fn a_click_shows_a_hidden_window() {
-        assert_eq!(activation_for(OverviewMode::Floating, false, false), TrayActivation::Show);
+        assert_eq!(
+            activation_for(OverviewMode::Floating, false, false),
+            TrayActivation::Show
+        );
     }
 
     #[test]
     fn a_repeated_click_toggles_the_tray_view() {
-        assert_eq!(activation_for(OverviewMode::Tray, true, true), TrayActivation::Dismiss);
-        assert_eq!(activation_for(OverviewMode::Tray, true, false), TrayActivation::Raise);
+        assert_eq!(
+            activation_for(OverviewMode::Tray, true, true),
+            TrayActivation::Dismiss
+        );
+        assert_eq!(
+            activation_for(OverviewMode::Tray, true, false),
+            TrayActivation::Raise
+        );
     }
 }

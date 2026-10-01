@@ -130,6 +130,7 @@ impl ProviderAdapter for OpenCodeGoAdapter {
         binding: &ConnectionBinding,
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
+        let binding = binding.clone();
         Box::pin(
             async move {
                 let credential = credentials::opencode_go_credential().await?;

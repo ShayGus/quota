@@ -125,7 +125,9 @@ pub(crate) async fn opencode_go_credential() -> Result<OpenCodeGoCredential, Pro
 
 /// The Codex `auth.json` path and a non-revealing profile label.
 fn codex_auth_file() -> Result<(PathBuf, String), ProviderError> {
-    let override_home = std::env::var("CODEX_HOME").ok().filter(|v| !v.trim().is_empty());
+    let override_home = std::env::var("CODEX_HOME")
+        .ok()
+        .filter(|v| !v.trim().is_empty());
     let (path, label) = match override_home {
         Some(home) => (
             PathBuf::from(home).join("auth.json"),

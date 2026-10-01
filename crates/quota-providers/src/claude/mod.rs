@@ -182,7 +182,7 @@ impl ProviderAdapter for ClaudeAdapter {
                 attempt_id: ConnectionAttemptId::generate(),
                 deadline: None,
             };
-            let profile = self.verified_profile(&credential, context).await?;
+            let profile = self.verified_profile(&credential, context.clone()).await?;
             let profile_label = credential.profile_label.clone();
             let pool = decode::pool_id(ProviderId::Claude, &profile_label);
             let principal = ProviderPrincipalId::new(profile.account_uuid).ok();
@@ -206,6 +206,7 @@ impl ProviderAdapter for ClaudeAdapter {
         binding: &ConnectionBinding,
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
+        let binding = binding.clone();
         Box::pin(
             async move {
                 let credential = credentials::claude_credential().await?;
@@ -214,7 +215,7 @@ impl ProviderAdapter for ClaudeAdapter {
                 // The profile route proves which account this credential belongs
                 // to, so a re-login for another account cannot answer for this
                 // binding.
-                let profile = self.verified_profile(&credential, context).await?;
+                let profile = self.verified_profile(&credential, context.clone()).await?;
                 decode::ensure_binding(
                     binding,
                     ProviderId::Claude,
@@ -223,11 +224,9 @@ impl ProviderAdapter for ClaudeAdapter {
                 )?;
                 let body = self.get_route(USAGE_URL, &credential, context).await?;
                 let usage: wire::ClaudeUsage =
-                    serde_json::from_value(body).map_err(|_| {
-                        ProviderError::UnsupportedSchema {
-                            detail: "the payload did not match the supported Claude usage shape"
-                                .to_owned(),
-                        }
+                    serde_json::from_value(body).map_err(|_| ProviderError::UnsupportedSchema {
+                        detail: "the payload did not match the supported Claude usage shape"
+                            .to_owned(),
                     })?;
                 let decoded: DecodedUsage = mapping::decode(&usage, &pool, Utc::now())?;
                 Ok(decoded.into_outcome(profile.identity))

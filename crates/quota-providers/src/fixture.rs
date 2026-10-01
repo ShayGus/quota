@@ -154,7 +154,11 @@ impl FixtureAdapter {
     }
 
     /// The identity this profile reports, checked against the binding.
-    fn verify(&self, profile: FixtureProfile, binding: &ConnectionBinding) -> Result<(), ProviderError> {
+    fn verify(
+        &self,
+        profile: FixtureProfile,
+        binding: &ConnectionBinding,
+    ) -> Result<(), ProviderError> {
         let matches = binding
             .principal_id
             .as_ref()
@@ -377,8 +381,8 @@ fn window(
     semantics: WindowSemantics,
 ) -> Result<QuotaWindow, ProviderError> {
     let resource = ResourceId::new(bucket).map_err(|_| fixture_error())?;
-    let scope = QuotaScope::new(resource, format!("Fixture {bucket}"))
-        .map_err(|_| fixture_error())?;
+    let scope =
+        QuotaScope::new(resource, format!("Fixture {bucket}")).map_err(|_| fixture_error())?;
     let id = QuotaWindowId::new(format!("fixture:{}:{}", pool.as_str(), bucket))
         .map_err(|_| fixture_error())?;
     Ok(QuotaWindow {
@@ -471,8 +475,18 @@ mod tests {
             .iter()
             .find(|window| window.category == QuotaCategory::Monthly)
             .expect("a monthly window exists");
-        assert!(session.measurement.remaining_percent().is_some_and(|p| p.value() > 90.0));
-        assert!(monthly.measurement.remaining_percent().is_some_and(|p| p.value() <= 0.0));
+        assert!(
+            session
+                .measurement
+                .remaining_percent()
+                .is_some_and(|p| p.value() > 90.0)
+        );
+        assert!(
+            monthly
+                .measurement
+                .remaining_percent()
+                .is_some_and(|p| p.value() <= 0.0)
+        );
     }
 
     #[test]
@@ -480,15 +494,23 @@ mod tests {
         let pool = FixtureAdapter::pool_for(FixtureProfile::NativeUnitsOnly);
         let windows = windows(FixtureProfile::NativeUnitsOnly, &pool, Utc::now())
             .expect("the fixture is total");
-        assert!(windows.iter().all(|w| w.measurement.remaining_percent().is_none()));
+        assert!(
+            windows
+                .iter()
+                .all(|w| w.measurement.remaining_percent().is_none())
+        );
     }
 
     #[test]
     fn the_unlimited_profile_is_not_a_full_percentage() {
         let pool = FixtureAdapter::pool_for(FixtureProfile::Unlimited);
-        let windows = windows(FixtureProfile::Unlimited, &pool, Utc::now())
-            .expect("the fixture is total");
-        assert!(windows.iter().all(|w| w.measurement == Measurement::Unlimited));
+        let windows =
+            windows(FixtureProfile::Unlimited, &pool, Utc::now()).expect("the fixture is total");
+        assert!(
+            windows
+                .iter()
+                .all(|w| w.measurement == Measurement::Unlimited)
+        );
     }
 
     #[test]

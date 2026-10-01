@@ -12,7 +12,6 @@ use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
-use quota_domain::quota::units::DecimalPrecision;
 use quota_domain::quota::money::MoneyMeasurement;
 use quota_domain::quota::units::CurrencyCode;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
@@ -173,16 +172,10 @@ fn named_limit(
     let model_label = model.and_then(|model| model.display_name.as_deref());
     let group = limit.group.as_deref().or(limit.kind.as_deref());
     let resource = model_id.unwrap_or("account");
-    let label = model_label
-        .or(group)
-        .unwrap_or("Claude limit")
-        .to_owned();
+    let label = model_label.or(group).unwrap_or("Claude limit").to_owned();
     // A bucket named "primary" is the provider's own name for this slot, so it
     // keeps the reported bucket identifier rather than inventing a period name.
-    let bucket = format!(
-        "{}-{index}",
-        decode::identifier(group.unwrap_or(resource))
-    );
+    let bucket = format!("{}-{index}", decode::identifier(group.unwrap_or(resource)));
     let draft = WindowDraft {
         provider: ProviderId::Claude,
         pool_id: pool,

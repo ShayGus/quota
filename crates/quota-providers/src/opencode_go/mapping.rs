@@ -41,7 +41,7 @@ pub(crate) fn decode(
     let mut decoded = DecodedUsage::new();
     for spec in windows() {
         let bucket = spec.window(usage);
-        let draft = draft(pool, spec, received_at);
+        let draft = draft(pool, &spec, received_at);
         match bucket {
             Some(bucket) => decoded.push(bucket_window(bucket, &draft, received_at)?),
             None => decoded.push(draft.reported_missing()?),

@@ -88,7 +88,10 @@ impl ProviderHttp {
         for (name, value) in request.headers {
             builder = builder.header(*name, *value);
         }
-        let response = builder.send().await.map_err(|error| transport_error(&error))?;
+        let response = builder
+            .send()
+            .await
+            .map_err(|error| transport_error(&error))?;
         let status = response.status();
         let retry_after = retry_after(&response);
         let body = read_body(response).await?;

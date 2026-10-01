@@ -15,8 +15,8 @@ use std::rc::Rc;
 use std::time::Duration as StdDuration;
 
 use chrono::{DateTime, Duration, TimeZone, Utc};
-use quota_domain::account::{AccountCardinality, ConnectionState, CredentialOwnership, FetchState};
 use quota_domain::account::VerifiedIdentity;
+use quota_domain::account::{AccountCardinality, ConnectionState, CredentialOwnership, FetchState};
 use quota_domain::ids::{
     AccountId, ConnectionId, DefinitionVersion, QuotaPoolId, QuotaWindowId, ResourceId,
 };
@@ -30,11 +30,11 @@ use quota_domain::quota::window::{
     Boundary, BoundaryKind, Completeness, Enforcement, MetricRole, QuotaCategory, QuotaWindow,
     SourceKind, WindowSemantics,
 };
-use quota_persistence::store::PreferenceDocumentStore;
 use quota_persistence::sqlite::{
-    AlertLevel, BackoffRecord, EpisodeKey, NewAccount, NewConnection,
-    SqlitePoolSettings, SqliteRepositories, open_pool, run_migrations, verify_pool_settings,
+    AlertLevel, BackoffRecord, EpisodeKey, NewAccount, NewConnection, SqlitePoolSettings,
+    SqliteRepositories, open_pool, run_migrations, verify_pool_settings,
 };
+use quota_persistence::store::PreferenceDocumentStore;
 use quota_persistence::{PersistenceError, PresentationPreferencesCodec};
 use serde_json::Value;
 use sqlx::SqlitePool;
@@ -151,7 +151,9 @@ async fn migrations_are_idempotent_on_reopen() {
     let directory = TempDir::new("migrate");
     let path = directory.path().join("quota.sqlite");
 
-    let first = open_pool(&path, SqlitePoolSettings::default()).await.unwrap();
+    let first = open_pool(&path, SqlitePoolSettings::default())
+        .await
+        .unwrap();
     run_migrations(&first).await.unwrap();
     let versions: Vec<u32> =
         sqlx::query_scalar("SELECT version FROM schema_migrations ORDER BY version")
@@ -160,7 +162,9 @@ async fn migrations_are_idempotent_on_reopen() {
             .unwrap();
     first.close().await;
 
-    let second = open_pool(&path, SqlitePoolSettings::default()).await.unwrap();
+    let second = open_pool(&path, SqlitePoolSettings::default())
+        .await
+        .unwrap();
     run_migrations(&second).await.unwrap();
     let again: Vec<u32> =
         sqlx::query_scalar("SELECT version FROM schema_migrations ORDER BY version")
@@ -212,12 +216,11 @@ async fn no_table_or_column_names_a_credential() {
     let directory = TempDir::new("no-secrets");
     let pool = migrated(&directory).await;
 
-    let schema: String = sqlx::query_scalar(
-        "SELECT group_concat(COALESCE(sql, name), ' ') FROM sqlite_master",
-    )
-    .fetch_one(&pool)
-    .await
-    .unwrap();
+    let schema: String =
+        sqlx::query_scalar("SELECT group_concat(COALESCE(sql, name), ' ') FROM sqlite_master")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
 
     let lowered = schema.to_lowercase();
     for forbidden in ["token", "cookie", "authorization", "secret", "password"] {
@@ -381,7 +384,10 @@ async fn deleting_one_account_leaves_its_same_provider_sibling_intact() {
     let repositories = SqliteRepositories::new(pool.clone());
     let accounts = repositories.accounts();
 
-    accounts.upsert_connection(&connection("conn-1")).await.unwrap();
+    accounts
+        .upsert_connection(&connection("conn-1"))
+        .await
+        .unwrap();
     accounts
         .upsert_account(&account("acct-a", "conn-1", 0, "Alpha"))
         .await
@@ -424,7 +430,11 @@ async fn deleting_one_account_leaves_its_same_provider_sibling_intact() {
         .await
         .unwrap();
     assert_eq!(survivors.len(), 1);
-    assert_eq!(survivors[0].id.as_str(), "acct-b", "the sibling must survive");
+    assert_eq!(
+        survivors[0].id.as_str(),
+        "acct-b",
+        "the sibling must survive"
+    );
 
     let readings: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM latest_measurements")
         .fetch_one(&pool)
@@ -535,7 +545,10 @@ async fn a_reading_and_its_history_are_written_in_one_transaction() {
     );
 
     let stored = repo.latest(&account_id, &window_id).await.unwrap().unwrap();
-    assert_eq!(stored.measurement.remaining_percent().unwrap().value(), 55.0);
+    assert_eq!(
+        stored.measurement.remaining_percent().unwrap().value(),
+        55.0
+    );
     assert_eq!(stored.definition_version, DefinitionVersion::INITIAL.0);
     assert_eq!(stored.observed_at, Some(at(0)));
 
@@ -602,10 +615,11 @@ async fn an_unavailable_measurement_stores_no_invented_percentage() {
         .unwrap();
     assert!(!stored.measurement.has_number());
 
-    let recorded: Option<f64> = sqlx::query_scalar("SELECT remaining_percent FROM measurement_history")
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+    let recorded: Option<f64> =
+        sqlx::query_scalar("SELECT remaining_percent FROM measurement_history")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
     assert_eq!(
         recorded, None,
         "no percentage may be invented for this reading"
@@ -640,13 +654,19 @@ async fn an_unchanged_observation_is_coalesced() {
 
     // The same value at the same observation time appends nothing.
     assert!(!repo.persist_reading(&account_id, &first).await.unwrap());
-    assert_eq!(repo.history_for_account(&account_id).await.unwrap().len(), 1);
+    assert_eq!(
+        repo.history_for_account(&account_id).await.unwrap().len(),
+        1
+    );
 
     // A value observed later appends exactly one row.
     let moved = window("win-1", "pool-1", 42.0, at(1));
     assert!(!repo.coalesce_unchanged(&account_id, &moved).await.unwrap());
     assert!(repo.persist_reading(&account_id, &moved).await.unwrap());
-    assert_eq!(repo.history_for_account(&account_id).await.unwrap().len(), 2);
+    assert_eq!(
+        repo.history_for_account(&account_id).await.unwrap().len(),
+        2
+    );
 
     pool.close().await;
 }
@@ -694,7 +714,11 @@ async fn backoff_persists_and_answers_is_rate_limited_now() {
     })
     .await
     .unwrap();
-    assert!(repo.is_rate_limited_now(&account_scope, at(1)).await.unwrap());
+    assert!(
+        repo.is_rate_limited_now(&account_scope, at(1))
+            .await
+            .unwrap()
+    );
     assert_eq!(
         repo.read(&account_scope).await.unwrap().unwrap().attempts,
         1
@@ -738,7 +762,11 @@ async fn backoff_round_trips_every_scope_kind() {
         .fetch_one(&pool)
         .await
         .unwrap();
-    assert_eq!(rows as usize, scopes.len(), "each scope owns exactly one row");
+    assert_eq!(
+        rows as usize,
+        scopes.len(),
+        "each scope owns exactly one row"
+    );
 
     pool.close().await;
 }
@@ -861,7 +889,10 @@ async fn a_connection_generation_advances_and_survives_a_restart() {
     let repositories = SqliteRepositories::new(pool.clone());
     let accounts = repositories.accounts();
 
-    accounts.upsert_connection(&connection("conn-1")).await.unwrap();
+    accounts
+        .upsert_connection(&connection("conn-1"))
+        .await
+        .unwrap();
     accounts
         .upsert_account(&account("acct-1", "conn-1", 0, "First"))
         .await
@@ -914,7 +945,10 @@ async fn an_account_records_its_verified_identity_and_fetch_state() {
     let repositories = SqliteRepositories::new(pool.clone());
     let accounts = repositories.accounts();
 
-    accounts.upsert_connection(&connection("conn-1")).await.unwrap();
+    accounts
+        .upsert_connection(&connection("conn-1"))
+        .await
+        .unwrap();
     accounts
         .upsert_account(&account("acct-1", "conn-1", 0, "First"))
         .await
@@ -980,7 +1014,10 @@ async fn two_accounts_may_not_share_one_connection_ordinal() {
     let repositories = SqliteRepositories::new(pool.clone());
     let accounts = repositories.accounts();
 
-    accounts.upsert_connection(&connection("conn-1")).await.unwrap();
+    accounts
+        .upsert_connection(&connection("conn-1"))
+        .await
+        .unwrap();
     accounts
         .upsert_account(&account("acct-1", "conn-1", 0, "First"))
         .await
@@ -1160,7 +1197,10 @@ fn a_document_from_a_newer_build_is_refused_and_preserved() {
 #[test]
 fn an_unavailable_store_is_reported_as_such() {
     let codec = PresentationPreferencesCodec::new(FailingStore);
-    assert_eq!(codec.load().unwrap_err(), PersistenceError::StoreUnavailable);
+    assert_eq!(
+        codec.load().unwrap_err(),
+        PersistenceError::StoreUnavailable
+    );
 }
 
 #[test]

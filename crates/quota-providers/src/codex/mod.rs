@@ -159,6 +159,7 @@ impl ProviderAdapter for CodexAdapter {
         binding: &ConnectionBinding,
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
+        let binding = binding.clone();
         Box::pin(
             async move {
                 let credential = credentials::codex_credential().await?;
@@ -172,7 +173,10 @@ impl ProviderAdapter for CodexAdapter {
                 )?;
                 let mut last_error = None;
                 for url in [PRIMARY_URL, FALLBACK_URL] {
-                    match self.read_endpoint(url, &credential, &pool, context).await {
+                    match self
+                        .read_endpoint(url, &credential, &pool, context.clone())
+                        .await
+                    {
                         Ok(usage) => {
                             let identity = verified_identity(
                                 usage

@@ -61,14 +61,18 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
 /// feature, so a release build reports it as not compiled.
 #[must_use]
 pub const fn is_compiled(provider_id: ProviderId) -> bool {
-    matches!(provider_id, ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo)
+    matches!(
+        provider_id,
+        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo
+    )
 }
 
 /// Builds the managed state and mounts the typed IPC registry.
 fn build_state(app: &tauri::AppHandle) -> Result<tauri::State<'static, AppState>, String> {
     let registry = quota_core::AccountRegistry::new();
     let builder = quota_core::SnapshotBuilder::new(AppInstanceId::generate());
-    let state = AppState::new(registry, builder).map_err(|error| error.diagnostic_code().to_owned())?;
+    let state =
+        AppState::new(registry, builder).map_err(|error| error.diagnostic_code().to_owned())?;
     app.manage(state);
     Ok(app.state::<AppState>())
 }

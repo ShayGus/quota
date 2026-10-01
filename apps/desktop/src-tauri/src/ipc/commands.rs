@@ -22,9 +22,7 @@ use crate::state::AppState;
 /// missed event is repaired without any frontend polling.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_snapshot(
-    state: State<'_, AppState>,
-) -> Result<SnapshotResponse, CommandError> {
+pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse, CommandError> {
     let builder = state.snapshots.lock().await;
     let registry = state.registry.read().await;
     let snapshot: AppSnapshot = builder.build(
@@ -62,7 +60,10 @@ pub async fn refresh_accounts(
 ) -> Result<Vec<AccountId>, CommandError> {
     let registry = state.registry.read().await;
     let chosen: Vec<AccountId> = match &selection {
-        AccountSelection::All => registry.iter().map(|entry| entry.account_id().clone()).collect(),
+        AccountSelection::All => registry
+            .iter()
+            .map(|entry| entry.account_id().clone())
+            .collect(),
         AccountSelection::Listed { account_refs } => {
             let mut ids = Vec::with_capacity(account_refs.len());
             for reference in account_refs {
@@ -93,7 +94,11 @@ pub async fn set_monitoring_state(
             reason: "no accounts are connected".into(),
         });
     }
-    Ok(if paused { MonitoringState::Paused } else { MonitoringState::Running })
+    Ok(if paused {
+        MonitoringState::Paused
+    } else {
+        MonitoringState::Running
+    })
 }
 
 /// Enables or disables monitoring for one account.
@@ -118,7 +123,9 @@ pub async fn rename_account(
     nickname: String,
 ) -> Result<(), CommandError> {
     let mut registry = state.registry.write().await;
-    registry.rename(account_ref.id(), nickname).map_err(map_core_error)
+    registry
+        .rename(account_ref.id(), nickname)
+        .map_err(map_core_error)
 }
 
 /// Removes the application's local reference to one account.
@@ -131,7 +138,10 @@ pub async fn disconnect_account(
     account_ref: AccountRef,
 ) -> Result<(), CommandError> {
     let mut registry = state.registry.write().await;
-    registry.remove(account_ref.id()).map(|_| ()).map_err(map_core_error)
+    registry
+        .remove(account_ref.id())
+        .map(|_| ())
+        .map_err(map_core_error)
 }
 
 /// Reports the fetch state the application last recorded for one account.
@@ -184,9 +194,10 @@ fn map_core_error(error: quota_core::CoreError) -> CommandError {
             expected: 0,
             actual: 0,
         },
-        quota_core::CoreError::Validation { field, reason } => {
-            CommandError::ValidationFailed { field: field.into(), reason: reason.into() }
-        }
+        quota_core::CoreError::Validation { field, reason } => CommandError::ValidationFailed {
+            field: field.into(),
+            reason: reason.into(),
+        },
         quota_core::CoreError::Provider(provider) => match provider {
             quota_core::ProviderError::Authentication => CommandError::ReconnectRequired,
             quota_core::ProviderError::Authorization => CommandError::PermissionDenied {

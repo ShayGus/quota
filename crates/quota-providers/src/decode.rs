@@ -320,13 +320,14 @@ impl DecodedUsage {
     /// Builds the outcome the scheduler consumes.
     #[must_use]
     pub fn into_outcome(self, identity: VerifiedIdentity) -> FetchOutcome {
+        let complete = self.is_complete();
         let read = QuotaRead {
             identity,
             windows: self.windows,
-            expected_but_missing: self.expected_but_missing.clone(),
+            expected_but_missing: self.expected_but_missing,
             debug_metadata: None,
         };
-        if self.is_complete() {
+        if complete {
             FetchOutcome::Complete(read)
         } else {
             FetchOutcome::Partial {

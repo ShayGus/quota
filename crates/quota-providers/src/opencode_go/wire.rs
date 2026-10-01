@@ -56,13 +56,23 @@ impl OpenCodeGoUsage {
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct OpenCodeGoBucket {
     /// Percent points used.
-    #[serde(default, alias = "percentUsed", alias = "usedPercent", alias = "usagePercent")]
+    #[serde(
+        default,
+        alias = "percentUsed",
+        alias = "usedPercent",
+        alias = "usagePercent"
+    )]
     pub(crate) percent: Option<Numberish>,
     /// Percent points still available, when that is the reported polarity.
     #[serde(default, alias = "remainingPercent")]
     pub(crate) percent_remaining: Option<Numberish>,
     /// The reset instant, as a date string or epoch seconds.
-    #[serde(default, alias = "resetAt", alias = "reset_at", alias = "nextResetTime")]
+    #[serde(
+        default,
+        alias = "resetAt",
+        alias = "reset_at",
+        alias = "nextResetTime"
+    )]
     pub(crate) resets_at: Option<Numberish>,
     /// The reset delay in seconds.
     #[serde(default, alias = "reset_in_sec")]
