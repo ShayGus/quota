@@ -411,18 +411,22 @@ pub fn start() -> Result<(), String> {
     let registry = bindings::registry();
     // The window-state plugin writes into the app config directory. The sample
     // build keeps its copy under the same `sample` child as its database.
+    let state_flags = crate::platform::window::restored_state_flags();
     #[cfg(feature = "sample-data")]
     let window_state = tauri_plugin_window_state::Builder::default()
         .with_filename("sample/.window-state.json")
+        .with_state_flags(state_flags)
         .build();
     #[cfg(not(feature = "sample-data"))]
-    let window_state = tauri_plugin_window_state::Builder::default().build();
+    let window_state = tauri_plugin_window_state::Builder::default()
+        .with_state_flags(state_flags)
+        .build();
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("overview") {
-                let _ = window.show();
-                let _ = window.set_focus();
-            }
+            // A second launch only brings the running overview forward. It
+            // never opens the settings window, which stays as the person left
+            // it.
+            let _ = crate::platform::window::activate_overview(app);
         }))
         .plugin(tauri_plugin_store::Builder::new().build())
         .plugin(tauri_plugin_sql::Builder::default().build())
@@ -436,11 +440,9 @@ pub fn start() -> Result<(), String> {
             let handle = app.handle().clone();
             crate::platform::tray::install(&handle)?;
             crate::platform::window::install_close_handlers(&handle);
-            let overview = app.get_webview_window("overview").ok_or_else(|| {
-                std::io::Error::other("the overview window is missing")
-            })?;
-            overview.show()?;
-            overview.set_focus()?;
+            // The overview is the only window a launch opens. The settings
+            // window was created hidden and waits for a person to ask for it.
+            crate::platform::window::activate_overview(&handle)?;
             tauri::async_runtime::spawn(async move {
                 if let Err(error) = initialize_backend(handle).await {
                     tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
