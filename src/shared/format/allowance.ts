@@ -141,13 +141,31 @@ function nativeAmount(measurement: Measurement): string {
       if (remaining === null) {
         return "No reading";
       }
-      return `${formatNumber(remaining / 10 ** scale, scale)} ${currency}`;
+      return `${formatMoney(remaining, scale)} ${currency}`;
     }
     case "unlimited":
     case "not_entitled":
     case "unavailable":
       return "No reading";
   }
+}
+
+/**
+ * A money amount from its minor units.
+ *
+ * Minor units are exact, so the amount is shown at the scale the provider gave
+ * it. Displaying only the currency's usual two places would turn a real amount
+ * into a zero, so a value that would read as zero keeps enough places to be
+ * seen rather than disappearing.
+ */
+function formatMoney(minor: number, scale: number): string {
+  const places = Number.isInteger(scale) && scale >= 0 ? Math.min(scale, 9) : 2;
+  const value = minor / 10 ** places;
+  const shown = value.toFixed(places);
+  if (value !== 0 && Number.parseFloat(shown) === 0) {
+    return value.toPrecision(3);
+  }
+  return shown;
 }
 
 /** One number, at the provider's own precision, from an untrusted payload. */

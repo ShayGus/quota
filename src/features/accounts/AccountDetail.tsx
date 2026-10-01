@@ -15,7 +15,6 @@ import {
   severityOf,
 } from "../../shared/format/allowance";
 import {
-  boundaryLead,
   formatAge,
   formatBoundary,
   formatExactInstant,
@@ -79,7 +78,7 @@ function WindowCard({
       <p className="limit-card__boundary">
         {window.boundary === null
           ? "No reported reset"
-          : `${boundaryLead(window.boundary)} · ${formatBoundary(window.boundary, now)}`}
+          : formatBoundary(window.boundary, now)}
       </p>
       <p className="limit-card__role">{ROLE_WORDS[window.metric_role]}</p>
     </button>
