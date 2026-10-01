@@ -7,8 +7,7 @@ every case passes.
 
 Layers named below: `domain` (`crates/quota-domain`), `core` (`crates/quota-core`),
 `providers` (`crates/quota-providers`), `persistence` (`crates/quota-persistence`),
-`contracts` (`crates/quota-contracts`), `host` (`src-tauri`), `ui`
-(`src`).
+`contracts` (`crates/quota-contracts`), `host` (`src-tauri`), `ui` (`src`).
 
 The native desktop host has not been compiled or run on this machine. The WSL image lacks
 `libdbus-1-dev`, WebKitGTK development packages, and `pkg-config`. Some host and UI code
@@ -36,8 +35,8 @@ Linux packages and runs the first host build.
 
 ## AC-45 to AC-61: UI and windowing
 
-| ID             | Layer    | Evidence                                                                          | Status                                        |
-| -------------- | -------- | --------------------------------------------------------------------------------- | --------------------------------------------- |
+| ID             | Layer    | Evidence                                                | Status                                        |
+| -------------- | -------- | ------------------------------------------------------- | --------------------------------------------- |
 | AC-45 to AC-61 | ui, host | `src` renderer and `src-tauri/src/platform` window code | source implemented; native runtime unverified |
 
 ## AC-62 to AC-71: multi-account and scheduling
@@ -117,4 +116,4 @@ desktop build.
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --exclude quota-desktop --no-deps --locked` | Rust documentation checks without the desktop host    |
 | `cargo xtask check-architecture`                                                              | Package, dependency, file size, and IPC rules         |
 | `cargo xtask check-release`                                                                   | Release feature set, licence allow list, action pins  |
-| `cargo xtask bindings --check`                                                                | The generated bindings, regenerated and diffed      |
+| `cargo xtask bindings --check`                                                                | The generated bindings, regenerated and diffed        |

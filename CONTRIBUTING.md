@@ -72,10 +72,10 @@ can be compared against a known baseline rather than guessed at.
 | `cargo xtask check-architecture`                                 | 0.2 s  | —                     |
 | `cargo xtask check-release`                                      | 0.3 s  | —                     |
 | `cargo xtask bindings --check`                                   | 0.2 s  | —                     |
-| `bun run typecheck`                                                 | 20.8 s | —                     |
-| `bun run lint`                                                      | 9.1 s  | —                     |
-| `bun run test`                                                      | 3.2 s  | —                     |
-| `bun run build`                                                     | 1.4 s  | —                     |
+| `bun run typecheck`                                              | 20.8 s | —                     |
+| `bun run lint`                                                   | 9.1 s  | —                     |
+| `bun run test`                                                   | 3.2 s  | —                     |
+| `bun run build`                                                  | 1.4 s  | —                     |
 
 The cold desktop build compiles 645 units and is bound by its dependency tree, not by
 linking: the final link alone is 6.1 s of the 79.6 s. Installing `lld` or `mold` would
@@ -95,26 +95,25 @@ two blocks above runs unchanged, and the test count is unaffected.
 
 ## 4. Generated bindings
 
-Rust is the contract source of truth. Commands and events are Rust structs and
-enums with `serde` and `specta::Type` derives, and `tauri-specta` writes
-`src/generated/bindings.ts` from them. The file is machine output and is never
-edited by hand.
+Rust is the contract source of truth. Commands and events are Rust structs and enums with
+`serde` and `specta::Type` derives, and `tauri-specta` writes `src/generated/bindings.ts`
+from them. The file is machine output and is never edited by hand.
 
-`cargo xtask bindings --check` regenerates the file and compares it with the
-committed one, so a hand edit, a changed signature, or a renamed event fails the
-gate. The regeneration lives in `src-tauri/tests/bindings.rs` because only the
-host crate can run the exporter.
+`cargo xtask bindings --check` regenerates the file and compares it with the committed
+one, so a hand edit, a changed signature, or a renamed event fails the gate. The
+regeneration lives in `src-tauri/tests/bindings.rs` because only the host crate can run
+the exporter.
 
-When you change a command, an argument type, a return type, an error variant, or
-an event payload, change the Rust definition and run the check. If it fails, the
-test writes the regenerated file next to the committed one; move that file over
-it. Do not edit `src/generated/bindings.ts` itself.
+When you change a command, an argument type, a return type, an error variant, or an event
+payload, change the Rust definition and run the check. If it fails, the test writes the
+regenerated file next to the committed one; move that file over it. Do not edit
+`src/generated/bindings.ts` itself.
 
-One consequence shapes the types: the pinned exporter refuses 64-bit integers
-outright, because `JSON.parse` would silently lose precision. Every counter in
-the contract is therefore a `u32`, and monetary minor units are declared as
-numbers at the type level, bounded by `MAX_SAFE_MINOR_UNITS`. Do not widen a
-counter back to 64 bits without changing how it crosses the wire.
+One consequence shapes the types: the pinned exporter refuses 64-bit integers outright,
+because `JSON.parse` would silently lose precision. Every counter in the contract is
+therefore a `u32`, and monetary minor units are declared as numbers at the type level,
+bounded by `MAX_SAFE_MINOR_UNITS`. Do not widen a counter back to 64 bits without changing
+how it crosses the wire.
 
 ## 5. Fixture tests
 
@@ -139,8 +138,8 @@ cargo test -p quota-providers --locked --features test-fixtures
 
 ## 6. Native run and build
 
-The Tauri CLI owns running, building and packaging the application. `cargo
-xtask` runs the repository gates and never starts the app.
+The Tauri CLI owns running, building and packaging the application. `cargo xtask` runs the
+repository gates and never starts the app.
 
 ```bash
 bun install            # once, from the repository root

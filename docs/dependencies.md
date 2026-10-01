@@ -2,17 +2,17 @@
 
 Resolved and verified on 1 October 2026 (spec section 7.6). Rust versions come from the
 committed `Cargo.lock`; each was also checked against the crates.io sparse index. npm
-versions come from the npm registry and are committed in `the repository root/package.json` and
-`the repository root/bun.lock`.
+versions come from the npm registry and are committed in
+`the repository root/package.json` and `the repository root/bun.lock`.
 
 ## Toolchain
 
-| Tool                               | Version       | Where declared                                                | How verified                                                                                                                                                               |
-| ---------------------------------- | ------------- | ------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Rust compiler                      | 1.97.1        | `rust-toolchain.toml`, with `clippy` and `rustfmt` components | `rustc --version` on the build machine                                                                                                                                     |
-| Tested minimum Rust version (MSRV) | 1.90.0        | `[workspace.package] rust-version` in `Cargo.toml`            | Chosen for edition 2024 support. Every crate inherits it with `rust-version.workspace = true`, so the gate in `cargo xtask check-architecture` fails if a member drops it. |
-| Cargo resolver                     | 3             | `[workspace] resolver`                                        | Required by a virtual workspace on edition 2024                                                                                                                            |
-| Bun                                 | 1.3.14        | `.bun-version`, read by `oven-sh/setup-bun` in CI            | The client that produced `bun.lock`; the specification listed pnpm and the captain changed the project to Bun. Bun replaces Node.js as the script runner, so no separate Node version is installed. |
+| Tool                               | Version | Where declared                                                | How verified                                                                                                                                                                                        |
+| ---------------------------------- | ------- | ------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust compiler                      | 1.97.1  | `rust-toolchain.toml`, with `clippy` and `rustfmt` components | `rustc --version` on the build machine                                                                                                                                                              |
+| Tested minimum Rust version (MSRV) | 1.90.0  | `[workspace.package] rust-version` in `Cargo.toml`            | Chosen for edition 2024 support. Every crate inherits it with `rust-version.workspace = true`, so the gate in `cargo xtask check-architecture` fails if a member drops it.                          |
+| Cargo resolver                     | 3       | `[workspace] resolver`                                        | Required by a virtual workspace on edition 2024                                                                                                                                                     |
+| Bun                                | 1.3.14  | `.bun-version`, read by `oven-sh/setup-bun` in CI             | The client that produced `bun.lock`; the specification listed pnpm and the captain changed the project to Bun. Bun replaces Node.js as the script runner, so no separate Node version is installed. |
 
 ## Rust dependencies
 

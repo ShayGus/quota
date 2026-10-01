@@ -41,8 +41,8 @@ bun install
 bun tauri dev
 ```
 
-`bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the
-Rust host, and opens the window. Close the window, or press Ctrl-C, to stop it.
+`bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust host,
+and opens the window. Close the window, or press Ctrl-C, to stop it.
 
 To produce a release build:
 
@@ -50,8 +50,8 @@ To produce a release build:
 bun tauri build
 ```
 
-There is no hand-written run command. The Tauri CLI owns starting, building and
-packaging the application; `cargo xtask` only runs the repository gates.
+There is no hand-written run command. The Tauri CLI owns starting, building and packaging
+the application; `cargo xtask` only runs the repository gates.
 
 ## Developer setup from a clean checkout
 
@@ -100,7 +100,7 @@ Run every check from the repository root.
 | `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Documentation links and missing docs                                                                                          |
 | `cargo xtask check-architecture`                                      | Workspace inheritance, forbidden dependency edges, file size, raw IPC calls, duplicated IPC models, provider feature defaults |
 | `cargo xtask check-release`                                           | Release feature set, licence allow list, workflow action pins, Tauri devtools and content security policy                     |
-| `cargo xtask bindings --check`                                        | `src/generated/bindings.ts` against the Rust IPC layer                                                           |
+| `cargo xtask bindings --check`                                        | `src/generated/bindings.ts` against the Rust IPC layer                                                                        |
 | `cargo deny check advisories licenses sources`                        | Advisories, licence allow list, allowed sources                                                                               |
 
 The frontend checks run in `the repository root`:

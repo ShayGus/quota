@@ -76,8 +76,7 @@ duplicated into them.
 Rust is the contract source of truth. Commands and events are Rust structs and enums with
 Serde and Specta derives; TypeScript definitions are generated from them. The renderer
 calls generated typed wrappers only. Raw `invoke(`, `listen(`, and `emit(` are confined to
-`src/generated/` and an audited integration wrapper under
-`src/shared/ipc/`.
+`src/generated/` and an audited integration wrapper under `src/shared/ipc/`.
 
 An event is transient delivery, not a durable log and not a mutation authority. No backend
 listener accepts a renderer-originated event as a command.
