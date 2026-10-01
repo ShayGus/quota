@@ -265,6 +265,29 @@ impl MonitoringRuntime {
         Ok(())
     }
 
+    /// Takes the one boundary every durable account change shares.
+    ///
+    /// A command that changes an account uses this so its read of the registry,
+    /// its write, and its publication cannot interleave with a supervised read
+    /// doing the same.
+    pub async fn commit(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.state.commit.lock().await
+    }
+
+    /// Publishes the projection the renderer shows, after a committed change.
+    ///
+    /// A mutation that stops scheduled work, such as pausing or disconnecting the
+    /// last account, produces no snapshot of its own, so without this the view
+    /// keeps showing the state before it.
+    ///
+    /// # Errors
+    /// Returns a typed persistence error when the publication fails.
+    pub async fn publish(&self) -> Result<(), quota_contracts::CommandError> {
+        worker::publish_snapshot(&self.state)
+            .await
+            .map_err(|code| quota_contracts::CommandError::Internal { code })
+    }
+
     /// Bumps one connection generation, then queues a verified refresh.
     pub async fn reconnect_account(
         &self,
@@ -312,6 +335,8 @@ impl MonitoringRuntime {
             )?;
         self.refresh([account_id.clone()], RefreshReason::UserRequested)
             .await?;
+        // The reconnect itself changed the connection state the renderer shows.
+        self.publish().await?;
         Ok(generation)
     }
 

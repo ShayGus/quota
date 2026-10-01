@@ -120,6 +120,9 @@ pub async fn set_monitoring_state(
             .request_all(crate::monitoring::RefreshReason::Resumed)
             .await?;
     }
+    // Paused workers produce no snapshot, so the renderer kept showing
+    // "Monitoring active" after the user paused.
+    state.monitor.publish().await?;
     Ok(next)
 }
 
@@ -131,27 +134,27 @@ pub async fn set_account_enabled(
     request: quota_contracts::SetAccountEnabledRequest,
 ) -> Result<(), CommandError> {
     let account_id = request.account_ref.id().clone();
-    let mut stored = state
-        .registry
-        .read()
-        .await
-        .get(&account_id)
-        .map(|entry| entry.stored.clone())
-        .ok_or(CommandError::AccountNotFound)?;
-    stored.monitoring_enabled = request.enabled;
-    state
-        .accounts
-        .upsert_account(stored)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    state
-        .registry
-        .write()
-        .await
-        .set_enabled(&account_id, request.enabled)
-        .map_err(map_core_error)?;
+    {
+        // One boundary from reading the account to writing it back, so a
+        // concurrent read cannot commit a copy of the value this is replacing.
+        let _commit = state.monitor.commit().await;
+        let mut registry = state.registry.write().await;
+        registry
+            .set_enabled(&account_id, request.enabled)
+            .map_err(map_core_error)?;
+        let stored = registry
+            .get(&account_id)
+            .map(|entry| entry.stored.clone())
+            .ok_or(CommandError::AccountNotFound)?;
+        state
+            .accounts
+            .upsert_account(stored)
+            .await
+            .map_err(|error| CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            })?;
+    }
+    state.monitor.publish().await?;
     if request.enabled {
         state
             .monitor
@@ -180,27 +183,25 @@ pub async fn rename_account(
             reason: "the nickname is blank or too long".into(),
         });
     }
-    let mut stored = state
-        .registry
-        .read()
-        .await
-        .get(&account_id)
-        .map(|entry| entry.stored.clone())
-        .ok_or(CommandError::AccountNotFound)?;
-    stored.nickname.clone_from(&nickname);
-    state
-        .accounts
-        .upsert_account(stored)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    state
-        .registry
-        .write()
-        .await
-        .rename(&account_id, nickname)
-        .map_err(map_core_error)
+    {
+        let _commit = state.monitor.commit().await;
+        let mut registry = state.registry.write().await;
+        registry
+            .rename(&account_id, nickname)
+            .map_err(map_core_error)?;
+        let stored = registry
+            .get(&account_id)
+            .map(|entry| entry.stored.clone())
+            .ok_or(CommandError::AccountNotFound)?;
+        state
+            .accounts
+            .upsert_account(stored)
+            .await
+            .map_err(|error| CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            })?;
+    }
+    state.monitor.publish().await
 }
 
 /// Removes the application's local reference to one account.
@@ -213,20 +214,26 @@ pub async fn disconnect_account(
     account_ref: AccountRef,
 ) -> Result<(), CommandError> {
     let account_id = account_ref.into_id();
-    state
-        .accounts
-        .remove_account(&account_id)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    state
-        .registry
-        .write()
-        .await
-        .remove(&account_id)
-        .map(|_| ())
-        .map_err(map_core_error)
+    {
+        let _commit = state.monitor.commit().await;
+        state
+            .accounts
+            .remove_account(&account_id)
+            .await
+            .map_err(|error| CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            })?;
+        state
+            .registry
+            .write()
+            .await
+            .remove(&account_id)
+            .map(|_| ())
+            .map_err(map_core_error)?;
+    }
+    // Removing the last account leaves no worker to publish, so the change is
+    // published here or the row stays on screen until the next refresh.
+    state.monitor.publish().await
 }
 
 /// Reads the last fetch state for one immutable account identity.

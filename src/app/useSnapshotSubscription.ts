@@ -5,6 +5,11 @@
  * the snapshot once; its cleanup stops both. Registration is asynchronous, so a
  * cleanup that runs before registration settles unsubscribes the listeners the
  * moment they arrive (spec 7.8.3, AC-85).
+ *
+ * The read follows the registration rather than racing it. The host answers the
+ * first read with the preferences and window state as events, so a read that ran
+ * first would deliver them to listeners that did not exist yet and Settings
+ * would wait for them for ever.
  */
 import { useEffect } from "react";
 
@@ -21,23 +26,28 @@ export function useSnapshotSubscription(): void {
   useEffect(() => {
     let stopped = false;
     let stop: (() => void) | null = null;
-    const started = startSnapshotSubscription();
-    started
-      .then((detach) => {
-        if (stopped) {
-          detach();
-          return;
-        }
-        stop = detach;
-      })
-      .catch(() => {
-        // A registration failure leaves the renderer without events; the
-        // snapshot read below still recovers the current state.
-      });
-    const reconciled = reconcileSnapshot();
-    reconciled.catch(() => {
-      // `reconcileSnapshot` already records its own failure in the store.
+
+    const start = async (): Promise<void> => {
+      const detach = await startSnapshotSubscription();
+      if (stopped) {
+        detach();
+        return;
+      }
+      stop = detach;
+      await reconcileSnapshot();
+    };
+
+    start().catch(() => {
+      // A registration failure leaves the renderer without events. The read is
+      // still attempted, because it recovers the accounts even though the
+      // supplemental preferences and window state arrived as events.
+      if (!stopped) {
+        reconcileSnapshot().catch(() => {
+          // `reconcileSnapshot` records its own failure in the store.
+        });
+      }
     });
+
     return () => {
       stopped = true;
       if (stop !== null) {

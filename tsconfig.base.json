@@ -1,11 +1,12 @@
 // Shared strict baseline for every TypeScript project in this package (spec 7.8.1).
 {
   "compilerOptions": {
-    "target": "ES2022",
+    "target": "ES2024",
     // `ESNext.Disposable` is a declaration-only addition: `@tauri-apps/api`
-    // declares `Symbol.asyncDispose` on its resource types, and WebView2 is an
-    // evergreen Chromium runtime that provides it. Owner: desktop renderer.
-    "lib": ["ES2022", "DOM", "DOM.Iterable", "ESNext.Disposable"],
+    // declares `Symbol.asyncDispose` on its resource types, and both webviews are
+    // evergreen. ES2024 brings `Promise.withResolvers`, which the renderer uses
+    // instead of hand-built resolver callbacks. Owner: desktop renderer.
+    "lib": ["ES2024", "DOM", "DOM.Iterable", "ESNext.Disposable"],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "jsx": "react-jsx",

@@ -74,6 +74,12 @@ export async function startSnapshotSubscription(): Promise<() => void> {
   };
 }
 
+// The host answers the first read with the preferences and window state as
+// events, so a read that arrives before bootstrap finishes loses them. These
+// bound how long the renderer waits for a backend that is still starting.
+const STARTUP_READ_ATTEMPTS = 40;
+const STARTUP_READ_BACKOFF_MS = 250;
+
 /**
  * Performs the one-time snapshot read.
  *
@@ -85,19 +91,35 @@ export async function startSnapshotSubscription(): Promise<() => void> {
  */
 export async function reconcileSnapshot(): Promise<void> {
   setLink("reconciling");
-  try {
-    const result = await commands.getSnapshot();
-    if (result.status === "error") {
-      reportCommandError(result.error);
-      setLink("unavailable");
+  for (let attempt = 0; attempt < STARTUP_READ_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await commands.getSnapshot();
+      if (result.status === "error") {
+        // The host answers the first read with the preferences and window state
+        // as events, so a read that arrives before bootstrap finishes loses
+        // them. Retrying is how that read is recovered.
+        if (
+          result.error.kind === "initialization_pending" &&
+          attempt + 1 < STARTUP_READ_ATTEMPTS
+        ) {
+          const { promise, resolve } = Promise.withResolvers<undefined>();
+          setTimeout(resolve, STARTUP_READ_BACKOFF_MS);
+          await promise;
+          continue;
+        }
+        reportCommandError(result.error);
+        setLink("unavailable");
+        return;
+      }
+      acceptSnapshot(result.data.snapshot);
+      setFailure(null);
+      return;
+    } catch (error) {
+      reportTransportFailure({
+        code: "unavailable",
+        detail: error instanceof Error ? error.name : "command rejected",
+      });
       return;
     }
-    acceptSnapshot(result.data.snapshot);
-    setFailure(null);
-  } catch (error) {
-    reportTransportFailure({
-      code: "unavailable",
-      detail: error instanceof Error ? error.name : "command rejected",
-    });
   }
 }

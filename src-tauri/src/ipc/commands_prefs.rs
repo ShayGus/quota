@@ -55,6 +55,16 @@ async fn persist_preferences_locked(
             reason: "the renderer sent an unsupported preference schema".into(),
         });
     }
+    // Two settings changed before the first confirmation arrived both carry the
+    // same revision, so the second whole-object save would silently restore the
+    // first one's other fields. A stale aggregate is refused instead.
+    let confirmed = state.preferences_state.read().await.clone();
+    if preferences.revision < confirmed.revision {
+        return Err(CommandError::RevisionConflict {
+            expected: preferences.revision,
+            actual: confirmed.revision,
+        });
+    }
     let current =
         state
             .preferences
