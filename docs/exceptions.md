@@ -60,15 +60,3 @@ CI job `rust` runs the command.
 | Rationale | Building the Tauri host requires `webkit2gtk` development packages and `pkg-config`. Neither is installed, and this task forbids installing system packages. The Rust library crates are ordinary Rust and are checked, linted, and tested on this machine; the host binary is not. |
 | Review date | 2026-10-01 |
 | Removal condition | Compile and run the host on a machine with the Tauri prerequisites, then run the native acceptance cases there. Windows installer work, the 72-hour soak, macOS, and Linux packaging are later stages, not part of this one. |
-
-## 5. `cargo xtask check-release` reports a pending item
-
-| Field | Value |
-|---|---|
-| Rule | The release gate verifies the shipping Tauri configuration: no `devtools: true` and no wildcard content security policy |
-| Deviation | No `tauri.conf.json` exists yet, so the gate reports that item as pending and does not fail |
-| Owner | Rust maintainer |
-| Scope | The `check_tauri_config` step of `cargo xtask check-release` |
-| Rationale | The desktop configuration is another slice's deliverable. Failing the gate for a file this slice does not own would block every run for a reason outside its control. The gate prints `no tauri.conf.json yet; the desktop host is not scaffolded, so this item is pending`, so the gap stays visible rather than silent. |
-| Review date | 2026-10-01 |
-| Removal condition | When `apps/desktop/src-tauri/tauri.conf.json` lands, the gate checks it automatically and the pending note disappears. |
