@@ -1,0 +1,36 @@
+[package]
+name = "quota-providers"
+description = "Isolated provider clients, decoders, and polling strategies for Quota."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+# Compiles the deterministic local provider used by automated tests. Release
+# artifacts are built with this feature off, so no test adapter can serve data.
+test-fixtures = []
+
+[dependencies]
+quota-core = { workspace = true }
+quota-domain = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "rt", "sync", "time"] }
+tracing = { workspace = true }
+reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
+
+[dev-dependencies]
+# The fixture adapter is a non-default feature, so the test profile selects it
+# explicitly. A plain `cargo build` never sees this table, which is why a
+# release artifact still contains no fixture code.
+quota-providers = { path = ".", features = ["test-fixtures"] }
+
+[lints]
+workspace = true

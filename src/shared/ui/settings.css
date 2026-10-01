@@ -1,0 +1,230 @@
+/**
+ * The settings surface: the navigation rail, setting rows, switches, the
+ * privacy card, and the account management cards.
+ */
+
+.settings {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  min-height: 100%;
+}
+
+.settings__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 16px 10px;
+  border-right: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.settings__nav button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 11px;
+  color: var(--muted);
+  text-align: left;
+}
+
+.settings__nav button[aria-current="page"] {
+  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.settings__content {
+  padding: 24px;
+  min-width: 0;
+}
+
+.settings__title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 630;
+  letter-spacing: -0.5px;
+}
+
+.settings__intro {
+  margin: 6px 0 20px;
+  max-width: 370px;
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--muted);
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 23px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting-row__label {
+  display: block;
+  font-size: 12px;
+  font-weight: 550;
+}
+
+.setting-row p {
+  margin: 5px 0 0;
+  max-width: 310px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.setting-row__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.switch {
+  position: relative;
+  width: 33px;
+  height: 19px;
+  min-width: 33px;
+  padding: 3px;
+  border-radius: 20px;
+  background: var(--track);
+}
+
+.switch::before {
+  content: "";
+  display: block;
+  height: 13px;
+  width: 13px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0002;
+  transition: transform 0.14s;
+}
+
+.switch[aria-checked="true"] {
+  background: var(--accent);
+}
+
+.switch[aria-checked="true"]::before {
+  transform: translateX(14px);
+}
+
+[data-theme="dark"] .switch[aria-checked="true"]::before {
+  background: #172d25;
+}
+
+.privacy-card {
+  display: flex;
+  gap: 11px;
+  margin: 0 0 12px;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.privacy-card strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.privacy-card p {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.account-manage-card {
+  padding: 13px;
+  margin: 10px 0;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.account-manage-card__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.account-manage-card__name {
+  display: block;
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.account-manage-card__meta {
+  display: block;
+  margin-top: 3px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.account-manage-card__actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+}
+
+.account-manage-card__rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.account-manage-card__rename input {
+  width: 160px;
+  padding: 6px 9px;
+}
+
+.fallback {
+  margin: 24px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.fallback h1,
+.fallback h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.fallback p {
+  margin: 10px 0 16px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+@media (max-width: 660px) {
+  .quota-cell__mobile-label {
+    display: block;
+  }
+
+  .settings {
+    grid-template-columns: 1fr;
+  }
+
+  .settings__nav {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+}

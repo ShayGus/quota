@@ -1,0 +1,86 @@
+/**
+ * Palette tokens and surface rules from the approved wireframe (spec 3.4).
+ *
+ * Severity colours are always paired with text, so colour is never the only
+ * carrier of meaning. Both themes define the same token names.
+ */
+:root {
+  --page: #f3f5f7;
+  --surface: #ffffff;
+  --surface-2: #f6f8fa;
+  --surface-3: #edf1f4;
+  --line: #e0e5eb;
+  --text: #1c2937;
+  --muted: #667482;
+  --subtle: #80909e;
+  --accent: #18775f;
+  --tint: #e8f4ef;
+  --track: #e5ebef;
+  --warn: #945b10;
+  --warn-bg: #fff3df;
+  --danger: #b33547;
+  --danger-bg: #fcecf0;
+  --focus: #2f70c1;
+  --shadow: 0 20px 60px #2333441d, 0 3px 10px #2333440a;
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --page: #11171e;
+  --surface: #192129;
+  --surface-2: #202a34;
+  --surface-3: #283440;
+  --line: #35414e;
+  --text: #edf2f7;
+  --muted: #adbbc9;
+  --subtle: #95a4b3;
+  --accent: #72d9b5;
+  --tint: #233e36;
+  --track: #3a4653;
+  --warn: #f4c074;
+  --warn-bg: #3d3222;
+  --danger: #ff8d9f;
+  --danger-bg: #412833;
+  --focus: #99c3fb;
+  --shadow: 0 20px 60px #00000066, 0 3px 10px #00000033;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--page);
+  color: var(--text);
+  font-family:
+    "Segoe UI Variable",
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    Arial,
+    sans-serif;
+  font-size: 14px;
+  font-synthesis: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+[data-reduce-motion="true"] *,
+[data-reduce-motion="true"] *::before {
+  animation: none !important;
+  transition: none !important;
+}

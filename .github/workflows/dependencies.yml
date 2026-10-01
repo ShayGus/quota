@@ -1,0 +1,66 @@
+# Scheduled dependency and advisory checks for Quota.
+#
+# This workflow changes nothing. It reports, so a reviewer can decide. Every
+# `uses:` is pinned to a full 40-character commit SHA; see ci.yml for why.
+#
+# `cargo deny` reads deny.toml, which holds the approved licence set, the
+# allowed registry, and the duplicate-version policy. `cargo audit` reads the
+# RustSec advisory database directly and reports the crates that need action.
+#
+# `cargo outdated` is deliberately not installed here. No pinned action ships
+# it, and `cargo install cargo-outdated` would compile an unpinned tool on every
+# run. `cargo update --workspace --dry-run` is used instead: it lists the
+# in-range upgrades Cargo can already take. A breaking upgrade is reviewed by
+# hand in a pull request, which is where it belongs.
+
+name: Dependencies
+
+on:
+  schedule:
+    # Every Monday at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependencies-${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  advisories:
+    name: Advisories and licences
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # rust-toolchain.toml pins the compiler; rustup installs it on first use.
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain
+
+      # EmbarkStudios/cargo-deny-action v2.1.1
+      - name: cargo deny
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
+        with:
+          command: check
+          # `--locked` refuses to change Cargo.lock, so the gate reports on the
+          # committed graph rather than an opportunistic update.
+          arguments: --locked
+          command-arguments: advisories licenses sources
+
+      # taiki-e/install-action v2.87.22
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit
+        run: cargo audit
+
+      - name: Report in-range updates
+        run: cargo update --workspace --dry-run

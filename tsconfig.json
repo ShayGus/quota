@@ -1,0 +1,9 @@
+// Solution file. `bun run typecheck` runs each project explicitly; this file points at them.
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" },
+    { "path": "./tsconfig.test.json" }
+  ]
+}

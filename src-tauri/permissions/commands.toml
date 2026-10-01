@@ -1,0 +1,66 @@
+# Every application command, one allow-list entry each.
+#
+# The `quota:` prefix is the application identifier declared in
+# `tauri.conf.json`. A capability file grants `quota:allow-<command>`; a window
+# without that entry cannot call the command, even though the generated
+# TypeScript wrapper for it exists.
+
+[allow-get-snapshot]
+description = "Read the complete sanitized application snapshot."
+
+[allow-list-provider-capabilities]
+description = "List compiled provider adapters and their declared capabilities."
+
+[allow-get-connection-progress]
+description = "Read the typed progress of one connection attempt."
+
+[allow-begin-connection]
+description = "Start one authorized connection attempt."
+
+[allow-cancel-connection]
+description = "Cancel a running connection attempt."
+
+[allow-reconnect-account]
+description = "Re-verify and reconnect one account."
+
+[allow-set-account-enabled]
+description = "Enable or disable monitoring for one account."
+
+[allow-rename-account]
+description = "Change one account's display name."
+
+[allow-disconnect-account]
+description = "Remove the app's local reference to one account."
+
+[allow-refresh-accounts]
+description = "Request a refresh through the shared scheduler."
+
+[allow-set-monitoring-state]
+description = "Pause or resume monitoring."
+
+[allow-set-polling-preferences]
+description = "Change the validated polling policy for a provider."
+
+[allow-update-preferences]
+description = "Save confirmed presentation and notification preferences."
+
+[allow-set-overview-mode]
+description = "Move the overview between floating and tray anchoring."
+
+[allow-set-overview-always-on-top]
+description = "Change only the native topmost flag."
+
+[allow-fit-overview-to-accounts]
+description = "Resize the overview to the account comparison layout."
+
+[allow-reset-overview-position]
+description = "Restore a known-visible floating position."
+
+[allow-open-provider-usage-page]
+description = "Open an allowlisted provider usage page in the external browser."
+
+[allow-clear-local-history]
+description = "Delete one account's local reading history."
+
+[allow-export-sanitized-diagnostics]
+description = "Write a redacted diagnostics export to a user-chosen path."

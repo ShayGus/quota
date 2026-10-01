@@ -1,0 +1,9 @@
+// Tests run in jsdom under Vitest. A separate project, so no Node global leaks into the renderer.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["node", "vite/client"],
+    "noEmit": true
+  },
+  "include": ["src", "tests", "vitest.config.ts"]
+}

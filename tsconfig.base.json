@@ -1,0 +1,28 @@
+// Shared strict baseline for every TypeScript project in this package (spec 7.8.1).
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    // `ESNext.Disposable` is a declaration-only addition: `@tauri-apps/api`
+    // declares `Symbol.asyncDispose` on its resource types, and both webviews are
+    // evergreen. ES2024 brings `Promise.withResolvers`, which the renderer uses
+    // instead of hand-built resolver callbacks. Owner: desktop renderer.
+    "lib": ["ES2024", "DOM", "DOM.Iterable", "ESNext.Disposable"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "useUnknownInCatchVariables": true,
+    "verbatimModuleSyntax": true,
+    "isolatedModules": true,
+    "erasableSyntaxOnly": true,
+    "noUncheckedSideEffectImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": false,
+    "noEmit": true
+  }
+}

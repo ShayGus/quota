@@ -1,0 +1,9 @@
+// The renderer project: browser sources only. Node globals are deliberately absent.
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "types": ["vite/client"],
+    "noEmit": true
+  },
+  "include": ["src"]
+}
