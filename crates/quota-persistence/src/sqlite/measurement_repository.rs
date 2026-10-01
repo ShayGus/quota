@@ -425,7 +425,30 @@ fn optional_instant(
 }
 
 /// Writes one window inside the caller's transaction.
-async fn persist_window(
+/// The saved privacy policy, read at the one place history rows are written.
+async fn retain_history(
+    transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+) -> PersistenceResult<bool> {
+    let privacy: Option<String> = sqlx::query_scalar(
+        "SELECT operational_privacy_json FROM monitoring_preferences WHERE id = 1",
+    )
+    .fetch_optional(&mut **transaction)
+    .await
+    .table("monitoring_preferences")?;
+    Ok(privacy
+        .map(|json| {
+            serde_json::from_str::<quota_domain::preferences::OperationalPrivacyPreferences>(&json)
+        })
+        .transpose()
+        .map_err(|_| PersistenceError::RowRejected {
+            table: "monitoring_preferences",
+            reason: "invalid privacy policy",
+        })?
+        .unwrap_or_default()
+        .retain_history)
+}
+
+pub(crate) async fn persist_window(
     transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
     account_id: &AccountId,
     window: &QuotaWindow,
@@ -474,7 +497,8 @@ async fn persist_window(
     .await
     .table("latest_measurements")?;
 
-    if !unchanged {
+    let retain_history = retain_history(transaction).await?;
+    if !unchanged && retain_history {
         let observed_at = window
             .observed_at
             .map_or_else(|| received_at.clone(), codec::instant);
@@ -492,7 +516,7 @@ async fn persist_window(
         .await
         .table("measurement_history")?;
     }
-    Ok(!unchanged)
+    Ok(!unchanged && retain_history)
 }
 /// Reads the stored observation key for one account and window.
 async fn read_previous(
