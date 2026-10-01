@@ -6,7 +6,7 @@
  * immediately, while row identity, focus, and the click target stay put until
  * the list is idle (spec 4.3, AC-51).
  */
-import { useEffect, useRef, useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
 
 import type { AccountId, IndicatorStyle } from "../../generated/bindings";
 import { applyOrder, placeAccounts } from "../../shared/state/order";
@@ -39,6 +39,49 @@ export function listIsEngaged(container: HTMLElement | null): boolean {
   return active !== null && container.contains(active);
 }
 
+/**
+ * Applies a staged order once the list has been idle long enough, or as soon as
+ * it becomes idle after that.
+ *
+ * A single timer that gives up while someone is interacting with the list drops
+ * the update on the floor: nothing re-arms it, so the order silently stops
+ * matching the readings. Listening for the interaction that ends instead means
+ * the update lands as soon as the person lets go, which is the point of staging
+ * it. An unmount or a newer snapshot cancels it.
+ */
+function useApplyWhenIdle(
+  container: RefObject<HTMLElement | null>,
+  apply: () => void,
+  pending: boolean,
+): void {
+  useEffect(() => {
+    if (!pending) {
+      return;
+    }
+    let cancelled = false;
+    let timer = 0;
+    const attempt = (): void => {
+      timer = window.setTimeout(() => {
+        if (cancelled) {
+          return;
+        }
+        if (listIsEngaged(container.current)) {
+          // Still engaged. Look again after the same delay, so the update lands
+          // as soon as the person lets go rather than never.
+          attempt();
+          return;
+        }
+        apply();
+      }, REORDER_IDLE_MS);
+    };
+    attempt();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [pending, container, apply]);
+}
+
 /** The overview: every account, its limits, and its state. */
 export function Overview({
   state,
@@ -59,20 +102,7 @@ export function Overview({
 
   const pending = state.pendingOrder !== null;
 
-  // Apply a staged order once the list has been idle for the documented delay.
-  useEffect(() => {
-    if (!pending) {
-      return;
-    }
-    const timer = window.setTimeout(() => {
-      if (!listIsEngaged(listRef.current)) {
-        applyPendingOrder();
-      }
-    }, REORDER_IDLE_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [pending, state.snapshot]);
+  useApplyWhenIdle(listRef, applyPendingOrder, pending);
 
   // The placements are derived from the snapshot prop and the applied order, so
   // the render is a pure function of its inputs. Reading module state here would

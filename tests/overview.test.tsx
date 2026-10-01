@@ -7,7 +7,7 @@
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { Overview, REORDER_IDLE_MS } from "../src/features/overview/Overview";
 import type { RendererState } from "../src/shared/state/types";
@@ -383,8 +383,63 @@ describe("a value update while the list is busy", () => {
     expect(screen.getByRole("button", { name: /update order/i })).toBeTruthy();
   });
 
-  it("has a documented idle delay before an unattended reorder", () => {
-    expect(REORDER_IDLE_MS).toBe(1200);
+  it("holds the staged order while the list has focus, then applies it", () => {
+    vi.useFakeTimers();
+    try {
+      acceptSnapshot(
+        snapshot("instance-1", 1, [
+          account("first", "codex", 1, [quotaWindow("w", "session", percent(80))], {
+            rank: 80,
+          }),
+          account("second", "claude", 2, [quotaWindow("w", "session", percent(10))], {
+            rank: 10,
+          }),
+        ]),
+      );
+      applyPendingOrder();
+      render(<Harness />);
+      expect(rowOrder()).toEqual(["second", "first"]);
+
+      // Someone is working inside the list, so focus is inside it.
+      const focusedButton = document
+        .querySelector('[data-account-id="second"]')
+        ?.querySelector("button");
+      focusedButton?.focus();
+      expect(document.activeElement).toBe(focusedButton);
+
+      act(() => {
+        acceptSnapshot(
+          snapshot("instance-1", 2, [
+            account("first", "codex", 1, [quotaWindow("w", "session", percent(2))], {
+              rank: 2,
+            }),
+            account("second", "claude", 2, [quotaWindow("w", "session", percent(95))], {
+              rank: 95,
+            }),
+          ]),
+        );
+      });
+
+      // Idle for well past the delay, but the list is still engaged, so the
+      // order holds and the values stay current.
+      act(() => {
+        vi.advanceTimersByTime(REORDER_IDLE_MS * 5);
+      });
+      expect(getRendererState().pendingOrder).not.toBeNull();
+      expect(rowOrder()).toEqual(["second", "first"]);
+
+      // They let go. The order lands on its own, without being asked for.
+      act(() => {
+        (document.activeElement as HTMLElement | null)?.blur();
+      });
+      act(() => {
+        vi.advanceTimersByTime(REORDER_IDLE_MS * 5);
+      });
+      expect(rowOrder()).toEqual(["first", "second"]);
+      expect(getRendererState().pendingOrder).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
