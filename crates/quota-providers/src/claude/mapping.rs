@@ -283,15 +283,22 @@ fn extra_usage(
     };
     let limit = minor_units(extra.monthly_limit.as_ref());
     let used = minor_units(extra.used_credits.as_ref());
-    if limit.is_none() && used.is_none() {
-        // No amount arrived, so no amount is invented. A reported utilisation
-        // still proves the provider meant to send a spend cap, so that reading
-        // is unusable rather than merely absent.
-        if extra.utilization.is_some() {
-            return draft.invalid(vec![QuotaIssue::NonFiniteValue {
-                field: "extra_usage.monthly_limit".to_owned(),
-            }]);
+    let mut issues = Vec::new();
+    for (reported, decoded, field) in [
+        (&extra.monthly_limit, limit, "extra_usage.monthly_limit"),
+        (&extra.used_credits, used, "extra_usage.used_credits"),
+    ] {
+        if reported.is_some() && decoded.is_none() {
+            issues.push(QuotaIssue::NonFiniteValue {
+                field: field.to_owned(),
+            });
         }
+    }
+    if !issues.is_empty() {
+        return draft.invalid(issues);
+    }
+    if limit.is_none() && used.is_none() {
+        // No amount arrived, so no amount is invented.
         return draft.reported_missing();
     }
     draft.build(
@@ -313,7 +320,7 @@ fn scale(extra: &ClaudeExtraUsage) -> Option<u8> {
         return Some(DEFAULT_SCALE);
     };
     let field = reported.field()?;
-    if field.value < 0.0 {
+    if field.value < 0.0 || field.value > f64::from(MAX_SCALE) || field.value.fract() != 0.0 {
         return None;
     }
     #[expect(

@@ -91,6 +91,6 @@ pub(crate) struct OpenCodeGoBucket {
     )]
     pub(crate) resets_at: Option<Numberish>,
     /// The reset delay in seconds.
-    #[serde(default, alias = "reset_in_sec")]
+    #[serde(default, alias = "resetInSec")]
     pub(crate) reset_in_sec: Option<Numberish>,
 }
