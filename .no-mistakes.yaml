@@ -1,14 +1,8 @@
 # Per-repository no-mistakes configuration for Quota.
-#
-# The pipeline runs the project's own gates. The command strings below are the
-# commands .github/workflows/ci.yml runs as `run:` gate steps, with CI's exact
-# flags, grouped by kind rather than in CI's order, so a validation run proves
-# what CI proves. CI's one extra gate step, `cargo build --locked -p quota-desktop`,
-# needs the test agent's launch check instead. README.md "Commands" and
-# CONTRIBUTING.md section 3 own those lists: change this file in the same commit
-# that changes them. Nothing here weakens a gate.
 
 commands:
+  prepare: bun install --frozen-lockfile
+
   # The static gates. No command is dropped, replaced, or made advisory.
   lint: >-
     cargo fmt --all -- --check &&
@@ -23,70 +17,25 @@ commands:
 
   # The gates that execute code.
   test: >-
+    cargo build --locked -p quota-desktop &&
     cargo test --workspace --locked &&
     bun run test &&
     bun run build
 
-# The Test agent runs the gate list. Its budget problem is exploration, not
-# test time: the whole list runs in about a minute on a warm tree, so the
-# instructions spend their words on what not to do instead.
 test:
   instructions: |
-    Prove the repository's own gates. Do not explore the tree, do not invent
-    extra checks, and do not read source files to decide what to run.
+    The pipeline owns execution of commands.prepare, commands.test, and
+    commands.lint. Use the recorded command results as evidence; do not rerun
+    those commands or run lint gates during evidence collection. Do not explore
+    the tree, invent extra checks, or read source files to decide what to run.
+    Do not launch the native app or a dev server.
 
-    Run exactly these commands, once each, from the repository root, in this
-    order:
+    Repository-local dependency preparation is allowed through commands.prepare.
+    Cold Cargo compilation is allowed when this worktree has no build cache.
+    Prefer existing target/ and node_modules caches. Never run cargo clean,
+    delete target/, or point CARGO_TARGET_DIR somewhere new. Never install
+    anything outside the repository, use sudo, or install system packages.
 
-      cargo fmt --all -- --check
-      cargo clippy --workspace --all-targets --locked -- -D warnings
-      RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
-      cargo xtask check-architecture
-      cargo xtask check-release
-      cargo xtask bindings --check
-      bun run typecheck
-      bun run lint
-      bun run format:check
-      cargo test --workspace --locked
-      bun run test
-      bun run build
-
-    Then run one real launch check. Start `bun tauri dev`, wait until its log
-    shows the Vite dev server URL and the Tauri host initialising with no
-    panic, request the dev server URL and record the HTTP status, then stop
-    it. This host has no window capture, so the log line and the HTTP response
-    are the evidence; report them as such instead of claiming a screenshot.
-
-    The dev server uses a fixed port, 1420. If it reports "Port 1420 is already
-    in use", the port belongs to another process, not to this repository: never
-    kill it and never retry on 1420. Name the process holding it, pick a free
-    port, and run the same check there:
-
-      bun tauri dev --config '{"build":{"devUrl":"http://localhost:PORT","beforeDevCommand":"bun run dev -- --port PORT --strictPort"}}'
-
-    Measured here: the host compiles 645 units in 9.8 s and the dev server
-    answers 200, so a launch check costs about two minutes, not a budget.
-
-    Reuse the warm `target/` directory and the installed `node_modules`. Never
-    run `cargo clean`, delete `target/`, point `CARGO_TARGET_DIR` somewhere
-    new, or rebuild from scratch. Install nothing: `bun install`,
-    `cargo install`, and `cargo deny` are out of scope because the
-    dependencies are already present. Measured warm on a 32-core machine:
-    `commands.lint` runs in 39 to 45 s and `commands.test` in 15 s. A gate
-    that takes minutes means the build cache was lost, not that the code is
-    slow.
-
-    Run each command once and report the exact command, its exit code, and its
-    wall-clock time. A failure is reported, not retried, not worked around, and
-    not fixed: record it and stop.
-
-# Quota does document where each fact belongs, so the Document step gets a
-# pointer to those owners instead of a second prose policy of its own.
-document:
-  instructions: |
-    README.md "Documentation" owns which file documents what, and
-    CONTRIBUTING.md sections 7 and 8 own the enforced rules. Put a fact in the
-    file that already owns it. Record every deviation in `docs/exceptions.md`
-    with an owner, a rationale, a scope, a review date, and a removal
-    condition. When a gate command is added, removed, or changed, update
-    README.md "Commands" and CONTRIBUTING.md section 3 in the same commit.
+    Report the available command results with their exit codes and wall-clock
+    times. A failure is reported, not retried, worked around, or fixed: record
+    it and stop. Leave lint execution to the pipeline's later Lint step.
