@@ -118,13 +118,13 @@ fn named_window(
 }
 
 /// Builds the draft for an account-wide primary or secondary window.
-fn account_draft(
-    pool: &QuotaPoolId,
-    bucket: &str,
+fn account_draft<'a>(
+    pool: &'a QuotaPoolId,
+    bucket: &'a str,
     category: QuotaCategory,
     duration_seconds: Option<i64>,
     received_at: DateTime<Utc>,
-) -> WindowDraft<'_> {
+) -> WindowDraft<'a> {
     WindowDraft {
         provider: ProviderId::Codex,
         pool_id: pool,
@@ -165,8 +165,7 @@ fn credit_window(
             Some(field) if field.value >= 0.0 => draft.build(
                 Measurement::Quantity(QuantityMeasurement {
                     unit: QuotaUnit::Credits,
-                    precision: DecimalPrecision::new(field.decimals)
-                        .unwrap_or(DecimalPrecision::MAX),
+                    precision: field.decimals,
                     used: None,
                     remaining: Some(field.value),
                     // A balance has no ceiling, so it never yields a percentage.

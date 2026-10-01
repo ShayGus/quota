@@ -14,7 +14,7 @@ use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
 
-use crate::decode::{self, DecodedUsage, Numberish, WindowDraft, percentage};
+use crate::decode::{self, DecodedUsage, WindowDraft, percentage};
 use crate::opencode_go::wire::{OpenCodeGoBucket, OpenCodeGoEnvelope, OpenCodeGoUsage};
 
 /// The duration of the rolling window, in seconds.
@@ -114,11 +114,11 @@ fn windows() -> [WindowSpec; 3] {
 }
 
 /// Builds the draft for one window.
-fn draft(
-    pool: &QuotaPoolId,
-    spec: &WindowSpec,
+fn draft<'a>(
+    pool: &'a QuotaPoolId,
+    spec: &'a WindowSpec,
     received_at: DateTime<Utc>,
-) -> WindowDraft<'_> {
+) -> WindowDraft<'a> {
     WindowDraft {
         provider: ProviderId::OpenCodeGo,
         pool_id: pool,
@@ -188,7 +188,6 @@ fn decode_bucket(bucket: &OpenCodeGoBucket) -> Result<Option<Measurement>, Quota
     percentage(100.0 - field.value, field.decimals, "percentRemaining").map(Some)
 }
 
-/// The field name used when a remaining value cannot be read.
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +205,7 @@ mod tests {
     #[test]
     fn a_remaining_percentage_becomes_a_used_percentage() {
         let bucket = OpenCodeGoBucket {
-            percent_remaining: Some(Numberish::Text("37.5".to_owned())),
+            percent_remaining: Some(crate::decode::Numberish::Text("37.5".to_owned())),
             ..OpenCodeGoBucket::default()
         };
         let measurement = decode_bucket(&bucket)

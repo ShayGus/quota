@@ -47,6 +47,9 @@ pub(crate) struct HttpReply {
 }
 
 /// A client configured for one provider family.
+///
+/// The client holds no credential, so its `Debug` output names only the type.
+#[derive(Debug)]
 pub(crate) struct ProviderHttp {
     client: reqwest::Client,
 }
@@ -69,7 +72,6 @@ impl ProviderHttp {
                     _ => attempt.stop(),
                 }
             }))
-            .cookie_store(false)
             .build()
             .map_err(|_| ProviderError::Transient {
                 detail: "the HTTP client could not be constructed".to_owned(),
@@ -126,7 +128,8 @@ fn remaining_timeout(deadline: Option<DateTime<Utc>>) -> Option<Duration> {
     if remaining <= chrono::Duration::zero() {
         return Some(Duration::from_millis(1));
     }
-    Duration::try_from(remaining).ok()
+    let millis = u64::try_from(remaining.num_milliseconds()).ok()?;
+    Some(Duration::from_millis(millis))
 }
 
 /// Reads the body with a hard size ceiling.

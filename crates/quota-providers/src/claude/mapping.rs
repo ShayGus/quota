@@ -12,6 +12,7 @@ use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
+use quota_domain::quota::units::DecimalPrecision;
 use quota_domain::quota::money::MoneyMeasurement;
 use quota_domain::quota::units::CurrencyCode;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};

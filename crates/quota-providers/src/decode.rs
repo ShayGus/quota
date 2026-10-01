@@ -41,7 +41,7 @@ pub(crate) struct NumberField {
     /// The decoded value.
     pub(crate) value: f64,
     /// Decimal places in the text the provider sent, capped at the domain limit.
-    pub(crate) decimals: u8,
+    pub(crate) decimals: DecimalPrecision,
 }
 
 impl Numberish {
@@ -55,10 +55,9 @@ impl Numberish {
         if !value.is_finite() {
             return None;
         }
-        Some(NumberField {
-            value,
-            decimals: decimal_places(&text).min(DecimalPrecision::MAX),
-        })
+        // A count above the domain ceiling is clamped, so this never fails.
+        let decimals = DecimalPrecision::new(decimal_places(&text)).ok()?;
+        Some(NumberField { value, decimals })
     }
 
     /// Decodes an integral count, rejecting fractional values.
@@ -94,7 +93,9 @@ fn decimal_places(text: &str) -> u8 {
     let Some((_, fraction)) = text.split_once('.') else {
         return 0;
     };
-    u8::try_from(fraction.len()).unwrap_or(DecimalPrecision::MAX)
+    u8::try_from(fraction.len())
+        .unwrap_or(DecimalPrecision::MAX)
+        .min(DecimalPrecision::MAX)
 }
 
 /// Reads a reset instant written as epoch seconds or as a date string.
@@ -103,8 +104,8 @@ fn decimal_places(text: &str) -> u8 {
 /// all, yields `None`: this crate never guesses a reset time.
 pub(crate) fn reset_instant(value: &Numberish) -> Option<DateTime<Utc>> {
     match value {
-        Self::Number(_) => epoch_instant(value.whole()?),
-        Self::Text(text) => {
+        Numberish::Number(_) => epoch_instant(value.whole()?),
+        Numberish::Text(text) => {
             let text = text.trim();
             if let Ok(seconds) = text.parse::<i64>() {
                 return epoch_instant(seconds);
@@ -189,7 +190,7 @@ pub(crate) fn window_id(
 
 /// A resource identifier that always satisfies the domain invariants.
 pub(crate) fn resource_id(text: &str) -> ResourceId {
-    ResourceId::new(identifier(text)).unwrap_or_else(|_| ResourceId::new("quota").unwrap_or_else(|_| ResourceId::generate()))
+    ResourceId::new(identifier(text)).unwrap_or_else(|_| ResourceId::generate())
 }
 
 /// A display label trimmed to the domain's scope-label budget.
@@ -265,7 +266,11 @@ pub(crate) fn scope(resource: &str, resource_label: &str) -> Result<QuotaScope, 
 }
 
 /// A percentage measurement, or the issue that explains why it is unusable.
-pub(crate) fn percentage(used: f64, decimals: u8, field: &str) -> Result<Measurement, QuotaIssue> {
+pub(crate) fn percentage(
+    used: f64,
+    precision: DecimalPrecision,
+    field: &str,
+) -> Result<Measurement, QuotaIssue> {
     if !used.is_finite() {
         return Err(QuotaIssue::NonFiniteValue {
             field: field.to_owned(),
@@ -274,8 +279,6 @@ pub(crate) fn percentage(used: f64, decimals: u8, field: &str) -> Result<Measure
     if used < 0.0 {
         return Err(QuotaIssue::NegativeUsage { value: used });
     }
-    let precision = DecimalPrecision::new(decimals.min(DecimalPrecision::MAX))
-        .unwrap_or(DecimalPrecision::MAX);
     PercentageMeasurement::from_used_percent(used, precision)
         .map(Measurement::Percentage)
         .map_err(|_| QuotaIssue::NonFiniteValue {
