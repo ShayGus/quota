@@ -19,6 +19,7 @@ pub fn get(app: &AppHandle, label: &'static str) -> Result<WebviewWindow, Comman
 }
 
 /// Maps a native error without exposing paths or platform details.
+#[must_use]
 pub fn failed(operation: &'static str) -> CommandError {
     CommandError::NativeOperationFailed {
         operation: operation.into(),
@@ -59,16 +60,16 @@ pub fn install_close_handlers(app: &AppHandle) {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = native_for_event.hide();
-                if label == "overview" {
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        let controller = state.window.clone();
-                        let app = app.clone();
-                        let app_instance_id = state.app_instance_id.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let confirmed = controller.lock().await.set_visible(false);
-                            let _ = publish_state(&app, &app_instance_id, confirmed);
-                        });
-                    }
+                if label == "overview"
+                    && let Some(state) = app.try_state::<crate::state::AppState>()
+                {
+                    let controller = state.window.clone();
+                    let app = app.clone();
+                    let app_instance_id = state.app_instance_id.clone();
+                    tauri::async_runtime::spawn(async move {
+                        let confirmed = controller.lock().await.set_visible(false);
+                        publish_state(&app, &app_instance_id, confirmed);
+                    });
                 }
             }
             tauri::WindowEvent::Focused(false) if label == "overview" => {
@@ -81,7 +82,7 @@ pub fn install_close_handlers(app: &AppHandle) {
                             && set_visible(&app, "overview", false, false) == Ok(false)
                         {
                             let confirmed = controller.lock().await.set_visible(false);
-                            let _ = publish_state(&app, &app_instance_id, confirmed);
+                            publish_state(&app, &app_instance_id, confirmed);
                         }
                     });
                 }
@@ -97,8 +98,6 @@ pub fn publish_state(
     app_instance_id: &quota_domain::ids::AppInstanceId,
     state: OverviewWindowState,
 ) {
-    use tauri_specta::Event;
-
     let event = crate::ipc::events::OverviewWindowStateChanged(
         quota_contracts::OverviewWindowStateChanged {
             app_instance_id: app_instance_id.clone(),
@@ -110,17 +109,20 @@ pub fn publish_state(
             },
         },
     );
-    if event.emit_to(app, "overview").is_err() {
-        tracing::warn!(
-            code = "overview_window_event_failed",
-            "window state event was not delivered"
-        );
-    }
-    if event.emit_to(app, "settings").is_err() {
-        tracing::warn!(
-            code = "settings_window_event_failed",
-            "window state event was not delivered"
-        );
+    emit_window_state(app, &event, "overview", "overview_window_event_failed");
+    emit_window_state(app, &event, "settings", "settings_window_event_failed");
+}
+
+fn emit_window_state(
+    app: &AppHandle,
+    event: &crate::ipc::events::OverviewWindowStateChanged,
+    label: &str,
+    code: &str,
+) {
+    use tauri_specta::Event;
+
+    if event.emit_to(app, label).is_err() {
+        tracing::warn!(code = code, "window state event was not delivered");
     }
 }
 

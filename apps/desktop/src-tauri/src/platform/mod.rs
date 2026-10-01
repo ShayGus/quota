@@ -7,5 +7,4 @@
 pub mod tray;
 pub mod window;
 
-pub use tray::TrayController;
 pub use window::{OverviewWindowController, OverviewWindowState};

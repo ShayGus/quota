@@ -10,16 +10,19 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use quota_contracts::commands::{BeginConnectionRequest, ConnectionAttemptAccepted};
+use quota_contracts::events::ConnectionProgress;
 use quota_contracts::refs::AttemptRef;
 use quota_core::accounts::AccountRegistry;
+use quota_core::clock::SystemClock;
 use quota_core::ports::{AccountRepository, BackoffRepository};
 use quota_core::snapshots::SnapshotBuilder;
 use quota_domain::account::ConnectionState;
-use quota_domain::ids::{AccountId, ConnectionAttemptId, ConnectionId};
+use quota_domain::ids::{AccountId, ConnectionAttemptId};
 use quota_domain::polling::ProviderPollingPolicy;
-use quota_domain::provider::ProviderId;
 use quota_domain::snapshot::MonitoringState;
 use tokio::sync::{Semaphore, mpsc, watch};
+
+use connection::emit_connection_progress;
 
 mod connection;
 mod worker;
@@ -79,6 +82,26 @@ pub struct MonitoringRuntime {
     state: RuntimeState,
 }
 
+/// The owned handles the shared polling supervisor starts with.
+pub struct MonitoringStartup {
+    /// The Tauri handle the supervisor emits events through.
+    pub app: tauri::AppHandle,
+    /// The live account registry the supervisor reads and commits.
+    pub registry: Arc<tokio::sync::RwLock<AccountRegistry>>,
+    /// The snapshot builder the supervisor renders from.
+    pub snapshots: Arc<tokio::sync::Mutex<SnapshotBuilder>>,
+    /// Durable account and binding storage.
+    pub accounts: Arc<dyn AccountRepository>,
+    /// Durable backoff storage.
+    pub backoff: Arc<dyn BackoffRepository>,
+    /// The live monitoring switch the supervisor obeys.
+    pub monitoring: Arc<tokio::sync::RwLock<MonitoringState>>,
+    /// The live polling policies the supervisor enforces.
+    pub policies: Arc<tokio::sync::RwLock<Vec<ProviderPollingPolicy>>>,
+    /// The compiled provider adapters the supervisor reads through.
+    pub providers: Arc<quota_providers::ProviderRegistry>,
+}
+
 impl std::fmt::Debug for MonitoringRuntime {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("MonitoringRuntime")
@@ -91,27 +114,18 @@ impl std::fmt::Debug for MonitoringRuntime {
 impl MonitoringRuntime {
     /// Starts one supervised coordinator on Tauri's shared async runtime.
     #[must_use]
-    pub fn start(
-        app: tauri::AppHandle,
-        registry: Arc<tokio::sync::RwLock<AccountRegistry>>,
-        snapshots: Arc<tokio::sync::Mutex<SnapshotBuilder>>,
-        accounts: Arc<dyn AccountRepository>,
-        backoff: Arc<dyn BackoffRepository>,
-        monitoring: Arc<tokio::sync::RwLock<MonitoringState>>,
-        policies: Arc<tokio::sync::RwLock<Vec<ProviderPollingPolicy>>>,
-        providers: Arc<quota_providers::ProviderRegistry>,
-    ) -> Self {
+    pub fn start(startup: MonitoringStartup) -> Self {
         let (sender, receiver) = mpsc::channel(QUEUE_CAPACITY);
         let (shutdown, shutdown_receiver) = watch::channel(false);
         let state = RuntimeState {
-            app,
-            registry,
-            snapshots,
-            accounts,
-            backoff,
-            monitoring,
-            policies,
-            providers,
+            app: startup.app,
+            registry: startup.registry,
+            snapshots: startup.snapshots,
+            accounts: startup.accounts,
+            backoff: startup.backoff,
+            monitoring: startup.monitoring,
+            policies: startup.policies,
+            providers: startup.providers,
             clock: Arc::new(SystemClock),
             permits: Arc::new(Semaphore::new(MAX_REMOTE_READS)),
             pending: Arc::new(tokio::sync::Mutex::new(HashSet::new())),

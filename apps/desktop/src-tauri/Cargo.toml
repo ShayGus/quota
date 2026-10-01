@@ -20,6 +20,16 @@ path = "src/main.rs"
 [build-dependencies]
 tauri-build = { workspace = true }
 
+[features]
+# Loads the built renderer from `frontendDist` instead of the dev server URL.
+# This is how the app is started locally; it is not a default feature.
+custom-protocol = ["tauri/custom-protocol"]
+# Seeds ten deterministic sample accounts and keeps their database and
+# preference store under a `sample` subdirectory, so the overview can be
+# reviewed with no real credentials. This is how the sample is started
+# locally; it is not a default feature.
+sample-data = ["quota-providers/test-fixtures"]
+
 [dependencies]
 quota-contracts = { workspace = true }
 quota-core = { workspace = true }
@@ -28,12 +38,17 @@ quota-persistence = { workspace = true, features = ["tauri-plugins"] }
 quota-providers = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
 specta = { workspace = true, features = ["derive"] }
+specta-typescript = { workspace = true }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-positioner = { workspace = true, features = ["tray-icon"] }
 tauri-plugin-single-instance = { workspace = true }
+tauri-plugin-sql = { workspace = true }
+tauri-plugin-store = { workspace = true }
+tauri-plugin-window-state = { workspace = true }
 tauri-specta = { workspace = true, features = ["derive", "typescript"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }

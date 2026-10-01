@@ -1,10 +1,10 @@
-// Application-command permissions.
-//
-// Each command below is an allow-list entry. A command that is not named here
-// is denied to every window, regardless of what a capability file contains.
-// `xtask check-architecture` compares this list against the commands actually
-// registered in the Tauri Specta registry, so a new command cannot ship with
-// implicit all-window access.
+# Application-command permissions.
+#
+# Each command below is an allow-list entry. A command that is not named here
+# is denied to every window, regardless of what a capability file contains.
+# `xtask check-architecture` compares this list against the commands actually
+# registered in the Tauri Specta registry, so a new command cannot ship with
+# implicit all-window access.
 
 [default]
 description = "Commands the floating overview window may call."

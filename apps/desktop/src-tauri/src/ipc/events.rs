@@ -12,18 +12,20 @@ use quota_contracts::{
     PersistenceStatusChanged as PersistenceStatusChangedPayload,
     PreferencesChanged as PreferencesChangedPayload, SnapshotUpdated as SnapshotUpdatedPayload,
 };
+use serde::{Deserialize, Serialize};
+use specta::Type;
 use tauri_specta::Event;
 
 /// The primary quota and account update channel.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct SnapshotUpdated(pub SnapshotUpdatedPayload);
 
 /// Progress of one connection attempt.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct ConnectionProgressChanged(pub ConnectionProgressChangedPayload);
 
 /// Emitted after a preference save succeeds, never before.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct PreferencesChanged(pub PreferencesChangedPayload);
 
 /// Publishes a preference aggregate after every durable owner confirms its save.
@@ -37,28 +39,24 @@ pub fn publish_preferences(
         preference_revision: preferences.revision,
         preferences: preferences.clone(),
     });
-    if event.emit_to(app, "overview").is_err() {
-        tracing::warn!(
-            code = "overview_preferences_event_failed",
-            "preference event was not delivered"
-        );
-    }
-    if event.emit_to(app, "settings").is_err() {
-        tracing::warn!(
-            code = "settings_preferences_event_failed",
-            "preference event was not delivered"
-        );
+    emit_preferences(app, &event, "overview", "overview_preferences_event_failed");
+    emit_preferences(app, &event, "settings", "settings_preferences_event_failed");
+}
+
+fn emit_preferences(app: &tauri::AppHandle, event: &PreferencesChanged, label: &str, code: &str) {
+    if event.emit_to(app, label).is_err() {
+        tracing::warn!(code = code, "preference event was not delivered");
     }
 }
 
 /// Whether the supervisor is scheduling reads.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct MonitoringStateChanged(pub MonitoringStateChangedPayload);
 
 /// Confirmed native overview window state, or a typed native failure.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct OverviewWindowStateChanged(pub OverviewWindowStateChangedPayload);
 
 /// Durable storage availability.
-#[derive(Debug, Clone, tauri_specta::Event)]
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct PersistenceStatusChanged(pub PersistenceStatusChangedPayload);

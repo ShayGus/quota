@@ -1,14 +1,12 @@
 //! Shared refresh coordinator and supervised read workers.
 
-use std::time::Duration;
-
 use quota_contracts::events::SnapshotUpdated as SnapshotUpdatedPayload;
 use quota_core::clock::Clock;
 use quota_core::ports::ProviderError;
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::ids::ConnectionAttemptId;
 use quota_domain::polling::LimitScope;
-use quota_domain::snapshot::PersistenceStatus;
+use quota_domain::snapshot::{MonitoringState, PersistenceStatus};
 use tauri_specta::Event;
 use tokio::sync::{mpsc, watch};
 use tokio::task::JoinSet;
@@ -17,8 +15,8 @@ use tokio::time::{MissedTickBehavior, interval_at};
 use crate::ipc::events::SnapshotUpdated as SnapshotUpdatedEvent;
 
 use super::{
-    MAX_REMOTE_READS, MonitoringRuntime, PERIODIC_REFRESH, RefreshReason, RefreshRequest,
-    RuntimeState,
+    MAX_REMOTE_READS, MonitoringRuntime, PERIODIC_REFRESH, REMOTE_TIMEOUT, RefreshReason,
+    RefreshRequest, RuntimeState,
 };
 pub(super) async fn run_coordinator(
     runtime: MonitoringRuntime,
@@ -34,33 +32,19 @@ pub(super) async fn run_coordinator(
     loop {
         tokio::select! {
             changed = shutdown.changed() => {
-                if changed.is_err() || *shutdown.borrow() {
+                if shutdown_requested(&shutdown, changed.is_err()) {
                     break;
                 }
             }
             _ = timer.tick() => {
-                let _ = runtime.request_all(RefreshReason::Scheduled).await;
+                on_scheduled_tick(&runtime).await;
             }
             request = receiver.recv(), if workers.len() < MAX_REMOTE_READS => {
                 let Some(request) = request else { break; };
-                let state = runtime.state.clone();
-                let permits = state.permits.clone();
-                workers.spawn(async move {
-                    let permit = permits.acquire_owned().await;
-                    if let Ok(permit) = permit {
-                        let result = perform_read(&state, &request).await;
-                        drop(permit);
-                        if let Err(error) = result {
-                            tracing::warn!(target: "quota::scheduler", code = %error, "supervised read did not commit");
-                        }
-                    }
-                    state.pending.lock().await.remove(&request.account_id);
-                });
+                spawn_supervised_read(&mut workers, runtime.state.clone(), request);
             }
             Some(joined) = workers.join_next(), if !workers.is_empty() => {
-                if let Err(error) = joined {
-                    tracing::error!(target: "quota::scheduler", error = %error, "supervised worker task failed");
-                }
+                on_worker_joined(joined);
             }
         }
     }
@@ -69,9 +53,62 @@ pub(super) async fn run_coordinator(
     while workers.join_next().await.is_some() {}
 }
 
+/// Whether a shutdown watch outcome means the coordinator must stop.
+fn shutdown_requested(shutdown: &watch::Receiver<bool>, changed_failed: bool) -> bool {
+    changed_failed || *shutdown.borrow()
+}
+
+/// Queues every enabled account after a periodic tick fires.
+async fn on_scheduled_tick(runtime: &MonitoringRuntime) {
+    let _ = runtime.request_all(RefreshReason::Scheduled).await;
+}
+
+/// Spawns one supervised read under the global two-read budget.
+fn spawn_supervised_read(workers: &mut JoinSet<()>, state: RuntimeState, request: RefreshRequest) {
+    let permits = state.permits.clone();
+    workers.spawn(async move {
+        let permit = permits.acquire_owned().await;
+        if let Ok(permit) = permit {
+            let result = perform_read(&state, &request).await;
+            drop(permit);
+            if let Err(error) = result {
+                tracing::warn!(target: "quota::scheduler", code = %error, "supervised read did not commit");
+            }
+        }
+        state.pending.lock().await.remove(&request.account_id);
+    });
+}
+
+/// Logs a supervised worker that finished on its own.
+fn on_worker_joined(joined: Result<(), tokio::task::JoinError>) {
+    if let Err(error) = joined {
+        tracing::error!(target: "quota::scheduler", error = %error, "supervised worker task failed");
+    }
+}
+
 async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<(), String> {
-    if *state.monitoring.read().await == MonitoringState::Paused {
+    let Some(target) = resolve_read_target(state, request).await? else {
         return Ok(());
+    };
+    let read = fetch_reading(state, &target.entry, &target.adapter, &target.binding).await?;
+    commit_reading(state, request, &target, &read).await
+}
+
+/// The verified account, adapter, and backoff scope one supervised read needs.
+struct ReadTarget {
+    entry: quota_core::accounts::RegisteredAccount,
+    binding: quota_core::ports::ConnectionBinding,
+    adapter: std::sync::Arc<dyn quota_core::ports::ProviderAdapter>,
+    scope: LimitScope,
+}
+
+/// Resolves the account, adapter, and scope, or reports there is nothing to do.
+async fn resolve_read_target(
+    state: &RuntimeState,
+    request: &RefreshRequest,
+) -> Result<Option<ReadTarget>, String> {
+    if *state.monitoring.read().await == MonitoringState::Paused {
+        return Ok(None);
     }
     let entry = state
         .registry
@@ -81,7 +118,7 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
         .cloned()
         .ok_or_else(|| "account_removed".to_owned())?;
     if !entry.stored.monitoring_enabled {
-        return Ok(());
+        return Ok(None);
     }
     let binding = entry.binding.clone();
     let adapter = state
@@ -98,19 +135,34 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
         .map_err(|error| error.reason)?
         .is_some_and(|backoff| backoff.is_waiting_at(now))
     {
-        return Ok(());
+        return Ok(None);
     }
+    Ok(Some(ReadTarget {
+        entry,
+        binding,
+        adapter,
+        scope,
+    }))
+}
 
+/// Reads one binding with a timeout, recording a failure when none arrives.
+async fn fetch_reading(
+    state: &RuntimeState,
+    entry: &quota_core::accounts::RegisteredAccount,
+    adapter: &std::sync::Arc<dyn quota_core::ports::ProviderAdapter>,
+    binding: &quota_core::ports::ConnectionBinding,
+) -> Result<quota_core::ports::QuotaRead, String> {
+    let now = state.clock.now();
     let context = quota_core::ports::ReadContext {
         attempt_id: ConnectionAttemptId::generate(),
         deadline: Some(now + chrono::Duration::seconds(10)),
     };
     let response =
-        match tokio::time::timeout(REMOTE_TIMEOUT, adapter.read_quota(&binding, context)).await {
+        match tokio::time::timeout(REMOTE_TIMEOUT, adapter.read_quota(binding, context)).await {
             Err(_) => {
                 record_failure(
                     state,
-                    &entry,
+                    entry,
                     ProviderError::Transient {
                         detail: "request timeout".to_owned(),
                     },
@@ -120,7 +172,7 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
             }
             Ok(Err(error)) => {
                 let code = error.diagnostic_code().to_owned();
-                record_failure(state, &entry, error).await?;
+                record_failure(state, entry, error).await?;
                 return Err(code);
             }
             Ok(Ok(response)) => response,
@@ -128,11 +180,21 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
     let Some(read) = response.read() else {
         if let quota_core::ports::FetchOutcome::Failed(error) = response {
             let code = error.diagnostic_code().to_owned();
-            record_failure(state, &entry, error).await?;
+            record_failure(state, entry, error).await?;
             return Err(code);
         }
         return Err("provider_returned_no_reading".to_owned());
     };
+    Ok(read.clone())
+}
+
+/// Commits one reading after re-checking the connection generation.
+async fn commit_reading(
+    state: &RuntimeState,
+    request: &RefreshRequest,
+    target: &ReadTarget,
+    read: &quota_core::ports::QuotaRead,
+) -> Result<(), String> {
     let windows = read.windows.clone();
     let expected_missing = read.expected_but_missing.clone();
     let identity = read.identity.clone();
@@ -142,7 +204,7 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
         let live = registry
             .get(&request.account_id)
             .ok_or_else(|| "account_removed_before_commit".to_owned())?;
-        if !live.binding.accepts(&binding) {
+        if !live.binding.accepts(&target.binding) {
             return Err("stale_connection_generation".to_owned());
         }
         registry
@@ -174,7 +236,7 @@ async fn perform_read(state: &RuntimeState, request: &RefreshRequest) -> Result<
         .map_err(|error| error.reason)?;
     state
         .backoff
-        .clear_backoff(&scope)
+        .clear_backoff(&target.scope)
         .await
         .map_err(|error| error.reason)?;
     publish_snapshot(state).await
@@ -200,10 +262,10 @@ async fn record_failure(
         .iter()
         .find(|policy| policy.provider_id == entry.binding.provider_id)
         .cloned();
-    let delay = policy
-        .as_ref()
-        .map(|policy| policy.backoff_for_attempt(attempts))
-        .unwrap_or_else(|| chrono::Duration::minutes(5));
+    let delay = policy.as_ref().map_or_else(
+        || chrono::Duration::minutes(5),
+        |policy| policy.backoff_for_attempt(attempts),
+    );
     let provider_retry_after = match &error {
         ProviderError::RateLimited { retry_after } => *retry_after,
         _ => None,

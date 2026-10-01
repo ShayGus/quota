@@ -3,5 +3,8 @@
 #![forbid(unsafe_code)]
 
 fn main() {
-    quota_desktop_lib::run();
+    if let Err(error) = quota_desktop_lib::run() {
+        eprintln!("quota failed to start: {error}");
+        std::process::exit(1);
+    }
 }

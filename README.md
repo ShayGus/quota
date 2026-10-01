@@ -22,16 +22,76 @@ snapshots. SQLite stores account, history, backoff, monitoring, notification,
 operational privacy, and polling state. The Tauri Store plugin stores
 presentation settings.
 
-The React renderer and Tauri host are present. The source includes the tray menu,
-window controls, and settings route. The native host has not compiled or run on
-this WSL machine. The local image lacks `libdbus-1-dev`, WebKitGTK development
-files, and `pkg-config`. CI installs these packages and runs the first host build.
+The React renderer and Tauri host are present. The host compiles, lints, tests,
+and launches on this WSL machine. The Tauri system libraries were installed on
+2026-10-01. The app opens a window through WSLg; software rendering is used, so
+the window is correct but not GPU-accelerated.
 
 Windows installers, the 72-hour ten-account soak, macOS, and Linux packaging
 remain unverified.
 
 `docs/acceptance.md` maps the specified acceptance cases to a layer and records
 the remaining checks.
+
+## Run the app
+
+One command builds the renderer and opens the desktop window:
+
+```bash
+cargo xtask dev
+```
+
+It prints every command it runs before running it. Under the hood it is:
+
+```bash
+pnpm --dir apps/desktop build
+cargo run -p quota-desktop --features custom-protocol
+```
+
+`--features custom-protocol` makes the window load the built files in
+`apps/desktop/dist` instead of the dev-server URL in `tauri.conf.json`, so no
+vite server has to be running. Close the window, or press Ctrl-C, to stop it.
+
+With no accounts connected the overview shows its empty state. To read your real
+local logins, start the app the same way and add an account from the settings
+window. Quota reads the credential files the owning CLI already wrote, and never
+writes, refreshes, or deletes them:
+
+| Provider    | File it reads                                                               | Owner       |
+| ----------- | --------------------------------------------------------------------------- | ----------- |
+| Codex       | `~/.codex/auth.json`, or `$CODEX_HOME/auth.json`                            | Codex CLI   |
+| Claude      | `~/.claude/.credentials.json`, or `$CLAUDE_CONFIG_DIR/.credentials.json`    | Claude Code |
+| OpenCode Go | `~/.local/share/opencode/auth.json`, or `$XDG_DATA_HOME/opencode/auth.json` | OpenCode    |
+
+Expect one account row per verified principal, each row carrying every quota
+window that provider reported, with a countdown to the next reset. If the file is
+missing, the provider reads as not connected and the app still starts. Codex and
+Claude do not report an account identity in their usage response, so Quota reads
+the identity from the credential file; OpenCode Go reports none at all, so its
+row is labelled by credential profile and is known-unverified.
+
+The tray icon is the launcher. A left click shows the overview or raises it if it
+is already open, the menu opens settings, refreshes, pauses monitoring, or quits,
+and closing the window hides it rather than stopping the monitor.
+
+## Sample data
+
+The `sample-data` feature starts the app with ten fictional accounts and no real
+credentials, so the full overview can be reviewed anywhere:
+
+```bash
+cargo run -p quota-desktop --features custom-protocol,sample-data
+```
+
+Each account reads from the deterministic local fixture adapter and carries a
+fixed percentage per window, so the ten rows are stable between runs and need no
+network. The feature is not a default. A build without it compiles no fixture
+code and reads only the three real providers above.
+
+Sample mode keeps its state away from the real one. The database, the preference
+store, and the saved window geometry go under a `sample` child of the app config
+directory, which is `~/.config/app.quota.monitor/sample/` on Linux. A normal
+build never touches that directory and a sample build never touches its sibling.
 
 ## Developer setup from a clean checkout
 
@@ -72,16 +132,16 @@ and how it was verified.
 
 Run every check from the repository root.
 
-| Command | What it checks |
-|---|---|
-| `cargo fmt --all -- --check` | Formatting |
-| `cargo clippy --workspace --all-targets --locked -- -D warnings` | Lint policy; warning-level findings fail |
-| `cargo test --workspace --locked` | Unit and integration tests |
-| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Documentation links and missing docs |
-| `cargo xtask check-architecture` | Workspace inheritance, forbidden dependency edges, file size, raw IPC calls, duplicated IPC models, provider feature defaults |
-| `cargo xtask check-release` | Release feature set, licence allow list, workflow action pins, Tauri devtools and content security policy |
-| `cargo xtask bindings --check` | `apps/desktop/src/generated/bindings.ts` against the Rust IPC layer |
-| `cargo deny check advisories licenses sources` | Advisories, licence allow list, allowed sources |
+| Command                                                               | What it checks                                                                                                                |
+| --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `cargo fmt --all -- --check`                                          | Formatting                                                                                                                    |
+| `cargo clippy --workspace --all-targets --locked -- -D warnings`      | Lint policy; warning-level findings fail                                                                                      |
+| `cargo test --workspace --locked`                                     | Unit and integration tests                                                                                                    |
+| `RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked` | Documentation links and missing docs                                                                                          |
+| `cargo xtask check-architecture`                                      | Workspace inheritance, forbidden dependency edges, file size, raw IPC calls, duplicated IPC models, provider feature defaults |
+| `cargo xtask check-release`                                           | Release feature set, licence allow list, workflow action pins, Tauri devtools and content security policy                     |
+| `cargo xtask bindings --check`                                        | `apps/desktop/src/generated/bindings.ts` against the Rust IPC layer                                                           |
+| `cargo deny check advisories licenses sources`                        | Advisories, licence allow list, allowed sources                                                                               |
 
 The frontend checks run in `apps/desktop`:
 

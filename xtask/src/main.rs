@@ -1,7 +1,7 @@
 //! Repository automation. Run through `cargo xtask <command>`.
-//!
-//! Subcommands are static gates: they read files and print violations. None of
-//! them compiles another crate or contacts the network.
+//! Subcommands are static gates that read files and print violations, with one
+//! exception: `dev` builds the renderer and runs the desktop host, because
+//! seeing the app is the point of that command.
 
 #![forbid(unsafe_code)]
 
@@ -9,6 +9,7 @@ mod bindings;
 mod cargo_manifest;
 mod check_architecture;
 mod check_release;
+mod dev;
 mod outcome;
 mod scan;
 mod toml;
@@ -41,6 +42,7 @@ fn run(arguments: &[String]) -> u8 {
         }
     };
     match command {
+        Some("dev") => dev::run(&root),
         Some("check-architecture") => gate("check-architecture", &check_architecture::run(&root)),
         Some("check-release") => gate("check-release", &check_release::run(&root)),
         Some("bindings") => {
@@ -98,6 +100,7 @@ fn usage() {
 usage: cargo xtask <command>
 
 commands:
+  dev                   build the renderer and start the desktop app window.
   check-architecture   fail when a package, dependency, file size, raw IPC call,
                        duplicated IPC model, or provider feature violates policy.
   check-release        fail when the release surface is not audited: test
@@ -112,11 +115,10 @@ Options:
   --root <path>        read the tree at <path> instead of this repository. The
                        gates use it for their own tests.
 
-The bindings check does not run tauri-specta. tauri-specta needs webkit2gtk and
-pkg-config, which this build machine does not have, so it cannot be compiled
-here. The check instead reads the #[tauri::command] function names and the
-event struct names under apps/desktop/src-tauri/src/ipc and compares them with
-bindings.ts in both directions. CI runs the same command. docs/exceptions.md
-records this deviation."
+The bindings check reads the source instead of compiling it, because compiling
+tauri-specta would make the gate as slow as a full build. It reads the
+#[tauri::command] function names and the event struct names under
+apps/desktop/src-tauri/src/ipc and compares them with bindings.ts in both
+directions. CI runs the same command. docs/exceptions.md records this deviation."
     );
 }

@@ -7,6 +7,7 @@ use quota_contracts::CommandError;
 use quota_contracts::RegisteredProvider;
 use quota_contracts::commands::{AccountSelection, RefreshReason, SnapshotResponse};
 use quota_contracts::refs::AccountRef;
+use quota_core::clock::Clock;
 use quota_domain::account::FetchState;
 use quota_domain::ids::AccountId;
 use quota_domain::provider::ProviderId;
@@ -40,6 +41,7 @@ pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse
 /// Lists every provider this build knows about, including unavailable adapters.
 #[tauri::command]
 #[specta::specta]
+#[must_use]
 pub fn list_provider_capabilities() -> Vec<RegisteredProvider> {
     ProviderId::ALL
         .into_iter()

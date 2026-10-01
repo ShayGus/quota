@@ -31,9 +31,8 @@ pub fn activation_for(
         return TrayActivation::Show;
     }
     match mode {
-        OverviewMode::Floating => TrayActivation::Raise,
         OverviewMode::Tray if click_is_repeated => TrayActivation::Dismiss,
-        OverviewMode::Tray => TrayActivation::Raise,
+        OverviewMode::Floating | OverviewMode::Tray => TrayActivation::Raise,
     }
 }
 
@@ -97,12 +96,13 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
 
 fn tray_image() -> tauri::image::Image<'static> {
     const SIZE: usize = 24;
+    let side = u32::try_from(SIZE).unwrap_or(0);
     let mut rgba = vec![0; SIZE * SIZE * 4];
     for y in 0..SIZE {
         for x in 0..SIZE {
             let index = (y * SIZE + x) * 4;
-            let dx = x as i32 - 12;
-            let dy = y as i32 - 12;
+            let dx = i32::try_from(x).unwrap_or(0) - 12;
+            let dy = i32::try_from(y).unwrap_or(0) - 12;
             if dx * dx + dy * dy <= 121 {
                 let bar = (5..=7).contains(&x) && (10..=17).contains(&y)
                     || (10..=12).contains(&x) && (7..=17).contains(&y)
@@ -115,7 +115,7 @@ fn tray_image() -> tauri::image::Image<'static> {
             }
         }
     }
-    tauri::image::Image::new_owned(rgba, SIZE as u32, SIZE as u32)
+    tauri::image::Image::new_owned(rgba, side, side)
 }
 
 fn activate_from_tray(app: &AppHandle, repeated: bool) {
@@ -148,16 +148,17 @@ fn activate_from_tray(app: &AppHandle, repeated: bool) {
 }
 
 fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
-    match event.id.as_ref() {
+    let id = event.id;
+    match id.as_ref() {
         "open" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                if let Ok(visible) = window::set_visible(&app, "overview", true, true) {
-                    if let Some(state) = app.try_state::<crate::state::AppState>() {
-                        let state = state.inner().clone();
-                        let confirmed = state.window.lock().await.set_visible(visible);
-                        window::publish_state(&app, &state.app_instance_id, confirmed);
-                    }
+                if let Ok(visible) = window::set_visible(&app, "overview", true, true)
+                    && let Some(state) = app.try_state::<crate::state::AppState>()
+                {
+                    let state = state.inner().clone();
+                    let confirmed = state.window.lock().await.set_visible(visible);
+                    window::publish_state(&app, &state.app_instance_id, confirmed);
                 }
             });
         }
@@ -167,20 +168,19 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         "refresh" => {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
-                if let Some(state) = app.try_state::<crate::state::AppState>() {
-                    if let Err(error) = state
+                if let Some(state) = app.try_state::<crate::state::AppState>()
+                    && let Err(error) = state
                         .monitor
                         .request_all(crate::monitoring::RefreshReason::UserRequested)
                         .await
-                    {
-                        tracing::warn!(code = error.diagnostic_code(), "tray refresh was refused");
-                    }
+                {
+                    tracing::warn!(code = error.diagnostic_code(), "tray refresh was refused");
                 }
             });
         }
         "pause" | "resume" => {
             let app = app.clone();
-            let paused = event.id.as_ref() == "pause";
+            let paused = id.as_ref() == "pause";
             tauri::async_runtime::spawn(async move {
                 if let Err(error) =
                     crate::ipc::commands::set_monitoring_state(app.state(), paused).await

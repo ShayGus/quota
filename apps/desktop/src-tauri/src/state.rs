@@ -87,19 +87,21 @@ impl AppState {
         let monitoring_state = Arc::new(tokio::sync::RwLock::new(monitoring_state));
         let preferences_state = Arc::new(tokio::sync::RwLock::new(initial_preferences));
         let preferences_write = Arc::new(tokio::sync::Mutex::new(()));
-        let monitor = MonitoringRuntime::start(
-            app.clone(),
-            registry.clone(),
-            snapshots.clone(),
-            accounts.clone(),
-            backoff.clone(),
-            monitoring_state.clone(),
-            policies.clone(),
+        let policies = Arc::new(tokio::sync::RwLock::new(policies));
+        let monitor = MonitoringRuntime::start(crate::monitoring::MonitoringStartup {
+            app: app.clone(),
+            registry: registry.clone(),
+            snapshots: snapshots.clone(),
+            accounts: accounts.clone(),
+            backoff: backoff.clone(),
+            monitoring: monitoring_state.clone(),
+            policies: policies.clone(),
             providers,
-        );
+        });
         Self {
             app,
             app_instance_id,
+            registry,
             snapshots,
             clock: Arc::new(SystemClock),
             window: Arc::new(tokio::sync::Mutex::new(OverviewWindowController::new())),

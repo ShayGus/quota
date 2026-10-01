@@ -93,7 +93,8 @@ pub async fn set_overview_always_on_top(
 pub async fn fit_overview_to_accounts(
     state: State<'_, AppState>,
 ) -> Result<WindowStateResponse, CommandError> {
-    let account_count = state.registry.read().await.len();
+    let account_count = u32::try_from(state.registry.read().await.len())
+        .map_err(|_| window::failed("read_account_count"))?;
     if account_count == 0 {
         return Err(CommandError::ValidationFailed {
             field: "accounts".into(),
@@ -110,10 +111,10 @@ pub async fn fit_overview_to_accounts(
         .ok_or_else(|| window::failed("find_display"))?;
     let area = monitor.work_area();
     let scale = monitor.scale_factor();
-    let max_width = (area.size.width as f64 / scale).floor();
-    let max_height = (area.size.height as f64 / scale).floor();
+    let max_width = (f64::from(area.size.width) / scale).floor();
+    let max_height = (f64::from(area.size.height) / scale).floor();
     let width = 810.0_f64.min(max_width).max(1.0);
-    let height = (280.0 + account_count as f64 * 68.0)
+    let height = (280.0 + f64::from(account_count) * 68.0)
         .min(max_height)
         .max(1.0);
     native
@@ -121,8 +122,8 @@ pub async fn fit_overview_to_accounts(
         .map_err(|_| window::failed("fit_window_size"))?;
     native
         .set_position(PhysicalPosition::new(
-            area.position.x + ((area.size.width as f64 - width * scale) / 2.0) as i32,
-            area.position.y + ((area.size.height as f64 - height * scale) / 2.0) as i32,
+            f64::from(area.position.x) + (f64::from(area.size.width) - width * scale) / 2.0,
+            f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
         ))
         .map_err(|_| window::failed("center_fitted_window"))?;
     let visible = window::set_visible(&state.app, "overview", true, true)?;
@@ -152,8 +153,8 @@ pub async fn reset_overview_position(
         .map_err(|_| window::failed("read_window_size"))?;
     native
         .set_position(PhysicalPosition::new(
-            area.position.x + (area.size.width.saturating_sub(size.width) / 2) as i32,
-            area.position.y + (area.size.height.saturating_sub(size.height) / 2) as i32,
+            area.position.x + (area.size.width.saturating_sub(size.width) / 2).cast_signed(),
+            area.position.y + (area.size.height.saturating_sub(size.height) / 2).cast_signed(),
         ))
         .map_err(|_| window::failed("reset_window_position"))?;
     native
@@ -197,14 +198,14 @@ pub async fn activate_overview(
 /// address. An unknown provider is refused rather than guessed.
 #[tauri::command]
 #[specta::specta]
-pub fn open_provider_usage_page(
-    app: tauri::AppHandle,
+pub async fn open_provider_usage_page(
+    state: State<'_, AppState>,
     provider_id: ProviderId,
 ) -> Result<(), CommandError> {
     let Some(url) = crate::bootstrap_helpers::usage_page_of(provider_id) else {
         return Err(CommandError::UnsupportedProvider { provider_id });
     };
-    crate::bootstrap_helpers::open_external(&app, url)
+    crate::bootstrap_helpers::open_external(&state.app, url)
 }
 
 fn window_state_response(state: WindowModelState) -> WindowStateResponse {

@@ -6,7 +6,7 @@
 //! `capabilities/` meaningful; without it a narrow capability file alone does
 //! not restrict a custom command.
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = tauri_build::AppManifest::new().commands(&[
         "get_snapshot",
         "list_provider_capabilities",
@@ -29,5 +29,6 @@ fn main() {
         "clear_local_history",
         "export_sanitized_diagnostics",
     ]);
-    tauri_build::try_build(manifest).expect("the Tauri application manifest must be valid");
+    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))?;
+    Ok(())
 }

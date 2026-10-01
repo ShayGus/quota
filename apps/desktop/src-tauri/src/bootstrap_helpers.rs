@@ -120,7 +120,7 @@ pub async fn write_diagnostics(
         "schema_version": 1,
         "account_count": state.registry.read().await.len(),
         "providers": policies.iter().map(|policy| policy.provider_id).collect::<Vec<_>>(),
-        "polling": policies,
+        "polling": &*policies,
     });
     drop(policies);
 

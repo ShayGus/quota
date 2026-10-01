@@ -34,7 +34,7 @@ when one appears.
 
 ## Build status
 
-This package does not compile on the machine that produced the scaffold: Tauri on Linux
-needs the WebKitGTK development packages and `pkg-config`, and neither is present, and no
-package manager access is available. CI compiles it on a runner that installs them. See
-`docs/exceptions.md`.
+This package compiles on this machine. The `WebKitGTK` development packages and
+`pkg-config` were installed on 2026-10-01, and the crate now builds, lints, and tests
+locally. CI still compiles it on a clean runner, which is what proves the declared package
+set is complete. See `docs/exceptions.md`.

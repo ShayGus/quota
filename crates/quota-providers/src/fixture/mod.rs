@@ -10,6 +10,8 @@
 
 pub(crate) mod windows;
 
+#[cfg(feature = "test-fixtures")]
+pub use windows::seed_sample_accounts;
 pub use windows::{fixture_binding, fixture_context};
 
 use std::sync::Arc;
@@ -27,6 +29,10 @@ use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use windows::{identity, windows};
 
 /// The fixture profiles, one per account shape the tests need.
+///
+/// The first five cover the isolated reading shapes a test drives directly. The
+/// last five give the `sample-data` desktop build ten distinguishable accounts,
+/// with the roles and the window spread of the review wireframe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FixtureProfile {
     /// A healthy account with every window reported.
@@ -39,16 +45,31 @@ pub enum FixtureProfile {
     NativeUnitsOnly,
     /// An account whose session allowance has no ceiling.
     Unlimited,
+    /// A lightly used account, with a session and a weekly window.
+    Personal,
+    /// An account whose session is almost gone, with a weekly window.
+    Work,
+    /// A barely used account, with a session and a weekly window.
+    Experiments,
+    /// An account with a session, a weekly, and an exhausted monthly window.
+    ClientProject,
+    /// An account with all three windows nearly untouched.
+    Studio,
 }
 
 impl FixtureProfile {
     /// Every profile, in a stable order.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 10] = [
         Self::Healthy,
         Self::MonthlyExhausted,
         Self::StaleBoundary,
         Self::NativeUnitsOnly,
         Self::Unlimited,
+        Self::Personal,
+        Self::Work,
+        Self::Experiments,
+        Self::ClientProject,
+        Self::Studio,
     ];
 
     /// The stable key used in the account identity and the binding label.
@@ -60,6 +81,11 @@ impl FixtureProfile {
             Self::StaleBoundary => "stale-boundary",
             Self::NativeUnitsOnly => "native-units",
             Self::Unlimited => "unlimited",
+            Self::Personal => "personal",
+            Self::Work => "work",
+            Self::Experiments => "experiments",
+            Self::ClientProject => "client-project",
+            Self::Studio => "studio",
         }
     }
 
@@ -78,6 +104,11 @@ impl FixtureProfile {
             Self::StaleBoundary => "Fixture stale boundary",
             Self::NativeUnitsOnly => "Fixture native units",
             Self::Unlimited => "Fixture unlimited",
+            Self::Personal => "Personal",
+            Self::Work => "Work",
+            Self::Experiments => "Experiments",
+            Self::ClientProject => "Client project",
+            Self::Studio => "Studio",
         }
     }
 
