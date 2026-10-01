@@ -20,6 +20,11 @@ export function lowestWindow(account: AccountSnapshot): QuotaWindow | null {
   let lowest: QuotaWindow | null = null;
   let lowestValue = Number.POSITIVE_INFINITY;
   for (const window of account.windows) {
+    // An extra-spend cap is a ceiling on spending beyond the plan, not an
+    // allowance, so it never decides how close to exhaustion an account is.
+    if (window.metric_role !== "included_allowance") {
+      continue;
+    }
     const percent = remainingPercent(window.measurement);
     if (percent !== null && percent < lowestValue) {
       lowest = window;

@@ -1,13 +1,14 @@
 /**
- * Theme resolution.
+ * Theme, motion, and density resolution.
  *
- * The chosen theme is a confirmed preference. `system` follows the operating
- * system and must react when that changes, so a media-query listener is owned
- * by an Effect with a matching cleanup (spec 7.8.3).
+ * Each is a confirmed preference. `system` follows the operating system and must
+ * react when that changes, so the media query is read through a subscription
+ * rather than captured once: a cached value left Follow system showing the wrong
+ * scheme after the system changed while the listener was detached.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 
-import type { Theme } from "../generated/bindings";
+import type { Density, Theme } from "../generated/bindings";
 import type { RendererState } from "../shared/state/types";
 
 /** The colour scheme actually painted. */
@@ -31,6 +32,11 @@ export function chosenTheme(state: RendererState): Theme {
   return state.preferences?.theme ?? "system";
 }
 
+/** The row density the current state confirms. */
+export function chosenDensity(state: RendererState): Density {
+  return state.preferences?.density ?? "compact";
+}
+
 /** Applies a resolved theme to the document element. */
 export function applyTheme(theme: ResolvedTheme): void {
   document.documentElement.dataset["theme"] = theme;
@@ -39,23 +45,24 @@ export function applyTheme(theme: ResolvedTheme): void {
 /** Reads the theme the current state resolves to, following the system setting. */
 export function useTheme(state: RendererState): ResolvedTheme {
   const chosen = chosenTheme(state);
-  const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark());
-  useEffect(() => {
-    if (chosen !== "system") {
-      return;
-    }
-    const query = window.matchMedia("(prefers-color-scheme: dark)");
-    const onChange = (event: MediaQueryListEvent): void => {
-      setPrefersDark(event.matches);
-    };
-    query.addEventListener("change", onChange);
-    return () => {
-      query.removeEventListener("change", onChange);
-    };
-  }, [chosen]);
+  const prefersDark = useSyncExternalStore(subscribeSystemTheme, systemPrefersDark);
   const resolved = resolveTheme(chosen, prefersDark);
+  // Both are confirmed preferences, so both are applied at the document rather
+  // than left to the operating system or to fixed row geometry.
+  const reduceMotion = state.preferences?.reduce_motion ?? false;
+  const density = chosenDensity(state);
   useEffect(() => {
     applyTheme(resolved);
-  }, [resolved]);
+    document.documentElement.dataset["reduceMotion"] = String(reduceMotion);
+    document.documentElement.dataset["density"] = density;
+  }, [resolved, reduceMotion, density]);
   return resolved;
+}
+
+function subscribeSystemTheme(onChange: () => void): () => void {
+  const query = window.matchMedia("(prefers-color-scheme: dark)");
+  query.addEventListener("change", onChange);
+  return () => {
+    query.removeEventListener("change", onChange);
+  };
 }

@@ -7,13 +7,12 @@
  */
 import { useId, type JSX } from "react";
 
-import type { IndicatorStyle } from "../../generated/bindings";
 import { Icon } from "../../shared/ui/Icon";
 
 /** Which accounts the list shows. */
 export type OverviewFilter = "all" | "attention";
 
-/** The filter and search controls, plus the indicator-style switch. */
+/** The filter and search controls. */
 export function OverviewToolbar({
   filter,
   onFilter,
@@ -21,8 +20,6 @@ export function OverviewToolbar({
   onSearch,
   attentionCount,
   allCount,
-  style,
-  onStyle,
   orderUpdatePending,
   onApplyOrder,
 }: {
@@ -32,8 +29,6 @@ export function OverviewToolbar({
   readonly onSearch: (search: string) => void;
   readonly attentionCount: number;
   readonly allCount: number;
-  readonly style: IndicatorStyle;
-  readonly onStyle: (style: IndicatorStyle) => void;
   /** Whether a newer order is waiting for a safe idle point. */
   readonly orderUpdatePending: boolean;
   readonly onApplyOrder: () => void;
@@ -83,26 +78,6 @@ export function OverviewToolbar({
               Update order
             </button>
           ) : null}
-          <div className="segmented" role="group" aria-label="Allowance indicators">
-            <button
-              type="button"
-              aria-pressed={style === "ring"}
-              onClick={() => {
-                onStyle("ring");
-              }}
-            >
-              Rings
-            </button>
-            <button
-              type="button"
-              aria-pressed={style === "bar"}
-              onClick={() => {
-                onStyle("bar");
-              }}
-            >
-              Bars
-            </button>
-          </div>
         </div>
       </div>
       <div className="search-line">

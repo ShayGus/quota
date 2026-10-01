@@ -16,7 +16,7 @@ import type {
 import { formatRemaining } from "../../shared/format/allowance";
 import { formatAge, instantOf } from "../../shared/format/duration";
 import { Icon } from "../../shared/ui/Icon";
-import { COLUMNS, QuotaCell, columnLabel, windowFor } from "./QuotaCell";
+import { COLUMNS, QuotaCell, columnLabel, windowsFor, type Column } from "./QuotaCell";
 import { statusOf } from "./status";
 
 /** The provider marks from the wireframe. Text only; no provider artwork is bundled. */
@@ -44,11 +44,12 @@ export function AccountRow({
   const status = statusOf(account);
   const lastSuccess = instantOf(account.last_success_at);
   const age = lastSuccess === null ? "No accepted reading" : formatAge(lastSuccess, now);
+  // Anything the standard columns do not show, including every extra-spend cap:
+  // a cap is reported as itself rather than as the monthly allowance.
   const extra = account.windows.filter(
     (window) =>
-      window.category !== "session" &&
-      window.category !== "weekly" &&
-      window.category !== "monthly",
+      !COLUMNS.includes(window.category as Column) ||
+      window.metric_role !== "included_allowance",
   );
   const workspace = account.identity?.workspace_label;
   return (
@@ -80,17 +81,24 @@ export function AccountRow({
           </span>
         </span>
       </button>
-      {COLUMNS.map((column) => (
-        <QuotaCell
-          key={column}
-          account={account}
-          column={column}
-          window={windowFor(account, column)}
-          style={style}
-          now={now}
-          onOpen={onOpen}
-        />
-      ))}
+      {COLUMNS.map((column) => {
+        const windows = windowsFor(account, column);
+        return (
+          <div key={column} className="quota-column">
+            {(windows.length === 0 ? [null] : windows).map((window) => (
+              <QuotaCell
+                key={window?.id ?? column}
+                account={account}
+                column={column}
+                window={window}
+                style={style}
+                now={now}
+                onOpen={onOpen}
+              />
+            ))}
+          </div>
+        );
+      })}
       <div className="row-state">
         <span className={`badge badge--${status.tone}`}>
           <Icon name={status.icon} size={11} />

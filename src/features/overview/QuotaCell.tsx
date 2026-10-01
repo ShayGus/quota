@@ -49,6 +49,23 @@ export function windowFor(account: AccountSnapshot, column: Column): QuotaWindow
   return account.windows.find((window) => window.category === column) ?? null;
 }
 
+/**
+ * Every window that belongs in one column.
+ *
+ * A category can carry more than one allowance: a Claude plan may report a
+ * weekly allowance and a separate weekly allowance for one model. Taking only
+ * the first hides the one that controls exhaustion, so all of them are returned
+ * and the caller renders each.
+ */
+export function windowsFor(
+  account: AccountSnapshot,
+  column: Column,
+): readonly QuotaWindow[] {
+  return account.windows.filter(
+    (window) => window.category === column && window.metric_role === "included_allowance",
+  );
+}
+
 /** The words under one ring, from what the reading actually is. */
 function captionOf(window: QuotaWindow, state: ReadingState): string {
   if (hasReading(window.measurement)) {

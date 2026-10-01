@@ -105,6 +105,17 @@
   min-height: 54px;
 }
 
+/* Comfortable rows give larger targets and more spacing, which is what the
+   confirmed density preference asks for; compact stays the default. */
+[data-density="comfortable"] .account-row {
+  min-height: 74px;
+  padding: 12px 12px;
+}
+
+[data-density="comfortable"] .quota-column {
+  gap: 12px;
+}
+
 .account-row:first-of-type {
   border-radius: 9px 9px 0 0;
 }

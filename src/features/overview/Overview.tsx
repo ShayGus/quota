@@ -51,7 +51,9 @@ export function Overview({
 }): JSX.Element {
   const [filter, setFilter] = useState<OverviewFilter>("all");
   const [search, setSearch] = useState("");
-  const [style, setStyle] = useState<IndicatorStyle>("ring");
+  // The indicator style is a confirmed preference, so the overview reads it
+  // rather than keeping an unsaved local copy that never reaches the host.
+  const style: IndicatorStyle = state.preferences?.indicator_style ?? "ring";
   const listRef = useRef<HTMLDivElement | null>(null);
   const now = useNow();
 
@@ -134,8 +136,6 @@ export function Overview({
         onSearch={setSearch}
         attentionCount={attentionCount}
         allCount={placements.length}
-        style={style}
-        onStyle={setStyle}
         orderUpdatePending={pending}
         onApplyOrder={applyPendingOrder}
       />
