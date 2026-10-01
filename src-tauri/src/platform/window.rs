@@ -18,8 +18,8 @@ use quota_domain::preferences::OverviewMode;
 ///
 /// `StateFlags::VISIBLE` is deliberately absent. The plugin shows every window
 /// it holds no saved state for, and re-shows any window that was visible when
-/// the app last exited, so keeping the flag opens the settings window beside
-/// the overview on every launch. Visibility belongs to the host: the setup hook
+/// the app last exited, so keeping the flag can open the settings window beside
+/// the overview at launch. Visibility belongs to the host: the setup hook
 /// shows the overview, and the overview control or the tray menu shows the
 /// settings window.
 ///
