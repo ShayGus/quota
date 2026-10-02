@@ -74,5 +74,10 @@ are data (which accounts exist and their values) and the text listed above. Nati
 behaviour was driven with real input: the pinned header drags the window, unpinning
 anchors the popover above the taskbar, Escape steps back and then hides, settings Details
 and Add account open the popover, and the tray's icon, tooltip, and menu were read from
-Windows. The popover's height follows its content up to 760 pixels, as the wireframe's
-does.
+Windows. Each tray menu item was chosen: Settings opens settings, Show App restores the
+popover, and Exit ends the process. A left click on the icon opens the app and a second
+click keeps it open. The popover's ×, Alt+F4, and the settings window's × hide to the tray
+while the process keeps running. A second launch keeps one process and brings the app
+forward, and a `--autostart` launch stays hidden. Launch at login wrote the `Quota` entry
+in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and removed it again. The
+popover's height follows its content up to 760 pixels, as the wireframe's does.

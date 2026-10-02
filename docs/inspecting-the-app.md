@@ -213,6 +213,29 @@ ids in reverse order and repeat; neither requested interface should change.
 `max_width` above the window width — 1400 for both windows — to get the image at its real
 size.
 
+## On Windows
+
+`bun run inspect` works on Windows, with one connection problem. Verified on a Windows 11
+development build on 2 October 2026.
+
+- **The pipe name does not match.** The plugin names its named pipe after the full socket
+  path, `\\.\pipe\C:\Users\<you>\AppData\Local\Temp\tauri-mcp.sock`, and writes the token
+  beside it as `%TEMP%\tauri-mcp.sock.token`. `tauri-mcp-server` 0.3.1 always connects to
+  `\\.\pipe\tmp\tauri-mcp.sock` on Windows and ignores `TAURI_MCP_IPC_PATH`, so
+  `bun x tauri-mcp-server` cannot connect as shipped. The verification used a copy of the
+  server, outside the repository, whose `getEffectiveIpcPath` returns the plugin's real
+  pipe name, with the token passed in `TAURI_MCP_AUTH_TOKEN`. Nothing in this repository
+  depends on that copy.
+- **Settings has no DOM tools,** by design (see
+  [What an agent gets](#what-an-agent-gets)). To inspect its layout, load
+  `#/settings/<section>` in the overview webview at the settings size (780 × 600), then
+  return the overview to `/`. The same components render; only the window's command
+  permissions differ. Native screenshots of the real settings window still work.
+- **The tray is outside the webview.** Windows UI Automation exposes the tray icon as a
+  `NotifyItemIcon` whose name is its tooltip. The tray's popup menu is owner-drawn, so its
+  items are read from a screen capture of the `#32768` menu window rather than from UI
+  Automation.
+
 ## Native libraries a Linux debug build needs
 
 The plugin's screenshot stack needs three native development dependencies that are not in

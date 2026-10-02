@@ -4,8 +4,9 @@ The Tauri desktop host for Quota.
 
 This package is an outer composition layer. It maps domain results onto the typed IPC
 contracts in `quota-contracts`, mounts the Tauri Specta registry, and owns the native
-window and tray adapters and registers the notification plugin. It holds no quota rules of
-its own; every rule lives in `quota-domain` or `quota-core`.
+window, tray, and login-item adapters, and registers the notification, single-instance,
+and autostart plugins. It holds no quota rules of its own; every rule lives in
+`quota-domain` or `quota-core`.
 
 ## Layout
 
@@ -18,7 +19,15 @@ its own; every rule lives in `quota-domain` or `quota-core`.
 | `src/ipc/commands.rs` | Thin `#[tauri::command]` handlers.                                   |
 | `src/ipc/events.rs`   | `tauri_specta::Event` wrappers and the typed emit path.              |
 | `src/ipc/bindings.rs` | The one registry used both to mount handlers and to export bindings. |
-| `src/platform/`       | Tray and overview window adapters.                                   |
+| `src/platform/`       | Tray, popover window, and launch-at-login (`autostart.rs`) adapters. |
+
+## Lifecycle
+
+Quota runs as one instance: a second launch brings the running popover forward. Closing a
+window hides it; the tray icon stays, a left click opens the app, and its menu offers
+Settings, Show App, and Exit. Only Exit ends the process. Launch at login registers a
+login item with an `--autostart` argument, so a launch at sign-in starts quietly in the
+tray and a login launch that finds Quota already running changes nothing.
 
 ## Security model
 
