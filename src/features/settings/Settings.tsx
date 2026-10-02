@@ -99,6 +99,9 @@ export function Settings({
       window.location.hash = `#/settings/${next}`;
     }
   }, []);
+  const showAccounts = useCallback(() => {
+    navigate("accounts");
+  }, [navigate]);
   const now = useNow();
   const preferences = state.preferences;
   if (tab === "connect") {
@@ -108,9 +111,7 @@ export function Settings({
           key={route}
           state={state}
           actions={actions}
-          onDone={() => {
-            navigate("accounts");
-          }}
+          onDone={showAccounts}
         />
       </div>
     );

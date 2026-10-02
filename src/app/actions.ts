@@ -21,6 +21,7 @@ import {
 } from "../generated/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { reportAsync, reportSettled } from "../shared/ipc/report";
+import { reconcileSnapshot } from "../shared/ipc/subscription";
 import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
 
 /** The renderer's command surface. Every function awaits its own failure path. */
@@ -92,7 +93,7 @@ export const actions = {
         .cancelConnection(attempt)
         .then((result) =>
           result.status === "error" && result.error.kind === "cancelled"
-          ? { status: "ok" as const, data: null }
+            ? { status: "ok" as const, data: null }
             : result,
         ),
     );
@@ -106,7 +107,9 @@ export const actions = {
    * answer is false.
    */
   async confirmConnection(attempt: AttemptRef): Promise<boolean> {
-    return reportSettled(commands.confirmConnection(attempt));
+    const saved = await reportSettled(commands.confirmConnection(attempt));
+    if (saved) await reconcileSnapshot();
+    return saved;
   },
   /** Moves the overview between floating and tray mode. */
   async setOverviewMode(mode: OverviewMode): Promise<void> {

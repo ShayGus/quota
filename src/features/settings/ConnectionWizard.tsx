@@ -55,6 +55,11 @@ export function ConnectionWizard({
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
+
+  useEffect(() => {
+    if (progress?.kind === "verified") onDone();
+  }, [progress?.kind, onDone]);
+
   const candidate =
     progress?.kind === "awaiting_confirmation" ? progress.context.candidate : null;
   const accounts = state.snapshot?.accounts ?? [];

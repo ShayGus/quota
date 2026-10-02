@@ -10,7 +10,7 @@
  * pair leaves exactly one active subscription (AC-85).
  */
 import { commands, events } from "../../generated/bindings";
-import { reportCommandError, reportTransportFailure } from "./report";
+import { launch, reportCommandError, reportTransportFailure } from "./report";
 import {
   acceptAttempt,
   acceptMonitoring,
@@ -43,6 +43,7 @@ export async function startSnapshotSubscription(): Promise<() => void> {
         revision: payload.attempt_revision,
         progress: payload.progress,
       });
+      if (payload.progress.kind === "verified") launch(reconcileSnapshot());
     }),
     events.preferencesChanged.listen((event) => {
       const payload = event.payload;

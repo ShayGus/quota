@@ -1,11 +1,17 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { EventCallback } from "@tauri-apps/api/event";
 
 const invoke = vi.hoisted(() => vi.fn());
+const listen = vi.hoisted(() =>
+  vi.fn<(name: string, callback: EventCallback<unknown>) => Promise<() => void>>(() =>
+    Promise.resolve(() => undefined),
+  ),
+);
 vi.mock("@tauri-apps/api/core", () => ({ invoke }));
 vi.mock("@tauri-apps/api/event", () => ({
-  listen: () => Promise.resolve(() => undefined),
+  listen,
 }));
 
 import { actions as hostActions } from "../src/app/actions";
@@ -22,6 +28,7 @@ import {
   getRendererState,
 } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
+import { startSnapshotSubscription } from "../src/shared/ipc/subscription";
 import {
   account,
   percent,
@@ -86,6 +93,9 @@ beforeEach(() => {
   window.location.hash = "#/settings/connect";
   acceptPreferences(preferences());
   acceptSnapshot(snapshot("instance-1", 1, [account("a", "claude", 1, [])]));
+  invoke.mockResolvedValue({
+    snapshot: snapshot("instance-1", 1, [account("a", "claude", 1, [])]),
+  });
 });
 
 describe("Provider → Connect → Verify", () => {
@@ -112,6 +122,14 @@ describe("Provider → Connect → Verify", () => {
       });
     });
     expect(screen.queryByRole("heading", { name: REVIEW })).toBeNull();
+    act(() => {
+      acceptAttempt({
+        attemptId: "another-attempt",
+        revision: 3,
+        progress: { kind: "verified", context: { state: "connected" } },
+      });
+    });
+    expect(screen.getByRole("heading", { name: "Connect Claude" })).toBeTruthy();
     act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
@@ -234,17 +252,111 @@ describe("Provider → Connect → Verify", () => {
         confirmation.resolve(saved);
         await confirmation.promise;
       });
-      if (saved) {
-        await waitFor(() => {
-          expect(screen.getByRole("article", { name: "Manage Account 1" })).toBeTruthy();
+      await waitFor(() => {
+        expect(screen.getByRole("article", { name: "Manage Account 1" })).toBeTruthy();
+      });
+    },
+  );
+
+  it.each(["failed", "lost"] as const)(
+    "reconciles Accounts after Verified even when the confirmation reply is %s",
+    async (reply) => {
+      const confirmation = Promise.withResolvers<boolean>();
+      const listeners = new Map<string, EventCallback<unknown>>();
+      listen.mockImplementation((name: string, callback: EventCallback<unknown>) => {
+        listeners.set(name, callback);
+        return Promise.resolve(() => {
+          listeners.delete(name);
         });
-      } else {
+      });
+      const detach = await startSnapshotSubscription();
+      try {
+        const actions = {
+          ...settingsActions(),
+          confirmConnection: vi.fn(() => confirmation.promise),
+        };
+        invoke.mockResolvedValue({
+          snapshot: snapshot("instance-1", 2, [
+            account("a", "claude", 1, []),
+            account("saved", "claude", 2, [], { nickname: "Saved subscription" }),
+          ]),
+        });
+        render(<Harness actions={actions} />);
+        fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+        await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+        act(() => {
+          acceptAttempt({
+            attemptId: "attempt-1",
+            revision: 2,
+            progress: awaitingConfirmation(),
+          });
+        });
+        fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+        act(() => {
+          listeners.get("connection-progress-changed")?.({
+            event: "connection-progress-changed",
+            id: 1,
+            payload: {
+              app_instance_id: "instance-1",
+              attempt_id: "attempt-1",
+              attempt_revision: 3,
+              progress: { kind: "verified", context: { state: "connected" } },
+            },
+          });
+        });
+        if (reply === "failed") {
+          await act(async () => {
+            confirmation.resolve(false);
+            await confirmation.promise;
+          });
+        }
+        await waitFor(() => {
+          expect(
+            screen.getByRole("article", { name: "Manage Saved subscription" }),
+          ).toBeTruthy();
+        });
+        expect(invoke).toHaveBeenCalledExactlyOnceWith("get_snapshot");
+        expect(actions.confirmConnection).toHaveBeenCalledTimes(1);
         expect(screen.queryByRole("heading", { name: "Account added" })).toBeNull();
-        expect(screen.queryByLabelText("Account nickname")).toBeNull();
-        expect(container.textContent).not.toContain("Captain's private nickname");
+      } finally {
+        detach();
       }
     },
   );
+
+  it("reconciles a successful confirmation reply without a Verified event", async () => {
+    const saved = snapshot("instance-1", 2, [account("saved", "claude", 1, [])]);
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(command === "get_snapshot" ? { snapshot: saved } : null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" })).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+    });
+    expect(invoke).toHaveBeenCalledWith("get_snapshot");
+    expect(getRendererState().snapshot).toEqual(saved);
+  });
+
+  it("does not reconcile a confirmation that was refused before saving", async () => {
+    invoke.mockRejectedValue({
+      kind: "persistence_unavailable",
+      context: { owner: "sqlite" },
+    });
+    expect(await hostActions.confirmConnection({ id: "attempt-1" })).toBe(false);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+    });
+  });
+
+  it("keeps confirmation successful when reconciliation cannot reach the host", async () => {
+    invoke.mockImplementation((command: string) =>
+      command === "get_snapshot"
+        ? Promise.reject(new Error("snapshot unavailable"))
+        : Promise.resolve(null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" })).toBe(true);
+    expect(getRendererState().failure).toMatchObject({ kind: "transport" });
+  });
 
   it("starts a fresh wizard when Add reopens settings on the same connection section", async () => {
     window.location.hash = "#/settings/connect/request-1";

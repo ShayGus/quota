@@ -190,11 +190,10 @@ pub(super) async fn commit_pending(
             },
         )
         .await;
-    publish_snapshot(&runtime.state)
-        .await
-        .map_err(|_| CommandError::Internal {
-            code: "snapshot_publish_failed".into(),
-        })
+    if let Err(code) = publish_snapshot(&runtime.state).await {
+        tracing::warn!(%code, "the saved connection snapshot was not delivered");
+    }
+    Ok(())
 }
 
 /// Persists one confirmed candidate and registers it with the supervisor.
