@@ -5,7 +5,7 @@
  * export destination is validated by the host, and the export never contains
  * tokens, cookies, or provider payloads.
  */
-import type { JSX } from "react";
+import { useState, type JSX } from "react";
 
 import type { MonitoringState } from "../../../generated/bindings";
 import { displayName } from "../../../shared/format/alias";
@@ -13,15 +13,19 @@ import { formatAge, instantOf } from "../../../shared/format/duration";
 import { providerLabel } from "../../../shared/format/provider";
 import type { RendererState } from "../../../shared/state/types";
 import { Icon } from "../../../shared/ui/Icon";
-import { SettingRow, SettingsTitle, Switch } from "../Primitives";
+import { launch } from "../../../shared/ipc/report";
+import { SettingsTitle } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import { withExportIdentities } from "../preferences";
 
 /** The application version this panel reports. */
 const APP_VERSION = "0.1.0";
 
-/** The file the export is written to. The host resolves and validates it. */
-const EXPORT_DESTINATION = "quota-diagnostics.json";
+/**
+ * The label the host puts in the export's file name. The host reduces it to a
+ * safe stem and writes `quota-diagnostics-<label>.json` in its own diagnostics
+ * folder; the renderer never chooses a path.
+ */
+const EXPORT_LABEL = "settings";
 
 function monitoringWords(monitoring: MonitoringState | null): string {
   if (monitoring === null) {
@@ -40,6 +44,7 @@ export function DiagnosticsPanel({
   readonly now: number;
   readonly actions: SettingsActions;
 }): JSX.Element {
+  const [saved, setSaved] = useState<string | null>(null);
   const accounts = state.snapshot?.accounts ?? [];
   const preferences = state.preferences;
   const log = accounts.map((account) => {
@@ -87,29 +92,25 @@ export function DiagnosticsPanel({
         type="button"
         className="button"
         onClick={() => {
-          actions.exportDiagnostics(EXPORT_DESTINATION);
+          launch(
+            actions.exportDiagnostics(EXPORT_LABEL).then((path) => {
+              setSaved(path);
+            }),
+          );
         }}
       >
         <Icon name="download" />
         Export diagnostics
       </button>
-      {preferences === null ? null : (
-        <SettingRow
-          label="Include identities in diagnostics"
-          description="Off by default. Account labels are added to the export only when this is on."
-          control={
-            <Switch
-              checked={preferences.privacy.export_identities}
-              label="Include identities in diagnostics"
-              onChange={(next) => {
-                actions.savePreferences(withExportIdentities(preferences, next));
-              }}
-            />
-          }
-        />
+      {saved === null ? null : (
+        <p className="form-hint" role="status">
+          Saved to {saved}
+        </p>
       )}
       <div className="note">
-        The export is sanitized: it never contains tokens, cookies, or provider payloads.
+        The export is sanitized: it holds the account count, providers, and polling
+        settings, and never contains account identities, tokens, cookies, or provider
+        payloads.
       </div>
     </>
   );

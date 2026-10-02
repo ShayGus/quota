@@ -76,7 +76,8 @@ export interface SettingsActions {
   /** Drops retained history for one account. The host has no all-accounts clear. */
   readonly clearHistory: (accountId: AccountId) => void;
   /** Writes a diagnostic export to the destination the host will validate. */
-  readonly exportDiagnostics: (destination: string) => void;
+  /** Writes a sanitized report and answers where, or `null` when it failed. */
+  readonly exportDiagnostics: (label: string) => Promise<string | null>;
   /** Shows the add-account wizard in the popover. */
   readonly showAddAccount: () => void;
   /** Whether Quota starts at login, as the system confirms it; `null` when unknown. */

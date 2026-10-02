@@ -70,7 +70,10 @@ function ManagedAccount({
       <div className="provider-meta" style={{ marginTop: "8px", maxWidth: "none" }}>
         {alias
           ? "Identity hidden"
-          : (account.identity?.principal_label ?? "Identity not verified")}{" "}
+          : (account.identity?.principal_label ?? "Identity not verified")}
+        {alias || account.identity?.workspace_label == null
+          ? ""
+          : ` · ${account.identity.workspace_label}`}{" "}
         · {windows} {windows === 1 ? "window" : "windows"}
       </div>
       <div className="account-manage-actions">

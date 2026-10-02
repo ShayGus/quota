@@ -34,7 +34,9 @@ function settingsActions(): SettingsActions {
     confirmConnection: vi.fn(() => Promise.resolve(true)),
     reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
-    exportDiagnostics: vi.fn(),
+    exportDiagnostics: vi.fn(() =>
+      Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
+    ),
     showAddAccount: vi.fn(),
     showOverview: vi.fn(),
     showAccountDetail: vi.fn(),

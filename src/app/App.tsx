@@ -26,7 +26,7 @@ import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
 import { AppHeader, SettingsHeader } from "./AppHeader";
 import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
-import { listenForNavigation, showInPopover } from "./navigation";
+import { listenForNavigation, showInPopover } from "../shared/ipc/navigation";
 import { useFitContentHeight } from "./useFitContentHeight";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
 import { useTheme } from "./useTheme";
@@ -91,9 +91,7 @@ const settingsActions: SettingsActions = {
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
   },
-  exportDiagnostics: (destination) => {
-    launch(actions.exportDiagnostics(destination));
-  },
+  exportDiagnostics: (label) => actions.exportDiagnostics(label),
   showAddAccount: () => {
     launch(showInPopover({ view: "connect" }));
   },
@@ -162,6 +160,12 @@ function QuotaWindow(): JSX.Element {
   return <Popover state={state} toast={toast} onToast={setToast} />;
 }
 
+/**
+ * Counts Add account requests. Each request is a fresh wizard, keyed by this
+ * count, so the previous wizard unmounts and discards whatever it was holding.
+ */
+let wizardRequests = 0;
+
 /** The popover: header, the current surface, and footer. */
 function Popover({
   state,
@@ -186,7 +190,8 @@ function Popover({
   const surface = view.name === "detail" && account === null ? "overview" : view.name;
 
   const openConnect = (): void => {
-    setView({ name: "connect", serial: Date.now() });
+    wizardRequests += 1;
+    setView({ name: "connect", serial: wizardRequests });
   };
 
   useEffect(() => {
@@ -204,26 +209,24 @@ function Popover({
   useEffect(() => {
     let stop: (() => void) | null = null;
     let stopped = false;
-    listenForNavigation((target) => {
-      if (target.view === "detail") {
-        setView({ name: "detail", id: target.accountId, windowId: target.windowId });
-      } else if (target.view === "connect") {
-        setView({ name: "connect", serial: Date.now() });
-      } else {
-        setView({ name: "overview" });
-      }
-    })
-      .then((detach) => {
+    launch(
+      listenForNavigation((target) => {
+        if (target.view === "detail") {
+          setView({ name: "detail", id: target.accountId, windowId: target.windowId });
+        } else if (target.view === "connect") {
+          wizardRequests += 1;
+          setView({ name: "connect", serial: wizardRequests });
+        } else {
+          setView({ name: "overview" });
+        }
+      }).then((detach) => {
         if (stopped) {
           detach();
         } else {
           stop = detach;
         }
-      })
-      .catch(() => {
-        // Without the listener, settings cannot route here; the popover itself
-        // still works.
-      });
+      }),
+    );
     return () => {
       stopped = true;
       stop?.();

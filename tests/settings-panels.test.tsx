@@ -6,6 +6,7 @@
  * the real panels and read what each interaction saves (spec 13.2).
  */
 import { fireEvent, render, screen, within } from "@testing-library/react";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Preferences } from "../src/generated/bindings";
@@ -52,7 +53,9 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       confirmConnection: vi.fn(() => Promise.resolve(true)),
       reconnectAccount: vi.fn(() => Promise.resolve(undefined)),
       clearHistory: vi.fn(),
-      exportDiagnostics: vi.fn(),
+      exportDiagnostics: vi.fn(() =>
+        Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
+      ),
       showAddAccount: vi.fn(),
       showOverview: vi.fn(),
       showAccountDetail: vi.fn(),
@@ -271,7 +274,7 @@ describe("appearance", () => {
 });
 
 describe("diagnostics", () => {
-  it("exports a sanitized report and states each account's status", () => {
+  it("exports a sanitized report and states each account's status", async () => {
     const { actions } = settingsActions();
     render(
       <DiagnosticsPanel
@@ -288,8 +291,16 @@ describe("diagnostics", () => {
     expect(document.querySelector(".diagnostic-log")?.textContent).toBe(
       "Codex · a1 · connected · idle · checked 1m ago",
     );
-    fireEvent.click(screen.getByRole("button", { name: "Export diagnostics" }));
-    expect(actions.exportDiagnostics).toHaveBeenCalledWith("quota-diagnostics.json");
+    expect(
+      screen.queryByRole("switch", { name: "Include identities in diagnostics" }),
+    ).toBeNull();
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Export diagnostics" })),
+    );
+    expect(actions.exportDiagnostics).toHaveBeenCalledWith("settings");
+    expect(screen.getByRole("status").textContent).toBe(
+      "Saved to /data/diagnostics/quota-diagnostics-settings.json",
+    );
   });
 });
 
@@ -309,6 +320,7 @@ describe("account management identities", () => {
     expect(cards).toHaveLength(2);
     for (const [index, card] of cards.entries()) {
       expect(card.textContent).toContain(`a${String(index + 1)}@example.test`);
+      expect(card.textContent).toContain("Home");
       expect(card.textContent).toContain("Claude");
     }
     const secondCard = cards[1];
@@ -327,6 +339,7 @@ describe("account management identities", () => {
       expect(card.textContent).toContain("Identity hidden");
       expect(card.textContent).not.toContain("@example.test");
       expect(card.textContent).not.toContain("Work");
+      expect(card.textContent).not.toContain("Home");
     }
     rerender(panel(base));
     expect(screen.getByText(/a1@example.test/)).toBeTruthy();

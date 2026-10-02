@@ -14,6 +14,13 @@ const invoked: { command: string; args: unknown }[] = [];
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (command: string, args: unknown) => {
     invoked.push({ command, args });
+    // A started connection answers with its attempt identity, as the host does.
+    if (command === "begin_connection") {
+      return Promise.resolve({
+        attempt_ref: { id: "attempt-1" },
+        attempt_id: "attempt-1",
+      });
+    }
     return Promise.resolve(null);
   },
 }));
@@ -60,12 +67,14 @@ import { FeatureBoundary } from "../src/app/ErrorBoundary";
 import {
   acceptMonitoring,
   acceptPreferences,
+  acceptAttempt,
   acceptSnapshot,
   setFailure,
 } from "../src/shared/state/store";
 import type { PollingStrategy, ProviderPollingPolicy } from "../src/generated/bindings";
 import {
   account,
+  candidate,
   percent,
   preferences,
   snapshot,
@@ -347,7 +356,11 @@ describe("approved control actions", () => {
     ]);
     acceptSnapshot(snapshot("instance-1", 1, [owner]));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Codex Weekly: 41% remaining" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Codex a1, Weekly: 41% remaining. Resets in 2h 0m",
+      }),
+    );
     expect(
       screen.getByRole("tab", { name: "Weekly" }).getAttribute("aria-selected"),
     ).toBe("true");
@@ -737,4 +750,55 @@ describe("toasts", () => {
     });
     expect(commandsMatching("refresh_accounts")).toHaveLength(1);
   });
+});
+
+describe("leaving the add-account wizard", () => {
+  it.each([
+    [
+      "Escape",
+      (): void => {
+        fireEvent.keyDown(window, { key: "Escape" });
+      },
+    ],
+    [
+      "a fresh Add account",
+      (): void => {
+        const footer = document.querySelector<HTMLElement>(".app-footer .text-btn");
+        if (footer === null) throw new Error("the footer Add account is missing");
+        fireEvent.click(footer);
+      },
+    ],
+  ] as const)(
+    "discards a held candidate on %s instead of leaving it saved",
+    async (_route, leave) => {
+      acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+      acceptPreferences(preferences());
+      render(<App />);
+      fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+      fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
+      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 2,
+          progress: {
+            kind: "awaiting_confirmation",
+            context: { candidate: candidate("codex") },
+          },
+        });
+      });
+      expect(
+        screen.getByRole("heading", { name: "Is this the right account?" }),
+      ).toBeTruthy();
+      act(leave);
+      await waitFor(() => {
+        expect(commandsMatching("cancel_connection")).toHaveLength(1);
+      });
+      expect(commandsMatching("cancel_connection")[0]?.args).toEqual({
+        attemptRef: { id: "attempt-1" },
+      });
+      expect(commandsMatching("confirm_connection")).toHaveLength(0);
+      expect(commandsMatching("disconnect_account")).toHaveLength(0);
+    },
+  );
 });

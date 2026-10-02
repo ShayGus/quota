@@ -159,8 +159,8 @@ bun tauri build        # release bundles
   `sqlx`.
 - A first-party production file over 400 non-comment, non-blank lines fails the
   architecture gate. The guideline is 250.
-- Raw `invoke(`, `listen(`, and `emit(` are confined to `src/generated/` and
-  `src/shared/ipc/`.
+- Raw `invoke`, `listen`, `emit`, and `emitTo` calls, including their generic forms, are
+  confined to `src/generated/` and `src/shared/ipc/`.
 - Every `uses:` in `.github/workflows/` is pinned to a full 40-character commit SHA. A tag
   or a branch fails `cargo xtask check-release`, and a `run:` step must not interpolate
   event text such as a pull-request title or a branch name.

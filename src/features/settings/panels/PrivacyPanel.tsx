@@ -52,8 +52,9 @@ export function PrivacyPanel({
         <div>
           <strong>No credentials reach this window</strong>
           <p>
-            Tokens and cookies stay in the operating system credential store. The window
-            receives sanitized quota snapshots only.
+            Quota's host reads each provider's existing local sign-in to check quota;
+            tokens and cookies never leave it. This window receives sanitized quota
+            snapshots only.
           </p>
         </div>
       </div>

@@ -75,9 +75,11 @@ into those tables.
 
 Rust is the contract source of truth. Commands and events are Rust structs and enums with
 Serde and Specta derives; TypeScript definitions are generated from them. The renderer
-uses generated typed wrappers for application commands. Raw `invoke(`, `listen(`, and
-`emit(` are confined to `src/generated/` and audited integration wrappers under
-`src/shared/ipc/`.
+uses generated typed wrappers for application commands. Raw `invoke`, `listen`, `emit`,
+and `emitTo` calls, including their generic forms, are confined to `src/generated/` and
+audited integration wrappers under `src/shared/ipc/`. One of those wrappers,
+`navigation.ts`, carries window-to-window presentation routing (settings asking the
+popover to show a surface); it holds no mutation.
 
 An event is transient delivery, not a durable log and not a mutation authority. No backend
 listener accepts a renderer-originated event as a command.

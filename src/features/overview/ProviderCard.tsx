@@ -22,6 +22,7 @@ import { Icon } from "../../shared/ui/Icon";
 import { Bar, Ring } from "../../shared/ui/Meter";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import {
+  boundarySentence,
   cardWindows,
   extraLabel,
   ledgerTime,
@@ -32,6 +33,7 @@ import {
   viewKnown,
   viewSeverity,
   viewValue,
+  windowControlName,
   windowLabel,
   windowView,
 } from "./reading";
@@ -170,11 +172,14 @@ function extraSummary(
 /** One ring and the line under it. */
 function QuotaButton({
   account,
+  accountLabel,
   window,
   now,
   onOpenWindow,
 }: {
   readonly account: AccountSnapshot;
+  /** The account's own label, or its alias, so the name says whose it is. */
+  readonly accountLabel: string;
   readonly window: QuotaWindow;
   readonly now: number;
   readonly onOpenWindow: (accountId: AccountId, windowId: QuotaWindowId) => void;
@@ -186,7 +191,14 @@ function QuotaButton({
     <button
       type="button"
       className="quota-button"
-      aria-label={`${providerLabel(account.provider_id)} ${label}: ${readingText(view, window)}`}
+      aria-label={windowControlName(
+        providerLabel(account.provider_id),
+        accountLabel,
+        label,
+        view,
+        window,
+        now,
+      )}
       onClick={() => {
         onOpenWindow(account.account_id, window.id);
       }}
@@ -214,11 +226,14 @@ function QuotaButton({
 /** One compact row: label, bar, value, and reset time. */
 function LedgerRow({
   account,
+  accountLabel,
   window,
   now,
   onOpenWindow,
 }: {
   readonly account: AccountSnapshot;
+  /** The account's own label, or its alias, so the name says whose it is. */
+  readonly accountLabel: string;
   readonly window: QuotaWindow;
   readonly now: number;
   readonly onOpenWindow: (accountId: AccountId, windowId: QuotaWindowId) => void;
@@ -231,7 +246,14 @@ function LedgerRow({
     <button
       type="button"
       className={`ledger-row${tone === "" ? "" : ` ${tone}`}`}
-      aria-label={`${providerLabel(account.provider_id)} ${label}: ${readingText(view, window)}`}
+      aria-label={windowControlName(
+        providerLabel(account.provider_id),
+        accountLabel,
+        label,
+        view,
+        window,
+        now,
+      )}
       onClick={() => {
         onOpenWindow(account.account_id, window.id);
       }}
@@ -239,7 +261,9 @@ function LedgerRow({
       <span className="bar-label">{label}</span>
       <Bar fraction={viewFraction(view, window)} />
       <span className="bar-value">{viewValue(view, window)}</span>
-      <span className="bar-time">{ledgerTime(view, window, now)}</span>
+      <span className="bar-time" title={boundarySentence(view, window, now)}>
+        {ledgerTime(view, window, now)}
+      </span>
     </button>
   );
 }
@@ -319,6 +343,7 @@ export function ProviderCard({
           <LedgerRow
             key={window.id}
             account={account}
+            accountLabel={label}
             window={window}
             now={now}
             onOpenWindow={onOpenWindow}
@@ -336,6 +361,7 @@ export function ProviderCard({
           <QuotaButton
             key={window.id}
             account={account}
+            accountLabel={label}
             window={window}
             now={now}
             onOpenWindow={onOpenWindow}

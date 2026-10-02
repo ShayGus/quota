@@ -7,6 +7,7 @@
 import type {
   AccountSnapshot,
   AppSnapshot,
+  BoundaryKind,
   ConnectionProgress,
   Measurement,
   MonitoringState,
@@ -28,7 +29,9 @@ export function window(
   measurement: Measurement,
   options: {
     readonly label?: string;
+    readonly resource?: string;
     readonly boundaryAt?: string | null;
+    readonly boundaryKind?: BoundaryKind;
     readonly role?: QuotaWindow["metric_role"];
   } = {},
 ): QuotaWindow {
@@ -37,7 +40,7 @@ export function window(
     provider_bucket_id: null,
     pool_id: "pool-1",
     scope: {
-      resource: "resource",
+      resource: options.resource ?? "resource",
       label: options.label ?? "Subscription",
     },
     category,
@@ -52,7 +55,7 @@ export function window(
         ? null
         : {
             at: options.boundaryAt ?? "2026-10-01T14:00:00.000Z",
-            kind: "full_reset",
+            kind: options.boundaryKind ?? "full_reset",
           },
     observed_at: "2026-10-01T11:59:00.000Z",
     received_at: "2026-10-01T11:59:00.000Z",

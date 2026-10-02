@@ -9,8 +9,11 @@ use crate::scan;
 /// Largest number of code lines a first-party production file may hold.
 const FILE_LIMIT: usize = 400;
 
-/// Raw IPC entry points the renderer may only reach through generated code.
-const RAW_IPC: [&str; 3] = ["invoke(", "listen(", "emit("];
+/// Raw IPC entry points the renderer may only reach through generated code,
+/// including their generic forms and window-targeted emits.
+const RAW_IPC: [&str; 8] = [
+    "invoke(", "invoke<", "listen(", "listen<", "emit(", "emit<", "emitTo(", "emitTo<",
+];
 
 /// Prefixes under `src/` that may call IPC directly.
 const IPC_EXEMPT_PREFIXES: [&str; 2] = ["src/generated/", "src/shared/ipc/"];

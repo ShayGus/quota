@@ -14,7 +14,12 @@ import {
   severityOf,
   type Severity,
 } from "../../shared/format/allowance";
-import { boundaryCountdown, boundaryLead, instantOf } from "../../shared/format/duration";
+import {
+  boundaryCountdown,
+  boundaryLead,
+  formatBoundary,
+  instantOf,
+} from "../../shared/format/duration";
 import { readingState } from "./freshness";
 
 /** The standard periods a card draws as rings, in the order it draws them. */
@@ -66,11 +71,24 @@ export function cardWindows(account: AccountSnapshot): {
   readonly main: readonly QuotaWindow[];
   readonly extra: readonly QuotaWindow[];
 } {
+  const included = account.windows.filter(
+    (window) => window.metric_role === "included_allowance",
+  );
+  // The account-wide scope is the one most included allowances share; a
+  // narrower scope, such as one model family's weekly limit, is listed instead
+  // of drawn as the period's ring.
+  const shared = new Map<string, number>();
+  for (const window of included) {
+    shared.set(window.scope.resource, (shared.get(window.scope.resource) ?? 0) + 1);
+  }
+  const breadth = (window: QuotaWindow): number => shared.get(window.scope.resource) ?? 0;
   const main: QuotaWindow[] = [];
   for (const category of MAIN_CATEGORIES) {
-    const window = account.windows.find(
-      (candidate) =>
-        candidate.category === category && candidate.metric_role === "included_allowance",
+    const candidates = included.filter((window) => window.category === category);
+    const window = candidates.reduce<QuotaWindow | undefined>(
+      (best, candidate) =>
+        best === undefined || breadth(candidate) > breadth(best) ? candidate : best,
+      undefined,
     );
     if (window !== undefined) {
       main.push(window);
@@ -197,4 +215,32 @@ export function ledgerTime(view: WindowView, window: QuotaWindow, now: number): 
     case "current":
       return window.boundary === null ? "—" : boundaryCountdown(window.boundary, now);
   }
+}
+
+/** The sentence that says when a window's allowance changes, or why it is not shown. */
+export function boundarySentence(
+  view: WindowView,
+  window: QuotaWindow,
+  now: number,
+): string {
+  if (view === "current" && window.boundary !== null) {
+    return formatBoundary(window.boundary, now);
+  }
+  return resetLine(view, window, now).lead;
+}
+
+/**
+ * The accessible name of one window's control: whose allowance it is, which
+ * window, the reading, and when it changes, so two accounts of one provider
+ * never share a name.
+ */
+export function windowControlName(
+  provider: string,
+  accountLabel: string,
+  label: string,
+  view: WindowView,
+  window: QuotaWindow,
+  now: number,
+): string {
+  return `${provider} ${accountLabel}, ${label}: ${readingText(view, window)}. ${boundarySentence(view, window, now)}`;
 }

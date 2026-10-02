@@ -206,7 +206,7 @@ export const actions = {
     await reportAsync(commands.clearLocalHistory({ id: accountId }));
   },
   /** Writes a sanitized diagnostic export to a host-resolved destination. */
-  async exportDiagnostics(destination: string): Promise<void> {
-    await reportAsync(commands.exportSanitizedDiagnostics(destination));
+  async exportDiagnostics(label: string): Promise<string | null> {
+    return reportAsync(commands.exportSanitizedDiagnostics(label));
   },
 };

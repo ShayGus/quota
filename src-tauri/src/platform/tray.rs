@@ -4,7 +4,7 @@
 //! hides it to the tray; a left click on the icon always opens the app, and the
 //! menu offers Settings, Show App, and Exit. Only Exit ends the process.
 
-use quota_domain::account::ConnectionState;
+use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::QuotaCategory;
 use quota_domain::ranking::{AccountOrder, UnrankedReason};
@@ -167,12 +167,11 @@ fn tray_image(attention: bool, dark: bool) -> tauri::image::Image<'static> {
                     alpha = alpha.max(dot);
                 }
             }
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "the value is rounded and clamped to 0..=255 first"
-            )]
-            let a = (alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+            // The smallest byte whose value covers the alpha, so no float is
+            // cast; alpha is clamped to 0..=1 by its construction.
+            let a = (0..=u8::MAX)
+                .find(|value| f64::from(*value) + 0.5 > alpha * 255.0)
+                .unwrap_or(u8::MAX);
             pixel.copy_from_slice(&[colour[0], colour[1], colour[2], a]);
         }
     }
@@ -211,45 +210,78 @@ fn provider_name(provider: ProviderId) -> &'static str {
 }
 
 /// The badge words for an account that needs attention, or `None`.
+///
+/// The order matches the renderer's status: connection state first, then the
+/// fetch state, then the ranking, so the tray and the popover never disagree
+/// about which accounts need attention.
 fn account_attention(account: &AccountSnapshot) -> Option<String> {
-    if account.connection_state == ConnectionState::ReauthenticationRequired {
-        return Some("Reconnect".to_owned());
+    connection_attention(account.connection_state)
+        .or_else(|| fetch_attention(account.fetch_state))
+        .map(str::to_owned)
+        .or_else(|| order_attention(account))
+}
+
+/// A connection state that needs the person, in the renderer's words.
+const fn connection_attention(state: ConnectionState) -> Option<&'static str> {
+    match state {
+        ConnectionState::ReauthenticationRequired => Some("Reconnect"),
+        ConnectionState::Disconnected => Some("Disconnected"),
+        ConnectionState::Connecting => Some("Connecting"),
+        ConnectionState::NeverConnected
+        | ConnectionState::Connected
+        | ConnectionState::Unsupported => None,
     }
-    match &account.order {
-        AccountOrder::Unranked(order) => match order.reason {
-            UnrankedReason::Stale => Some("Stale".to_owned()),
-            UnrankedReason::ResetPending => Some("Verifying reset".to_owned()),
-            UnrankedReason::Incomplete => Some("Partially reported".to_owned()),
-            UnrankedReason::ReconnectRequired => Some("Reconnect".to_owned()),
-            UnrankedReason::NativeUnitsOnly
-            | UnrankedReason::UnlimitedOnly
-            | UnrankedReason::NoIncludedAllowance
-            | UnrankedReason::Disabled
-            | UnrankedReason::MonitoringPaused => None,
-        },
-        AccountOrder::Ranked(order) => {
-            let remaining = order.remaining_percent.value();
-            if remaining > 20.0 {
-                return None;
+}
+
+/// A fetch state that means the reading is not being kept current.
+const fn fetch_attention(state: FetchState) -> Option<&'static str> {
+    match state {
+        FetchState::Backoff => Some("Rate limited"),
+        FetchState::Offline => Some("Offline"),
+        FetchState::Error => Some("Check failed"),
+        FetchState::Idle | FetchState::Fetching => None,
+    }
+}
+
+/// The ranking's words: an unranked reason, or a low or exhausted allowance.
+fn order_attention(account: &AccountSnapshot) -> Option<String> {
+    let order = match &account.order {
+        AccountOrder::Unranked(order) => {
+            return match order.reason {
+                UnrankedReason::Stale => Some("Stale"),
+                UnrankedReason::ResetPending => Some("Verifying reset"),
+                UnrankedReason::Incomplete => Some("Partially reported"),
+                UnrankedReason::NativeUnitsOnly => Some("Native units only"),
+                UnrankedReason::NoIncludedAllowance => Some("No included allowance"),
+                UnrankedReason::ReconnectRequired => Some("Reconnect"),
+                UnrankedReason::UnlimitedOnly
+                | UnrankedReason::Disabled
+                | UnrankedReason::MonitoringPaused => None,
             }
-            let name = account
-                .windows
-                .iter()
-                .find(|window| window.id == order.controlling_window_id)
-                .map_or("Allowance", |window| match window.category {
-                    QuotaCategory::Session => "5h",
-                    QuotaCategory::Daily => "Daily",
-                    QuotaCategory::Weekly => "Weekly",
-                    QuotaCategory::Monthly => "Monthly",
-                    QuotaCategory::Custom => "Allowance",
-                });
-            Some(if remaining <= 0.0 {
-                format!("{name} exhausted")
-            } else {
-                format!("{name} low")
-            })
+            .map(str::to_owned);
         }
+        AccountOrder::Ranked(order) => order,
+    };
+    let remaining = order.remaining_percent.value();
+    if remaining > 20.0 {
+        return None;
     }
+    let name = account
+        .windows
+        .iter()
+        .find(|window| window.id == order.controlling_window_id)
+        .map_or("Allowance", |window| match window.category {
+            QuotaCategory::Session => "5h",
+            QuotaCategory::Daily => "Daily",
+            QuotaCategory::Weekly => "Weekly",
+            QuotaCategory::Monthly => "Monthly",
+            QuotaCategory::Custom => "Allowance",
+        });
+    Some(if remaining <= 0.0 {
+        format!("{name} exhausted")
+    } else {
+        format!("{name} low")
+    })
 }
 
 /// Shows the current attention state on the tray icon and in its tooltip.
@@ -315,7 +347,6 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 mod tests {
     use super::*;
     use quota_domain::Percent;
-    use quota_domain::account::FetchState;
     use quota_domain::ids::{AccountId, AppInstanceId, ConnectionId, QuotaWindowId};
     use quota_domain::ranking::{RankedOrder, UnrankedOrder};
     use quota_domain::snapshot::{PersistenceStatus, SNAPSHOT_SCHEMA_VERSION};
@@ -381,6 +412,16 @@ mod tests {
         assert_eq!(
             tray_summary(&paused),
             (false, "Quota · monitoring paused".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_rate_limited_account_is_not_reported_current() {
+        let mut limited = account("a", ranked(64.0));
+        limited.fetch_state = FetchState::Backoff;
+        assert_eq!(
+            tray_summary(&snapshot(vec![limited], MonitoringState::Running)),
+            (true, "Quota · Claude · Rate limited".to_owned())
         );
     }
 

@@ -124,10 +124,62 @@ describe("the account card", () => {
       ]),
     );
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Codex Weekly: 41% remaining" }));
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Codex a1, Weekly: 41% remaining. Resets in 2h 0m",
+      }),
+    );
     expect(calls.openWindow).toHaveBeenCalledWith("a1", "weekly-window");
     fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
     expect(calls.open).toHaveBeenCalledWith("a1");
+  });
+
+  it("names each ring by its account, so two accounts of one provider differ", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a1", "codex", 1, [quotaWindow("s1", "session", percent(72))], {
+          nickname: "Work",
+          rank: 72,
+        }),
+        account("a2", "codex", 2, [quotaWindow("s2", "session", percent(72))], {
+          nickname: "Home",
+          rank: 72,
+        }),
+      ]),
+    );
+    render(<Harness />);
+    expect(
+      screen.getByRole("button", { name: /^Codex Work, 5-hour: 72% remaining/ }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^Codex Home, 5-hour: 72% remaining/ }),
+    ).toBeTruthy();
+  });
+
+  it("draws the account-wide allowance as the ring and lists a narrower one", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account(
+          "a1",
+          "claude",
+          1,
+          [
+            quotaWindow("model-weekly", "weekly", percent(43), {
+              label: "Model-specific weekly",
+              resource: "one-model",
+            }),
+            quotaWindow("session", "session", percent(18), { resource: "all-models" }),
+            quotaWindow("weekly", "weekly", percent(64), { resource: "all-models" }),
+          ],
+          { rank: 18 },
+        ),
+      ]),
+    );
+    render(<Harness />);
+    expect(
+      screen.getByRole("button", { name: /^Claude a1, Weekly: 64% remaining/ }),
+    ).toBeTruthy();
+    expect(screen.getByRole("button", { name: /1 model limit/ })).toBeTruthy();
   });
 
   it("lists other independent limits on request", () => {
@@ -748,6 +800,29 @@ describe("boundary meanings", () => {
       expect(document.querySelector(".reset-label")?.textContent).toBe(
         `${String(word)} 2h 0m`,
       );
+    },
+  );
+
+  it.each(kinds.map((kind, index) => [kind, words[index]] as const))(
+    "keeps a %s boundary's meaning on its compact row",
+    (kind, word) => {
+      acceptPreferences(preferences({ indicator_style: "bar" }));
+      const window = {
+        ...quotaWindow("w", "session", percent(72)),
+        boundary: { kind, at: "2026-10-01T14:00:00Z" },
+      };
+      acceptSnapshot(
+        snapshot("instance-1", 1, [account("a", "claude", 1, [window], { rank: 72 })]),
+      );
+      render(<Harness />);
+      expect(document.querySelector(".bar-time")?.getAttribute("title")).toBe(
+        `${String(word)} 2h 0m`,
+      );
+      expect(
+        screen.getByRole("button", {
+          name: `Claude a, 5-hour: 72% remaining. ${String(word)} 2h 0m`,
+        }),
+      ).toBeTruthy();
     },
   );
 
