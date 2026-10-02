@@ -66,6 +66,15 @@ impl AccountRepository {
     /// # Errors
     /// Returns a typed persistence error when the write is refused.
     pub async fn upsert_connection(&self, connection: &NewConnection) -> PersistenceResult<()> {
+        Self::upsert_connection_on(&self.pool, connection).await
+    }
+
+    /// [`Self::upsert_connection`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn upsert_connection_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        connection: &NewConnection,
+    ) -> PersistenceResult<()> {
         let ownership = codec::encode(&connection.credential_ownership, "connections")?;
         let cardinality = codec::encode(&connection.cardinality, "connections")?;
         let state = codec::encode(&ConnectionState::NeverConnected, "connections")?;
@@ -87,7 +96,7 @@ impl AccountRepository {
         .bind(connection.profile_label.as_deref())
         .bind(cardinality)
         .bind(state)
-        .execute(&self.pool)
+        .execute(executor)
         .await
         .table("connections")?;
         Ok(())
@@ -126,11 +135,21 @@ impl AccountRepository {
         connection_id: &ConnectionId,
         state: ConnectionState,
     ) -> PersistenceResult<()> {
+        Self::set_connection_state_on(&self.pool, connection_id, state).await
+    }
+
+    /// [`Self::set_connection_state`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn set_connection_state_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        connection_id: &ConnectionId,
+        state: ConnectionState,
+    ) -> PersistenceResult<()> {
         let encoded = codec::encode(&state, "connections")?;
         let updated = sqlx::query("UPDATE connections SET state = ? WHERE id = ?")
             .bind(encoded)
             .bind(connection_id.as_str())
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .table("connections")?
             .rows_affected();
@@ -151,6 +170,25 @@ impl AccountRepository {
         workspace_id: Option<&WorkspaceId>,
         entitlement_id: Option<&EntitlementId>,
     ) -> PersistenceResult<()> {
+        Self::record_verified_binding_on(
+            &self.pool,
+            connection_id,
+            principal_id,
+            workspace_id,
+            entitlement_id,
+        )
+        .await
+    }
+
+    /// [`Self::record_verified_binding`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn record_verified_binding_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        connection_id: &ConnectionId,
+        principal_id: Option<&ProviderPrincipalId>,
+        workspace_id: Option<&WorkspaceId>,
+        entitlement_id: Option<&EntitlementId>,
+    ) -> PersistenceResult<()> {
         let updated = sqlx::query(
             "UPDATE connections
                 SET principal_id = ?, workspace_id = ?, entitlement_id = ?
@@ -160,7 +198,7 @@ impl AccountRepository {
         .bind(workspace_id.map(quota_domain::ids::WorkspaceId::as_str))
         .bind(entitlement_id.map(quota_domain::ids::EntitlementId::as_str))
         .bind(connection_id.as_str())
-        .execute(&self.pool)
+        .execute(executor)
         .await
         .table("connections")?
         .rows_affected();
