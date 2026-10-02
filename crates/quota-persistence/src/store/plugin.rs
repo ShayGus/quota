@@ -35,12 +35,23 @@ impl<R: Runtime> PreferenceDocumentStore for PluginDocumentStore<R> {
     }
 
     fn write(&self, key: &str, value: &Value) -> PersistenceResult<()> {
+        let previous = self.store.get(key);
         self.store.set(key.to_owned(), value.clone());
-        self.store
-            .save()
-            .map_err(|_| PersistenceError::StoreUnavailable)
+        if self.store.save().is_err() {
+            if let Some(previous) = previous {
+                self.store.set(key.to_owned(), previous);
+            } else {
+                self.store.delete(key);
+            }
+            return Err(PersistenceError::StoreUnavailable);
+        }
+        Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "plugin_tests.rs"]
+mod tests;
 
 /// The typed preference repository over the plugin's store.
 pub struct StorePreferencesRepository<R: Runtime> {

@@ -30,6 +30,8 @@ tauri-plugin-store = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+tauri = { workspace = true, features = ["test"] }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["rt", "macros"] }
 
 [lints]
