@@ -99,6 +99,7 @@ pub(super) async fn publish_snapshot(state: &RuntimeState) -> Result<(), String>
         &PersistenceStatus::Available,
         state.clock.now(),
     );
+    crate::platform::tray::reflect_snapshot(&state.app, &snapshot);
     let event = SnapshotUpdatedEvent(SnapshotUpdatedPayload {
         app_instance_id: snapshot.app_instance_id.clone(),
         revision: snapshot.revision,

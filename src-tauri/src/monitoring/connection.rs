@@ -1,4 +1,4 @@
-//! Cancellable connection discovery, verification, and account persistence.
+//! Cancellable connection discovery and verification for candidate review.
 
 use std::sync::Arc;
 
@@ -7,12 +7,11 @@ use quota_contracts::commands::BeginConnectionRequest;
 use quota_contracts::events::{ConnectionProgress, ConnectionProgressChangedPayload};
 use quota_core::clock::Clock;
 use quota_core::ports::{ProviderAdapter, ProviderError};
-use quota_domain::account::ConnectionState;
-use quota_domain::ids::{AccountId, ConnectionAttemptId, ConnectionId};
+use quota_domain::ids::ConnectionAttemptId;
 use tauri_specta::Event;
 use tokio::sync::watch;
 
-use super::worker::publish_snapshot;
+use super::confirm;
 use super::{MonitoringRuntime, REMOTE_TIMEOUT, RuntimeState};
 
 /// Emits one attempt's progress under a revision that only moves forward.
@@ -60,7 +59,9 @@ impl AttemptReporter {
         let mut next_revision = self.revision.lock().await;
         let revision = (*next_revision)?;
         *next_revision = match progress {
-            ConnectionProgress::Started | ConnectionProgress::AwaitingUser => Some(revision + 1),
+            ConnectionProgress::Started
+            | ConnectionProgress::AwaitingUser
+            | ConnectionProgress::AwaitingConfirmation { .. } => Some(revision + 1),
             _ => None,
         };
         Some(revision)
@@ -95,39 +96,47 @@ pub(super) async fn run_connection_attempt(
         });
     }
 
-    for candidate in candidates {
-        if *cancelled.borrow() {
-            return Ok(());
-        }
-        let ids = candidate_binding(&adapter, &candidate);
-        let Some(read) = read_candidate_quota(
-            &runtime,
-            &adapter,
-            &ids.binding,
-            &attempt_id,
-            &mut cancelled,
-        )
-        .await?
-        else {
-            return Ok(());
-        };
-        let _connection_gate = runtime.connection_gate.lock().await;
-        commit_candidate(&runtime, candidate, &request, ids, read, &cancelled).await?;
-        reporter
-            .emit(
-                &runtime.state,
-                &attempt_id,
-                ConnectionProgress::Verified {
-                    state: ConnectionState::Connected,
-                },
-            )
-            .await;
+    // One attempt offers one candidate. An adapter that reports several
+    // accounts is connected one attempt at a time, because the person confirms
+    // one identity per attempt and the wizard shows one.
+    let candidate = candidates.into_iter().next();
+    if *cancelled.borrow() {
+        return Ok(());
     }
-    publish_snapshot(&runtime.state)
-        .await
-        .map_err(|_| CommandError::Internal {
-            code: "snapshot_publish_failed".into(),
-        })
+    let Some(candidate) = candidate else {
+        return Ok(());
+    };
+    let ids = confirm::candidate_binding(&adapter, &candidate);
+    let Some((read, timestamps)) = read_candidate_quota(
+        &runtime,
+        &adapter,
+        &ids.binding,
+        &attempt_id,
+        &mut cancelled,
+    )
+    .await?
+    else {
+        return Ok(());
+    };
+    let pending = confirm::PendingConnection::new(
+        candidate,
+        request,
+        ids,
+        read,
+        timestamps,
+        Arc::clone(&reporter),
+    );
+    let verified = confirm::hold_candidate(&runtime, &attempt_id, pending, &cancelled).await?;
+    reporter
+        .emit(
+            &runtime.state,
+            &attempt_id,
+            ConnectionProgress::AwaitingConfirmation {
+                candidate: verified,
+            },
+        )
+        .await;
+    Ok(())
 }
 
 /// Discovers locally visible accounts, filtered to the requested profile.
@@ -169,36 +178,6 @@ async fn discover_connection_candidates(
     Ok(Some(candidates))
 }
 
-/// The fresh identities one verified candidate is committed under.
-struct CandidateIds {
-    connection_id: ConnectionId,
-    account_id: AccountId,
-    binding: quota_core::ports::ConnectionBinding,
-}
-
-/// Mints the connection, account, and binding for one candidate.
-fn candidate_binding(
-    adapter: &Arc<dyn ProviderAdapter>,
-    candidate: &quota_core::ports::DiscoveredAccount,
-) -> CandidateIds {
-    let connection_id = ConnectionId::generate();
-    let account_id = AccountId::generate();
-    let binding = quota_core::ports::ConnectionBinding {
-        connection_id: connection_id.clone(),
-        generation: 0,
-        provider_id: adapter.provider_id(),
-        principal_id: candidate.principal_id.clone(),
-        workspace_id: candidate.workspace_id.clone(),
-        entitlement_id: candidate.entitlement_id.clone(),
-        profile_label: candidate.profile_label.clone(),
-    };
-    CandidateIds {
-        connection_id,
-        account_id,
-        binding,
-    }
-}
-
 /// Reads one candidate binding with a timeout.
 ///
 /// Returns `None` when cancellation wins the permit or read race.
@@ -208,13 +187,14 @@ async fn read_candidate_quota(
     binding: &quota_core::ports::ConnectionBinding,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
-) -> Result<Option<quota_core::ports::QuotaRead>, CommandError> {
+) -> Result<Option<(quota_core::ports::QuotaRead, confirm::ReadTimestamps)>, CommandError> {
     let permit = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
         permit = runtime.state.permits.clone().acquire_owned() => {
             permit.map_err(|_| CommandError::Cancelled)?
         }
     };
+    let dispatched_at = runtime.state.clock.now();
     let response = tokio::select! {
         _ = cancelled.changed() => {
             drop(permit);
@@ -226,7 +206,7 @@ async fn read_candidate_quota(
                 binding,
                 quota_core::ports::ReadContext {
                     attempt_id: attempt_id.clone(),
-                    deadline: Some(runtime.state.clock.now() + chrono::Duration::seconds(10)),
+                    deadline: Some(dispatched_at + chrono::Duration::seconds(10)),
                 },
             ),
         ) => result
@@ -235,6 +215,7 @@ async fn read_candidate_quota(
             })?
             .map_err(provider_command_error)?,
     };
+    let completed_at = runtime.state.clock.now();
     drop(permit);
     let read = response
         .read()
@@ -242,92 +223,16 @@ async fn read_candidate_quota(
         .ok_or_else(|| CommandError::Internal {
             code: "connection_read_unavailable".into(),
         })?;
-    Ok(Some(read))
-}
-
-/// Persists one verified candidate and registers it with the supervisor.
-async fn commit_candidate(
-    runtime: &MonitoringRuntime,
-    candidate: quota_core::ports::DiscoveredAccount,
-    request: &BeginConnectionRequest,
-    ids: CandidateIds,
-    read: quota_core::ports::QuotaRead,
-    cancelled: &watch::Receiver<bool>,
-) -> Result<(), CommandError> {
-    let now = runtime.state.clock.now();
-    let stored = quota_core::ports::StoredAccount {
-        account_id: ids.account_id.clone(),
-        connection: quota_domain::account::ConnectionSummary {
-            id: ids.connection_id,
-            provider_id: ids.binding.provider_id,
-            credential_ownership: candidate.credential_ownership,
-            generation: 0,
-            profile_label: candidate.profile_label.clone(),
-            cardinality: candidate.cardinality,
-            state: ConnectionState::Connected,
-            principal_id: candidate.principal_id,
-            workspace_id: candidate.workspace_id,
-            entitlement_id: candidate.entitlement_id,
+    Ok(Some((
+        read,
+        confirm::ReadTimestamps {
+            dispatched_at,
+            completed_at,
         },
-        nickname: request.nickname.clone(),
-        connection_ordinal: 0,
-        monitoring_enabled: true,
-        connection_state: ConnectionState::Connected,
-        fetch_state: quota_domain::account::FetchState::Idle,
-        last_attempt_at: Some(now),
-        last_success_at: Some(now),
-        next_attempt_at: Some(now + chrono::Duration::seconds(300)),
-        identity: Some(read.identity),
-        windows: read.windows,
-        expected_but_missing_window_ids: read.expected_but_missing,
-    };
-    let new_account = quota_core::accounts::NewAccount {
-        account_id: ids.account_id.clone(),
-        stored: stored.clone(),
-        profile_label: candidate.profile_label,
-        monitoring_enabled: true,
-    };
-
-    if *cancelled.borrow() {
-        return Err(CommandError::Cancelled);
-    }
-    if runtime
-        .state
-        .registry
-        .read()
-        .await
-        .find_duplicate(&new_account)
-        .is_some()
-    {
-        return Err(CommandError::ValidationFailed {
-            field: "binding".into(),
-            reason: "this verified account and quota pool are already connected".into(),
-        });
-    }
-    // The registry assigns the authoritative ordinal, so the account is
-    // registered before it is written: persisting first stored ordinal zero and
-    // left the stable tie-break order to chance on the next restart.
-    let mut registry = runtime.state.registry.write().await;
-    let registered = match registry.register(new_account) {
-        Ok(entry) => entry.stored.clone(),
-        Err(error) => return Err(core_command_error(error)),
-    };
-    drop(registry);
-    if let Err(error) = runtime.state.accounts.upsert_account(registered).await {
-        // The account is only durable if this succeeded, so the registration it
-        // made is withdrawn rather than left in memory alone.
-        let mut registry = runtime.state.registry.write().await;
-        if let Err(error) = registry.remove(&ids.account_id) {
-            tracing::warn!(code = %error, "the rolled-back account was still registered in memory");
-        }
-        return Err(CommandError::PersistenceUnavailable {
-            owner: error.owner.to_owned(),
-        });
-    }
-    Ok(())
+    )))
 }
 
-fn provider_command_error(error: ProviderError) -> CommandError {
+pub(super) fn provider_command_error(error: ProviderError) -> CommandError {
     match error {
         ProviderError::Authentication => CommandError::ReconnectRequired,
         ProviderError::Authorization => CommandError::PermissionDenied {
@@ -339,29 +244,31 @@ fn provider_command_error(error: ProviderError) -> CommandError {
     }
 }
 
-fn core_command_error(error: quota_core::CoreError) -> CommandError {
-    match error {
-        quota_core::CoreError::AccountNotFound(_)
-        | quota_core::CoreError::ConnectionNotFound(_) => CommandError::AccountNotFound,
-        quota_core::CoreError::ReconnectRequired => CommandError::ReconnectRequired,
-        quota_core::CoreError::StaleResult => CommandError::RevisionConflict {
-            expected: 0,
-            actual: 0,
-        },
-        quota_core::CoreError::Validation { field, reason } => CommandError::ValidationFailed {
-            field: field.into(),
-            reason: reason.into(),
-        },
-        quota_core::CoreError::Provider(error) => provider_command_error(error),
-        quota_core::CoreError::Persistence { owner } => CommandError::PersistenceUnavailable {
-            owner: owner.into(),
-        },
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use quota_contracts::commands::VerifiedCandidate;
+    use quota_domain::account::{ConnectionState, VerifiedIdentity};
+    use quota_domain::provider::ProviderId;
+    use quota_domain::quota::window::SourceKind;
+
     use super::*;
+
+    /// The progress an attempt reports once it has verified one identity.
+    fn awaiting_confirmation() -> ConnectionProgress {
+        ConnectionProgress::AwaitingConfirmation {
+            candidate: VerifiedCandidate {
+                provider_id: ProviderId::Fixture,
+                nickname: "Personal".into(),
+                identity: VerifiedIdentity {
+                    principal_label: "demo@example.com".into(),
+                    workspace_label: None,
+                    plan_label: None,
+                    source: SourceKind::LocalCapture,
+                },
+                windows: Vec::new(),
+            },
+        }
+    }
 
     #[tokio::test]
     async fn acknowledged_cancellation_prevents_all_later_progress() {
@@ -373,6 +280,7 @@ mod tests {
         for progress in [
             ConnectionProgress::Started,
             ConnectionProgress::AwaitingUser,
+            awaiting_confirmation(),
             ConnectionProgress::Verified {
                 state: ConnectionState::Connected,
             },
@@ -406,7 +314,11 @@ mod tests {
                     .await,
                 Some(2)
             );
-            assert_eq!(reporter.next_revision(&terminal).await, Some(3));
+            assert_eq!(
+                reporter.next_revision(&awaiting_confirmation()).await,
+                Some(3)
+            );
+            assert_eq!(reporter.next_revision(&terminal).await, Some(4));
             assert_eq!(
                 reporter.next_revision(&ConnectionProgress::Started).await,
                 None

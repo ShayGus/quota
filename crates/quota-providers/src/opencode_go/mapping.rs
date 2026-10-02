@@ -84,7 +84,7 @@ fn windows() -> [WindowSpec; 3] {
     [
         WindowSpec {
             category: QuotaCategory::Session,
-            resource: "account",
+            resource: quota_domain::quota::scope::ACCOUNT_RESOURCE,
             label: "OpenCode Go rolling",
             bucket: "rolling",
             // The provider states a five-hour rolling window.
@@ -93,7 +93,7 @@ fn windows() -> [WindowSpec; 3] {
         },
         WindowSpec {
             category: QuotaCategory::Weekly,
-            resource: "account",
+            resource: quota_domain::quota::scope::ACCOUNT_RESOURCE,
             label: "OpenCode Go weekly",
             bucket: "weekly",
             semantics: WindowSemantics::RollingPeriod,
@@ -102,7 +102,7 @@ fn windows() -> [WindowSpec; 3] {
         WindowSpec {
             // The only monthly window in scope, so it is mapped, never dropped.
             category: QuotaCategory::Monthly,
-            resource: "account",
+            resource: quota_domain::quota::scope::ACCOUNT_RESOURCE,
             label: "OpenCode Go monthly",
             bucket: "monthly",
             // A calendar cycle is not assumed: this source states a duration,

@@ -8,13 +8,15 @@
  *
  * One subscription registers one listener per backend event, so the counts here
  * are per listener: six events means six live listeners for one subscription.
+ * The popover also listens for navigation requests from the settings window,
+ * which is one more listener with the same lifecycle.
  */
 import { render, waitFor } from "@testing-library/react";
 import { StrictMode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-/** The wire events the renderer subscribes to. */
-const EVENTS = 6;
+/** The wire events the renderer subscribes to, plus the popover's navigation listener. */
+const EVENTS = 6 + 1;
 
 /** Live listeners. */
 let active = 0;

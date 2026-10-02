@@ -1,16 +1,35 @@
-import { useState, type JSX } from "react";
+/**
+ * Add an account: Provider → Connect → Verify.
+ *
+ * Connecting uses the provider's existing local sign-in; credentials never
+ * enter this window. A verified attempt is held by the host as a pending
+ * candidate: nothing is saved and no monitoring starts until the person
+ * confirms it and names it here. Leaving the wizard by any route, whether
+ * Back, Cancel, Escape, or opening a fresh wizard, discards the candidate, so
+ * an unconfirmed account is never left behind.
+ */
+import { useEffect, useRef, useState, type JSX } from "react";
 
-import type { AttemptRef } from "../../generated/bindings";
-import { accountLabel, displayName } from "../../shared/format/alias";
-import { formatRemaining, hasReading } from "../../shared/format/allowance";
+import type { AttemptRef, QuotaWindow } from "../../generated/bindings";
+import { accountLabel } from "../../shared/format/alias";
+import { formatRemaining } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
 import type { RendererState } from "../../shared/state/types";
 import { Icon } from "../../shared/ui/Icon";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
+import { NicknameField } from "./Primitives";
 import type { SettingsActions } from "./Settings";
+import { windowLabel } from "../overview/reading";
 
 const PROVIDERS = ["codex", "claude", "open_code_go"] as const;
+
+/** The quota windows each provider reports, as the picker lists them. */
+const PROVIDER_WINDOWS: Record<(typeof PROVIDERS)[number], string> = {
+  codex: "5-hour · Weekly",
+  claude: "5-hour · Weekly · Model-specific",
+  open_code_go: "5-hour · Weekly · Monthly",
+};
 
 const AUTHENTICATION_RECOVERY = {
   codex:
@@ -21,37 +40,104 @@ const AUTHENTICATION_RECOVERY = {
     "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
 };
 
+/**
+ * A verified window's name on Verify: its period and the allowance it measures,
+ * so two windows of one period stay distinct.
+ */
+function verifiedWindowName(window: QuotaWindow): string {
+  const period = windowLabel(window);
+  const scope = window.scope.label;
+  return scope === "" || scope === period ? period : `${period} · ${scope}`;
+}
+
+/** The reading being approved, in the words the overview uses. */
+function verifiedReading(window: QuotaWindow): string {
+  const value = formatRemaining(window.measurement);
+  return /\d/.test(value) ? `${value} remaining` : value;
+}
+
+/** The nickname a new account starts with, as the wireframe suggests it. */
+const DEFAULT_NICKNAME = "Personal";
+
+/** The actions the wizard needs. */
+export type WizardActions = Pick<
+  SettingsActions,
+  "beginConnection" | "cancelConnection" | "confirmConnection"
+>;
+
 export function ConnectionWizard({
   state,
   actions,
   onDone,
 }: {
   readonly state: RendererState;
-  readonly actions: SettingsActions;
-  readonly onDone: () => void;
+  readonly actions: WizardActions;
+  /** Leaves the wizard. `added` says whether an account was saved. */
+  readonly onDone: (added: boolean) => void;
 }): JSX.Element {
   const [provider, setProvider] = useState<(typeof PROVIDERS)[number] | null>(null);
-  const [nickname, setNickname] = useState("Personal");
+  const [nickname, setNickname] = useState(DEFAULT_NICKNAME);
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
-  const verified = progress?.kind === "verified";
+  const candidate =
+    progress?.kind === "awaiting_confirmation" ? progress.context.candidate : null;
   const accounts = state.snapshot?.accounts ?? [];
-  const savedAccounts = accounts.filter(
-    (account) =>
-      account.provider_id === provider && account.connection_state === "connected",
-  );
+  // A candidate is not in the account list yet, so it takes the label the alias
+  // helper gives an account it has not numbered, as details does.
+  const alias = accountLabel(state.preferences, accounts, "");
   const busy =
     starting ||
     (attempt !== null &&
       (progress === undefined ||
         progress.kind === "started" ||
         progress.kind === "awaiting_user"));
-  const step = provider === null ? 1 : verified ? 3 : 2;
+  const step = provider === null ? 1 : candidate !== null ? 3 : 2;
+
+  // What must be discarded if the wizard goes away: a running attempt or a
+  // held candidate. Kept in a ref so the unmount cleanup sees the latest.
+  const pending = useRef<AttemptRef | null>(null);
+  // Whether the wizard is still on screen, so an answer that arrives after it
+  // has gone neither leaves an attempt running nor navigates.
+  const mounted = useRef(false);
+  // Whether the saved account has already been reported, so the reply and the
+  // Verified event, whichever arrives first, finish the wizard only once.
+  const finished = useRef(false);
+  const live =
+    attempt !== null && !adding && (busy || candidate !== null) ? attempt : null;
+  useEffect(() => {
+    pending.current = live;
+  }, [live]);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      const held = pending.current;
+      if (held !== null) {
+        launch(actions.cancelConnection(held));
+      }
+    };
+  }, [actions]);
+
+  /** Leaves the wizard once the host has saved the account. */
+  const finish = (): void => {
+    pending.current = null;
+    if (finished.current || !mounted.current) return;
+    finished.current = true;
+    onDone(true);
+  };
+
+  // A save whose reply was lost still reports Verified, so the wizard leaves
+  // instead of offering an Add account that can no longer succeed.
+  const verified = progress?.kind === "verified";
+  useEffect(() => {
+    if (verified) finish();
+  });
 
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
@@ -62,9 +148,13 @@ export function ConnectionWizard({
     try {
       const accepted = await actions.beginConnection({
         provider_id: provider,
-        nickname: nickname.trim(),
+        nickname: nickname.trim() || DEFAULT_NICKNAME,
         profile_label: null,
       });
+      if (!mounted.current) {
+        if (accepted !== null) await actions.cancelConnection(accepted);
+        return;
+      }
       setAttempt(accepted);
       if (accepted === null)
         setRefusal(
@@ -75,246 +165,276 @@ export function ConnectionWizard({
     }
   };
 
-  const cancel = async (): Promise<void> => {
-    if (attempt !== null && busy) await actions.cancelConnection(attempt);
-    onDone();
+  /** Discards the live attempt or candidate, if any, and forgets it. */
+  const discard = async (): Promise<void> => {
+    pending.current = null;
+    setAttempt(null);
+    setConfirmed(false);
+    if (live !== null) await actions.cancelConnection(live);
   };
 
+  const add = async (): Promise<void> => {
+    if (attempt === null || adding || !confirmed || nickname.trim().length === 0) return;
+    setAdding(true);
+    try {
+      if (await actions.confirmConnection(attempt, nickname.trim())) finish();
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const steps = (
+    <div className="step-line" aria-label="Connection steps">
+      {["Provider", "Connect", "Verify"].map((label, index) => (
+        <StepMarker key={label} index={index} label={label} step={step} />
+      ))}
+    </div>
+  );
+
+  let body: JSX.Element;
+  if (provider === null) {
+    body = (
+      <>
+        <h2>Add a subscription</h2>
+        <p className="intro">
+          Choose a provider to connect its account. Only real quota windows will appear in
+          your overview.
+        </p>
+        {PROVIDERS.map((id) => (
+          <button
+            key={id}
+            type="button"
+            className="provider-pick"
+            onClick={() => {
+              setProvider(id);
+            }}
+          >
+            <ProviderMark providerId={id} />
+            <span className="provider-copy">
+              <span className="provider-name">{providerLabel(id)}</span>
+              <span className="provider-meta">{PROVIDER_WINDOWS[id]}</span>
+            </span>
+            <Icon name="chevron-right" />
+          </button>
+        ))}
+        <div className="note">
+          Quota reads the provider's existing local sign-in. It never asks for a password,
+          and credentials never enter this window.
+        </div>
+      </>
+    );
+  } else if (candidate !== null) {
+    const identity = candidate.identity;
+    body = (
+      <>
+        <div className="success-icon">
+          <Icon name="check" />
+        </div>
+        <h2>Is this the right account?</h2>
+        <p className="intro">
+          Confirm the identity before adding this subscription to your overview.
+        </p>
+        <dl className="detail-list">
+          <div>
+            <dt>Provider</dt>
+            <dd>{providerLabel(candidate.provider_id)}</dd>
+          </div>
+          <div>
+            <dt>Account</dt>
+            <dd>{alias || identity.principal_label}</dd>
+          </div>
+          <div>
+            <dt>Workspace</dt>
+            <dd>
+              {alias ? "Workspace hidden" : (identity.workspace_label ?? "Not reported")}
+            </dd>
+          </div>
+          {candidate.windows.length === 0 ? (
+            <div>
+              <dt>Quota reading</dt>
+              <dd>Not reported</dd>
+            </div>
+          ) : (
+            candidate.windows.map((window) => (
+              <div key={window.id}>
+                <dt>{verifiedWindowName(window)}</dt>
+                <dd>{verifiedReading(window)}</dd>
+              </div>
+            ))
+          )}
+        </dl>
+        <NicknameField
+          id="account-nickname"
+          value={nickname}
+          hidden={alias !== ""}
+          hint="Shown below the provider name. Nothing is saved until you add the account."
+          onChange={setNickname}
+        />
+        <label className="checkline">
+          <input
+            id="confirm-account"
+            type="checkbox"
+            checked={confirmed}
+            onChange={(event) => {
+              setConfirmed(event.currentTarget.checked);
+            }}
+          />
+          This is the account I intended to connect.
+        </label>
+        <div className="wizard-action">
+          <button
+            type="button"
+            className="button"
+            disabled={adding}
+            onClick={() => {
+              launch(discard());
+            }}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={adding || !confirmed || nickname.trim().length === 0}
+            onClick={() => {
+              launch(add());
+            }}
+          >
+            <Icon name={adding ? "clock" : "plus"} />
+            {adding ? "Adding…" : "Add account"}
+          </button>
+        </div>
+      </>
+    );
+  } else {
+    body = (
+      <>
+        <h2>Connect {providerLabel(provider)}</h2>
+        <p className="intro">
+          Quota uses this provider's existing local sign-in to read your quota.
+        </p>
+        <div className="connection-box">
+          <div className="identity">
+            <ProviderMark providerId={provider} />
+            <span className="provider-copy">
+              <span className="provider-name">{providerLabel(provider)}</span>
+              <span className="provider-meta">Existing local sign-in</span>
+            </span>
+          </div>
+          <h3>Quota-only connection</h3>
+          <p>
+            No sign-in opens here and no inference is submitted. The next step shows the
+            account the provider verified, for you to confirm.
+          </p>
+        </div>
+        {progress?.kind === "awaiting_user" ? (
+          <div className="note" role="status">
+            Finish signing in with the provider's own tool.
+          </div>
+        ) : null}
+        {progress?.kind === "failed" ? (
+          <div className="note" role="alert">
+            {progress.context.error.kind === "reconnect_required"
+              ? AUTHENTICATION_RECOVERY[provider]
+              : describeCommandError(progress.context.error)}
+          </div>
+        ) : null}
+        {progress?.kind === "cancelled" ? (
+          <div className="note" role="status">
+            Connection cancelled. You can try again.
+          </div>
+        ) : null}
+        {refusal === null ? null : (
+          <div className="note" role="alert">
+            {refusal}
+          </div>
+        )}
+        <div className="note">
+          A connection is added only after its account identity and an actual quota
+          reading have been verified and you confirm it.
+        </div>
+        <div className="wizard-action">
+          <button
+            type="button"
+            className="button"
+            disabled={busy}
+            onClick={() => {
+              setProvider(null);
+              setAttempt(null);
+              setRefusal(null);
+            }}
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="button primary"
+            disabled={busy}
+            onClick={() => {
+              launch(connect());
+            }}
+          >
+            <Icon name={busy ? "clock" : "arrow-right"} />
+            {busy ? "Verifying…" : "Connect"}
+          </button>
+        </div>
+      </>
+    );
+  }
+
   return (
-    <section className="wizard" aria-label="Connect an account">
-      <div className="detail__back">
+    <section aria-label="Connect an account">
+      <div className="back-row">
         <button
           type="button"
           className="back-button"
-          disabled={starting}
+          disabled={starting || adding}
           onClick={() => {
-            launch(cancel());
+            if (live === null) {
+              onDone(false);
+              return;
+            }
+            launch(
+              discard().then(() => {
+                onDone(false);
+              }),
+            );
           }}
         >
-          <Icon name="arrow-left" size={13} />
+          <Icon name="arrow-left" />
           Cancel
         </button>
+        <span className="badge">LOCAL SIGN-IN</span>
       </div>
-      <div className="step-line" aria-label="Connection steps">
-        {["Provider", "Connect", "Verify"].map((label, index) => (
-          <span
-            key={label}
-            className="wizard-step"
-            aria-current={step === index + 1 ? "step" : undefined}
-          >
-            <b>{index + 1}</b>
-            {label}
-          </span>
-        ))}
+      <div className="wizard">
+        {steps}
+        {body}
       </div>
-      {provider === null ? (
-        <>
-          <h2>Add a subscription</h2>
-          <p className="settings__intro">
-            Choose a provider. Only real quota windows will appear in your overview.
-          </p>
-          {PROVIDERS.map((id) => (
-            <button
-              key={id}
-              type="button"
-              className="provider-pick"
-              onClick={() => {
-                setProvider(id);
-              }}
-            >
-              <ProviderMark providerId={id} />
-              <span>
-                <strong>{providerLabel(id)}</strong>
-                <small>Connect an existing local sign-in</small>
-              </span>
-              <Icon name="external" size={14} />
-            </button>
-          ))}
-          <p className="note">
-            Quota reads the provider's existing local credentials. Sign in with its own
-            tool first; credentials never enter this window.
-          </p>
-        </>
-      ) : verified ? (
-        <>
-          <div className="success-icon">
-            <Icon
-              name={progress.context.state === "connected" ? "check" : "warning"}
-              size={24}
-            />
-          </div>
-          <h2>Verify your connection</h2>
-          <p className="settings__intro">Review the result reported by the provider.</p>
-          <dl className="detail__list">
-            <div>
-              <dt>Provider</dt>
-              <dd>{providerLabel(provider)}</dd>
-            </div>
-            <div>
-              <dt>Requested nickname</dt>
-              <dd>{nickname.trim()}</dd>
-            </div>
-            <div>
-              <dt>Connection</dt>
-              <dd>{progress.context.state}</dd>
-            </div>
-          </dl>
-          <h3>Saved {providerLabel(provider)} accounts</h3>
-          {savedAccounts.length === 0 ? (
-            <p className="note">
-              Account, workspace, and quota reading have not arrived in the account
-              snapshot yet.
-            </p>
-          ) : (
-            savedAccounts.map((account) => {
-              const alias = accountLabel(state.preferences, accounts, account.account_id);
-              return (
-                <article
-                  key={account.account_id}
-                  aria-label={`Saved ${displayName(state.preferences, accounts, account)}`}
-                >
-                  <h4>{displayName(state.preferences, accounts, account)}</h4>
-                  <dl className="detail__list">
-                    <div>
-                      <dt>Account</dt>
-                      <dd>
-                        {alias || account.identity?.principal_label || "Not reported"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Workspace</dt>
-                      <dd>
-                        {alias
-                          ? "Workspace hidden"
-                          : (account.identity?.workspace_label ?? "Not reported")}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Quota reading</dt>
-                      <dd>
-                        {account.windows.length === 0
-                          ? "Not reported"
-                          : account.windows.map((window) => (
-                              <p key={window.id}>
-                                {window.scope.label || "Allowance"}:{" "}
-                                {formatRemaining(window.measurement)}{" "}
-                                {hasReading(window.measurement)
-                                  ? "remaining (last reported)"
-                                  : "(not reported)"}
-                              </p>
-                            ))}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })
-          )}
-          <p className="note">
-            The host saves verified accounts before this review. The attempt result does
-            not identify which account it saved; these are the provider's saved accounts
-            from the latest snapshot. Confirmation before saving is not available yet.
-          </p>
-          <label className="checkline">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(event) => {
-                setConfirmed(event.currentTarget.checked);
-              }}
-            />
-            I will review the connected account in Accounts.
-          </label>
-          <div className="wizard-action">
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={!confirmed}
-              onClick={onDone}
-            >
-              Manage accounts
-            </button>
-          </div>
-        </>
-      ) : (
-        <>
-          <h2>Connect {providerLabel(provider)}</h2>
-          <p className="settings__intro">
-            Use this provider's local sign-in to verify a quota-only connection.
-          </p>
-          <div className="connection-box">
-            <div className="identity">
-              <ProviderMark providerId={provider} />
-              <strong>{providerLabel(provider)}</strong>
-            </div>
-            <h3>Existing local credentials</h3>
-            <p>
-              No inference is submitted. A connection succeeds only after the host
-              verifies the provider identity and a quota reading.
-            </p>
-          </div>
-          <label className="control-label" htmlFor="account-nickname">
-            Account nickname
-          </label>
-          <input
-            id="account-nickname"
-            type="text"
-            maxLength={64}
-            value={nickname}
-            disabled={busy}
-            onChange={(event) => {
-              setNickname(event.currentTarget.value);
-            }}
-          />
-          {progress?.kind === "awaiting_user" ? (
-            <p className="note" role="status">
-              Finish signing in with the provider's own tool.
-            </p>
-          ) : null}
-          {progress?.kind === "failed" ? (
-            <p className="note" role="alert">
-              {progress.context.error.kind === "reconnect_required"
-                ? AUTHENTICATION_RECOVERY[provider]
-                : describeCommandError(progress.context.error)}
-            </p>
-          ) : null}
-          {progress?.kind === "cancelled" ? (
-            <p className="note" role="status">
-              Connection cancelled. You can try again.
-            </p>
-          ) : null}
-          {refusal === null ? null : (
-            <p className="note" role="alert">
-              {refusal}
-            </p>
-          )}
-          <div className="wizard-action">
-            <button
-              type="button"
-              className="button"
-              disabled={busy}
-              onClick={() => {
-                setProvider(null);
-                setAttempt(null);
-                setRefusal(null);
-              }}
-            >
-              Back
-            </button>
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={busy || nickname.trim().length === 0}
-              onClick={() => {
-                launch(connect());
-              }}
-            >
-              <Icon name={busy ? "clock" : "link"} size={14} />
-              {busy ? "Verifying…" : "Connect"}
-            </button>
-          </div>
-        </>
-      )}
     </section>
+  );
+}
+
+/** One numbered step, with the rule that joins it to the next. */
+function StepMarker({
+  index,
+  label,
+  step,
+}: {
+  readonly index: number;
+  readonly label: string;
+  readonly step: number;
+}): JSX.Element {
+  const current = step === index + 1;
+  return (
+    <>
+      {index > 0 ? <span className="step-rule" /> : null}
+      <span
+        className={`step${current ? " selected" : ""}`}
+        aria-current={current ? "step" : undefined}
+      >
+        {index + 1}
+      </span>
+      <span>{label}</span>
+    </>
   );
 }

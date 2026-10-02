@@ -33,8 +33,16 @@ export const commands = {
 	refreshAccounts: (selection: AccountSelection, reason: RefreshReason) => typedError<AccountId[], CommandError>(__TAURI_INVOKE("refresh_accounts", { selection, reason })),
 	/**  Starts one cancellable local-credential connection attempt. */
 	beginConnection: (request: BeginConnectionRequest) => typedError<ConnectionAttemptAccepted, CommandError>(__TAURI_INVOKE("begin_connection", { request })),
-	/**  Cancels one running local connection attempt. */
+	/**  Cancels one running attempt, or discards one verified candidate. */
 	cancelConnection: (attemptRef: AttemptRef) => typedError<null, CommandError>(__TAURI_INVOKE("cancel_connection", { attemptRef })),
+	/**
+	 *  Saves the verified candidate one attempt is holding, under the nickname the
+	 *  person confirmed.
+	 * 
+	 *  Nothing is written until this command runs, so declining a verified
+	 *  connection in the wizard leaves storage untouched.
+	 */
+	confirmConnection: (attemptRef: AttemptRef, nickname: string) => typedError<null, CommandError>(__TAURI_INVOKE("confirm_connection", { attemptRef, nickname })),
 	/**  Re-verifies one account under a new generation and queues a fresh read. */
 	reconnectAccount: (accountRef: AccountRef) => typedError<number, CommandError>(__TAURI_INVOKE("reconnect_account", { accountRef })),
 	/**  Saves committed preferences and returns what was actually persisted. */
@@ -74,14 +82,13 @@ export const commands = {
 	 */
 	setOverviewAlwaysOnTop: (alwaysOnTop: boolean) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("set_overview_always_on_top", { alwaysOnTop })),
 	/**
-	 *  Widens the overview to the account comparison layout.
+	 *  Fits the popover's height to its content, as the wireframe's popover does.
 	 * 
-	 *  This is an explicit user action. No reading, label change, or added account
-	 *  may resize or relocate the window on its own.
+	 *  The renderer reports how tall its content is; the host decides the height
+	 *  and position inside the monitor's work area and records the geometry change,
+	 *  so the window is never moved outside the controller.
 	 */
-	fitOverviewToAccounts: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_to_accounts")),
-	/**  Restores a position known to be inside a surviving monitor's work area. */
-	resetOverviewPosition: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("reset_overview_position")),
+	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
 	/**
 	 *  Opens one allowlisted provider usage page in the external browser.
 	 * 
@@ -90,7 +97,8 @@ export const commands = {
 	 */
 	openProviderUsagePage: (providerId: ProviderId) => typedError<null, CommandError>(__TAURI_INVOKE("open_provider_usage_page", { providerId })),
 	/**
-	 *  Shows and focuses the settings window.
+	 *  Shows and focuses the settings window, placed over the overview or, when
+	 *  the overview is hidden, beside the tray.
 	 * 
 	 *  The window is created hidden at launch and stays hidden until this command
 	 *  or the tray menu runs, so the settings surface never opens beside the
@@ -362,7 +370,16 @@ export type ConnectionProgress =
 { kind: "started" } | 
 /**  The provider asked the user to do something. */
 { kind: "awaiting_user" } | 
-/**  The attempt produced a verified binding. */
+/**
+ *  The attempt verified an identity and is waiting for a decision.
+ * 
+ *  Nothing is stored and no monitoring starts until the person confirms.
+ */
+{ kind: "awaiting_confirmation"; context: {
+	/**  The verified identity, which is not saved yet. */
+	candidate: VerifiedCandidate,
+} } | 
+/**  The person confirmed the candidate and the account is now saved. */
 { kind: "verified"; context: {
 	/**  The verified connection state. */
 	state: ConnectionState,
@@ -448,13 +465,6 @@ export type DecimalPrecision = number;
 
 /**  A version of a window or account definition, as reported by the provider. */
 export type DefinitionVersion = number;
-
-/**  How much room a row takes. */
-export type Density = 
-/**  More rows, smaller text blocks. */
-"compact" | 
-/**  Larger touch targets and more spacing. */
-"comfortable";
 
 /**  How strongly the provider enforces this limit. */
 export type Enforcement = 
@@ -747,8 +757,6 @@ export type Preferences = {
 	revision: number,
 	/**  The colour scheme. */
 	theme: Theme,
-	/**  Row density. */
-	density: Density,
 	/**  The allowance indicator. */
 	indicator_style: IndicatorStyle,
 	/**  Where the overview lives. */
@@ -1154,6 +1162,22 @@ export type UnrankedReason =
 "monitoring_paused" | 
 /**  No included allowance applies to this account. */
 "no_included_allowance";
+
+/**
+ *  A verified identity held for the person's decision, and not yet saved.
+ *  Nothing about this type names a stored account, so a candidate that is never
+ *  confirmed leaves no account behind. It carries no secret material.
+ */
+export type VerifiedCandidate = {
+	/**  The adapter that reported this identity. */
+	provider_id: ProviderId,
+	/**  The nickname the person asked for. Presentation only. */
+	nickname: string,
+	/**  The provider-verified principal, workspace, plan, and source. */
+	identity: VerifiedIdentity,
+	/**  The quota reading this attempt verified. */
+	windows: QuotaWindow[],
+};
 
 /**  A provider-verified identity, shown for confirmation. */
 export type VerifiedIdentity = {

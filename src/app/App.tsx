@@ -5,31 +5,52 @@
  * value comes from the snapshot store, and every mutation is a typed command
  * (spec 7.8.3).
  */
-import { useEffect, useLayoutEffect, useRef, useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 
 import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import type { OverviewFilter } from "../features/overview/OverviewToolbar";
+import { ConnectionWizard } from "../features/settings/ConnectionWizard";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
-import type { AccountId } from "../generated/bindings";
-import { launch } from "../shared/ipc/report";
+import type { AccountId, QuotaWindowId } from "../generated/bindings";
+import {
+  describeCommandError,
+  describeTransportFailure,
+  launch,
+} from "../shared/ipc/report";
+import { getRendererState } from "../shared/state/store";
+import type { RendererFailure, RendererState } from "../shared/state/types";
 import { useRendererState } from "../shared/state/useRendererState";
+import { Icon } from "../shared/ui/Icon";
+import { refreshMessage, Toast, type ToastMessage } from "../shared/ui/RefreshNotice";
 import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
-import { Icon } from "../shared/ui/Icon";
-import { AppHeader } from "./AppHeader";
+import { AppHeader, SettingsHeader } from "./AppHeader";
 import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
+import { listenForNavigation, showInPopover } from "../shared/ipc/navigation";
+import { useFitContentHeight } from "./useFitContentHeight";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
 import { useTheme } from "./useTheme";
 
 /**
- * Which surface the overview window is showing.
+ * Which surface the popover is showing.
  *
  * Settings has no entry here: it belongs to its own window, whose capability is
- * the only one that may save preferences. The overview asks the host to show it.
+ * the only one that may save preferences. The popover asks the host to show it.
  */
 type View =
-  { readonly name: "overview" } | { readonly name: "detail"; readonly id: AccountId };
+  | { readonly name: "overview" }
+  | {
+      readonly name: "detail";
+      readonly id: AccountId;
+      readonly windowId: QuotaWindowId | null;
+    }
+  | {
+      readonly name: "connect";
+      readonly serial: number;
+      /** The hidden-report count when the wizard opened; see `surface`. */
+      readonly hiddenReports: number;
+    };
 
 /** The settings actions, wired to the typed commands. */
 const settingsActions: SettingsActions = {
@@ -48,12 +69,6 @@ const settingsActions: SettingsActions = {
   setOverviewMode: (mode) => {
     launch(actions.setOverviewMode(mode));
   },
-  fitToAccounts: () => {
-    launch(actions.fitToAccounts());
-  },
-  resetPosition: () => {
-    launch(actions.resetPosition());
-  },
   setAccountEnabled: (accountId, enabled) => {
     launch(actions.setAccountEnabled(accountId, enabled));
   },
@@ -71,14 +86,46 @@ const settingsActions: SettingsActions = {
     return accepted === null ? null : { id: accepted.attempt_id };
   },
   cancelConnection: (attempt) => actions.cancelConnection(attempt),
+  confirmConnection: (attempt, nickname) => actions.confirmConnection(attempt, nickname),
   reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
   },
-  exportDiagnostics: (destination) => {
-    launch(actions.exportDiagnostics(destination));
+  exportDiagnostics: (label) => actions.exportDiagnostics(label),
+  showAddAccount: () => {
+    launch(showInPopover({ view: "connect" }));
+  },
+  launchAtLogin: () => actions.launchAtLogin(),
+  setLaunchAtLogin: (launch) => actions.setLaunchAtLogin(launch),
+  showOverview: () => {
+    launch(showInPopover({ view: "overview" }));
+  },
+  showAccountDetail: (accountId) => {
+    launch(showInPopover({ view: "detail", accountId, windowId: null }));
   },
 };
+
+/** The words for a failed command, as a toast states them. */
+function failureText(failure: RendererFailure): string {
+  return failure.kind === "domain"
+    ? describeCommandError(failure.error)
+    : describeTransportFailure(failure.failure);
+}
+
+/**
+ * The toast for the latest failure. A command that the host refuses is stated
+ * where the person acted, instead of failing silently.
+ */
+function useFailureToast(
+  failure: RendererFailure | null,
+  show: (message: ToastMessage) => void,
+): void {
+  useEffect(() => {
+    if (failure !== null) {
+      show({ text: failureText(failure) });
+    }
+  }, [failure, show]);
+}
 
 /** The window root, inside the application-level boundary. */
 export function App(): JSX.Element {
@@ -90,140 +137,184 @@ export function App(): JSX.Element {
   );
 }
 
-/** The window. */
+/** The window: the settings window, or the popover. */
 function QuotaWindow(): JSX.Element {
   const state = useRendererState();
+  useTheme(state);
   // The settings window is opened with this hash and is the only window whose
   // capability may save preferences, so it is the only window that renders it.
   const isSettingsWindow = window.location.hash.startsWith("#/settings");
+  const [toast, setToast] = useState<ToastMessage | null>(null);
+  useFailureToast(state.failure, setToast);
+  if (isSettingsWindow) {
+    return (
+      <div className="window settings-window">
+        <SettingsHeader />
+        <FeatureBoundary surface="settings">
+          <Settings state={state} actions={settingsActions} />
+        </FeatureBoundary>
+        <Toast message={toast} />
+      </div>
+    );
+  }
+  return <Popover state={state} toast={toast} onToast={setToast} />;
+}
+
+/**
+ * Counts Add account requests. Each request is a fresh wizard, keyed by this
+ * count, so the previous wizard unmounts and discards whatever it was holding.
+ */
+let wizardRequests = 0;
+
+/** The popover: header, the current surface, and footer. */
+function Popover({
+  state,
+  toast,
+  onToast,
+}: {
+  readonly state: RendererState;
+  readonly toast: ToastMessage | null;
+  readonly onToast: (message: ToastMessage) => void;
+}): JSX.Element {
   const [view, setView] = useState<View>({ name: "overview" });
-  // The filter and the search text belong to the window rather than the list,
-  // because the footer states how many accounts the filter leaves visible.
+  // The filter belongs to the window rather than the list, so returning from
+  // details keeps it.
   const [filter, setFilter] = useState<OverviewFilter>("all");
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
-  const mainRef = useRef<HTMLElement | null>(null);
-  const [counts, setCounts] = useState({ visible: 0, total: 0 });
-  const toggleSearch = (open: boolean): void => {
-    setSearchOpen(open);
-    if (!open) setSearch("");
-  };
   const now = useNow();
-  useTheme(state);
 
   const account =
     view.name === "detail" && state.snapshot !== null
       ? (state.snapshot.accounts.find((candidate) => candidate.account_id === view.id) ??
         null)
       : null;
+  // Hiding the popover, by its Hide button, the window's close, or a tray
+  // popover losing focus, ends the wizard: one opened before the latest hidden
+  // report is no longer shown, and its cleanup discards a pending account, so
+  // reopening never offers it again. A confirmation already in flight still
+  // finishes.
+  const wizardEnded =
+    view.name === "connect" && view.hiddenReports !== state.hiddenReports;
+  const surface =
+    (view.name === "detail" && account === null) || wizardEnded ? "overview" : view.name;
+
+  const openConnect = (): void => {
+    wizardRequests += 1;
+    setView({
+      name: "connect",
+      serial: wizardRequests,
+      hiddenReports: state.hiddenReports,
+    });
+  };
 
   useEffect(() => {
-    if (isSettingsWindow) return;
+    // Fit returns the overview to its default state: all accounts, no detail.
     const fit = (): void => {
       setFilter("all");
-      setSearch("");
-      setSearchOpen(false);
       setView({ name: "overview" });
     };
     window.addEventListener("quota-fit-overview", fit);
     return () => {
       window.removeEventListener("quota-fit-overview", fit);
     };
-  }, [isSettingsWindow]);
+  }, []);
 
-  useLayoutEffect(() => {
-    const main = mainRef.current;
-    if (main === null || isSettingsWindow || account !== null) return;
-    const measure = (): void => {
-      const bounds = main.getBoundingClientRect();
-      const heading = main.querySelector<HTMLElement>(".table__columns");
-      const top =
-        heading !== null && getComputedStyle(heading).display !== "none"
-          ? Math.max(bounds.top, heading.getBoundingClientRect().bottom)
-          : bounds.top;
-      const rows = [...main.querySelectorAll<HTMLElement>(".account-row")];
-      const visible = rows.filter((row) => {
-        const rect = row.getBoundingClientRect();
-        return (
-          rect.height > 0 &&
-          rect.top >= top - 1 &&
-          rect.bottom <= bounds.bottom + 1 &&
-          rect.left >= bounds.left - 1 &&
-          rect.right <= bounds.right + 1
-        );
-      }).length;
-      setCounts((previous) =>
-        previous.visible === visible && previous.total === rows.length
-          ? previous
-          : { visible, total: rows.length },
-      );
-    };
-    measure();
-    main.addEventListener("scroll", measure, true);
-    window.addEventListener("resize", measure);
-    const observer =
-      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measure);
-    observer?.observe(main);
-    const content = main.querySelector(".overview");
-    if (content !== null) observer?.observe(content);
-    for (const row of main.querySelectorAll(".account-row")) observer?.observe(row);
+  useEffect(() => {
+    let stop: (() => void) | null = null;
+    let stopped = false;
+    launch(
+      listenForNavigation((target) => {
+        if (target.view === "detail") {
+          setView({ name: "detail", id: target.accountId, windowId: target.windowId });
+        } else if (target.view === "connect") {
+          wizardRequests += 1;
+          setView({
+            name: "connect",
+            serial: wizardRequests,
+            hiddenReports: getRendererState().hiddenReports,
+          });
+        } else {
+          setView({ name: "overview" });
+        }
+      }).then((detach) => {
+        if (stopped) {
+          detach();
+        } else {
+          stop = detach;
+        }
+      }),
+    );
     return () => {
-      main.removeEventListener("scroll", measure, true);
-      window.removeEventListener("resize", measure);
-      observer?.disconnect();
+      stopped = true;
+      stop?.();
     };
-  }, [state, filter, search, searchOpen, account, isSettingsWindow]);
+  }, []);
+
+  useEffect(() => {
+    // Escape steps back to the overview; from the overview it hides the popover.
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      if (document.querySelector("dialog[open]") !== null) {
+        return;
+      }
+      event.preventDefault();
+      if (surface === "overview") {
+        launch(actions.closeWindow());
+      } else {
+        setView({ name: "overview" });
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [surface]);
+
+  const pinned = state.preferences?.overview_mode === "floating";
+  const root = useRef<HTMLDivElement | null>(null);
+  useFitContentHeight(root);
 
   return (
-    <div className="shell">
+    <div className={`window popover${pinned ? " pinned" : ""}`} ref={root}>
       <AppHeader
         state={state}
-        view={isSettingsWindow ? "settings" : view.name}
         onSettings={() => {
           launch(actions.openSettings());
         }}
+        onRefresh={() => {
+          onToast({
+            text: refreshMessage(
+              state.snapshot?.accounts ?? [],
+              state.preferences,
+              Date.now(),
+            ),
+          });
+          launch(actions.refresh("user_requested"));
+        }}
       />
-      <main className="shell__main" ref={mainRef}>
-        {isSettingsWindow ? (
-          <FeatureBoundary surface="settings">
-            <Settings state={state} actions={settingsActions} />
-          </FeatureBoundary>
-        ) : account === null ? (
-          <FeatureBoundary surface="overview">
-            <Overview
-              filter={filter}
-              onFilter={setFilter}
-              searchOpen={searchOpen}
-              onSearchOpen={toggleSearch}
-              search={search}
-              onSearch={setSearch}
-              onFit={() => {
-                launch(actions.fitToAccounts());
-              }}
-              onAddAccount={() => {
-                launch(actions.openSettings("connect"));
-              }}
-              onIndicatorStyle={(next) => {
-                launch(actions.setIndicatorStyle(next));
-              }}
+      <main className="app-main">
+        {view.name === "connect" && surface === "connect" ? (
+          <FeatureBoundary surface="add account">
+            <ConnectionWizard
+              key={view.serial}
               state={state}
-              onOpenAccount={(accountId) => {
-                setView({ name: "detail", id: accountId });
-              }}
-              onResume={() => {
-                launch(actions.setMonitoring(false));
-              }}
-              onReconnect={(accountId) => {
-                // Reconnecting re-verifies the credential under a new generation.
-                // Opening the detail view is a different thing and does not do it.
-                launch(actions.reconnectAccount(accountId));
+              actions={settingsActions}
+              onDone={(added) => {
+                if (added) {
+                  onToast({ text: "Account added. It now appears in your overview." });
+                }
+                setFilter("all");
+                setView({ name: "overview" });
               }}
             />
           </FeatureBoundary>
-        ) : (
-          <FeatureBoundary surface="account details">
+        ) : account !== null && view.name === "detail" ? (
+          <FeatureBoundary surface="quota detail">
             <AccountDetail
+              key={`${account.account_id}:${view.windowId ?? ""}`}
               account={account}
+              windowId={view.windowId}
               preferences={state.preferences}
               accounts={state.snapshot?.accounts ?? []}
               now={now}
@@ -238,61 +329,83 @@ function QuotaWindow(): JSX.Element {
               }}
             />
           </FeatureBoundary>
+        ) : (
+          <FeatureBoundary surface="overview">
+            <Overview
+              filter={filter}
+              onFilter={setFilter}
+              onAddAccount={openConnect}
+              onIndicatorStyle={(next) => {
+                launch(actions.setIndicatorStyle(next));
+              }}
+              state={state}
+              onOpenAccount={(accountId) => {
+                setView({ name: "detail", id: accountId, windowId: null });
+              }}
+              onOpenWindow={(accountId, windowId) => {
+                setView({ name: "detail", id: accountId, windowId });
+              }}
+              onResume={() => {
+                launch(actions.setMonitoring(false));
+              }}
+              onReconnect={(accountId) => {
+                // Reconnecting re-verifies the credential under a new generation.
+                // Opening the detail view is a different thing and does not do it.
+                launch(actions.reconnectAccount(accountId));
+              }}
+              onEnable={(accountId) => {
+                launch(actions.setAccountEnabled(accountId, true));
+              }}
+            />
+          </FeatureBoundary>
         )}
       </main>
-      {isSettingsWindow ? null : (
-        <WindowFooter
-          counts={account !== null ? null : counts}
-          onAddAccount={() => {
-            launch(actions.openSettings("connect"));
-          }}
-        />
-      )}
+      <PopoverFooter state={state} onAddAccount={openConnect} />
+      <Toast message={toast} />
     </div>
   );
 }
 
-/** The window footer: what the backend is doing, and how much is on screen. */
-function WindowFooter({
-  counts,
+/** The popover footer: what the backend is doing, and Add account. */
+function PopoverFooter({
+  state,
   onAddAccount,
 }: {
-  /** Fully visible rows and total filtered rows, or `null` off the overview. */
-  readonly counts: { readonly visible: number; readonly total: number } | null;
+  readonly state: RendererState;
   readonly onAddAccount: () => void;
 }): JSX.Element {
-  const state = useRendererState();
   const link = state.link;
   const paused = state.monitoring?.kind === "paused";
+  const refreshing =
+    state.snapshot?.accounts.some((account) => account.fetch_state === "fetching") ??
+    false;
+  const storage =
+    state.persistence === null || state.persistence.kind === "available"
+      ? ""
+      : state.persistence.kind === "degraded"
+        ? " · storage degraded"
+        : " · storage needs repair";
   const label =
     link === "connecting"
-      ? "Connecting to Quota"
+      ? "Connecting to Quota…"
       : link === "reconciling"
-        ? "Reconciling with Quota"
+        ? "Reconciling with Quota…"
         : link === "unavailable"
           ? "Quota is not reachable"
-          : paused
-            ? "Paused · last known values"
-            : "Monitoring active";
+          : refreshing
+            ? "Refreshing…"
+            : paused
+              ? "Monitoring paused"
+              : "Local only · monitoring active";
   return (
-    <footer className="shell__footer">
-      <span className="shell__state">
-        <Icon name={paused ? "pause" : "shield"} size={13} />
+    <footer className="app-footer">
+      <span className="footer-state">
+        <Icon name={paused ? "pause" : "shield"} />
         {label}
+        {storage}
       </span>
-      {state.persistence !== null && state.persistence.kind !== "available" ? (
-        <span className="shell__state">
-          Local storage{" "}
-          {state.persistence.kind === "degraded" ? "degraded" : "needs repair"}
-        </span>
-      ) : null}
-      {counts !== null ? (
-        <span className="shell__count" data-testid="visible-count">
-          {counts.visible} / {counts.total} visible
-        </span>
-      ) : null}
-      <button type="button" className="text-button" onClick={onAddAccount}>
-        <Icon name="plus" size={13} />
+      <button type="button" className="text-btn" onClick={onAddAccount}>
+        <Icon name="plus" />
         Add account
       </button>
     </footer>

@@ -58,6 +58,15 @@ bun run typecheck && bun run lint && bun run format:check && bun run test && bun
 CI runs exactly these commands. If a command passes locally and fails in CI, the
 difference is the environment, not the command.
 
+The same commands run on Windows and Linux, and are meant to run unchanged on macOS (see
+[Platforms](docs/platforms.md)). On Windows, stop a running development app first, because
+it holds `target\debug\quota.exe` open. Tauri needs the version 6 common controls, which
+only the Windows application manifest selects, so `src-tauri/build.rs` and
+`crates/quota-persistence/build.rs` hand `src-tauri/windows-app-manifest.xml` to the
+linker for every binary they link, tests included. A crate whose tests start linking Tauri
+needs the same build script; without it its test binary exits with
+`STATUS_ENTRYPOINT_NOT_FOUND` before any test runs.
+
 The inspection checks are described in
 [the inspection guide](docs/inspecting-the-app.md#why-it-cannot-reach-a-release).
 
@@ -159,8 +168,8 @@ bun tauri build        # release bundles
   `sqlx`.
 - A first-party production file over 400 non-comment, non-blank lines fails the
   architecture gate. The guideline is 250.
-- Raw `invoke(`, `listen(`, and `emit(` are confined to `src/generated/` and
-  `src/shared/ipc/`.
+- Raw `invoke`, `listen`, `emit`, and `emitTo` calls, including their generic forms, are
+  confined to `src/generated/` and `src/shared/ipc/`.
 - Every `uses:` in `.github/workflows/` is pinned to a full 40-character commit SHA. A tag
   or a branch fails `cargo xtask check-release`, and a `run:` step must not interpolate
   event text such as a pull-request title or a branch name.

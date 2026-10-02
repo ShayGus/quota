@@ -82,8 +82,10 @@ export default defineConfig(() => ({
         }
       : false,
     watch: {
-      // tell Vite to ignore watching `src-tauri`
-      ignored: ["**/src-tauri/**"],
+      // Ignore the Rust side: `src-tauri` and the workspace-root Cargo `target`
+      // directory. Cargo holds build artifacts (e.g. proc-macro DLLs) locked on
+      // Windows, which makes chokidar's fs.watch throw EBUSY and kill the dev server.
+      ignored: ["**/src-tauri/**", "**/target/**"],
     },
   },
 }));

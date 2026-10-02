@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,16 +9,24 @@ vi.mock("@tauri-apps/api/event", () => ({
 }));
 
 import { actions as hostActions } from "../src/app/actions";
+import { ConnectionWizard } from "../src/features/settings/ConnectionWizard";
 import { Settings, type SettingsActions } from "../src/features/settings/Settings";
+import type {
+  AttemptRef,
+  ProviderId,
+  VerifiedCandidate,
+} from "../src/generated/bindings";
 import {
   acceptAttempt,
   acceptPreferences,
   acceptSnapshot,
   getRendererState,
+  setFailure,
 } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
 import {
   account,
+  candidate,
   percent,
   preferences,
   snapshot,
@@ -32,106 +40,123 @@ function settingsActions(): SettingsActions {
     savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setOverviewMode: vi.fn(),
-    fitToAccounts: vi.fn(),
-    resetPosition: vi.fn(),
     setAccountEnabled: vi.fn(),
     renameAccount: vi.fn(),
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve({ id: "attempt-1" })),
     cancelConnection: vi.fn(() => Promise.resolve(undefined)),
+    confirmConnection: vi.fn(() => Promise.resolve(true)),
     reconnectAccount: vi.fn(() => Promise.resolve(undefined)),
     clearHistory: vi.fn(),
-    exportDiagnostics: vi.fn(),
+    exportDiagnostics: vi.fn(() =>
+      Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
+    ),
+    showAddAccount: vi.fn(),
+    showOverview: vi.fn(),
+    showAccountDetail: vi.fn(),
+    launchAtLogin: vi.fn(() => Promise.resolve(false)),
+    setLaunchAtLogin: vi.fn((launch: boolean) => Promise.resolve(launch)),
   };
 }
 
-function Harness({ actions }: { readonly actions: SettingsActions }): React.ReactElement {
+/** The wizard as the popover shows it. */
+function Wizard({
+  actions,
+  onDone,
+}: {
+  readonly actions: SettingsActions;
+  readonly onDone: (added: boolean) => void;
+}): React.ReactElement {
+  const state = useRendererState();
+  return <ConnectionWizard state={state} actions={actions} onDone={onDone} />;
+}
+
+/** The settings window, which still renders the wizard on its connection route. */
+function SettingsHarness({
+  actions,
+}: {
+  readonly actions: SettingsActions;
+}): React.ReactElement {
   const state = useRendererState();
   return <Settings state={state} actions={actions} />;
 }
 
+/** The account that was there before every test. */
+const existing = account("a", "claude", 1, []);
+
+/** Reports that the host verified one attempt and holds its candidate. */
+function hold(attemptId: string, provider: ProviderId, revision = 2): VerifiedCandidate {
+  const held = candidate(provider, [quotaWindow("quota", "session", percent(72))]);
+  act(() => {
+    acceptAttempt({
+      attemptId,
+      revision,
+      progress: { kind: "awaiting_confirmation", context: { candidate: held } },
+    });
+  });
+  return held;
+}
+
+/** Picks a provider and presses Connect. */
+async function connect(provider: string): Promise<void> {
+  fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${provider}`) }));
+  await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+}
+
+const VERIFY = { name: "Is this the right account?" };
+
 beforeEach(() => {
-  window.location.hash = "#/settings/connect";
+  window.location.hash = "";
+  invoke.mockReset();
+  setFailure(null);
   acceptPreferences(preferences());
-  acceptSnapshot(snapshot("instance-1", 1, [account("a", "claude", 1, [])]));
+  acceptSnapshot(snapshot("instance-1", 1, [existing]));
 });
 
 describe("Provider → Connect → Verify", () => {
-  it("waits for its own verification event and lets the user review accounts", async () => {
+  it("shows only its own candidate, then confirms it under the chosen nickname", async () => {
     const actions = settingsActions();
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    expect(screen.getByRole("heading", { name: "Connect Claude" })).toBeTruthy();
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Codex");
+    hold("someone-else", "codex");
+    expect(screen.queryByRole("heading", VERIFY)).toBeNull();
+    hold("attempt-1", "codex");
+    expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
+    const facts = document.querySelector(".detail-list")?.textContent ?? "";
+    expect(facts).toContain("new@example.test");
+    // The reading being approved, not just a count of windows.
+    expect(facts).toContain("5-hour · Subscription");
+    expect(facts).toContain("72% remaining");
+    // Nothing is saved yet: the account list is unchanged.
+    expect(getRendererState().snapshot?.accounts).toHaveLength(1);
+    const add = screen.getByRole("button", { name: "Add account" });
+    expect(add).toHaveProperty("disabled", true);
     fireEvent.change(screen.getByLabelText("Account nickname"), {
-      target: { value: "Work" },
+      target: { value: "  Work  " },
     });
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    expect(actions.beginConnection).toHaveBeenCalledWith({
-      provider_id: "claude",
-      nickname: "Work",
-      profile_label: null,
-    });
-    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    act(() => {
-      acceptAttempt({
-        attemptId: "another-attempt",
-        revision: 2,
-        progress: { kind: "verified", context: { state: "connected" } },
-      });
-    });
-    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    act(() => {
-      acceptAttempt({
-        attemptId: "attempt-1",
-        revision: 2,
-        progress: { kind: "verified", context: { state: "connected" } },
-      });
-    });
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
-    expect(screen.getByText("Work")).toBeTruthy();
-    const manage = screen.getByRole("button", { name: "Manage accounts" });
-    expect(manage).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(manage);
-    await waitFor(() => {
-      expect(screen.getByRole("article", { name: "Manage a" })).toBeTruthy();
-    });
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
-    });
+    await act(() => fireEvent.click(add));
+    expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Work");
+    expect(onDone).toHaveBeenCalledWith(true);
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+    expect(actions.disconnectAccount).not.toHaveBeenCalled();
+    expect(actions.renameAccount).not.toHaveBeenCalled();
   });
 
-  it("starts a fresh wizard when Add reopens settings on the same connection section", async () => {
-    window.location.hash = "#/settings/connect/request-1";
-    const actions = settingsActions();
-    const { container } = render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    fireEvent.change(screen.getByLabelText("Account nickname"), {
-      target: { value: "Work" },
-    });
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    act(() => {
-      acceptAttempt({
-        attemptId: "attempt-1",
-        revision: 2,
-        progress: { kind: "verified", context: { state: "connected" } },
-      });
-    });
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
-    container.hidden = true;
-    act(() => {
-      window.location.hash = "#/settings/connect/request-2";
-      fireEvent(window, new HashChangeEvent("hashchange"));
-    });
-    container.hidden = false;
-    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
-    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    expect(screen.getByLabelText("Account nickname")).toHaveProperty("value", "Personal");
-    vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+  it("leaves once the host reports the account saved, even if the reply was lost", async () => {
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => Promise.resolve(false)),
+    };
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(onDone).not.toHaveBeenCalled();
     act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
@@ -139,44 +164,126 @@ describe("Provider → Connect → Verify", () => {
         progress: { kind: "verified", context: { state: "connected" } },
       });
     });
-    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
+    expect(onDone).toHaveBeenCalledExactlyOnceWith(true);
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
   });
 
-  it("shows snapshot identities and readings without attributing saved accounts to the attempt", async () => {
+  it("finishes once when both the reply and the Verified event arrive", async () => {
     const actions = settingsActions();
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: { kind: "verified", context: { state: "connected" } },
+      });
+    });
+    expect(onDone).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
+  it("keeps the candidate on screen when the host refuses to save it", async () => {
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => Promise.resolve(false)),
+    };
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(actions.confirmConnection).toHaveBeenCalledTimes(1);
+    expect(onDone).not.toHaveBeenCalled();
+    expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
+  });
+
+  it("discards the candidate on Back and on Cancel, deleting nothing", async () => {
+    const actions = settingsActions();
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Back" })));
+    expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-1" });
+    expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
+    vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
     await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    hold("attempt-2", "codex");
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
+    expect(actions.cancelConnection).toHaveBeenLastCalledWith({ id: "attempt-2" });
+    expect(onDone).toHaveBeenCalledWith(false);
+    expect(actions.disconnectAccount).not.toHaveBeenCalled();
+    expect(actions.confirmConnection).not.toHaveBeenCalled();
+  });
+
+  it("discards a held candidate when the wizard is dismissed any other way", async () => {
+    const actions = settingsActions();
+    const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    // Escape, a fresh Add account, or navigating away all unmount the wizard.
+    view.unmount();
+    expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-1" });
+    expect(actions.disconnectAccount).not.toHaveBeenCalled();
+  });
+
+  it("lets a confirmation already in flight finish when the wizard goes away", async () => {
+    const confirmed = Promise.withResolvers<boolean>();
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => confirmed.promise),
+    };
+    const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    view.unmount();
+    await act(async () => {
+      confirmed.resolve(true);
+      await confirmed.promise;
+    });
+    expect(actions.confirmConnection).toHaveBeenCalledTimes(1);
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
+  it("cancels a running attempt when the wizard is dismissed mid-connection", async () => {
+    const actions = settingsActions();
+    const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Claude");
+    expect(screen.getByRole("button", { name: "Verifying…" })).toBeTruthy();
+    view.unmount();
+    expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-1" });
+  });
+
+  it("does not cancel an attempt that already finished", async () => {
+    const actions = settingsActions();
+    const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
     act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
-        progress: { kind: "verified", context: { state: "connected" } },
+        progress: {
+          kind: "failed",
+          context: { error: { kind: "secure_store_unavailable" } },
+        },
       });
     });
-    expect(
-      screen.getByText(/Account, workspace, and quota reading have not arrived/),
-    ).toBeTruthy();
-    act(() => {
-      acceptSnapshot(
-        snapshot("instance-1", 2, [
-          account("a", "claude", 1, []),
-          account("b", "codex", 2, [quotaWindow("quota", "session", percent(72))]),
-        ]),
-      );
-    });
-    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
-      "b@example.test",
-    );
-    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
-      "Home",
-    );
-    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
-      "72% remaining (last reported)",
-    );
-    expect(screen.queryByText("a@example.test")).toBeNull();
-    expect(screen.getByText(/does not identify which account it saved/)).toBeTruthy();
+    view.unmount();
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
+  it("hides the pending identity behind an alias", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
     act(() => {
       acceptPreferences(
         preferences({
@@ -188,25 +295,57 @@ describe("Provider → Connect → Verify", () => {
         }),
       );
     });
-    expect(
-      screen.getByRole("article", { name: "Saved Account 2" }).textContent,
-    ).toContain("Workspace hidden");
-    expect(screen.queryByText("b@example.test")).toBeNull();
-    expect(screen.queryByText("Home")).toBeNull();
+    const facts = document.querySelector(".detail-list")?.textContent ?? "";
+    expect(facts).toContain("Account 0");
+    expect(facts).toContain("Workspace hidden");
+    expect(facts).not.toContain("new@example.test");
+    expect(facts).not.toContain("Home");
+  });
+
+  it("masks the nickname being typed while account labels are hidden, and follows the setting", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    const field = screen.getByLabelText<HTMLInputElement>("Account nickname");
+    expect(field.classList.contains("masked")).toBe(false);
+    const aliases = (mode: "stable_aliases" | "off"): void => {
+      act(() => {
+        acceptPreferences(
+          preferences({
+            privacy: {
+              alias_mode: mode,
+              retain_history: false,
+              export_identities: false,
+            },
+          }),
+        );
+      });
+    };
+    // Turned on while Verify is open.
+    aliases("stable_aliases");
+    expect(field.classList.contains("masked")).toBe(true);
+    expect(field.getAttribute("placeholder")).toBeNull();
+    expect(screen.getByText("Hidden while Hide account labels is on.")).toBeTruthy();
+    // Typing still works, and the typed nickname is what is saved.
+    fireEvent.change(field, { target: { value: "Secret" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Secret");
+    aliases("off");
   });
 
   it.each([
-    ["Codex", "codex login"],
-    ["Claude", "Run claude in a terminal"],
-    ["OpenCode Go", "Sign in with OpenCode"],
-  ])(
+    ["Codex", "codex", "codex login"],
+    ["Claude", "claude", "Run claude in a terminal"],
+    ["OpenCode Go", "open_code_go", "Sign in with OpenCode"],
+  ] as const)(
     "guides a first %s connection through its own sign-in tool",
-    async (provider, tool) => {
+    async (provider, id, tool) => {
       acceptSnapshot(snapshot("instance-1", 2, []));
       const actions = settingsActions();
-      render(<Harness actions={actions} />);
-      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${provider}`) }));
-      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      render(<Wizard actions={actions} onDone={vi.fn()} />);
+      await connect(provider);
       act(() => {
         acceptAttempt({
           attemptId: "attempt-1",
@@ -220,57 +359,25 @@ describe("Provider → Connect → Verify", () => {
       const recovery = screen.getByRole("alert").textContent;
       expect(recovery).toContain(tool);
       expect(recovery).toContain("press Connect again");
-      expect(recovery).not.toContain("Reconnect that account");
       expect(screen.getByRole("button", { name: "Connect" })).toHaveProperty(
         "disabled",
         false,
       );
-      expect(getRendererState().snapshot?.accounts).toHaveLength(0);
       vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
       await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
       expect(screen.queryByRole("alert")).toBeNull();
-      expect(actions.beginConnection).toHaveBeenCalledTimes(2);
-      act(() => {
-        acceptAttempt({
-          attemptId: "attempt-2",
-          revision: 2,
-          progress: { kind: "verified", context: { state: "connected" } },
-        });
-      });
-      expect(
-        screen.getByRole("heading", { name: "Verify your connection" }),
-      ).toBeTruthy();
+      hold("attempt-2", id);
+      expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
     },
   );
 
-  it("shows connection failures and cancels a running attempt by its identity", async () => {
-    const actions = settingsActions();
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    act(() => {
-      acceptAttempt({
-        attemptId: "attempt-1",
-        revision: 2,
-        progress: {
-          kind: "failed",
-          context: { error: { kind: "secure_store_unavailable" } },
-        },
-      });
-    });
-    expect(screen.getByRole("alert").textContent).toContain("key store is unavailable");
-    vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
-    expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-2" });
-  });
-
-  it("preserves verification received before the begin command returns", async () => {
+  it("preserves a candidate received before the begin command returns", async () => {
+    const held = candidate("claude");
     invoke.mockImplementation(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
-        progress: { kind: "verified", context: { state: "connected" } },
+        progress: { kind: "awaiting_confirmation", context: { candidate: held } },
       });
       return Promise.resolve({
         attempt_ref: { id: "attempt-1" },
@@ -284,10 +391,9 @@ describe("Provider → Connect → Verify", () => {
         return accepted === null ? null : { id: accepted.attempt_id };
       },
     };
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Claude");
+    expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
     act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
@@ -295,7 +401,7 @@ describe("Provider → Connect → Verify", () => {
         progress: { kind: "started" },
       });
     });
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
+    expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
     expect(getRendererState().attempts[0]?.revision).toBe(2);
   });
 
@@ -304,10 +410,148 @@ describe("Provider → Connect → Verify", () => {
       ...settingsActions(),
       beginConnection: vi.fn(() => Promise.resolve(null)),
     };
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^OpenCode Go/ }));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("OpenCode Go");
     expect(screen.getByRole("alert").textContent).toContain("connection was refused");
-    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
+    expect(screen.queryByRole("heading", VERIFY)).toBeNull();
+  });
+});
+
+describe("the settings connection route", () => {
+  it("starts a fresh wizard, discarding the old candidate, when the route is reopened", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const actions = settingsActions();
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-1" });
+  });
+
+  it("returns to Accounts when the wizard finishes there", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const actions = settingsActions();
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(window.location.hash).toMatch(/^#\/settings\/accounts\//);
+  });
+
+  it("cancels a late begin reply after a fresh route replaces the wizard", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const accepted = Promise.withResolvers<AttemptRef | null>();
+    const actions = {
+      ...settingsActions(),
+      beginConnection: vi.fn(() => accepted.promise),
+    };
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+    await act(async () => {
+      accepted.resolve({ id: "late-attempt" });
+      await accepted.promise;
+    });
+    expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({
+      id: "late-attempt",
+    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(actions.confirmConnection).not.toHaveBeenCalled();
+  });
+
+  it("keeps the fresh route when an abandoned confirmation finishes", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const confirmed = Promise.withResolvers<boolean>();
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => confirmed.promise),
+    };
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    await act(async () => {
+      confirmed.resolve(true);
+      await confirmed.promise;
+    });
+    expect(window.location.hash).toBe("#/settings/connect/request-2");
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+  });
+});
+
+describe("the connection commands", () => {
+  it("reconciles a saved confirmation without waiting for its Verified event", async () => {
+    const saved = snapshot("instance-1", 2, [
+      existing,
+      account("saved", "claude", 2, []),
+    ]);
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(command === "get_snapshot" ? { snapshot: saved } : null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+      nickname: "Work",
+    });
+    expect(invoke).toHaveBeenCalledWith("get_snapshot");
+    expect(getRendererState().snapshot).toEqual(saved);
+  });
+
+  it("does not reconcile a confirmation the host refused before saving", async () => {
+    invoke.mockRejectedValue({
+      kind: "persistence_unavailable",
+      context: { owner: "sqlite" },
+    });
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(false);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+      nickname: "Work",
+    });
+  });
+
+  it("keeps a confirmation successful when reconciliation cannot reach the host", async () => {
+    invoke.mockImplementation((command: string) =>
+      command === "get_snapshot"
+        ? Promise.reject(new Error("snapshot unavailable"))
+        : Promise.resolve(null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(true);
+    expect(getRendererState().failure).toMatchObject({ kind: "transport" });
+  });
+
+  it("treats cancelling an attempt that already finished as harmless", async () => {
+    invoke.mockRejectedValue({ kind: "cancelled" });
+    await hostActions.cancelConnection({ id: "finished-attempt" });
+    expect(invoke).toHaveBeenCalledWith("cancel_connection", {
+      attemptRef: { id: "finished-attempt" },
+    });
+    expect(getRendererState().failure).toBeNull();
+  });
+
+  it("reports other cancellation failures", async () => {
+    invoke.mockRejectedValue({
+      kind: "permission_denied",
+      context: { window_label: "settings" },
+    });
+    await hostActions.cancelConnection({ id: "attempt-1" });
+    expect(getRendererState().failure).toEqual({
+      kind: "domain",
+      error: { kind: "permission_denied", context: { window_label: "settings" } },
+    });
   });
 });

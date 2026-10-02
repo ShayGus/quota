@@ -149,17 +149,17 @@ Run on 2026-10-02 under WSL2 with WSLg, `bun run inspect`, first with the Vite p
 to 1433 because a sibling checkout held 1420, then on port 1420 with `GDK_BACKEND=x11` for
 the screenshot:
 
-| Check                                                                              | Result                                                                           |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                              |
-| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                              |
-| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                              |
-| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                              |
-| `tools/list`                                                                       | 19 tools                                                                         |
-| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                  |
-| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                          |
-| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window |
-| `take_screenshot`                                                                  | a 810x720 JPEG of the overview window, in `docs/inspection-proof/`               |
+| Check                                                                              | Result                                                                                           |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                                              |
+| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                                              |
+| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                                              |
+| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                                              |
+| `tools/list`                                                                       | 19 tools                                                                                         |
+| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                                  |
+| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                                          |
+| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window                 |
+| `take_screenshot`                                                                  | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
 
 This capture predates the overview-only inspection scope; current sessions forward webview
 console logs only from overview. The console output proves the original capability grant
@@ -212,6 +212,29 @@ ids in reverse order and repeat; neither requested interface should change.
 `take_screenshot` scales the result to `max_width`, which defaults to 512. Pass
 `max_width` above the window width — 1400 for both windows — to get the image at its real
 size.
+
+## On Windows
+
+`bun run inspect` works on Windows, with one connection problem. Verified on a Windows 11
+development build on 2 October 2026.
+
+- **The pipe name does not match.** The plugin names its named pipe after the full socket
+  path, `\\.\pipe\C:\Users\<you>\AppData\Local\Temp\tauri-mcp.sock`, and writes the token
+  beside it as `%TEMP%\tauri-mcp.sock.token`. `tauri-mcp-server` 0.3.1 always connects to
+  `\\.\pipe\tmp\tauri-mcp.sock` on Windows and ignores `TAURI_MCP_IPC_PATH`, so
+  `bun x tauri-mcp-server` cannot connect as shipped. The verification used a copy of the
+  server, outside the repository, whose `getEffectiveIpcPath` returns the plugin's real
+  pipe name, with the token passed in `TAURI_MCP_AUTH_TOKEN`. Nothing in this repository
+  depends on that copy.
+- **Settings has no DOM tools,** by design (see
+  [What an agent gets](#what-an-agent-gets)). To inspect its layout, load
+  `#/settings/<section>` in the overview webview at the settings size (780 × 600), then
+  return the overview to `/`. The same components render; only the window's command
+  permissions differ. Native screenshots of the real settings window still work.
+- **The tray is outside the webview.** Windows UI Automation exposes the tray icon as a
+  `NotifyItemIcon` whose name is its tooltip. The tray's popup menu is owner-drawn, so its
+  items are read from a screen capture of the `#32768` menu window rather than from UI
+  Automation.
 
 ## Native libraries a Linux debug build needs
 

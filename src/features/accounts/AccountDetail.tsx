@@ -1,32 +1,40 @@
 /**
- * Account details.
+ * Quota detail.
  *
- * Every applicable window is shown at the same time, with its own number, exact
- * boundary, scope, and freshness. There are no period tabs, so basic comparison
- * never depends on opening a second surface (spec 3.2, AC-55).
+ * One window at a time, chosen by tab, with its reading, its exact boundary,
+ * its scope, and where it came from. Every other window is listed beneath as an
+ * independent limit, so nothing is averaged or hidden (spec 3.2).
  */
-import { useState, type JSX } from "react";
+import { useRef, useState, type JSX, type KeyboardEvent, type RefObject } from "react";
 
-import type { AccountSnapshot, Preferences, QuotaWindow } from "../../generated/bindings";
+import type {
+  AccountSnapshot,
+  Preferences,
+  QuotaWindow,
+  QuotaWindowId,
+} from "../../generated/bindings";
+import { formatRemaining } from "../../shared/format/allowance";
+import { displayName } from "../../shared/format/alias";
 import {
-  arcFraction,
-  formatRemaining,
-  hasReading,
-  severityOf,
-} from "../../shared/format/allowance";
-import {
-  formatAge,
-  formatBoundary,
+  boundaryCountdown,
+  boundaryLead,
   formatExactInstant,
-  instantOf,
 } from "../../shared/format/duration";
-import { accountLabel } from "../../shared/format/alias";
-import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
-import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { Ring } from "../../shared/ui/Meter";
-import { freshnessCaption, readingState } from "../overview/freshness";
-import { columnLabel } from "../overview/QuotaCell";
+import { checkedLine, Identity, StatusBadge } from "../overview/ProviderCard";
+import {
+  cardWindows,
+  extraLabel,
+  readingText,
+  viewCaption,
+  viewFraction,
+  viewSeverity,
+  viewValue,
+  windowLabel,
+  windowView,
+  type WindowView,
+} from "../overview/reading";
 import { statusOf } from "../overview/status";
 
 /** The time zone used for exact boundary times. */
@@ -48,67 +56,104 @@ const ROLE_WORDS: Record<QuotaWindow["metric_role"], string> = {
   credit_balance: "Credit balance",
 };
 
-/** One window card: its reading, its boundary, and what it covers. */
-function WindowCard({
-  window,
-  account,
-  now,
-  selected,
-  onSelect,
-}: {
-  readonly window: QuotaWindow;
-  readonly account: AccountSnapshot;
-  readonly now: number;
-  readonly selected: boolean;
-  readonly onSelect: (windowId: QuotaWindow["id"]) => void;
-}): JSX.Element {
-  // The same freshness the overview uses, so a window that has gone stale or
-  // whose boundary has passed cannot look healthy here (spec 6, AC-15).
-  const scope = window.scope.label || "Allowance";
-  const state = readingState(account, window, now);
-  const severity = state === "current" ? severityOf(window.measurement) : "stale";
-  const value = formatRemaining(window.measurement);
-  const hasValue = hasReading(window.measurement);
-  return (
-    <button
-      type="button"
-      className={`limit-card${selected ? " limit-card--selected" : ""}`}
-      aria-pressed={selected}
-      aria-label={`${scope}: ${value} remaining. ${formatBoundary(window.boundary, now)}`}
-      onClick={() => {
-        onSelect(window.id);
-      }}
-    >
-      <h3>
-        {window.category === "daily" || window.category === "custom"
-          ? scope
-          : columnLabel(window.category)}
-      </h3>
-      <Ring
-        fraction={arcFraction(window.measurement)}
-        severity={severity}
-        label={value}
-        caption={hasValue ? freshnessCaption(state) : "no reading"}
-      />
-      <p className="limit-card__boundary">
-        {window.boundary === null
-          ? "No reported reset"
-          : formatBoundary(window.boundary, now)}
-      </p>
-      <p className="limit-card__instant">
-        {window.boundary === null
-          ? "No reported reset"
-          : formatExactInstant(window.boundary.at, DISPLAY_TIME_ZONE)}
-      </p>
-      <p className="limit-card__role">{ROLE_WORDS[window.metric_role]}</p>
-      <p className="limit-card__scope">{scope}</p>
-    </button>
-  );
+/** The words for what a window's period is. */
+const SEMANTICS_WORDS: Record<QuotaWindow["semantics"], string> = {
+  anchored_period: "Anchored period",
+  rolling_period: "Rolling window",
+  calendar_cycle: "Calendar billing cycle",
+  unknown: "Period not reported by the provider",
+};
+
+/** The words for what happens at a window's boundary. */
+const BOUNDARY_WORDS: Record<NonNullable<QuotaWindow["boundary"]>["kind"], string> = {
+  full_reset: "Full reset at the boundary",
+  next_replenishment: "Partial replenishment",
+  billing_boundary: "Billing boundary",
+  unknown: "Boundary meaning not reported",
+};
+
+/** The eyebrow, headline, and explanation beside the large ring. */
+function summaryCopy(
+  view: WindowView,
+  window: QuotaWindow,
+  now: number,
+): {
+  readonly eyebrow: string;
+  readonly headline: string;
+  readonly lines: readonly string[];
+} {
+  switch (view) {
+    case "pending":
+      return {
+        eyebrow: "RESET STATUS",
+        headline: "Verifying",
+        lines: ["The reset time passed.", "No fresh reading is available."],
+      };
+    case "stale":
+      return {
+        eyebrow: "LAST-KNOWN READING",
+        headline: "Not current",
+        lines: ["The number shown is historical.", "It may have changed."],
+      };
+    case "unavailable":
+      return {
+        eyebrow: "QUOTA STATUS",
+        headline: "No reading",
+        lines: ["This is unknown, not 0%."],
+      };
+    case "current":
+      return window.boundary === null
+        ? {
+            eyebrow: "RESETS IN",
+            headline: "Not reported",
+            lines: ["The provider did not report a reset time."],
+          }
+        : {
+            eyebrow: `${boundaryLead(window.boundary).toUpperCase()} IN`,
+            headline: boundaryCountdown(window.boundary, now),
+            lines: [
+              `${formatExactInstant(window.boundary.at, DISPLAY_TIME_ZONE)} · ${DISPLAY_TIME_ZONE}`,
+              "Reported by the provider",
+            ],
+          };
+  }
 }
 
-/** The account details surface. */
+/** The measurement row: used and left for a current percentage, else what is known. */
+function measurementText(view: WindowView, window: QuotaWindow): string {
+  const left = formatRemaining(window.measurement);
+  switch (view) {
+    case "current":
+      return window.measurement.kind === "percentage" &&
+        window.measurement.value.used_percent !== null
+        ? `${String(Math.round(window.measurement.value.used_percent))}% used / ${left} left`
+        : `${left} left`;
+    case "stale":
+      return `${left} left · last known`;
+    case "pending":
+      return `${left} left before reset · historical`;
+    case "unavailable":
+      return "Not available";
+  }
+}
+
+/** The account's windows in tab order: the card's rings, then its other limits. */
+function orderedWindows(account: AccountSnapshot): readonly QuotaWindow[] {
+  const { main, extra } = cardWindows(account);
+  return [...main, ...extra];
+}
+
+/** A window's tab label. */
+function tabLabel(account: AccountSnapshot, window: QuotaWindow): string {
+  return cardWindows(account).main.includes(window)
+    ? windowLabel(window)
+    : extraLabel(window);
+}
+
+/** The quota detail surface. */
 export function AccountDetail({
   account,
+  windowId,
   now,
   onBack,
   accounts,
@@ -117,6 +162,8 @@ export function AccountDetail({
   onManageAccounts,
 }: {
   readonly account: AccountSnapshot;
+  /** The window to show first, or `null` for the first one. */
+  readonly windowId: QuotaWindowId | null;
   readonly now: number;
   readonly onBack: () => void;
   readonly onUsagePage: () => void;
@@ -124,164 +171,198 @@ export function AccountDetail({
   readonly accounts: readonly AccountSnapshot[];
   readonly preferences: Preferences | null;
 }): JSX.Element {
-  const alias = accountLabel(preferences, accounts, account.account_id);
-  const label = alias || account.nickname;
-  const workspace = alias ? "Workspace hidden" : account.identity?.workspace_label;
-  const [selectedWindow, setSelectedWindow] = useState<QuotaWindow["id"] | null>(
-    account.windows[0]?.id ?? null,
-  );
-  const status = statusOf(account);
-  const lastSuccess = instantOf(account.last_success_at);
-  const lastAttempt = instantOf(account.last_attempt_at);
-  const selected = account.windows.find((window) => window.id === selectedWindow) ?? null;
-  const controllingWindowId =
-    account.order.kind === "ranked" ? account.order.value.controlling_window_id : null;
-  const controlling =
-    controllingWindowId === null
-      ? undefined
-      : account.windows.find((window) => window.id === controllingWindowId);
-  const controllingValue =
-    controlling === undefined
-      ? "no current reading"
-      : formatRemaining(controlling.measurement);
-  // The reading the person is looking at: the card they chose, else the first.
-  const shown = selected ?? account.windows[0];
-  const readingSource =
-    shown === undefined
-      ? "No reading"
-      : `${SOURCE_WORDS[shown.source]} · ${shown.scope.label}`;
+  const label = displayName(preferences, accounts, account);
+  const windows = orderedWindows(account);
+  const [selectedId, setSelectedId] = useState<QuotaWindowId | null>(windowId);
+  const tabs = useRef<HTMLDivElement | null>(null);
+  const selected = windows.find((window) => window.id === selectedId) ?? windows[0];
+
+  const onTabKey = (event: KeyboardEvent<HTMLButtonElement>): void => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+      return;
+    }
+    event.preventDefault();
+    const index = windows.findIndex((window) => window.id === selected?.id);
+    const step = event.key === "ArrowRight" ? 1 : -1;
+    const next = windows[(index + step + windows.length) % windows.length];
+    if (next === undefined) {
+      return;
+    }
+    setSelectedId(next.id);
+    tabs.current
+      ?.querySelector<HTMLButtonElement>(`[data-window="${CSS.escape(next.id)}"]`)
+      ?.focus();
+  };
+
   return (
-    <section className="detail" aria-label={`Account details for ${label}`}>
-      <div className="detail__back">
+    <section aria-label={`Quota detail for ${label}`}>
+      <div className="back-row">
         <button type="button" className="back-button" onClick={onBack}>
-          <Icon name="arrow-left" size={13} />
-          All accounts
+          <Icon name="arrow-left" />
+          All subscriptions
         </button>
-        <span className="eyebrow">Account details</span>
-      </div>
-      <div className="detail__identity">
-        <div className="identity">
-          <ProviderMark providerId={account.provider_id} />
-          <div>
-            <h2>{label}</h2>
-            <p>
-              {providerLabel(account.provider_id)}
-              {workspace != null ? ` · ${workspace}` : ""}
-              {account.identity?.plan_label != null
-                ? ` · ${account.identity.plan_label}`
-                : ""}
-            </p>
-          </div>
-        </div>
-        <span className={`badge badge--${status.tone}`}>
-          <Icon name={status.icon} size={11} />
-          {status.text}
+        <span className="eyebrow" style={{ fontSize: "8px", letterSpacing: "1px" }}>
+          QUOTA DETAIL
         </span>
       </div>
-      {account.windows.length === 0 ? (
-        <p className="note">This account reports no allowance windows yet.</p>
-      ) : (
-        <div className="detail__grid">
-          {account.windows.map((window) => (
-            <WindowCard
-              key={window.id}
-              window={window}
-              account={account}
-              now={now}
-              selected={window.id === selectedWindow}
-              onSelect={setSelectedWindow}
-            />
-          ))}
+      <div className="detail-body">
+        <div className="detail-identity">
+          <div className="identity">
+            <Identity account={account} label={label} />
+          </div>
+          <StatusBadge status={statusOf(account, now)} />
         </div>
-      )}
-      <dl className="detail__list">
+        {selected === undefined ? (
+          <div className="note">This account reports no allowance windows yet.</div>
+        ) : (
+          <SelectedWindow
+            account={account}
+            windows={windows}
+            selected={selected}
+            now={now}
+            tabsRef={tabs}
+            onSelect={setSelectedId}
+            onTabKey={onTabKey}
+          />
+        )}
+        <div className="note">
+          Reset times tell you when an allowance changes, not how long you can keep
+          working. Limits are never averaged.
+        </div>
+        <div className="detail-bottom">
+          <button type="button" className="text-btn" onClick={onUsagePage}>
+            <Icon name="external" />
+            Provider usage page
+          </button>
+          <button type="button" className="text-btn" onClick={onManageAccounts}>
+            Manage account
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** The tabs, the selected window's summary and facts, and the other limits. */
+function SelectedWindow({
+  account,
+  windows,
+  selected,
+  now,
+  tabsRef,
+  onSelect,
+  onTabKey,
+}: {
+  readonly account: AccountSnapshot;
+  readonly windows: readonly QuotaWindow[];
+  readonly selected: QuotaWindow;
+  readonly now: number;
+  readonly tabsRef: RefObject<HTMLDivElement | null>;
+  readonly onSelect: (windowId: QuotaWindowId) => void;
+  readonly onTabKey: (event: KeyboardEvent<HTMLButtonElement>) => void;
+}): JSX.Element {
+  const view = windowView(account, selected, now);
+  const summary = summaryCopy(view, selected, now);
+  const others = windows.filter((window) => window.id !== selected.id);
+  return (
+    <>
+      <div className="tabs" role="tablist" aria-label="Quota window" ref={tabsRef}>
+        {windows.map((window) => (
+          <button
+            key={window.id}
+            type="button"
+            role="tab"
+            data-window={window.id}
+            aria-selected={window.id === selected.id}
+            tabIndex={window.id === selected.id ? 0 : -1}
+            className={window.id === selected.id ? "selected" : ""}
+            onClick={() => {
+              onSelect(window.id);
+            }}
+            onKeyDown={onTabKey}
+          >
+            {tabLabel(account, window)}
+          </button>
+        ))}
+      </div>
+      <div
+        className="detail-summary"
+        role="group"
+        aria-label={`${tabLabel(account, selected)}: ${readingText(view, selected)}`}
+      >
+        <Ring
+          fraction={viewFraction(view, selected)}
+          severity={viewSeverity(view, selected)}
+          label={viewValue(view, selected)}
+          caption={viewCaption(view, selected)}
+        />
+        <div className="detail-time">
+          <div className="eyebrow">{summary.eyebrow}</div>
+          <strong className="mono">{summary.headline}</strong>
+          <p>
+            {summary.lines.map((line, index) => (
+              <span key={line}>
+                {index > 0 ? <br /> : null}
+                {line}
+              </span>
+            ))}
+          </p>
+        </div>
+      </div>
+      <dl className="detail-list">
         <div>
-          <dt>Account</dt>
-          <dd>{alias || account.identity?.principal_label || account.nickname}</dd>
+          <dt>Allowance scope</dt>
+          <dd>{selected.scope.label || "Not reported"}</dd>
         </div>
         <div>
-          <dt>Local account ID</dt>
-          <dd>{account.account_id}</dd>
+          <dt>Measurement</dt>
+          <dd>{measurementText(view, selected)}</dd>
         </div>
         <div>
-          <dt>Provider</dt>
-          <dd>{providerLabel(account.provider_id)}</dd>
+          <dt>Last checked</dt>
+          <dd>{checkedLine(account, now)}</dd>
         </div>
         <div>
-          <dt>Workspace</dt>
-          <dd>{workspace ?? "Not reported"}</dd>
-        </div>
-        <div>
-          <dt>Plan</dt>
-          <dd>{account.identity?.plan_label ?? "Not reported"}</dd>
-        </div>
-        <div>
-          <dt>Identity source</dt>
+          <dt>Window semantics</dt>
           <dd>
-            {account.identity === null
-              ? "Not verified"
-              : SOURCE_WORDS[account.identity.source]}
+            {selected.boundary === null
+              ? "No reported reset"
+              : BOUNDARY_WORDS[selected.boundary.kind]}
+            <br />
+            <span className="muted">{SEMANTICS_WORDS[selected.semantics]}</span>
           </dd>
         </div>
         <div>
           <dt>Reading source</dt>
-          <dd>{readingSource}</dd>
-        </div>
-        <div>
-          <dt>Connection</dt>
           <dd>
-            {account.connection_state} · generation{" "}
-            {String(account.connection_generation)}
+            {SOURCE_WORDS[selected.source]}
+            <br />
+            <span className="muted">{ROLE_WORDS[selected.metric_role]}</span>
           </dd>
         </div>
-        <div>
-          <dt>Last accepted reading</dt>
-          <dd>{lastSuccess === null ? "None yet" : formatAge(lastSuccess, now)}</dd>
-        </div>
-        <div>
-          <dt>Last attempt</dt>
-          <dd>{lastAttempt === null ? "None yet" : formatAge(lastAttempt, now)}</dd>
-        </div>
-        <div>
-          <dt>Missing windows</dt>
-          <dd>
-            {account.expected_but_missing_window_ids.length === 0
-              ? "None"
-              : account.expected_but_missing_window_ids.join(", ")}
-          </dd>
-        </div>
-        {selected === null ? null : (
-          <div>
-            <dt>{selected.scope.label || "Allowance"} boundary</dt>
-            <dd>
-              {selected.boundary === null
-                ? "Not reported"
-                : formatExactInstant(selected.boundary.at, DISPLAY_TIME_ZONE)}
-            </dd>
-          </div>
-        )}
       </dl>
-      {account.order.kind === "unranked" ? (
-        <p className="note">
-          This account is in “Needs checking” because its rank reason is “
-          {account.order.value.reason}”. Its last known percentage is never used as a
-          current sorting value.
-        </p>
-      ) : (
-        <p className="note">
-          Ranked by {account.order.value.scope_label}: {controllingValue}. Rule version{" "}
-          {String(account.order.value.rule_version)}.
-        </p>
+      {others.length === 0 ? null : (
+        <>
+          <h3 className="section-title">Other independent limits</h3>
+          {others.map((window) => {
+            const otherView = windowView(account, window, now);
+            const tone = otherView === "current" ? viewSeverity(otherView, window) : "";
+            return (
+              <button
+                key={window.id}
+                type="button"
+                className={`other-limit${tone === "" ? "" : ` ${tone}`}`}
+                onClick={() => {
+                  onSelect(window.id);
+                }}
+              >
+                <span>{tabLabel(account, window)}</span>
+                <strong>{readingText(otherView, window)}</strong>
+              </button>
+            );
+          })}
+        </>
       )}
-      <div className="detail__bottom">
-        <button type="button" className="text-button" onClick={onUsagePage}>
-          <Icon name="external" size={13} />
-          Provider usage page
-        </button>
-        <button type="button" className="text-button" onClick={onManageAccounts}>
-          Manage accounts
-        </button>
-      </div>
-    </section>
+    </>
   );
 }

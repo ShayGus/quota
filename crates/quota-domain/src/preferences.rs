@@ -22,17 +22,6 @@ pub enum Theme {
     Dark,
 }
 
-/// How much room a row takes.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
-#[serde(rename_all = "snake_case")]
-pub enum Density {
-    /// More rows, smaller text blocks.
-    #[default]
-    Compact,
-    /// Larger touch targets and more spacing.
-    Comfortable,
-}
-
 /// How a remaining allowance is drawn.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -206,8 +195,6 @@ pub struct PresentationPreferences {
     pub revision: u32,
     /// The colour scheme.
     pub theme: Theme,
-    /// Row density.
-    pub density: Density,
     /// The allowance indicator.
     pub indicator_style: IndicatorStyle,
     /// Where the overview lives.
@@ -231,7 +218,6 @@ impl Default for PresentationPreferences {
             schema_version: PREFERENCES_SCHEMA_VERSION,
             revision: 0,
             theme: Theme::default(),
-            density: Density::default(),
             indicator_style: IndicatorStyle::default(),
             overview_mode: OverviewMode::default(),
             always_on_top: false,

@@ -11,7 +11,10 @@ use quota_domain::ids::AccountId;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_domain::snapshot::AccountSnapshot;
 
-use crate::sqlite::{NewAccount, NewConnection, SqliteRepositories};
+use crate::error::TableContext;
+use crate::sqlite::{
+    AccountRepository, MeasurementRepository, NewAccount, NewConnection, SqliteRepositories,
+};
 
 fn map_error(error: &crate::PersistenceError) -> RepositoryError {
     RepositoryError::new("sqlite", error.to_string())
@@ -90,103 +93,125 @@ impl SqliteAccountPortAdapter {
         Ok(accounts)
     }
 
+    /// Writes one account, its connection, its pool bindings and its readings
+    /// in a single transaction, so a failure at any step leaves nothing of the
+    /// account behind: a confirmed account is either saved whole or not at all.
     async fn store_account(&self, account: StoredAccount) -> Result<(), RepositoryError> {
-        self.store_connection(&account).await?;
-        self.store_account_row(&account).await?;
-        self.store_windows(&account).await
-    }
-
-    async fn store_connection(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
-        let connection = &account.connection;
-        let new_connection = NewConnection {
-            id: connection.id.clone(),
-            provider_id: connection.provider_id,
-            credential_ownership: connection.credential_ownership,
-            profile_label: connection.profile_label.clone(),
-            cardinality: connection.cardinality,
-        };
-        self.repositories
-            .accounts()
-            .upsert_connection(&new_connection)
+        let mut transaction = self
+            .repositories
+            .pool()
+            .begin()
             .await
+            .table("accounts")
             .map_err(|e| map_error(&e))?;
-        self.repositories
-            .accounts()
-            .set_connection_state(&connection.id, connection.state)
+        store_connection(&mut transaction, &account).await?;
+        store_account_row(&mut transaction, &account).await?;
+        store_windows(&mut transaction, &account).await?;
+        transaction
+            .commit()
             .await
-            .map_err(|e| map_error(&e))?;
-        self.repositories
-            .accounts()
-            .record_verified_binding(
-                &connection.id,
-                connection.principal_id.as_ref(),
-                connection.workspace_id.as_ref(),
-                connection.entitlement_id.as_ref(),
-            )
-            .await
+            .table("accounts")
             .map_err(|e| map_error(&e))
     }
+}
 
-    async fn store_account_row(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
-        let new_account = NewAccount {
-            id: account.account_id.clone(),
-            connection_id: account.connection.id.clone(),
-            provider_id: account.connection.provider_id,
-            nickname: account.nickname.clone(),
-            connection_ordinal: account.connection_ordinal,
-        };
-        self.repositories
-            .accounts()
-            .upsert_account(&new_account)
-            .await
-            .map_err(|e| map_error(&e))?;
-        self.repositories
-            .accounts()
-            .set_monitoring_enabled(&account.account_id, account.monitoring_enabled)
-            .await
-            .map_err(|e| map_error(&e))?;
-        if let Some(identity) = account.identity.as_ref() {
-            self.repositories
-                .accounts()
-                .record_verified_identity(&account.account_id, account.connection_state, identity)
-                .await
-                .map_err(|e| map_error(&e))?;
-        }
-        if let Some(attempted_at) = account.last_attempt_at.or(account.last_success_at) {
-            self.repositories
-                .accounts()
-                .record_attempt(
-                    &account.account_id,
-                    account.fetch_state,
-                    attempted_at,
-                    account.next_attempt_at,
-                )
-                .await
-                .map_err(|e| map_error(&e))?;
-        }
-        Ok(())
-    }
+type Transaction<'t> = sqlx::Transaction<'t, sqlx::Sqlite>;
 
-    async fn store_windows(&self, account: &StoredAccount) -> Result<(), RepositoryError> {
-        for window in &account.windows {
-            self.repositories
-                .accounts()
-                .bind_pool(
-                    &account.account_id,
-                    &window.pool_id,
-                    account.connection.provider_id,
-                    false,
-                )
-                .await
-                .map_err(|e| map_error(&e))?;
-        }
-        self.repositories
-            .measurements()
-            .replace_readings(&account.account_id, &account.windows)
-            .await
-            .map(|_| ())
-            .map_err(|e| map_error(&e))
+async fn store_connection(
+    transaction: &mut Transaction<'_>,
+    account: &StoredAccount,
+) -> Result<(), RepositoryError> {
+    let connection = &account.connection;
+    let new_connection = NewConnection {
+        id: connection.id.clone(),
+        provider_id: connection.provider_id,
+        credential_ownership: connection.credential_ownership,
+        profile_label: connection.profile_label.clone(),
+        cardinality: connection.cardinality,
+    };
+    AccountRepository::upsert_connection_on(&mut **transaction, &new_connection)
+        .await
+        .map_err(|e| map_error(&e))?;
+    AccountRepository::set_connection_state_on(
+        &mut **transaction,
+        &connection.id,
+        connection.state,
+    )
+    .await
+    .map_err(|e| map_error(&e))?;
+    AccountRepository::record_verified_binding_on(
+        &mut **transaction,
+        &connection.id,
+        connection.principal_id.as_ref(),
+        connection.workspace_id.as_ref(),
+        connection.entitlement_id.as_ref(),
+    )
+    .await
+    .map_err(|e| map_error(&e))
+}
+
+async fn store_account_row(
+    transaction: &mut Transaction<'_>,
+    account: &StoredAccount,
+) -> Result<(), RepositoryError> {
+    let new_account = NewAccount {
+        id: account.account_id.clone(),
+        connection_id: account.connection.id.clone(),
+        provider_id: account.connection.provider_id,
+        nickname: account.nickname.clone(),
+        connection_ordinal: account.connection_ordinal,
+    };
+    AccountRepository::upsert_account_in(transaction, &new_account)
+        .await
+        .map_err(|e| map_error(&e))?;
+    AccountRepository::set_monitoring_enabled_on(
+        &mut **transaction,
+        &account.account_id,
+        account.monitoring_enabled,
+    )
+    .await
+    .map_err(|e| map_error(&e))?;
+    if let Some(identity) = account.identity.as_ref() {
+        AccountRepository::record_verified_identity_on(
+            &mut **transaction,
+            &account.account_id,
+            account.connection_state,
+            identity,
+        )
+        .await
+        .map_err(|e| map_error(&e))?;
     }
+    AccountRepository::record_attempt_on(
+        &mut **transaction,
+        &account.account_id,
+        account.fetch_state,
+        account.last_attempt_at,
+        account.last_success_at,
+        account.next_attempt_at,
+    )
+    .await
+    .map_err(|e| map_error(&e))
+}
+
+async fn store_windows(
+    transaction: &mut Transaction<'_>,
+    account: &StoredAccount,
+) -> Result<(), RepositoryError> {
+    for window in &account.windows {
+        AccountRepository::bind_pool_in(
+            transaction,
+            &account.account_id,
+            &window.pool_id,
+            account.connection.provider_id,
+            false,
+        )
+        .await
+        .map_err(|e| map_error(&e))?;
+    }
+    MeasurementRepository::replace_readings_in(transaction, &account.account_id, &account.windows)
+        .await
+        .map(|_| ())
+        .map_err(|e| map_error(&e))
 }
 
 #[async_trait]

@@ -21,8 +21,10 @@ is recorded in
 
 The committed [`Cargo.lock`](../Cargo.lock) owns resolved versions; workspace and package
 manifests own requirements and enabled features. Inspect the desktop dependency graph with
-`cargo tree -p quota-desktop --locked`. This includes the window-state plugin, which the
-host registers during bootstrap.
+`cargo tree -p quota-desktop --locked`. This includes the window-state, single-instance,
+and autostart plugins, which the host registers during bootstrap. `tauri-plugin-autostart`
+2.7.0 and its renderer package `@tauri-apps/plugin-autostart` 2.7.0 were added on 2
+October 2026 for launch at login; the two are pinned to the same release.
 
 `libsqlite3-sys` is transitive through `sqlx-sqlite`; the linked engine version must be
 recorded from the shipping artifact at release (spec 13.6), rather than inferred from the

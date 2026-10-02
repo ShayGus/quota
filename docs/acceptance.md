@@ -16,6 +16,14 @@ This smoke check does not establish live-provider, tray, notification, or packag
 acceptance. Windows and macOS runs, Windows installers, Linux packaging, and the 72-hour
 ten-account soak remain unverified. CI installs the Linux dependencies on a clean runner.
 
+A Windows 11 development build was exercised on 2 October 2026 with one live Claude
+account, through the inspection plugin and real mouse and keyboard input. It confirmed the
+popover and settings layouts against the approved wireframe, header dragging, pin and
+unpin, Escape, close-to-tray, the tray icon, tooltip, and its Settings / Show App / Exit
+menu, single-instance activation, and the launch-at-login item in the Windows Run key.
+[The UI fidelity record](ui-fidelity/README.md#live-verification) owns that evidence. It
+is a development build, not a packaged installer.
+
 ## AC-01 to AC-14: normalisation and presentation
 
 | ID    | Layer      | Evidence                                                                                      | Status                                                                |
@@ -37,9 +45,9 @@ ten-account soak remain unverified. CI installs the Linux dependencies on a clea
 
 ## AC-45 to AC-61: UI and windowing
 
-| ID             | Layer    | Evidence                                                | Status                                        |
-| -------------- | -------- | ------------------------------------------------------- | --------------------------------------------- |
-| AC-45 to AC-61 | ui, host | `src` renderer and `src-tauri/src/platform` window code | source implemented; native runtime unverified |
+| ID             | Layer    | Evidence                                                | Status                                                                             |
+| -------------- | -------- | ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| AC-45 to AC-61 | ui, host | `src` renderer and `src-tauri/src/platform` window code | source implemented; Windows development build checked; packaged runtime unverified |
 
 ## AC-62 to AC-71: multi-account and scheduling
 

@@ -28,6 +28,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands::refresh_accounts,
             commands_connection::begin_connection,
             commands_connection::cancel_connection,
+            commands_connection::confirm_connection,
             commands_connection::reconnect_account,
             commands_prefs::update_preferences,
             commands_prefs::set_indicator_style,
@@ -36,8 +37,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_prefs::export_sanitized_diagnostics,
             commands_window::set_overview_mode,
             commands_window::set_overview_always_on_top,
-            commands_window::fit_overview_to_accounts,
-            commands_window::reset_overview_position,
+            commands_window::fit_overview_height,
             commands_window::open_provider_usage_page,
             commands_window::open_settings_window,
         ])

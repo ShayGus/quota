@@ -10,9 +10,12 @@ import type { JSX } from "react";
 /** One icon's name. */
 export type IconName =
   | "arrow-left"
+  | "arrow-right"
   | "bell"
   | "check"
   | "chevron-down"
+  | "chevron-right"
+  | "chevron-up"
   | "clock"
   | "close"
   | "donut"
@@ -41,9 +44,12 @@ export type IconName =
 /** The path data for every icon, on a 24-unit view box. */
 const PATHS: Record<IconName, JSX.Element> = {
   "arrow-left": <path d="M20 12H5m6-6-6 6 6 6" />,
+  "arrow-right": <path d="M4 12h15m-6-6 6 6-6 6" />,
   bell: <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />,
   check: <path d="m5 12 4 4L19 6" />,
   "chevron-down": <path d="m6 9 6 6 6-6" />,
+  "chevron-right": <path d="m9 5 7 7-7 7" />,
+  "chevron-up": <path d="m6 15 6-6 6 6" />,
   clock: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -136,36 +142,26 @@ const PATHS: Record<IconName, JSX.Element> = {
   ),
 };
 
-/** Renders one icon at the given pixel size. */
-export function Icon({
-  name,
-  size = 18,
-}: {
-  name: IconName;
-  size?: number;
-}): JSX.Element {
+/**
+ * Renders one icon.
+ *
+ * Its size comes from the stylesheet, which sizes each icon by where it sits,
+ * exactly as the wireframe does.
+ */
+export function Icon({ name }: { name: IconName }): JSX.Element {
   return (
-    <svg
-      className="icon"
-      viewBox="0 0 24 24"
-      width={size}
-      height={size}
-      aria-hidden="true"
-      focusable="false"
-    >
+    <svg className="icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
       {PATHS[name]}
     </svg>
   );
 }
 
 /** The Quota mark, drawn from the wireframe's geometry. */
-export function Logo({ size = 26 }: { size?: number }): JSX.Element {
+export function Logo(): JSX.Element {
   return (
     <svg
       className="logo"
       viewBox="0 0 32 32"
-      width={size}
-      height={size}
       fill="none"
       aria-hidden="true"
       focusable="false"

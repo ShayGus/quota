@@ -7,9 +7,10 @@
  * attributes, which keeps this project free of a second assertion vocabulary.
  */
 import { cleanup } from "@testing-library/react";
-import { afterEach, beforeEach } from "vitest";
+import { afterEach, beforeEach, vi } from "vitest";
 
 import { resetRendererState } from "../src/shared/state/store";
+import { NOW } from "./fixtures";
 
 // React 19 reads this flag to decide whether `act` may batch updates. Vitest
 // runs with `globals: false`, which is what Testing Library's automatic setup
@@ -40,6 +41,10 @@ if (typeof window.matchMedia !== "function") {
 
 beforeEach(() => {
   resetRendererState();
+  // Fixture boundaries and readings are anchored to NOW. Only the clock is
+  // faked, so timers and promises keep running normally.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
 });
 
 afterEach(() => {
@@ -47,4 +52,5 @@ afterEach(() => {
   // This project keeps globals off, so cleanup is registered here.
   cleanup();
   resetRendererState();
+  vi.useRealTimers();
 });

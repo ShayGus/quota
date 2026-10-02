@@ -4,7 +4,11 @@
 //! stay in `quota-core`; these types exist so a window operation can be tested
 //! through a seam and so the renderer never holds a Tauri handle.
 
+pub mod autostart;
+pub mod popover_height;
+pub mod settings_window;
 pub mod tray;
+pub mod tray_anchor;
 pub mod window;
 mod window_transition;
 

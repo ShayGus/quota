@@ -1,12 +1,20 @@
 /**
- * Palette tokens and surface rules from the approved wireframe (spec 3.4).
+ * Palette tokens and base rules from the approved wireframe.
  *
  * Severity colours are always paired with text, so colour is never the only
  * carrier of meaning. Both themes define the same token names.
  */
 :root {
+  font-family:
+    "Segoe UI Variable",
+    "Segoe UI",
+    -apple-system,
+    BlinkMacSystemFont,
+    Arial,
+    sans-serif;
+  font-synthesis: none;
   --page: #f3f5f7;
-  --surface: #ffffff;
+  --surface: #fff;
   --surface-2: #f6f8fa;
   --surface-3: #edf1f4;
   --line: #e0e5eb;
@@ -20,12 +28,15 @@
   --warn-bg: #fff3df;
   --danger: #b33547;
   --danger-bg: #fcecf0;
-  --focus: #2f70c1;
   --shadow: 0 20px 60px #2333441d, 0 3px 10px #2333440a;
+  --focus: #2f70c1;
+  color: var(--text);
+  background: var(--page);
+  font-size: 14px;
   color-scheme: light;
 }
 
-[data-theme="dark"] {
+:root[data-theme="dark"] {
   --page: #11171e;
   --surface: #192129;
   --surface-2: #202a34;
@@ -41,8 +52,8 @@
   --warn-bg: #3d3222;
   --danger: #ff8d9f;
   --danger-bg: #412833;
+  --shadow: 0 20px 60px #0006, 0 3px 10px #0003;
   --focus: #99c3fb;
-  --shadow: 0 20px 60px #00000066, 0 3px 10px #00000033;
   color-scheme: dark;
 }
 
@@ -58,17 +69,45 @@ body,
 
 body {
   margin: 0;
-  background: var(--page);
+  background: var(--surface-2);
   color: var(--text);
-  font-family:
-    "Segoe UI Variable",
-    "Segoe UI",
-    -apple-system,
-    BlinkMacSystemFont,
-    Arial,
-    sans-serif;
-  font-size: 14px;
-  font-synthesis: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+p {
+  margin: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+svg {
+  display: block;
+  flex-shrink: 0;
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12px;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1.6px;
+  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {

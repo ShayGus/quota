@@ -7,6 +7,8 @@
 import type {
   AccountSnapshot,
   AppSnapshot,
+  BoundaryKind,
+  ConnectionProgress,
   Measurement,
   MonitoringState,
   PersistenceStatus,
@@ -14,6 +16,7 @@ import type {
   ProviderId,
   QuotaWindow,
   UnrankedReason,
+  VerifiedCandidate,
 } from "../src/generated/bindings";
 
 /** A timestamp far enough in the future that fixtures never expire. */
@@ -26,7 +29,9 @@ export function window(
   measurement: Measurement,
   options: {
     readonly label?: string;
+    readonly resource?: string;
     readonly boundaryAt?: string | null;
+    readonly boundaryKind?: BoundaryKind;
     readonly role?: QuotaWindow["metric_role"];
   } = {},
 ): QuotaWindow {
@@ -35,7 +40,7 @@ export function window(
     provider_bucket_id: null,
     pool_id: "pool-1",
     scope: {
-      resource: "resource",
+      resource: options.resource ?? "account",
       label: options.label ?? "Subscription",
     },
     category,
@@ -50,7 +55,7 @@ export function window(
         ? null
         : {
             at: options.boundaryAt ?? "2026-10-01T14:00:00.000Z",
-            kind: "full_reset",
+            kind: options.boundaryKind ?? "full_reset",
           },
     observed_at: "2026-10-01T11:59:00.000Z",
     received_at: "2026-10-01T11:59:00.000Z",
@@ -163,7 +168,6 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
     schema_version: 1,
     revision: 7,
     theme: "dark",
-    density: "compact",
     indicator_style: "ring",
     overview_mode: "floating",
     always_on_top: false,
@@ -178,5 +182,37 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
     privacy: { alias_mode: "off", retain_history: false, export_identities: false },
     polling: [],
     ...overrides,
+  };
+}
+
+/** A verified identity held for confirmation, not yet saved. */
+export function candidate(
+  provider: ProviderId,
+  windows: readonly QuotaWindow[] = [],
+  principal = "new@example.test",
+): VerifiedCandidate {
+  return {
+    provider_id: provider,
+    nickname: "Personal",
+    identity: {
+      principal_label: principal,
+      workspace_label: "Home",
+      plan_label: null,
+      source: "documented_api",
+    },
+    windows: [...windows],
+  };
+}
+
+/** Attempt progress holding one candidate for confirmation. */
+export function awaitingConfirmation(
+  attemptId: string,
+  held: VerifiedCandidate,
+  revision = 2,
+): { attemptId: string; revision: number; progress: ConnectionProgress } {
+  return {
+    attemptId,
+    revision,
+    progress: { kind: "awaiting_confirmation", context: { candidate: held } },
   };
 }

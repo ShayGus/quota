@@ -64,13 +64,23 @@ impl MeasurementRepository {
         windows: &[QuotaWindow],
     ) -> PersistenceResult<usize> {
         let mut transaction = self.pool.begin().await.table("latest_measurements")?;
+        let history_rows = Self::replace_readings_in(&mut transaction, account_id, windows).await?;
+        transaction.commit().await.table("latest_measurements")?;
+        Ok(history_rows)
+    }
+
+    /// [`Self::replace_readings`] inside a caller's transaction, which the
+    /// caller commits.
+    pub(crate) async fn replace_readings_in(
+        transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        account_id: &AccountId,
+        windows: &[QuotaWindow],
+    ) -> PersistenceResult<usize> {
         let mut history_rows = 0;
         for window in windows {
-            history_rows +=
-                usize::from(persist_window(&mut transaction, account_id, window).await?);
+            history_rows += usize::from(persist_window(transaction, account_id, window).await?);
         }
-        sweep_absent_windows(&mut transaction, account_id, windows).await?;
-        transaction.commit().await.table("latest_measurements")?;
+        sweep_absent_windows(transaction, account_id, windows).await?;
         Ok(history_rows)
     }
 }

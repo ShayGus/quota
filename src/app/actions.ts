@@ -1,9 +1,9 @@
 /**
  * The typed commands the renderer may issue, wrapped as owned operations.
  *
- * Every action here delegates to `reportAsync`, so the promise has an owner and
- * a failure path. Nothing in the renderer calls a generated binding directly
- * outside this module and the subscription lifecycle.
+ * Every action here owns its promise and failure path. Nothing in the renderer
+ * calls a generated binding directly outside this module and the subscription
+ * lifecycle.
  */
 import {
   commands,
@@ -20,8 +20,27 @@ import {
   type SettingsDestination,
 } from "../generated/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { reportAsync } from "../shared/ipc/report";
-import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { reportAsync, reportSettled } from "../shared/ipc/report";
+import { reconcileSnapshot } from "../shared/ipc/subscription";
+import {
+  acceptAttempt,
+  clearAttempt,
+  getRendererState,
+  setFailure,
+} from "../shared/state/store";
+
+/** Records a login-item failure, so the window can say so. */
+function reportLaunchAtLogin(operation: string): null {
+  setFailure({
+    kind: "domain",
+    error: {
+      kind: "native_operation_failed",
+      context: { operation, reason: "the operating system refused the login item" },
+    },
+  });
+  return null;
+}
 
 /** The renderer's command surface. Every function awaits its own failure path. */
 export const actions = {
@@ -85,9 +104,30 @@ export const actions = {
   async reconnectAccount(accountId: AccountId): Promise<void> {
     await reportAsync(commands.reconnectAccount({ id: accountId }));
   },
-  /** Cancels one live attempt. Cancellation is a deliberate result, not a failure. */
+  /** Cancels a live attempt or discards a verified candidate. Neither is a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {
-    await reportAsync(commands.cancelConnection(attempt));
+    await reportAsync(
+      commands
+        .cancelConnection(attempt)
+        .then((result) =>
+          result.status === "error" && result.error.kind === "cancelled"
+            ? { status: "ok" as const, data: null }
+            : result,
+        ),
+    );
+  },
+  /**
+   * Confirms one candidate and reports whether the command acknowledged success.
+   *
+   * A false result can mean a lost reply after a durable save. Verified progress
+   * independently closes the wizard, and the subscription reconciles the
+   * snapshot. A successful reply reconciles here even if Verified was lost;
+   * reconciliation failure does not turn that acknowledgement into a failed save.
+   */
+  async confirmConnection(attempt: AttemptRef, nickname: string): Promise<boolean> {
+    const saved = await reportSettled(commands.confirmConnection(attempt, nickname));
+    if (saved) await reconcileSnapshot();
+    return saved;
   },
   /** Moves the overview between floating and tray mode. */
   async setOverviewMode(mode: OverviewMode): Promise<void> {
@@ -101,13 +141,12 @@ export const actions = {
   async setAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
     await reportAsync(commands.setOverviewAlwaysOnTop(alwaysOnTop));
   },
-  /** Widens the overview to fit every account within the work area. */
-  async fitToAccounts(): Promise<void> {
-    await reportAsync(commands.fitOverviewToAccounts());
-  },
-  /** Returns the overview to a visible work area. */
-  async resetPosition(): Promise<void> {
-    await reportAsync(commands.resetOverviewPosition());
+  /**
+   * Asks the host to fit the popover's height to its content. The host decides
+   * the height and position inside the work area; a refusal is reported.
+   */
+  async fitOverviewHeight(contentHeight: number): Promise<void> {
+    await reportAsync(commands.fitOverviewHeight(Math.max(0, Math.round(contentHeight))));
   },
   async savePollingPreferences(policy: ProviderPollingPolicy): Promise<void> {
     await reportAsync(commands.setPollingPreferences(policy.provider_id, policy));
@@ -126,6 +165,35 @@ export const actions = {
   async closeWindow(): Promise<void> {
     await getCurrentWindow().close();
   },
+  /**
+   * Whether Quota is registered to start at login, as the system reports it,
+   * or `null` when the system could not be asked.
+   */
+  async launchAtLogin(): Promise<boolean | null> {
+    try {
+      return await isEnabled();
+    } catch {
+      return null;
+    }
+  },
+  /**
+   * Registers or removes the login item, then reports the state the system
+   * confirms, so the switch never shows a registration that did not happen.
+   */
+  async setLaunchAtLogin(launch: boolean): Promise<boolean | null> {
+    try {
+      if (launch) {
+        await enable();
+      } else {
+        await disable();
+      }
+      return await isEnabled();
+    } catch {
+      return reportLaunchAtLogin(
+        launch ? "enable_launch_at_login" : "disable_launch_at_login",
+      );
+    }
+  },
   /** Opens one provider's usage page in the external browser. */
   async openUsagePage(accountId: AccountId): Promise<void> {
     const provider = getRendererState().snapshot?.accounts.find(
@@ -141,7 +209,7 @@ export const actions = {
     await reportAsync(commands.clearLocalHistory({ id: accountId }));
   },
   /** Writes a sanitized diagnostic export to a host-resolved destination. */
-  async exportDiagnostics(destination: string): Promise<void> {
-    await reportAsync(commands.exportSanitizedDiagnostics(destination));
+  async exportDiagnostics(label: string): Promise<string | null> {
+    return reportAsync(commands.exportSanitizedDiagnostics(label));
   },
 };

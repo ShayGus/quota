@@ -20,7 +20,5 @@ permissions = [
   "allow-set-indicator-style",
   "allow-set-overview-mode",
   "allow-set-overview-always-on-top",
-  "allow-fit-overview-to-accounts",
-  "allow-reset-overview-position",
   "allow-export-sanitized-diagnostics",
 ]

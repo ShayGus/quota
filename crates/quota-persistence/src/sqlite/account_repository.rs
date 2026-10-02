@@ -87,14 +87,23 @@ impl AccountRepository {
     /// not exist, and [`PersistenceError::IntegrityViolation`] on a duplicate
     /// identity or a duplicate ordinal within the connection.
     pub async fn upsert_account(&self, account: &NewAccount) -> PersistenceResult<()> {
-        let fetch_state = codec::encode(&FetchState::Idle, "accounts")?;
-
         let mut transaction = self.pool.begin().await.table("accounts")?;
+        Self::upsert_account_in(&mut transaction, account).await?;
+        transaction.commit().await.table("accounts")?;
+        Ok(())
+    }
+
+    /// [`Self::upsert_account`] inside a caller's transaction, which the caller commits.
+    pub(crate) async fn upsert_account_in(
+        transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        account: &NewAccount,
+    ) -> PersistenceResult<()> {
+        let fetch_state = codec::encode(&FetchState::Idle, "accounts")?;
 
         let connection_state: Option<String> =
             sqlx::query_scalar("SELECT state FROM connections WHERE id = ?")
                 .bind(account.connection_id.as_str())
-                .fetch_optional(&mut *transaction)
+                .fetch_optional(&mut **transaction)
                 .await
                 .table("connections")?;
         let Some(connection_state) = connection_state else {
@@ -122,11 +131,9 @@ impl AccountRepository {
         .bind(i64::from(account.connection_ordinal))
         .bind(connection_state)
         .bind(fetch_state)
-        .execute(&mut *transaction)
+        .execute(&mut **transaction)
         .await
         .table("accounts")?;
-
-        transaction.commit().await.table("accounts")?;
         Ok(())
     }
 
@@ -139,10 +146,20 @@ impl AccountRepository {
         account_id: &AccountId,
         enabled: bool,
     ) -> PersistenceResult<()> {
+        Self::set_monitoring_enabled_on(&self.pool, account_id, enabled).await
+    }
+
+    /// [`Self::set_monitoring_enabled`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn set_monitoring_enabled_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        account_id: &AccountId,
+        enabled: bool,
+    ) -> PersistenceResult<()> {
         let updated = sqlx::query("UPDATE accounts SET monitoring_enabled = ? WHERE id = ?")
             .bind(i64::from(enabled))
             .bind(account_id.as_str())
-            .execute(&self.pool)
+            .execute(executor)
             .await
             .table("accounts")?
             .rows_affected();
@@ -155,6 +172,17 @@ impl AccountRepository {
     /// Returns [`PersistenceError::RowRejected`] when no such account exists.
     pub async fn record_verified_identity(
         &self,
+        account_id: &AccountId,
+        state: ConnectionState,
+        identity: &VerifiedIdentity,
+    ) -> PersistenceResult<()> {
+        Self::record_verified_identity_on(&self.pool, account_id, state, identity).await
+    }
+
+    /// [`Self::record_verified_identity`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn record_verified_identity_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
         account_id: &AccountId,
         state: ConnectionState,
         identity: &VerifiedIdentity,
@@ -177,7 +205,7 @@ impl AccountRepository {
         .bind(identity.plan_label.as_deref())
         .bind(encoded_source)
         .bind(account_id.as_str())
-        .execute(&self.pool)
+        .execute(executor)
         .await
         .table("accounts")?
         .rows_affected();
@@ -192,28 +220,46 @@ impl AccountRepository {
         &self,
         account_id: &AccountId,
         state: FetchState,
-        attempted_at: DateTime<Utc>,
+        attempted_at: Option<DateTime<Utc>>,
+        succeeded_at: Option<DateTime<Utc>>,
+        next_attempt_at: Option<DateTime<Utc>>,
+    ) -> PersistenceResult<()> {
+        Self::record_attempt_on(
+            &self.pool,
+            account_id,
+            state,
+            attempted_at,
+            succeeded_at,
+            next_attempt_at,
+        )
+        .await
+    }
+
+    /// [`Self::record_attempt`] on a given executor, so a caller can make it part of a
+    /// larger transaction.
+    pub(crate) async fn record_attempt_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        account_id: &AccountId,
+        state: FetchState,
+        attempted_at: Option<DateTime<Utc>>,
+        succeeded_at: Option<DateTime<Utc>>,
         next_attempt_at: Option<DateTime<Utc>>,
     ) -> PersistenceResult<()> {
         let encoded = codec::encode(&state, "accounts")?;
-        let succeeded = i64::from(state == FetchState::Idle);
-        let at = codec::instant(attempted_at);
-
         let updated = sqlx::query(
             "UPDATE accounts
                 SET fetch_state = ?,
                     last_attempt_at = ?,
-                    last_success_at = CASE WHEN ? = 1 THEN ? ELSE last_success_at END,
+                    last_success_at = ?,
                     next_attempt_at = ?
               WHERE id = ?",
         )
         .bind(encoded)
-        .bind(&at)
-        .bind(succeeded)
-        .bind(&at)
+        .bind(attempted_at.map(codec::instant))
+        .bind(succeeded_at.map(codec::instant))
         .bind(next_attempt_at.map(codec::instant))
         .bind(account_id.as_str())
-        .execute(&self.pool)
+        .execute(executor)
         .await
         .table("accounts")?
         .rows_affected();
@@ -314,12 +360,24 @@ impl AccountRepository {
         shared: bool,
     ) -> PersistenceResult<()> {
         let mut transaction = self.pool.begin().await.table("quota_pools")?;
+        Self::bind_pool_in(&mut transaction, account_id, pool_id, provider_id, shared).await?;
+        transaction.commit().await.table("account_pool_bindings")?;
+        Ok(())
+    }
 
+    /// [`Self::bind_pool`] inside a caller's transaction, which the caller commits.
+    pub(crate) async fn bind_pool_in(
+        transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
+        account_id: &AccountId,
+        pool_id: &QuotaPoolId,
+        provider_id: ProviderId,
+        shared: bool,
+    ) -> PersistenceResult<()> {
         sqlx::query("INSERT OR IGNORE INTO quota_pools (id, provider_id, shared) VALUES (?, ?, ?)")
             .bind(pool_id.as_str())
             .bind(provider_id.as_str())
             .bind(i64::from(shared))
-            .execute(&mut *transaction)
+            .execute(&mut **transaction)
             .await
             .table("quota_pools")?;
 
@@ -328,11 +386,9 @@ impl AccountRepository {
         )
         .bind(account_id.as_str())
         .bind(pool_id.as_str())
-        .execute(&mut *transaction)
+        .execute(&mut **transaction)
         .await
         .table("account_pool_bindings")?;
-
-        transaction.commit().await.table("account_pool_bindings")?;
         Ok(())
     }
 }

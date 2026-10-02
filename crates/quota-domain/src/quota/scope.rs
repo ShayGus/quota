@@ -6,6 +6,13 @@ use specta::Type;
 use crate::error::DomainError;
 use crate::ids::ResourceId;
 
+/// The resource every provider gives an allowance that covers the whole
+/// account, as opposed to one model, product, or credit balance.
+///
+/// The overview draws only these as a card's period rings; every other scope
+/// is listed under its own name. The renderer holds the same value.
+pub const ACCOUNT_RESOURCE: &str = "account";
+
 /// Maximum accepted length of a scope display label, in characters.
 pub const MAX_SCOPE_LABEL_LEN: usize = 80;
 

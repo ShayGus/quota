@@ -4,12 +4,17 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { AttemptRef } from "../src/generated/bindings";
 import { ConnectionWizard } from "../src/features/settings/ConnectionWizard";
-import { AccountsPanel } from "../src/features/settings/panels/AccountsPanel";
 import { Settings, type SettingsActions } from "../src/features/settings/Settings";
 import { Overview } from "../src/features/overview/Overview";
 import { initialRendererState } from "../src/shared/state/types";
-import { RefreshNotice } from "../src/shared/ui/RefreshNotice";
-import { account, preferences, snapshot } from "./fixtures";
+import { refreshMessage, Toast, TOAST_MS } from "../src/shared/ui/RefreshNotice";
+import {
+  account,
+  awaitingConfirmation,
+  candidate,
+  preferences,
+  snapshot,
+} from "./fixtures";
 
 function settingsActions(): SettingsActions {
   return {
@@ -18,17 +23,23 @@ function settingsActions(): SettingsActions {
     savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setOverviewMode: vi.fn(),
-    fitToAccounts: vi.fn(),
-    resetPosition: vi.fn(),
     setAccountEnabled: vi.fn(),
     renameAccount: vi.fn(),
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve(null)),
     cancelConnection: vi.fn(() => Promise.resolve()),
+    confirmConnection: vi.fn(() => Promise.resolve(true)),
     reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
-    exportDiagnostics: vi.fn(),
+    exportDiagnostics: vi.fn(() =>
+      Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
+    ),
+    showAddAccount: vi.fn(),
+    showOverview: vi.fn(),
+    showAccountDetail: vi.fn(),
+    launchAtLogin: vi.fn(() => Promise.resolve(false)),
+    setLaunchAtLogin: vi.fn((launch: boolean) => Promise.resolve(launch)),
   };
 }
 
@@ -51,9 +62,6 @@ describe("pending connection acceptance", () => {
       screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Back" }).disabled).toBe(
-      true,
-    );
-    expect(screen.getByLabelText<HTMLInputElement>("Account nickname").disabled).toBe(
       true,
     );
     fireEvent.click(screen.getByRole("button", { name: "Verifying…" }));
@@ -92,31 +100,28 @@ describe("pending connection acceptance", () => {
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
+    // Verified: the host holds the candidate and nothing is saved yet.
     panel.rerender(
       <ConnectionWizard
         state={{
           ...initialRendererState,
           preferences: preferences(),
-          attempts: [
-            {
-              attemptId: "attempt",
-              revision: 2,
-              progress: { kind: "verified", context: { state: "connected" } },
-            },
-          ],
+          attempts: [awaitingConfirmation("attempt", candidate("codex"))],
         }}
         actions={actions}
         onDone={vi.fn()}
       />,
     );
     expect(screen.queryByRole("button", { name: "Verifying…" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
+    expect(
+      screen.getByRole("heading", { name: "Is this the right account?" }),
+    ).toBeDefined();
+    expect(screen.getByRole("button", { name: "Add account" })).toHaveProperty(
       "disabled",
       true,
     );
     fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
+    expect(screen.getByRole("button", { name: "Add account" })).toHaveProperty(
       "disabled",
       false,
     );
@@ -139,7 +144,6 @@ describe("pending connection acceptance", () => {
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
-    expect(screen.getByLabelText("Account nickname")).toHaveProperty("disabled", false);
     expect(screen.getByRole("button", { name: "Back" })).toHaveProperty(
       "disabled",
       false,
@@ -149,17 +153,27 @@ describe("pending connection acceptance", () => {
 });
 
 describe("settings connection session", () => {
-  it("opens the wizard from Accounts and keeps acceptance and provider recovery on its route", async () => {
+  it("asks the popover for the wizard from Accounts", () => {
     window.history.replaceState(null, "", "#/settings/accounts");
+    const actions = settingsActions();
+    const state = { ...initialRendererState, preferences: preferences() };
+    render(<Settings state={state} actions={actions} />);
+    // Both the title action and the empty state's action open the same wizard.
+    const adds = screen.getAllByRole("button", { name: "Add account" });
+    expect(adds).toHaveLength(2);
+    for (const add of adds) fireEvent.click(add);
+    expect(actions.showAddAccount).toHaveBeenCalledTimes(2);
+    expect(window.location.hash).toBe("#/settings/accounts");
+  });
+
+  it("keeps acceptance and provider recovery on the host's connection route", async () => {
+    window.history.replaceState(null, "", "#/settings/connect");
     const pending = Promise.withResolvers<AttemptRef | null>();
     const beginConnection = vi.fn(() => pending.promise);
     const actions = { ...settingsActions(), beginConnection };
     const state = { ...initialRendererState, preferences: preferences() };
     const settings = render(<Settings state={state} actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    await waitFor(() => {
-      expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeDefined();
-    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeDefined();
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
     settings.rerender(<Settings state={{ ...state, link: "live" }} actions={actions} />);
@@ -199,177 +213,109 @@ describe("settings connection session", () => {
     ).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "Add account" })).toBeDefined();
+      expect(screen.getByRole("heading", { name: "Accounts" })).toBeDefined();
     });
     expect(actions.cancelConnection).not.toHaveBeenCalled();
   });
 });
 
-describe("snapshot refresh timing", () => {
+describe("refresh timing", () => {
   const now = Date.parse("2026-10-01T12:00:00.000Z");
   const waiting = {
     ...account("a1", "codex", 1, []),
     next_attempt_at: "2026-10-01T12:05:00.000Z",
   };
 
-  it("shows deferred manual refreshes in settings", () => {
-    const panel = render(
-      <AccountsPanel
-        accounts={[waiting]}
-        preferences={preferences()}
-        now={now}
-        actions={settingsActions()}
-        onAddAccount={vi.fn()}
-      />,
+  it("states a deferred manual refresh when it is requested, not as a standing banner", () => {
+    expect(refreshMessage([waiting], preferences(), now)).toContain(
+      "Next eligible read in 5m.",
     );
-    expect(screen.getByText(/Manual refreshes.*are deferred/).textContent).toContain(
-      "5m",
+    expect(refreshMessage([waiting], preferences(), now + 300_000)).toBe(
+      "Refreshing readings.",
     );
-    panel.rerender(
-      <AccountsPanel
-        accounts={[waiting]}
-        preferences={preferences()}
-        now={now + 300_000}
-        actions={settingsActions()}
+    render(
+      <Overview
+        state={{
+          ...initialRendererState,
+          snapshot: snapshot("instance-1", 1, [waiting]),
+        }}
+        filter="all"
+        onFilter={vi.fn()}
         onAddAccount={vi.fn()}
+        onIndicatorStyle={vi.fn()}
+        onResume={vi.fn()}
+        onOpenAccount={() => undefined}
+        onOpenWindow={() => undefined}
+        onReconnect={() => undefined}
+        onEnable={() => undefined}
       />,
     );
     expect(screen.queryByText(/Manual refreshes.*are deferred/)).toBeNull();
   });
 
-  it("shows the same timing in the overview", () => {
+  it("shows a toast and hides it again after a moment", () => {
     vi.useFakeTimers();
-    vi.setSystemTime(now);
     try {
-      render(
-        <Overview
-          state={{
-            ...initialRendererState,
-            snapshot: snapshot("instance-1", 1, [waiting]),
-          }}
-          filter="all"
-          onFilter={vi.fn()}
-          search=""
-          onSearch={vi.fn()}
-          searchOpen={false}
-          onSearchOpen={vi.fn()}
-          onFit={vi.fn()}
-          onAddAccount={vi.fn()}
-          onIndicatorStyle={vi.fn()}
-          onResume={vi.fn()}
-          onOpenAccount={() => undefined}
-          onReconnect={() => undefined}
-        />,
+      const toast = render(<Toast message={null} />);
+      expect(toast.container.querySelector(".toast.show")).toBeNull();
+      toast.rerender(<Toast message={{ text: "Refreshing readings." }} />);
+      expect(toast.container.querySelector(".toast.show")?.textContent).toBe(
+        "Refreshing readings.",
       );
-      expect(screen.getByText(/Manual refreshes.*are deferred/).textContent).toContain(
-        "5m",
-      );
+      act(() => {
+        vi.advanceTimersByTime(TOAST_MS);
+      });
+      expect(toast.container.querySelector(".toast.show")).toBeNull();
     } finally {
       vi.useRealTimers();
     }
   });
-});
 
-describe("refresh notice privacy", () => {
   it.each([
     ["stable_aliases", "Account 2"],
     ["off", "Captain's account"],
-  ] as const)("uses the same %s label in overview and settings", (mode, label) => {
-    vi.useFakeTimers();
-    vi.setSystemTime("2026-10-01T12:00:00.000Z");
-    const waiting = {
+  ] as const)("names the account with the %s label", (mode, label) => {
+    const named = {
       ...account("z", "codex", 1, [], { nickname: "Captain's account" }),
       next_attempt_at: "2026-10-01T12:05:00.000Z",
     };
     const confirmed = preferences();
-    const state = {
-      ...initialRendererState,
-      preferences: preferences({ privacy: { ...confirmed.privacy, alias_mode: mode } }),
-      snapshot: snapshot("instance-1", 1, [waiting, account("a", "claude", 2, [])]),
-    };
-    try {
-      const overview = render(
-        <Overview
-          state={state}
-          filter="all"
-          onFilter={vi.fn()}
-          search=""
-          onSearch={vi.fn()}
-          searchOpen={false}
-          onSearchOpen={vi.fn()}
-          onFit={vi.fn()}
-          onAddAccount={vi.fn()}
-          onIndicatorStyle={vi.fn()}
-          onResume={vi.fn()}
-          onOpenAccount={() => undefined}
-          onReconnect={() => undefined}
-        />,
-      );
-      expect(screen.getByRole("button", { name: `Details for ${label}` })).toBeDefined();
-      expect(screen.getByText(/Manual refreshes.*are deferred/).textContent).toContain(
-        `Manual refreshes for ${label} are deferred.`,
-      );
-      if (mode === "stable_aliases") {
-        expect(overview.container.textContent).not.toContain(waiting.nickname);
-      }
-      overview.unmount();
-      window.history.replaceState(null, "", "#/settings/accounts");
-      render(<Settings state={state} actions={settingsActions()} />);
-      const notice = screen.getByText(/Manual refreshes.*are deferred/);
-      expect(notice.textContent).toContain(`Manual refreshes for ${label} are deferred.`);
-      if (mode === "stable_aliases") {
-        expect(notice.textContent).not.toContain(waiting.nickname);
-      }
-    } finally {
-      vi.useRealTimers();
+    const message = refreshMessage(
+      [named, account("a", "claude", 2, [])],
+      preferences({ privacy: { ...confirmed.privacy, alias_mode: mode } }),
+      now,
+    );
+    expect(message).toContain(`Manual refreshes for ${label} are deferred.`);
+    if (mode === "stable_aliases") {
+      expect(message).not.toContain(named.nickname);
     }
   });
-});
 
-describe("effective refresh deadline rendering", () => {
   it.each([
     {
       name: "short",
       nextAttempt: "2026-10-01T12:05:00.000Z",
       initial: "5m",
-      afterMinute: "4m",
-      deadline: 300_000,
+      later: "4m",
     },
     {
       name: "long",
       nextAttempt: "2026-10-01T13:00:00.000Z",
       initial: "1h 0m",
-      afterMinute: "59m",
-      deadline: 3_600_000,
+      later: "59m",
     },
   ])("formats the snapshot deadline after $name Retry-After", (reading) => {
-    const now = Date.parse("2026-10-01T12:00:00.000Z");
-    const waiting = {
+    const backoff = {
       ...account("a1", "codex", 1, []),
       fetch_state: "backoff" as const,
       last_attempt_at: "2026-10-01T12:00:00.000Z",
       next_attempt_at: reading.nextAttempt,
     };
-    const notice = render(
-      <RefreshNotice accounts={[waiting]} preferences={null} now={now} />,
+    const first = refreshMessage([backoff], null, now);
+    expect(first).toContain(`Next eligible read in ${reading.initial}.`);
+    expect(first).not.toContain(reading.nextAttempt);
+    expect(refreshMessage([backoff], null, now + 60_000)).toContain(
+      `Next eligible read in ${reading.later}.`,
     );
-    expect(screen.getByRole("status").textContent).toContain(
-      `Next eligible read in ${reading.initial}.`,
-    );
-    expect(screen.getByRole("status").textContent).not.toContain(reading.nextAttempt);
-    notice.rerender(
-      <RefreshNotice accounts={[waiting]} preferences={null} now={now + 60_000} />,
-    );
-    expect(screen.getByRole("status").textContent).toContain(
-      `Next eligible read in ${reading.afterMinute}.`,
-    );
-    notice.rerender(
-      <RefreshNotice
-        accounts={[waiting]}
-        preferences={null}
-        now={now + reading.deadline}
-      />,
-    );
-    expect(screen.queryByRole("status")).toBeNull();
   });
 });

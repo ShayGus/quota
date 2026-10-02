@@ -1,5 +1,5 @@
 /**
- * Theme, motion, and density resolution.
+ * Theme and motion resolution.
  *
  * Each is a confirmed preference. `system` follows the operating system and must
  * react when that changes, so the media query is read through a subscription
@@ -8,7 +8,7 @@
  */
 import { useEffect, useSyncExternalStore } from "react";
 
-import type { Density, Theme } from "../generated/bindings";
+import type { Theme } from "../generated/bindings";
 import type { RendererState } from "../shared/state/types";
 
 /** The colour scheme actually painted. */
@@ -32,11 +32,6 @@ export function chosenTheme(state: RendererState): Theme {
   return state.preferences?.theme ?? "system";
 }
 
-/** The row density the current state confirms. */
-export function chosenDensity(state: RendererState): Density {
-  return state.preferences?.density ?? "compact";
-}
-
 /** Applies a resolved theme to the document element. */
 export function applyTheme(theme: ResolvedTheme): void {
   document.documentElement.dataset["theme"] = theme;
@@ -48,14 +43,12 @@ export function useTheme(state: RendererState): ResolvedTheme {
   const prefersDark = useSyncExternalStore(subscribeSystemTheme, systemPrefersDark);
   const resolved = resolveTheme(chosen, prefersDark);
   // Both are confirmed preferences, so both are applied at the document rather
-  // than left to the operating system or to fixed row geometry.
+  // than left to the operating system.
   const reduceMotion = state.preferences?.reduce_motion ?? false;
-  const density = chosenDensity(state);
   useEffect(() => {
     applyTheme(resolved);
     document.documentElement.dataset["reduceMotion"] = String(reduceMotion);
-    document.documentElement.dataset["density"] = density;
-  }, [resolved, reduceMotion, density]);
+  }, [resolved, reduceMotion]);
   return resolved;
 }
 

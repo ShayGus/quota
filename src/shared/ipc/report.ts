@@ -57,7 +57,9 @@ export function describeCommandError(error: CommandError): string {
     case "native_operation_unsupported":
       return "This system does not support that window operation.";
     case "native_operation_failed":
-      return "The system refused that window operation.";
+      return error.context.operation.endsWith("launch_at_login")
+        ? "Windows did not change the login item. Launch at login is unchanged."
+        : "The system refused that window operation.";
     case "cancelled":
       return "That was cancelled.";
     case "internal":
@@ -145,5 +147,31 @@ export async function reportAsync<T>(
       detail: reason instanceof Error ? reason.name : "command rejected",
     });
     return null;
+  }
+}
+
+/**
+ * Owns one asynchronous operation whose success carries no value.
+ *
+ * `reportAsync` answers `null` for both a unit result and a failure, so a
+ * caller that must stay on the screen it is already showing needs the outcome
+ * itself rather than a value it cannot tell apart.
+ */
+export async function reportSettled(
+  operation: Promise<CommandResult<null>>,
+): Promise<boolean> {
+  try {
+    const result = await operation;
+    if (result.status === "error") {
+      reportFailure(result.error);
+      return false;
+    }
+    return true;
+  } catch (reason: unknown) {
+    reportTransportFailure({
+      code: "unknown_error",
+      detail: reason instanceof Error ? reason.name : "command rejected",
+    });
+    return false;
   }
 }

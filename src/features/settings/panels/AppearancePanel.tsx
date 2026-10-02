@@ -1,27 +1,28 @@
 /**
  * Appearance settings.
  *
- * Theme, indicator style, and reduced motion are committed preferences. The
+ * Theme, overview layout, and reduced motion are committed preferences. The
  * theme also has a live preview effect, because the window must paint the chosen
  * scheme immediately.
  */
 import type { JSX } from "react";
 
-import type { Preferences, Theme } from "../../../generated/bindings";
-import { SettingRow, Select, Switch } from "../Primitives";
+import type { IndicatorStyle, Preferences, Theme } from "../../../generated/bindings";
+import { SettingRow, SettingsTitle, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import {
-  withDensity,
-  withIndicatorStyle,
-  withReduceMotion,
-  withTheme,
-} from "../preferences";
+import { withIndicatorStyle, withReduceMotion, withTheme } from "../preferences";
 
-/** The three colour-scheme options. */
+/** The three colour-scheme options, in the wireframe's order. */
 const THEMES: readonly (readonly [Theme, string])[] = [
-  ["system", "Follow system"],
   ["light", "Light"],
   ["dark", "Dark"],
+  ["system", "System"],
+];
+
+/** The two overview layouts. */
+const LAYOUTS: readonly (readonly [IndicatorStyle, string])[] = [
+  ["ring", "Donuts"],
+  ["bar", "Compact"],
 ];
 
 /** The appearance settings panel. */
@@ -34,23 +35,22 @@ export function AppearancePanel({
 }): JSX.Element {
   return (
     <>
-      <h3 className="settings__title">Appearance</h3>
-      <p className="settings__intro">
-        The same account rows, drawn with rings or with compact bars. Both styles show the
-        session, weekly, and monthly limits together.
-      </p>
+      <SettingsTitle
+        title="Appearance"
+        intro="The same information, in a layout that suits your desktop."
+      />
       <div className="theme-options">
         {THEMES.map(([theme, label]) => (
           <button
             key={theme}
             type="button"
-            className="theme-option"
+            className={`theme-option${preferences.theme === theme ? " selected" : ""}`}
             aria-pressed={preferences.theme === theme}
             onClick={() => {
               actions.savePreferences(withTheme(preferences, theme));
             }}
           >
-            <div className={`theme-thumbnail theme-thumbnail--${theme}`}>
+            <div className={`theme-thumbnail ${theme}`}>
               <span>
                 <i />
                 <i />
@@ -62,42 +62,29 @@ export function AppearancePanel({
         ))}
       </div>
       <SettingRow
-        label="Allowance indicators"
-        description="Rings show a draining arc. Bars show the same values horizontally."
+        label="Overview layout"
+        description="Comfortable rings or a denser list of bars."
         control={
-          <Select
-            label="Allowance indicators"
-            value={preferences.indicator_style}
-            options={[
-              ["ring", "Rings"],
-              ["bar", "Bars"],
-            ]}
-            onChange={(style) => {
-              actions.savePreferences(withIndicatorStyle(preferences, style));
-            }}
-          />
-        }
-      />
-      <SettingRow
-        label="Row density"
-        description="Compact fits ten accounts without scrolling at the reference window size."
-        control={
-          <Select
-            label="Row density"
-            value={preferences.density}
-            options={[
-              ["compact", "Compact"],
-              ["comfortable", "Comfortable"],
-            ]}
-            onChange={(density) => {
-              actions.savePreferences(withDensity(preferences, density));
-            }}
-          />
+          <div className="tabs" role="group" aria-label="Overview layout">
+            {LAYOUTS.map(([style, label]) => (
+              <button
+                key={style}
+                type="button"
+                className={preferences.indicator_style === style ? "selected" : ""}
+                aria-pressed={preferences.indicator_style === style}
+                onClick={() => {
+                  actions.savePreferences(withIndicatorStyle(preferences, style));
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
         }
       />
       <SettingRow
         label="Reduce motion"
-        description="Suppresses animation. A value change is still shown, without movement."
+        description="Disable small transitions. A value change is still shown, without movement."
         control={
           <Switch
             checked={preferences.reduce_motion}
@@ -108,6 +95,10 @@ export function AppearancePanel({
           />
         }
       />
+      <div className="note">
+        Each arc represents remaining allowance. Status colors are consistent across
+        providers; percentages are not combined.
+      </div>
     </>
   );
 }

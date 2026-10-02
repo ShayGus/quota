@@ -3,14 +3,14 @@
  *
  * The snapshot store is filled by:
  *  1. registering every typed event listener through the generated bindings;
- *  2. then requesting the snapshot once (spec 7.9).
+ *  2. then reconciling the snapshot at startup (spec 7.9) and after confirmed saves.
  *
  * If the component unmounts while registration is still pending, the listeners
  * that do arrive are unsubscribed immediately, so Strict Mode's mount/unmount
  * pair leaves exactly one active subscription (AC-85).
  */
 import { commands, events } from "../../generated/bindings";
-import { reportCommandError, reportTransportFailure } from "./report";
+import { launch, reportCommandError, reportTransportFailure } from "./report";
 import {
   acceptAttempt,
   acceptMonitoring,
@@ -43,6 +43,7 @@ export async function startSnapshotSubscription(): Promise<() => void> {
         revision: payload.attempt_revision,
         progress: payload.progress,
       });
+      if (payload.progress.kind === "verified") launch(reconcileSnapshot());
     }),
     events.preferencesChanged.listen((event) => {
       const payload = event.payload;
@@ -81,7 +82,7 @@ const STARTUP_READ_ATTEMPTS = 40;
 const STARTUP_READ_BACKOFF_MS = 250;
 
 /**
- * Performs the one-time snapshot read.
+ * Reads committed state at startup and after confirmed saves.
  *
  * This is a reconciliation read, not a polling loop: the renderer never
  * schedules provider work (spec 7.8, spec 7.9).
