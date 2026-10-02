@@ -126,6 +126,12 @@ button:disabled {
   font-size: 10px;
 }
 
+.button--full {
+  width: 100%;
+  font-size: 13px;
+  padding: 11px;
+}
+
 .button--primary {
   background: var(--accent);
   border-color: var(--accent);

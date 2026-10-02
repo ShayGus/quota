@@ -39,6 +39,8 @@ export const commands = {
 	reconnectAccount: (accountRef: AccountRef) => typedError<number, CommandError>(__TAURI_INVOKE("reconnect_account", { accountRef })),
 	/**  Saves committed preferences and returns what was actually persisted. */
 	updatePreferences: (preferences: Preferences) => typedError<Preferences, CommandError>(__TAURI_INVOKE("update_preferences", { preferences })),
+	/**  Saves only the allowance indicator style. */
+	setIndicatorStyle: (style: IndicatorStyle) => typedError<Preferences, CommandError>(__TAURI_INVOKE("set_indicator_style", { style })),
 	/**
 	 *  Saves one polling policy for a compiled provider.
 	 * 
@@ -96,7 +98,7 @@ export const commands = {
 	 *  webview itself, so window labels, permissions and geometry stay owned on
 	 *  one side.
 	 */
-	openSettingsWindow: () => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window")),
+	openSettingsWindow: (destination: SettingsDestination) => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window", { destination })),
 };
 
 /** Events */
@@ -589,6 +591,22 @@ export type MonitoringStateChangedPayload = {
 	monitoring_state: MonitoringState,
 };
 
+/**
+ *  Which of the three allowance alerts are switched on.
+ * 
+ *  Each alert is its own choice: the approved design offers 20%, 10%, and 0% as
+ *  three separate selections, so one shared percentage cannot stand in for
+ *  them, and a deselected alert is never written as a null percentage.
+ */
+export type NotificationAlerts = {
+	/**  Notify when an allowance reaches the low threshold. */
+	low: boolean,
+	/**  Notify when an allowance reaches the critical threshold. */
+	critical: boolean,
+	/**  Notify when an allowance is exhausted. */
+	exhausted: boolean,
+};
+
 /**  What the user wants to be told. */
 export type NotificationPolicy = {
 	/**  Whether notifications are enabled at all. */
@@ -609,6 +627,8 @@ export type NotificationThresholds = {
 	critical_percent: number | null,
 	/**  How far past a threshold a reading must recover before it re-arms. */
 	hysteresis_percent: number | null,
+	/**  Which of the three alerts are switched on. */
+	alerts?: NotificationAlerts,
 };
 
 /**  One account's position in the canonical order. */
@@ -1039,6 +1059,15 @@ export type SetAccountEnabledRequest = {
 	/**  The preference revision the caller believes is current. */
 	expected_revision: number,
 };
+
+/**  The settings surface requested by an overview action. */
+export type SettingsDestination = 
+/**  General window and monitoring settings. */
+"general" | 
+/**  Connected account management. */
+"accounts" | 
+/**  Provider connection wizard. */
+"connect";
 
 /**  The snapshot plus the revision the renderer should reconcile against. */
 export type SnapshotResponse = {

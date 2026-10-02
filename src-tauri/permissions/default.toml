@@ -17,6 +17,7 @@ permissions = [
   "allow-rename-account",
   "allow-disconnect-account",
   "allow-open-provider-usage-page",
+  "allow-set-indicator-style",
   "allow-set-overview-mode",
   "allow-set-overview-always-on-top",
   "allow-fit-overview-to-accounts",

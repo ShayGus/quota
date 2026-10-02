@@ -7,7 +7,7 @@
  */
 import { useState, type JSX } from "react";
 
-import type { AccountSnapshot, QuotaWindow } from "../../generated/bindings";
+import type { AccountSnapshot, Preferences, QuotaWindow } from "../../generated/bindings";
 import {
   arcFraction,
   formatRemaining,
@@ -20,9 +20,13 @@ import {
   formatExactInstant,
   instantOf,
 } from "../../shared/format/duration";
+import { accountLabel } from "../../shared/format/alias";
+import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
+import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { Ring } from "../../shared/ui/Meter";
 import { freshnessCaption, readingState } from "../overview/freshness";
+import { columnLabel } from "../overview/QuotaCell";
 import { statusOf } from "../overview/status";
 
 /** The time zone used for exact boundary times. */
@@ -60,6 +64,7 @@ function WindowCard({
 }): JSX.Element {
   // The same freshness the overview uses, so a window that has gone stale or
   // whose boundary has passed cannot look healthy here (spec 6, AC-15).
+  const scope = window.scope.label || "Allowance";
   const state = readingState(account, window, now);
   const severity = state === "current" ? severityOf(window.measurement) : "stale";
   const value = formatRemaining(window.measurement);
@@ -69,12 +74,16 @@ function WindowCard({
       type="button"
       className={`limit-card${selected ? " limit-card--selected" : ""}`}
       aria-pressed={selected}
-      aria-label={`${window.scope.label || "Allowance"}: ${value} remaining. ${formatBoundary(window.boundary, now)}`}
+      aria-label={`${scope}: ${value} remaining. ${formatBoundary(window.boundary, now)}`}
       onClick={() => {
         onSelect(window.id);
       }}
     >
-      <h3>{window.scope.label || "Allowance"}</h3>
+      <h3>
+        {window.category === "daily" || window.category === "custom"
+          ? scope
+          : columnLabel(window.category)}
+      </h3>
       <Ring
         fraction={arcFraction(window.measurement)}
         severity={severity}
@@ -86,7 +95,13 @@ function WindowCard({
           ? "No reported reset"
           : formatBoundary(window.boundary, now)}
       </p>
+      <p className="limit-card__instant">
+        {window.boundary === null
+          ? "No reported reset"
+          : formatExactInstant(window.boundary.at, DISPLAY_TIME_ZONE)}
+      </p>
       <p className="limit-card__role">{ROLE_WORDS[window.metric_role]}</p>
+      <p className="limit-card__scope">{scope}</p>
     </button>
   );
 }
@@ -96,14 +111,22 @@ export function AccountDetail({
   account,
   now,
   onBack,
-  label,
+  accounts,
+  preferences,
+  onUsagePage,
+  onManageAccounts,
 }: {
   readonly account: AccountSnapshot;
   readonly now: number;
   readonly onBack: () => void;
-  /** The name to show: the account's own, or its alias under the privacy setting. */
-  readonly label: string;
+  readonly onUsagePage: () => void;
+  readonly onManageAccounts: () => void;
+  readonly accounts: readonly AccountSnapshot[];
+  readonly preferences: Preferences | null;
 }): JSX.Element {
+  const alias = accountLabel(preferences, accounts, account.account_id);
+  const label = alias || account.nickname;
+  const workspace = alias ? "Workspace hidden" : account.identity?.workspace_label;
   const [selectedWindow, setSelectedWindow] = useState<QuotaWindow["id"] | null>(
     account.windows[0]?.id ?? null,
   );
@@ -121,6 +144,12 @@ export function AccountDetail({
     controlling === undefined
       ? "no current reading"
       : formatRemaining(controlling.measurement);
+  // The reading the person is looking at: the card they chose, else the first.
+  const shown = selected ?? account.windows[0];
+  const readingSource =
+    shown === undefined
+      ? "No reading"
+      : `${SOURCE_WORDS[shown.source]} · ${shown.scope.label}`;
   return (
     <section className="detail" aria-label={`Account details for ${label}`}>
       <div className="detail__back">
@@ -131,17 +160,18 @@ export function AccountDetail({
         <span className="eyebrow">Account details</span>
       </div>
       <div className="detail__identity">
-        <div>
-          <h2>{label}</h2>
-          <p>
-            {account.provider_id}
-            {account.identity?.workspace_label != null
-              ? ` · ${account.identity.workspace_label}`
-              : ""}
-            {account.identity?.plan_label != null
-              ? ` · ${account.identity.plan_label}`
-              : ""}
-          </p>
+        <div className="identity">
+          <ProviderMark providerId={account.provider_id} />
+          <div>
+            <h2>{label}</h2>
+            <p>
+              {providerLabel(account.provider_id)}
+              {workspace != null ? ` · ${workspace}` : ""}
+              {account.identity?.plan_label != null
+                ? ` · ${account.identity.plan_label}`
+                : ""}
+            </p>
+          </div>
         </div>
         <span className={`badge badge--${status.tone}`}>
           <Icon name={status.icon} size={11} />
@@ -167,15 +197,19 @@ export function AccountDetail({
       <dl className="detail__list">
         <div>
           <dt>Account</dt>
-          <dd>{account.nickname}</dd>
+          <dd>{alias || account.identity?.principal_label || account.nickname}</dd>
+        </div>
+        <div>
+          <dt>Local account ID</dt>
+          <dd>{account.account_id}</dd>
         </div>
         <div>
           <dt>Provider</dt>
-          <dd>{account.provider_id}</dd>
+          <dd>{providerLabel(account.provider_id)}</dd>
         </div>
         <div>
           <dt>Workspace</dt>
-          <dd>{account.identity?.workspace_label ?? "Not reported"}</dd>
+          <dd>{workspace ?? "Not reported"}</dd>
         </div>
         <div>
           <dt>Plan</dt>
@@ -188,6 +222,10 @@ export function AccountDetail({
               ? "Not verified"
               : SOURCE_WORDS[account.identity.source]}
           </dd>
+        </div>
+        <div>
+          <dt>Reading source</dt>
+          <dd>{readingSource}</dd>
         </div>
         <div>
           <dt>Connection</dt>
@@ -235,6 +273,15 @@ export function AccountDetail({
           {String(account.order.value.rule_version)}.
         </p>
       )}
+      <div className="detail__bottom">
+        <button type="button" className="text-button" onClick={onUsagePage}>
+          <Icon name="external" size={13} />
+          Provider usage page
+        </button>
+        <button type="button" className="text-button" onClick={onManageAccounts}>
+          Manage accounts
+        </button>
+      </div>
     </section>
   );
 }

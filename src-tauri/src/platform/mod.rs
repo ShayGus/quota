@@ -6,5 +6,6 @@
 
 pub mod tray;
 pub mod window;
+mod window_transition;
 
 pub use window::{OverviewWindowController, OverviewWindowState};

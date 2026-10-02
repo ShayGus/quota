@@ -18,7 +18,11 @@ import {
   hasReading,
   severityOf,
 } from "../../shared/format/allowance";
-import { formatBoundary } from "../../shared/format/duration";
+import {
+  boundaryCountdown,
+  boundaryLead,
+  formatBoundary,
+} from "../../shared/format/duration";
 import { Bar, Ring } from "../../shared/ui/Meter";
 import { freshnessCaption, readingState, type ReadingState } from "./freshness";
 
@@ -136,7 +140,11 @@ export function QuotaCell({
   const severity = state === "current" ? severityOf(window.measurement) : "stale";
   const fraction = arcFraction(window.measurement);
   const value = formatRemaining(window.measurement);
-  const reading = formatBoundary(window.boundary, now);
+  const reading = boundaryCountdown(window.boundary, now);
+  const lead =
+    window.boundary === null
+      ? "Status"
+      : `${state === "current" ? "" : "Not current · "}${boundaryLead(window.boundary)} in`;
   return (
     <div className="quota-cell">
       <span className="quota-cell__mobile-label">{label}</span>
@@ -152,7 +160,9 @@ export function QuotaCell({
           <span className="quota-cell__bar">
             <span className="quota-cell__bar-top">
               <strong>{value}</strong>
-              <small>{reading}</small>
+              <small>
+                {lead} · {reading}
+              </small>
             </span>
             <Bar fraction={fraction} severity={severity} />
           </span>
@@ -165,7 +175,7 @@ export function QuotaCell({
               caption={captionOf(window, state)}
             />
             <span className="quota-cell__time">
-              <small>Resets</small>
+              <small>{lead}</small>
               <strong>{reading}</strong>
             </span>
           </>

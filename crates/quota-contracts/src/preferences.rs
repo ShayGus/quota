@@ -1,7 +1,8 @@
 //! The preference aggregate handed to the renderer.
 //!
-//! This is assembled from the typed store and `SQLite` owners after both saves
-//! succeed. It is not an instruction to write the same object into every store.
+//! This is assembled from the typed store and `SQLite` owners after the required
+//! saves succeed. Presentation-only changes do not write the `SQLite` owner.
+//! It is not an instruction to write the same object into every store.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -10,7 +11,9 @@ use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::{
     Density, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
 };
-pub use quota_domain::preferences::{NotificationPolicy, NotificationThresholds, QuietHours};
+pub use quota_domain::preferences::{
+    NotificationAlerts, NotificationPolicy, NotificationThresholds, QuietHours,
+};
 
 /// The wire schema version of the preference aggregate.
 pub const PREFERENCES_SCHEMA_VERSION: u32 = 1;

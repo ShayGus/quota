@@ -8,24 +8,14 @@
  */
 import type { JSX } from "react";
 
-import type {
-  AccountSnapshot,
-  IndicatorStyle,
-  ProviderId,
-} from "../../generated/bindings";
+import type { AccountSnapshot, IndicatorStyle } from "../../generated/bindings";
 import { formatRemaining } from "../../shared/format/allowance";
 import { formatAge, instantOf } from "../../shared/format/duration";
+import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
+import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { COLUMNS, QuotaCell, columnLabel, windowsFor, type Column } from "./QuotaCell";
 import { statusOf } from "./status";
-
-/** The provider marks from the wireframe. Text only; no provider artwork is bundled. */
-const PROVIDER_MARKS: Record<ProviderId, string> = {
-  codex: ">_",
-  claude: "\u2733",
-  open_code_go: "GO",
-  fixture: "FX",
-};
 
 /** One account row. */
 export function AccountRow({
@@ -59,7 +49,7 @@ export function AccountRow({
     <article
       className={`account-row${account.order.kind === "unranked" ? " account-row--unknown" : ""}`}
       data-account-id={account.account_id}
-      aria-label={`${label}, ${account.provider_id}, ${age}`}
+      aria-label={`${label}, ${providerLabel(account.provider_id)}, ${age}`}
     >
       <button
         type="button"
@@ -69,18 +59,12 @@ export function AccountRow({
           onOpen(account.account_id);
         }}
       >
-        <span
-          className={`provider-mark provider-mark--${account.provider_id}`}
-          aria-hidden="true"
-        >
-          {PROVIDER_MARKS[account.provider_id]}
-        </span>
+        <ProviderMark providerId={account.provider_id} />
         <span className="identity__copy">
           <span className="identity__name">{label}</span>
           <span className="identity__meta">
-            {account.provider_id}
+            {providerLabel(account.provider_id)}
             {workspace != null ? ` · ${workspace}` : ""}
-            {` · #${String(account.connection_ordinal)}`}
           </span>
         </span>
       </button>
@@ -137,12 +121,12 @@ export function AccountColumns(): JSX.Element {
     <div className="table__columns" role="presentation">
       <span>
         Account
-        <small>least remaining first</small>
+        <small>Remaining →</small>
       </span>
       {COLUMNS.map((column) => (
         <span key={column}>{columnLabel(column)}</span>
       ))}
-      <span>State</span>
+      <span>Status</span>
     </div>
   );
 }

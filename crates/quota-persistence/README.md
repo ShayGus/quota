@@ -91,7 +91,7 @@ failed save cannot destroy the last-known-good document.
 
 | Feature         | Effect                                                                                             |
 | --------------- | -------------------------------------------------------------------------------------------------- |
-| _(default)_     | SQLite repositories and the document codec. No Tauri dependency.                                   |
+| _(default)_     | SQLite repositories and the document codec.                                                        |
 | `tauri-plugins` | Adds `store::plugin`, the `tauri_plugin_store`-backed store implementing the same load/save shape. |
 
 `store::plugin` does not exist when `tauri-plugins` is off, so a release build that does

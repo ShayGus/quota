@@ -17,12 +17,10 @@ export function AppHeader({
   state,
   view,
   onSettings,
-  onOverview,
 }: {
   readonly state: RendererState;
   readonly view: "overview" | "detail" | "settings";
   readonly onSettings: () => void;
-  readonly onOverview: () => void;
 }): JSX.Element {
   const accountCount = state.snapshot?.accounts.length ?? 0;
   const providerCount =
@@ -31,6 +29,27 @@ export function AppHeader({
       : new Set(state.snapshot.accounts.map((account) => account.provider_id)).size;
   const alwaysOnTop = state.preferences?.always_on_top ?? false;
   const mode = state.preferences?.overview_mode ?? "floating";
+  const paused = state.monitoring?.kind === "paused";
+  if (view === "settings") {
+    return (
+      <header className="settings-head">
+        <div>
+          <h2>Quota settings</h2>
+          <p>Window, accounts, and monitoring preferences</p>
+        </div>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Close settings"
+          onClick={() => {
+            launch(actions.closeWindow());
+          }}
+        >
+          <Icon name="close" size={17} />
+        </button>
+      </header>
+    );
+  }
   return (
     <header className="shell__header">
       <div className="shell__brand">
@@ -43,46 +62,64 @@ export function AppHeader({
         </div>
       </div>
       <div className="shell__actions">
-        {alwaysOnTop ? (
-          <span className="shell__top-label">
-            <Icon name="pin" size={12} />
-            Always on top
-          </span>
-        ) : null}
+        {alwaysOnTop ? <span className="shell__top-label">Always on top</span> : null}
+        <button
+          type="button"
+          className="mode-control"
+          aria-label={
+            mode === "floating" ? "Switch to tray popover" : "Switch to floating window"
+          }
+          onClick={() => {
+            launch(actions.setOverviewMode(mode === "floating" ? "tray" : "floating"));
+          }}
+        >
+          <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
+          {mode === "floating" ? "Floating" : "Tray"}
+        </button>
         <button
           type="button"
           className="icon-button"
           aria-pressed={alwaysOnTop}
           aria-label={alwaysOnTop ? "Turn off always on top" : "Keep the window on top"}
+          title={alwaysOnTop ? "Always on top — on" : "Always on top — off"}
           onClick={() => {
             launch(actions.setAlwaysOnTop(!alwaysOnTop));
           }}
         >
           <Icon name="pin" size={17} />
         </button>
-        <span className="mode-control">
-          <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
-          {mode === "floating" ? "Floating" : "Tray"}
-        </span>
-        {view === "overview" ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Open settings"
-            onClick={onSettings}
-          >
-            <Icon name="settings" size={17} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Back to the overview"
-            onClick={onOverview}
-          >
-            <Icon name="donut" size={17} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Refresh the readings now"
+          title="Refresh the readings now"
+          disabled={paused}
+          onClick={() => {
+            launch(actions.refresh("user_requested"));
+          }}
+        >
+          <Icon name="refresh" size={17} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Open settings"
+          title="Settings"
+          onClick={onSettings}
+        >
+          <Icon name="settings" size={17} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Hide Quota to tray"
+          title="Hide to tray; keep monitoring"
+          onClick={() => {
+            launch(actions.closeWindow());
+          }}
+        >
+          <Icon name="close" size={17} />
+        </button>
       </div>
     </header>
   );

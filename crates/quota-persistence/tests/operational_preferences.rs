@@ -10,7 +10,7 @@ mod support;
 use quota_core::ports::{MonitoringRepository, OperationalPreferencesRepository};
 use quota_domain::polling::{FixedIntervalPolicy, PollingStrategy, ProviderPollingPolicy};
 use quota_domain::preferences::{
-    NotificationPolicy, NotificationThresholds, OperationalPreferences,
+    NotificationAlerts, NotificationPolicy, NotificationThresholds, OperationalPreferences,
     OperationalPrivacyPreferences, QuietHours,
 };
 use quota_domain::provider::ProviderId;
@@ -40,6 +40,11 @@ async fn saved_operational_policies_round_trip_and_keep_monitoring_state() {
                 low_percent: 31.5,
                 critical_percent: 7.25,
                 hysteresis_percent: 2.5,
+                alerts: NotificationAlerts {
+                    low: true,
+                    critical: false,
+                    exhausted: true,
+                },
             },
             quiet_hours: QuietHours::DailyUtc {
                 from_minute: 75,

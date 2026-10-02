@@ -4,7 +4,7 @@
 //! resizes, or hides the window as a side effect of an unrelated change.
 
 use quota_contracts::CommandError;
-use quota_contracts::commands::WindowModeChange;
+use quota_contracts::commands::{SettingsDestination, WindowModeChange};
 use quota_contracts::events::OverviewWindowState as WindowStateResponse;
 use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::ProviderId;
@@ -20,20 +20,24 @@ pub async fn set_overview_mode(
     state: State<'_, AppState>,
     mode: OverviewMode,
 ) -> Result<WindowModeChange, CommandError> {
-    let native = window::get(&state.app, "overview")?;
-    window::apply_mode_chrome(&native, mode)?;
-    if mode == OverviewMode::Tray {
-        window::anchor_to_tray(&state.app)?;
-    }
     let mut controller = state.window.lock().await;
-    let confirmed = controller.set_mode(mode);
-    drop(controller);
-    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
-        preferences.overview_mode = mode;
+    let native = window::get(&state.app, "overview")?;
+    let result = window::transition_mode(&native, &mut controller, mode, async {
+        if mode == OverviewMode::Tray {
+            window::anchor_to_tray(&state.app)?;
+        }
+        let visible = native
+            .is_visible()
+            .map_err(|_| window::failed("read_window_visibility"))?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = mode;
+        })
+        .await?;
+        Ok(visible)
     })
-    .await?;
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(WindowModeChange::Applied(confirmed.mode))
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    Ok(WindowModeChange::Applied(result?.mode))
 }
 
 /// Changes the native topmost flag and saves the same confirmed preference.
@@ -45,6 +49,7 @@ pub async fn set_overview_always_on_top(
     state: State<'_, AppState>,
     always_on_top: bool,
 ) -> Result<WindowStateResponse, CommandError> {
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     native
         .set_always_on_top(always_on_top)
@@ -56,9 +61,7 @@ pub async fn set_overview_always_on_top(
     {
         return Err(window::failed("confirm_always_on_top"));
     }
-    let mut controller = state.window.lock().await;
     let confirmed = controller.set_always_on_top(always_on_top);
-    drop(controller);
     crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
         preferences.always_on_top = always_on_top;
     })
@@ -84,6 +87,7 @@ pub async fn fit_overview_to_accounts(
             reason: "there are no accounts to fit".into(),
         });
     }
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     let monitor = native
         .current_monitor()
@@ -100,21 +104,29 @@ pub async fn fit_overview_to_accounts(
     let height = (280.0 + f64::from(account_count) * 68.0)
         .min(max_height)
         .max(1.0);
-    native
-        .set_size(LogicalSize::new(width, height))
-        .map_err(|_| window::failed("fit_window_size"))?;
-    native
-        .set_position(PhysicalPosition::new(
-            f64::from(area.position.x) + (f64::from(area.size.width) - width * scale) / 2.0,
-            f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
-        ))
-        .map_err(|_| window::failed("center_fitted_window"))?;
-    let visible = window::set_visible(&state.app, "overview", true, true)?;
-    let mut controller = state.window.lock().await;
-    controller.set_visible(visible);
-    let confirmed = controller.record_geometry_change();
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(window_state_response(confirmed))
+    let result = window::transition_mode(&native, &mut controller, OverviewMode::Floating, async {
+        native
+            .set_size(LogicalSize::new(width, height))
+            .map_err(|_| window::failed("fit_window_size"))?;
+        native
+            .set_position(PhysicalPosition::new(
+                f64::from(area.position.x) + (f64::from(area.size.width) - width * scale) / 2.0,
+                f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
+            ))
+            .map_err(|_| window::failed("center_fitted_window"))?;
+        native
+            .eval("window.dispatchEvent(new Event('quota-fit-overview'));")
+            .map_err(|_| window::failed("fit_overview_content"))?;
+        let visible = window::set_visible(&state.app, "overview", true, true)?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = OverviewMode::Floating;
+        })
+        .await?;
+        Ok(visible)
+    })
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    result.map(window_state_response)
 }
 /// Restores a position known to be inside a surviving monitor's work area.
 #[tauri::command]
@@ -122,6 +134,7 @@ pub async fn fit_overview_to_accounts(
 pub async fn reset_overview_position(
     state: State<'_, AppState>,
 ) -> Result<WindowStateResponse, CommandError> {
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     let monitor = native
         .current_monitor()
@@ -134,32 +147,23 @@ pub async fn reset_overview_position(
     let size = native
         .outer_size()
         .map_err(|_| window::failed("read_window_size"))?;
-    native
-        .set_position(PhysicalPosition::new(
-            area.position.x + (area.size.width.saturating_sub(size.width) / 2).cast_signed(),
-            area.position.y + (area.size.height.saturating_sub(size.height) / 2).cast_signed(),
-        ))
-        .map_err(|_| window::failed("reset_window_position"))?;
-    native
-        .set_decorations(true)
-        .map_err(|_| window::failed("set_window_decorations"))?;
-    native
-        .set_skip_taskbar(false)
-        .map_err(|_| window::failed("set_taskbar_visibility"))?;
-    let visible = window::set_visible(&state.app, "overview", true, true)?;
-    let mut controller = state.window.lock().await;
-    controller.set_visible(visible);
-    controller.detach_to_floating();
-    let confirmed = controller.record_geometry_change();
-    drop(controller);
-    // Detaching is a mode change, so the preference it produced is saved rather
-    // than left for the next restart to undo.
-    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
-        preferences.overview_mode = OverviewMode::Floating;
+    let result = window::transition_mode(&native, &mut controller, OverviewMode::Floating, async {
+        native
+            .set_position(PhysicalPosition::new(
+                area.position.x + (area.size.width.saturating_sub(size.width) / 2).cast_signed(),
+                area.position.y + (area.size.height.saturating_sub(size.height) / 2).cast_signed(),
+            ))
+            .map_err(|_| window::failed("reset_window_position"))?;
+        let visible = window::set_visible(&state.app, "overview", true, true)?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = OverviewMode::Floating;
+        })
+        .await?;
+        Ok(visible)
     })
-    .await?;
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(window_state_response(confirmed))
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    result.map(window_state_response)
 }
 
 /// Opens one allowlisted provider usage page in the external browser.
@@ -196,8 +200,22 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
 /// one side.
 #[tauri::command]
 #[specta::specta]
-pub async fn open_settings_window(state: State<'_, AppState>) -> Result<(), CommandError> {
+pub async fn open_settings_window(
+    state: State<'_, AppState>,
+    destination: SettingsDestination,
+) -> Result<(), CommandError> {
     let native = window::get(&state.app, "settings")?;
+    let script = match destination {
+        SettingsDestination::General => "window.location.hash = '#/settings';".to_owned(),
+        SettingsDestination::Accounts => "window.location.hash = '#/settings/accounts';".to_owned(),
+        SettingsDestination::Connect => format!(
+            "window.location.hash = '#/settings/connect/{}';",
+            uuid::Uuid::new_v4()
+        ),
+    };
+    native
+        .eval(&script)
+        .map_err(|_| window::failed("navigate_settings"))?;
     native
         .show()
         .map_err(|_| window::failed("show_settings_window"))?;

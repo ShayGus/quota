@@ -14,8 +14,12 @@ import {
   type ConnectionAttemptId,
   type OverviewMode,
   type Preferences,
+  type ProviderPollingPolicy,
   type RefreshReason,
+  type IndicatorStyle,
+  type SettingsDestination,
 } from "../generated/bindings";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { reportAsync } from "../shared/ipc/report";
 import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
 
@@ -105,13 +109,22 @@ export const actions = {
   async resetPosition(): Promise<void> {
     await reportAsync(commands.resetOverviewPosition());
   },
+  async savePollingPreferences(policy: ProviderPollingPolicy): Promise<void> {
+    await reportAsync(commands.setPollingPreferences(policy.provider_id, policy));
+  },
   /** Saves the whole preference object. The confirmed object arrives by event. */
   async savePreferences(next: Preferences): Promise<void> {
     await reportAsync(commands.updatePreferences(next));
   },
   /** Shows the settings window, which is the only window that renders settings. */
-  async openSettings(): Promise<void> {
-    await reportAsync(commands.openSettingsWindow());
+  async openSettings(destination: SettingsDestination = "general"): Promise<void> {
+    await reportAsync(commands.openSettingsWindow(destination));
+  },
+  async setIndicatorStyle(style: IndicatorStyle): Promise<void> {
+    await reportAsync(commands.setIndicatorStyle(style));
+  },
+  async closeWindow(): Promise<void> {
+    await getCurrentWindow().close();
   },
   /** Opens one provider's usage page in the external browser. */
   async openUsagePage(accountId: AccountId): Promise<void> {

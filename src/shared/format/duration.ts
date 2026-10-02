@@ -100,6 +100,21 @@ export function formatBoundary(boundary: Boundary | null, now: number): string {
     : `${boundaryLead(boundary)} in ${remaining}`;
 }
 
+/**
+ * The countdown of one boundary on its own, without the words that name it.
+ *
+ * The overview puts the lead and the countdown on separate lines, so the two
+ * halves of `formatBoundary` are needed apart. A boundary nobody reported has
+ * no countdown, and says so.
+ */
+export function boundaryCountdown(boundary: Boundary | null, now: number): string {
+  if (boundary === null) {
+    return "Not reported";
+  }
+  const instant = instantOf(boundary.at);
+  return instant === null ? "Not reported" : formatCountdown(instant, now);
+}
+
 /** The exact boundary time, in a fixed zone, for the details surface. */
 export function formatExactInstant(value: DateTime, timeZone: string): string {
   const instant = instantOf(value);

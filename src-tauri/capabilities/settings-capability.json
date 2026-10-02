@@ -12,6 +12,7 @@
     "allow-list-provider-capabilities",
     "allow-update-preferences",
     "allow-set-polling-preferences",
+    "allow-set-monitoring-state",
     "allow-begin-connection",
     "allow-cancel-connection",
     "allow-reconnect-account",
