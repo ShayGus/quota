@@ -1,11 +1,16 @@
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, expect, test } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { build } from "vite";
 import { inspectionReleaseCheck } from "../vite.config";
 
 const roots: string[] = [];
+
+beforeEach(() => {
+  // Vite derives import.meta.env.DEV from NODE_ENV, which Vitest sets to test.
+  vi.stubEnv("NODE_ENV", "production");
+});
 
 afterEach(async () => {
   await Promise.all(
