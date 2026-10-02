@@ -8,6 +8,10 @@
     clippy::unwrap_used,
     reason = "test fixtures assert setup; a broken fixture must fail loudly"
 )]
+#![expect(
+    clippy::panic_in_result_fn,
+    reason = "integration tests propagate fallible database setup and assert persisted values"
+)]
 
 mod support;
 

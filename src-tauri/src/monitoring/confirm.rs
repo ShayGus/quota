@@ -29,14 +29,19 @@ pub(super) struct CandidateIds {
     pub(super) binding: ConnectionBinding,
 }
 
+/// The instants when a candidate's quota read started and finished.
+pub(super) struct ReadTimestamps {
+    pub(super) dispatched_at: DateTime<Utc>,
+    pub(super) completed_at: DateTime<Utc>,
+}
+
 /// One candidate waiting for the person's decision.
 pub(super) struct PendingConnection {
     candidate: DiscoveredAccount,
     request: BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
-    dispatched_at: DateTime<Utc>,
-    completed_at: DateTime<Utc>,
+    timestamps: ReadTimestamps,
     /// The attempt's reporter, so a later result keeps that attempt's revisions.
     pub(super) reporter: Arc<AttemptReporter>,
 }
@@ -48,8 +53,7 @@ impl PendingConnection {
         request: BeginConnectionRequest,
         ids: CandidateIds,
         read: QuotaRead,
-        dispatched_at: DateTime<Utc>,
-        completed_at: DateTime<Utc>,
+        timestamps: ReadTimestamps,
         reporter: Arc<AttemptReporter>,
     ) -> Self {
         Self {
@@ -57,8 +61,7 @@ impl PendingConnection {
             request,
             ids,
             read,
-            dispatched_at,
-            completed_at,
+            timestamps,
             reporter,
         }
     }
@@ -154,20 +157,10 @@ pub(super) async fn commit_pending(
         request,
         ids,
         read,
-        dispatched_at,
-        completed_at,
+        timestamps,
         reporter,
     } = pending;
-    if let Err(error) = commit_candidate(
-        runtime,
-        candidate,
-        &request,
-        ids,
-        read,
-        dispatched_at,
-        completed_at,
-    )
-    .await
+    if let Err(error) = commit_candidate(runtime, candidate, &request, ids, read, timestamps).await
     {
         // The candidate is spent either way, so the wizard returns to the
         // connect step with the typed reason rather than a dead Add button.
@@ -204,8 +197,7 @@ async fn commit_candidate(
     request: &BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
-    dispatched_at: DateTime<Utc>,
-    completed_at: DateTime<Utc>,
+    timestamps: ReadTimestamps,
 ) -> Result<(), CommandError> {
     let stored = quota_core::ports::StoredAccount {
         account_id: ids.account_id.clone(),
@@ -226,9 +218,9 @@ async fn commit_candidate(
         monitoring_enabled: true,
         connection_state: ConnectionState::Connected,
         fetch_state: quota_domain::account::FetchState::Idle,
-        last_attempt_at: Some(dispatched_at),
-        last_success_at: Some(completed_at),
-        next_attempt_at: Some(completed_at + chrono::Duration::seconds(300)),
+        last_attempt_at: Some(timestamps.dispatched_at),
+        last_success_at: Some(timestamps.completed_at),
+        next_attempt_at: Some(timestamps.completed_at + chrono::Duration::seconds(300)),
         identity: Some(read.identity),
         windows: read.windows,
         expected_but_missing_window_ids: read.expected_but_missing,

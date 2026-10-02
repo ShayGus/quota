@@ -123,8 +123,10 @@ pub(super) async fn run_connection_attempt(
         request,
         ids,
         read,
-        dispatched_at,
-        completed_at,
+        confirm::ReadTimestamps {
+            dispatched_at,
+            completed_at,
+        },
         Arc::clone(&reporter),
     );
     let verified = confirm::hold_candidate(&runtime, &attempt_id, pending, &cancelled).await?;

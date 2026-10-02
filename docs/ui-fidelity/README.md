@@ -34,8 +34,8 @@ plain hashes; native General navigation retains `#/settings`.
 
 The connection wizard uses `begin_connection`, `confirm_connection`, `cancel_connection`,
 and the existing attempt events; it never simulates verification. `awaiting_confirmation`
-carries the attempt's verified candidate; `verified` reports a durably saved account.
-The [user guide](../../README.md#connect-and-refresh-accounts) owns the review, confirmation,
+carries the attempt's verified candidate; `verified` reports a durably saved account. The
+[user guide](../../README.md#connect-and-refresh-accounts) owns the review, confirmation,
 cancellation, privacy, and Manage accounts behavior. Provider sign-in and connection
 adapter implementation belong to the connection task.
 

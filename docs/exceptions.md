@@ -150,3 +150,15 @@ generates. Nothing else differs.
 | Rationale         | See [the initializer's invariant](../crates/quota-providers/src/http.rs): an existing process-wide provider is retained, so a refused second installation needs no recovery. |
 | Review date       | 2026-10-02                                                                                                                                                                   |
 | Removal condition | Remove the expectation if provider installation gains a failure that requires recovery or changes to return no must-use result.                                              |
+
+## 12. `clippy::panic_in_result_fn` in persistence integration tests
+
+| Field             | Value                                                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rule              | Functions returning `Result` propagate failures rather than panic.                                                                                                               |
+| Deviation         | `crates/quota-persistence/tests/ports.rs` carries a file-scoped `#![expect(clippy::panic_in_result_fn, reason = "...")]`.                                                        |
+| Owner             | Rust maintainer                                                                                                                                                                  |
+| Scope             | The persistence ports integration-test entry file.                                                                                                                               |
+| Rationale         | The database reopening test propagates fallible database setup with `?` and uses assertions to report mismatched persisted values; the file contains no shipped production code. |
+| Review date       | 2026-10-02                                                                                                                                                                       |
+| Removal condition | Remove the expectation when this integration-test file no longer combines a `Result` return with assertions.                                                                     |
