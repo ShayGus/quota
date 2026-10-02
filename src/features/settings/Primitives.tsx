@@ -115,3 +115,51 @@ export function Select<T extends string>({
     </>
   );
 }
+
+/**
+ * The nickname input. With Hide account labels on, a nickname is an account
+ * label like any other, so the field masks what is typed and says why; the
+ * value is still saved as typed.
+ */
+export function NicknameField({
+  id,
+  value,
+  hidden,
+  onChange,
+  hint,
+}: {
+  readonly id: string;
+  readonly value: string;
+  readonly hidden: boolean;
+  readonly onChange: (value: string) => void;
+  readonly hint?: string;
+}): JSX.Element {
+  const hintId = useId();
+  const note = hidden ? "Hidden while Hide account labels is on." : hint;
+  return (
+    <>
+      <label className="field-label" htmlFor={id}>
+        Account nickname
+      </label>
+      <input
+        type="text"
+        id={id}
+        className={hidden ? "masked" : undefined}
+        autoComplete="off"
+        maxLength={32}
+        value={value}
+        placeholder={hidden ? undefined : "For example: Personal"}
+        required
+        aria-describedby={note === undefined ? undefined : hintId}
+        onChange={(event) => {
+          onChange(event.currentTarget.value);
+        }}
+      />
+      {note === undefined ? null : (
+        <div className="form-hint" id={hintId}>
+          {note}
+        </div>
+      )}
+    </>
+  );
+}

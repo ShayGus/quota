@@ -449,6 +449,10 @@ input[type="time"] {
   font-size: 11px;
 }
 
+.masked {
+  -webkit-text-security: disc;
+}
+
 .field-label {
   display: block;
   font-size: 11px;

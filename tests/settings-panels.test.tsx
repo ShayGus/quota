@@ -344,6 +344,39 @@ describe("account management identities", () => {
     expect(screen.getByText(/a2@example.test/)).toBeTruthy();
   });
 
+  it("keeps rename closed while account labels are hidden, and masks an open one", () => {
+    const { actions } = settingsActions();
+    const accounts = [account("a1", "claude", 1, [], { nickname: "Work" })];
+    const aliased = preferences({
+      privacy: {
+        alias_mode: "stable_aliases",
+        retain_history: false,
+        export_identities: false,
+      },
+    });
+    const { rerender } = render(
+      <AccountsPanel accounts={accounts} preferences={aliased} actions={actions} />,
+    );
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Rename" }).disabled,
+    ).toBe(true);
+
+    rerender(
+      <AccountsPanel accounts={accounts} preferences={preferences()} actions={actions} />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Rename" }));
+    const rename = screen.getByRole("dialog", { name: "Rename account" });
+    const field = within(rename).getByLabelText<HTMLInputElement>("Account nickname");
+    expect(field.classList.contains("masked")).toBe(false);
+    rerender(
+      <AccountsPanel accounts={accounts} preferences={aliased} actions={actions} />,
+    );
+    expect(field.classList.contains("masked")).toBe(true);
+    expect(
+      within(rename).getByText("Hidden while Hide account labels is on."),
+    ).toBeTruthy();
+  });
+
   it("renames, reconnects, and disconnects one account through its dialog", () => {
     const { actions } = settingsActions();
     const accounts = [

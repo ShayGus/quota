@@ -17,6 +17,7 @@ import { describeCommandError, launch } from "../../shared/ipc/report";
 import type { RendererState } from "../../shared/state/types";
 import { Icon } from "../../shared/ui/Icon";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
+import { NicknameField } from "./Primitives";
 import type { SettingsActions } from "./Settings";
 
 const PROVIDERS = ["codex", "claude", "open_code_go"] as const;
@@ -240,24 +241,13 @@ export function ConnectionWizard({
             </dd>
           </div>
         </dl>
-        <label className="field-label" htmlFor="account-nickname">
-          Account nickname
-        </label>
-        <input
-          type="text"
+        <NicknameField
           id="account-nickname"
-          autoComplete="off"
-          maxLength={32}
           value={nickname}
-          placeholder="For example: Personal"
-          required
-          onChange={(event) => {
-            setNickname(event.currentTarget.value);
-          }}
+          hidden={alias !== ""}
+          hint="Shown below the provider name. Nothing is saved until you add the account."
+          onChange={setNickname}
         />
-        <div className="form-hint">
-          Shown below the provider name. Nothing is saved until you add the account.
-        </div>
         <label className="checkline">
           <input
             id="confirm-account"

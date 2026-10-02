@@ -300,6 +300,39 @@ describe("Provider → Connect → Verify", () => {
     expect(facts).not.toContain("Home");
   });
 
+  it("masks the nickname being typed while account labels are hidden, and follows the setting", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    const field = screen.getByLabelText<HTMLInputElement>("Account nickname");
+    expect(field.classList.contains("masked")).toBe(false);
+    const aliases = (mode: "stable_aliases" | "off"): void => {
+      act(() => {
+        acceptPreferences(
+          preferences({
+            privacy: {
+              alias_mode: mode,
+              retain_history: false,
+              export_identities: false,
+            },
+          }),
+        );
+      });
+    };
+    // Turned on while Verify is open.
+    aliases("stable_aliases");
+    expect(field.classList.contains("masked")).toBe(true);
+    expect(field.getAttribute("placeholder")).toBeNull();
+    expect(screen.getByText("Hidden while Hide account labels is on.")).toBeTruthy();
+    // Typing still works, and the typed nickname is what is saved.
+    fireEvent.change(field, { target: { value: "Secret" } });
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Secret");
+    aliases("off");
+  });
+
   it.each([
     ["Codex", "codex", "codex login"],
     ["Claude", "claude", "Run claude in a terminal"],

@@ -19,7 +19,7 @@ import { launch } from "../../../shared/ipc/report";
 import { Dialog } from "../../../shared/ui/Dialog";
 import { Icon } from "../../../shared/ui/Icon";
 import { Identity } from "../../overview/ProviderCard";
-import { SettingsTitle } from "../Primitives";
+import { NicknameField, SettingsTitle } from "../Primitives";
 import type { SettingsActions } from "../Settings";
 
 /** The confirmation an account action is waiting on, if any. */
@@ -173,18 +173,11 @@ function PendingDialog({
           onClose={onClose}
         >
           <p>Use a short label to distinguish this subscription.</p>
-          <label className="field-label" htmlFor="rename-input">
-            Account nickname
-          </label>
-          <input
-            type="text"
+          <NicknameField
             id="rename-input"
-            maxLength={32}
-            autoComplete="off"
             value={nickname}
-            onChange={(event) => {
-              setNickname(event.currentTarget.value);
-            }}
+            hidden={alias !== ""}
+            onChange={setNickname}
           />
         </Dialog>
       );
