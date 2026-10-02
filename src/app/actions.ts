@@ -87,7 +87,15 @@ export const actions = {
   },
   /** Cancels a live attempt or discards a verified candidate. Neither is a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {
-    await reportAsync(commands.cancelConnection(attempt));
+    await reportAsync(
+      commands
+        .cancelConnection(attempt)
+        .then((result) =>
+          result.status === "error" && result.error.kind === "cancelled"
+          ? { status: "ok" as const, data: null }
+            : result,
+        ),
+    );
   },
   /**
    * Saves the verified candidate the person confirmed, and answers whether it

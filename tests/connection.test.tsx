@@ -10,7 +10,11 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 import { actions as hostActions } from "../src/app/actions";
 import { Settings, type SettingsActions } from "../src/features/settings/Settings";
-import type { ConnectionProgress, VerifiedCandidate } from "../src/generated/bindings";
+import type {
+  AttemptRef,
+  ConnectionProgress,
+  VerifiedCandidate,
+} from "../src/generated/bindings";
 import {
   acceptAttempt,
   acceptPreferences,
@@ -229,6 +233,9 @@ describe("Provider → Connect → Verify", () => {
       fireEvent(window, new HashChangeEvent("hashchange"));
     });
     container.hidden = false;
+    expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({
+      id: "attempt-1",
+    });
     expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: REVIEW })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
@@ -244,6 +251,104 @@ describe("Provider → Connect → Verify", () => {
     });
     expect(screen.queryByRole("heading", { name: REVIEW })).toBeNull();
     expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
+  });
+
+  it.each(["started", "awaiting_confirmation"] as const)(
+    "cancels a %s attempt when the wizard unmounts",
+    async (kind) => {
+      const actions = settingsActions();
+      const settings = render(<Harness actions={actions} />);
+      fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 2,
+          progress: kind === "started" ? { kind } : awaitingConfirmation(),
+        });
+      });
+      settings.unmount();
+      expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({
+        id: "attempt-1",
+      });
+      expect(actions.confirmConnection).not.toHaveBeenCalled();
+    },
+  );
+
+  it("cancels a late begin reply after a fresh route replaces the wizard", async () => {
+    const accepted = Promise.withResolvers<AttemptRef | null>();
+    const actions = {
+      ...settingsActions(),
+      beginConnection: vi.fn(() => accepted.promise),
+    };
+    render(<Harness actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+    await act(async () => {
+      accepted.resolve({ id: "late-attempt" });
+      await accepted.promise;
+    });
+    expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({
+      id: "late-attempt",
+    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(actions.confirmConnection).not.toHaveBeenCalled();
+  });
+
+  it("keeps the fresh route when an abandoned confirmation finishes", async () => {
+    const confirmed = Promise.withResolvers<boolean>();
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => confirmed.promise),
+    };
+    render(<Harness actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 2,
+        progress: awaitingConfirmation(),
+      });
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    await act(async () => {
+      confirmed.resolve(true);
+      await confirmed.promise;
+    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+  });
+
+  it("treats cleanup of an already finished attempt as harmless", async () => {
+    invoke.mockRejectedValue({ kind: "cancelled" });
+    await hostActions.cancelConnection({ id: "finished-attempt" });
+    expect(invoke).toHaveBeenCalledWith("cancel_connection", {
+      attemptRef: { id: "finished-attempt" },
+    });
+    expect(getRendererState().failure).toBeNull();
+  });
+
+  it("reports cancellation failures other than an already finished attempt", async () => {
+    invoke.mockRejectedValue({
+      kind: "permission_denied",
+      context: {
+        window_label: "settings",
+      },
+    });
+    await hostActions.cancelConnection({ id: "attempt-1" });
+    expect(getRendererState().failure).toEqual({
+      kind: "domain",
+      error: { kind: "permission_denied", context: { window_label: "settings" } },
+    });
   });
 
   it.each([

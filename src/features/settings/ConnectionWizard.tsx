@@ -1,4 +1,4 @@
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 
 import type { AttemptRef } from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
@@ -36,6 +36,22 @@ export function ConnectionWizard({
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  const mounted = useRef(false);
+  const cancelConnection = actions.cancelConnection;
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (attempt !== null) launch(cancelConnection(attempt));
+    };
+  }, [attempt, cancelConnection]);
+
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
@@ -66,31 +82,27 @@ export function ConnectionWizard({
         nickname: nickname.trim(),
         profile_label: null,
       });
+      if (!mounted.current) {
+        if (accepted !== null) await cancelConnection(accepted);
+        return;
+      }
       setAttempt(accepted);
       if (accepted === null)
         setRefusal(
           "The connection was refused. Check the provider's local sign-in and try again.",
         );
     } finally {
-      setStarting(false);
+      if (mounted.current) setStarting(false);
     }
-  };
-
-  const cancel = async (): Promise<void> => {
-    // A verified candidate is discarded here too, so declining one leaves
-    // nothing behind in the host.
-    if (attempt !== null && (busy || candidate !== null))
-      await actions.cancelConnection(attempt);
-    onDone();
   };
 
   const add = async (): Promise<void> => {
     if (attempt === null || adding) return;
     setAdding(true);
     try {
-      if (await actions.confirmConnection(attempt)) onDone();
+      if ((await actions.confirmConnection(attempt)) && mounted.current) onDone();
     } finally {
-      setAdding(false);
+      if (mounted.current) setAdding(false);
     }
   };
 
@@ -101,9 +113,7 @@ export function ConnectionWizard({
           type="button"
           className="back-button"
           disabled={starting}
-          onClick={() => {
-            launch(cancel());
-          }}
+          onClick={onDone}
         >
           <Icon name="arrow-left" size={13} />
           Cancel
