@@ -1,4 +1,4 @@
-//! Cancellable connection discovery, verification, and account persistence.
+//! Cancellable connection discovery and verification for candidate review.
 
 use std::sync::Arc;
 
@@ -107,7 +107,7 @@ pub(super) async fn run_connection_attempt(
         return Ok(());
     };
     let ids = confirm::candidate_binding(&adapter, &candidate);
-    let Some((read, times)) = read_candidate_quota(
+    let Some((read, timestamps)) = read_candidate_quota(
         &runtime,
         &adapter,
         &ids.binding,
@@ -123,7 +123,7 @@ pub(super) async fn run_connection_attempt(
         request,
         ids,
         read,
-        times,
+        timestamps,
         Arc::clone(&reporter),
     );
     let verified = confirm::hold_candidate(&runtime, &attempt_id, pending, &cancelled).await?;
@@ -187,7 +187,7 @@ async fn read_candidate_quota(
     binding: &quota_core::ports::ConnectionBinding,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
-) -> Result<Option<(quota_core::ports::QuotaRead, confirm::ReadTimes)>, CommandError> {
+) -> Result<Option<(quota_core::ports::QuotaRead, confirm::ReadTimestamps)>, CommandError> {
     let permit = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
         permit = runtime.state.permits.clone().acquire_owned() => {
@@ -225,7 +225,7 @@ async fn read_candidate_quota(
         })?;
     Ok(Some((
         read,
-        confirm::ReadTimes {
+        confirm::ReadTimestamps {
             dispatched_at,
             completed_at,
         },

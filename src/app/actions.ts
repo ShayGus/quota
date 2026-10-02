@@ -1,9 +1,9 @@
 /**
  * The typed commands the renderer may issue, wrapped as owned operations.
  *
- * Every action here delegates to `reportAsync`, so the promise has an owner and
- * a failure path. Nothing in the renderer calls a generated binding directly
- * outside this module and the subscription lifecycle.
+ * Every action here owns its promise and failure path. Nothing in the renderer
+ * calls a generated binding directly outside this module and the subscription
+ * lifecycle.
  */
 import {
   commands,
@@ -117,12 +117,12 @@ export const actions = {
     );
   },
   /**
-   * Saves the verified candidate the person confirmed, and answers whether it
-   * was saved.
+   * Confirms one candidate and reports whether the command acknowledged success.
    *
-   * Nothing is written before this call, so a candidate that is never confirmed
-   * leaves no account behind. The wizard stays on the review step when the
-   * answer is false.
+   * A false result can mean a lost reply after a durable save. Verified progress
+   * independently closes the wizard, and the subscription reconciles the
+   * snapshot. A successful reply reconciles here even if Verified was lost;
+   * reconciliation failure does not turn that acknowledgement into a failed save.
    */
   async confirmConnection(attempt: AttemptRef, nickname: string): Promise<boolean> {
     const saved = await reportSettled(commands.confirmConnection(attempt, nickname));

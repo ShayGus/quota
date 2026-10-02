@@ -86,6 +86,9 @@ export function ConnectionWizard({
   // Whether the wizard is still on screen, so an answer that arrives after it
   // has gone neither leaves an attempt running nor navigates.
   const mounted = useRef(false);
+  // Whether the saved account has already been reported, so the reply and the
+  // Verified event, whichever arrives first, finish the wizard only once.
+  const finished = useRef(false);
   const live =
     attempt !== null && !adding && (busy || candidate !== null) ? attempt : null;
   useEffect(() => {
@@ -101,6 +104,21 @@ export function ConnectionWizard({
       }
     };
   }, [actions]);
+
+  /** Leaves the wizard once the host has saved the account. */
+  const finish = (): void => {
+    pending.current = null;
+    if (finished.current || !mounted.current) return;
+    finished.current = true;
+    onDone(true);
+  };
+
+  // A save whose reply was lost still reports Verified, so the wizard leaves
+  // instead of offering an Add account that can no longer succeed.
+  const verified = progress?.kind === "verified";
+  useEffect(() => {
+    if (verified) finish();
+  });
 
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
@@ -140,10 +158,7 @@ export function ConnectionWizard({
     if (attempt === null || adding || !confirmed || nickname.trim().length === 0) return;
     setAdding(true);
     try {
-      if (await actions.confirmConnection(attempt, nickname.trim())) {
-        pending.current = null;
-        if (mounted.current) onDone(true);
-      }
+      if (await actions.confirmConnection(attempt, nickname.trim())) finish();
     } finally {
       setAdding(false);
     }

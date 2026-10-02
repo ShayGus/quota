@@ -66,10 +66,7 @@ export interface SettingsActions {
     request: BeginConnectionRequest,
   ) => Promise<AttemptRef | null>;
   readonly cancelConnection: (attempt: AttemptRef) => Promise<void>;
-  /**
-   * Saves the verified candidate one attempt is holding, and answers whether
-   * it was saved. Nothing is written before this call.
-   */
+  /** See `actions.confirmConnection` in `src/app/actions.ts` for result semantics. */
   readonly confirmConnection: (attempt: AttemptRef, nickname: string) => Promise<boolean>;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;

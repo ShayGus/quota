@@ -145,6 +145,47 @@ describe("Provider → Connect → Verify", () => {
     expect(actions.renameAccount).not.toHaveBeenCalled();
   });
 
+  it("leaves once the host reports the account saved, even if the reply was lost", async () => {
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => Promise.resolve(false)),
+    };
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    expect(onDone).not.toHaveBeenCalled();
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: { kind: "verified", context: { state: "connected" } },
+      });
+    });
+    expect(onDone).toHaveBeenCalledExactlyOnceWith(true);
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
+  it("finishes once when both the reply and the Verified event arrive", async () => {
+    const actions = settingsActions();
+    const onDone = vi.fn();
+    render(<Wizard actions={actions} onDone={onDone} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: { kind: "verified", context: { state: "connected" } },
+      });
+    });
+    expect(onDone).toHaveBeenCalledExactlyOnceWith(true);
+  });
+
   it("keeps the candidate on screen when the host refuses to save it", async () => {
     const actions = {
       ...settingsActions(),

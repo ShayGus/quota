@@ -2,8 +2,9 @@
 //!
 //! A candidate has been verified against the provider and read once, but
 //! nothing about it is durable until it is committed. Candidates live only in
-//! memory, so declining one, closing the settings window, or restarting the
-//! application leaves no account and no monitoring behind.
+//! memory, so cancelling the review or restarting the application leaves no
+//! account and no monitoring behind. Closing the native settings window only
+//! hides it; leaving or replacing the wizard cancels its attempt on unmount.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -31,7 +32,7 @@ pub(super) struct CandidateIds {
 /// When the verifying read was sent and when its answer arrived, so the saved
 /// account records that read rather than the moment it was confirmed.
 #[derive(Clone, Copy)]
-pub(super) struct ReadTimes {
+pub(super) struct ReadTimestamps {
     pub(super) dispatched_at: DateTime<Utc>,
     pub(super) completed_at: DateTime<Utc>,
 }
@@ -42,7 +43,7 @@ pub(super) struct PendingConnection {
     request: BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
-    times: ReadTimes,
+    timestamps: ReadTimestamps,
     /// The attempt's reporter, so a later result keeps that attempt's revisions.
     pub(super) reporter: Arc<AttemptReporter>,
 }
@@ -54,7 +55,7 @@ impl PendingConnection {
         request: BeginConnectionRequest,
         ids: CandidateIds,
         read: QuotaRead,
-        times: ReadTimes,
+        timestamps: ReadTimestamps,
         reporter: Arc<AttemptReporter>,
     ) -> Self {
         Self {
@@ -62,7 +63,7 @@ impl PendingConnection {
             request,
             ids,
             read,
-            times,
+            timestamps,
             reporter,
         }
     }
@@ -160,11 +161,12 @@ pub(super) async fn commit_pending(
         mut request,
         ids,
         read,
-        times,
+        timestamps,
         reporter,
     } = pending;
     request.nickname = nickname;
-    if let Err(error) = commit_candidate(runtime, candidate, &request, ids, read, times).await {
+    if let Err(error) = commit_candidate(runtime, candidate, &request, ids, read, timestamps).await
+    {
         // The candidate is spent either way, so the wizard returns to the
         // connect step with the typed reason rather than a dead Add button.
         reporter
@@ -200,7 +202,7 @@ async fn commit_candidate(
     request: &BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
-    times: ReadTimes,
+    timestamps: ReadTimestamps,
 ) -> Result<(), CommandError> {
     let stored = quota_core::ports::StoredAccount {
         account_id: ids.account_id.clone(),
@@ -221,9 +223,9 @@ async fn commit_candidate(
         monitoring_enabled: true,
         connection_state: ConnectionState::Connected,
         fetch_state: quota_domain::account::FetchState::Idle,
-        last_attempt_at: Some(times.dispatched_at),
-        last_success_at: Some(times.completed_at),
-        next_attempt_at: Some(times.completed_at + chrono::Duration::seconds(300)),
+        last_attempt_at: Some(timestamps.dispatched_at),
+        last_success_at: Some(timestamps.completed_at),
+        next_attempt_at: Some(timestamps.completed_at + chrono::Duration::seconds(300)),
         identity: Some(read.identity),
         windows: read.windows,
         expected_but_missing_window_ids: read.expected_but_missing,

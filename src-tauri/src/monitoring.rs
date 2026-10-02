@@ -271,8 +271,8 @@ impl MonitoringRuntime {
                 Err(joined) if joined.is_panic() => Some(CommandError::Internal {
                     code: "connection_attempt_stopped_unexpectedly".into(),
                 }),
-                // A finished attempt already reported its own terminal result,
-                // a cancelled one reported `Cancelled`, and an aborted task has
+                // Successful verification already reported its pending candidate,
+                // cancellation reported `Cancelled`, and an aborted task has
                 // nobody left to report to.
                 Ok(Ok(()) | Err(CommandError::Cancelled)) | Err(_) => None,
                 Ok(Err(error)) => Some(error),
