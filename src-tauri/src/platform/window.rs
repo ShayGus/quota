@@ -88,8 +88,8 @@ pub fn set_visible(
 /// Anchors the window beside the tray icon.
 ///
 /// The positioner only learns where the icon is from a tray event, so this
-/// fails until one has arrived. Callers that run at startup treat the failure as
-/// deferred work rather than a failure.
+/// fails until one has arrived. At startup the failure is logged as a warning;
+/// a later tray event retries the anchor.
 pub fn anchor_to_tray(app: &AppHandle) -> Result<(), CommandError> {
     use tauri_plugin_positioner::{Position, WindowExt};
     let native = get(app, "overview")?;

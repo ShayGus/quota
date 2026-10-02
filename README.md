@@ -49,6 +49,9 @@ Launching Quota again brings the running overview forward. Closing a window hide
 monitoring continues. Use Quit from the tray menu, or press Ctrl-C in the terminal, to
 stop the application.
 
+The native host logs warnings for failed close-time hiding, tray anchoring, second-launch
+focusing, and refused initial or periodic refresh requests.
+
 For development-only AI agent inspection, see
 [Inspecting the app](docs/inspecting-the-app.md).
 
