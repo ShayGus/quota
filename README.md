@@ -79,11 +79,16 @@ credential is missing or rejected, follow the provider-specific recovery guidanc
 
 After signing in, press Connect again. On Verify, review the verified Account, Workspace,
 and Quota reading, then choose Add account to add this subscription to your overview.
+Once saved, Quota opens Accounts and reconciles the saved account even if the snapshot
+delivery or confirmation reply fails; there is no separate completion screen.
 Nothing is saved and no monitoring starts before that choice; Cancel discards the verified
 result, and so does restarting the app. With Hide account labels enabled, a pending
 identity is replaced exactly as a saved one is. Starting a new Add account request opens a
 fresh wizard. [Provider credential discovery](docs/providers.md) owns the supported
 locations and overrides, including Windows defaults that work without `HOME`.
+
+Manage accounts from overview Details opens the Accounts management list, including
+after Settings was closed on another account's Details.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any
 backoff deadline. Checks that do not send a request leave the due time unchanged. The

@@ -2,8 +2,9 @@
 //!
 //! A candidate has been verified against the provider and read once, but
 //! nothing about it is durable until it is committed. Candidates live only in
-//! memory, so declining one, closing the settings window, or restarting the
-//! application leaves no account and no monitoring behind.
+//! memory, so cancelling the review or restarting the application leaves no
+//! account and no monitoring behind. Closing the native settings window only
+//! hides it; leaving or replacing the wizard cancels its attempt on unmount.
 
 use std::collections::HashMap;
 use std::sync::Arc;

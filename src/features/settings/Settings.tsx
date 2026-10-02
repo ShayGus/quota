@@ -62,10 +62,7 @@ export interface SettingsActions {
     request: BeginConnectionRequest,
   ) => Promise<AttemptRef | null>;
   readonly cancelConnection: (attempt: AttemptRef) => Promise<void>;
-  /**
-   * Saves the verified candidate one attempt is holding, and answers whether
-   * it was saved. Nothing is written before this call.
-   */
+  /** See `actions.confirmConnection` in `src/app/actions.ts` for result semantics. */
   readonly confirmConnection: (attempt: AttemptRef) => Promise<boolean>;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
@@ -76,8 +73,8 @@ export interface SettingsActions {
 }
 
 /**
- * Counts route requests, so asking for a section the window already shows is a
- * new route rather than the unchanged hash.
+ * Gives Accounts and Connect requests new identities so retained details and
+ * wizard state are reset even when the same section is requested again.
  */
 let requestedRoutes = 0;
 

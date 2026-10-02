@@ -1,4 +1,4 @@
-//! Cancellable connection discovery, verification, and account persistence.
+//! Cancellable connection discovery and verification for candidate review.
 
 use std::sync::Arc;
 

@@ -1,13 +1,11 @@
 The Quota renderer now follows the approved wireframe across the overview, account
 details, settings, and Provider → Connect → Verify wizard. It restores the required
 controls, search and ordering behavior, semantic quota labels, viewport counts, and the
-complete Fit transition. A verified connection is reported as a pending identity and only
-saved when the person chooses Add account, so Confirm-before-adding now matches the
-wireframe. Repeated Add requests start fresh wizards, and native window transitions are
-serialized through persistence and publication. Management cards show verified account
-identities; Hide account labels replaces those identities and workspaces while preserving
-public allowance labels in Details. Every settings destination carries a fresh route id,
-so Manage accounts always opens the account management list.
+complete Fit transition. Connection confirmation and Accounts navigation follow the
+[fidelity reference](README.md). Native window transitions are serialized through
+persistence and publication. Management cards show verified account identities; Hide
+account labels replaces those identities and workspaces while preserving public allowance
+labels in Details.
 
 ## Known gaps
 

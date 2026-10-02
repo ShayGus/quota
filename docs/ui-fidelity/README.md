@@ -28,20 +28,15 @@ opens Provider → Connect → Verify in the settings window. Details retain Set
 Provider usage page, and Manage accounts. The overview explains ordering, clears hidden
 searches, and counts fully visible rows over the filtered rows.
 
-Every settings destination carries a fresh route id, so Manage accounts from the overview
-and the Accounts section from the settings nav both open the account management list
-rather than reusing a retained panel left on one account's details.
+Accounts and Connect requests carry fresh route ids to reset retained account details and
+wizard state. General, Appearance, Notifications, Privacy, and Diagnostics retain their
+plain hashes; native General navigation retains `#/settings`.
 
 The connection wizard uses `begin_connection`, `confirm_connection`, `cancel_connection`,
-and the existing attempt events; it never simulates verification. Each explicit Add
-account request opens a fresh connection route, including when settings was hidden on a
-completed attempt. A successful attempt verifies the provider identity and one quota
-reading and reports them as a pending candidate instead of saving anything, so the Verify
-step shows Account, Workspace, and Quota reading and asks the person to confirm the
-identity before adding this subscription to their overview. Nothing is written and no
-monitoring starts until Add account; Cancel discards the candidate, and a restart or an
-abandoned attempt leaves no account behind. The Hide account labels preference hides a
-pending identity the same way it hides a saved one. Provider sign-in and connection
+and the existing attempt events; it never simulates verification. `awaiting_confirmation`
+carries the attempt's verified candidate; `verified` reports a durably saved account.
+The [user guide](../../README.md#connect-and-refresh-accounts) owns the review, confirmation,
+cancellation, privacy, and Manage accounts behavior. Provider sign-in and connection
 adapter implementation belong to the connection task.
 
 ## Known gaps
