@@ -189,10 +189,10 @@ xwininfo -root -tree | grep '"Quota"'
 docs/publish-x11-client-list.py 0x600010
 ```
 
-`publish-x11-client-list.py` writes both `_NET_CLIENT_LIST` and
-`_NET_CLIENT_LIST_STACKING` on the root window and exits; the values stay. It needs only
-`libX11.so.6`, no Python packages. The X server keeps them after the process exits, so it
-is a one-off per launch, because the window ids change every launch.
+`publish-x11-client-list.py` writes only `_NET_CLIENT_LIST_STACKING` on the root window
+and exits; the values stay. It needs only `libX11.so.6`, no Python packages. The X server
+keeps them after the process exits, so it is a one-off per launch, because the window ids
+change every launch.
 
 Pass the window ids to capture; both can be published together. The inspection plugin
 disables application-name matching and resolves the requested window label to its distinct

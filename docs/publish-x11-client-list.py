@@ -41,7 +41,7 @@ X11.XSync.argtypes = [ctypes.c_void_p, ctypes.c_int]
 
 
 def main() -> int:
-    """Sets both client-list atoms to the window ids given on the command line."""
+    """Sets the stacking client list to the window ids given on the command line."""
     if len(sys.argv) < 2:
         print(__doc__)
         return 2
@@ -54,18 +54,17 @@ def main() -> int:
         *[int(arg, 16) for arg in sys.argv[1:]]
     )
     cardinality = X11.XInternAtom(display, b"CARDINAL", 0)
-    for name in ("_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING"):
-        atom = X11.XInternAtom(display, name.encode(), 0)
-        X11.XChangeProperty(
-            display,
-            root,
-            atom,
-            cardinality,
-            32,
-            0,
-            ctypes.cast(windows, ctypes.c_void_p),
-            len(windows),
-        )
+    atom = X11.XInternAtom(display, b"_NET_CLIENT_LIST_STACKING", 0)
+    X11.XChangeProperty(
+        display,
+        root,
+        atom,
+        cardinality,
+        32,
+        0,
+        ctypes.cast(windows, ctypes.c_void_p),
+        len(windows),
+    )
     X11.XSync(display, 0)
     print("published", " ".join(hex(window) for window in windows))
     return 0

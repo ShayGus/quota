@@ -41,21 +41,23 @@ class FreshXServer:
 
 
 class PublishClientListTest(unittest.TestCase):
-    def test_missing_atoms_are_created_and_both_lists_are_published(self):
-        server = FreshXServer()
+    def test_missing_atoms_are_created_and_only_stacking_list_is_published(self):
         helper = Path(__file__).resolve().parent.parent / "docs/publish-x11-client-list.py"
-        with patch.object(ctypes, "CDLL", return_value=server), patch.object(
-            sys, "argv", [str(helper), "0x600010", "0x600020"]
-        ):
-            with self.assertRaises(SystemExit) as result:
-                runpy.run_path(str(helper), run_name="__main__")
-        self.assertEqual(result.exception.code, 0)
-        self.assertTrue(server.synced)
-        for name in (b"_NET_CLIENT_LIST", b"_NET_CLIENT_LIST_STACKING"):
-            self.assertEqual(
-                server.properties[server.atoms[name]],
-                (server.atoms[b"CARDINAL"], 32, 0, [0x600010, 0x600020]),
-            )
+        for ids in (["0x600010"], ["0x600010", "0x600020"]):
+            with self.subTest(ids=ids):
+                server = FreshXServer()
+                with patch.object(ctypes, "CDLL", return_value=server), patch.object(
+                    sys, "argv", [str(helper), *ids]
+                ):
+                    with self.assertRaises(SystemExit) as result:
+                        runpy.run_path(str(helper), run_name="__main__")
+                self.assertEqual(result.exception.code, 0)
+                self.assertTrue(server.synced)
+                self.assertEqual(len(server.properties), 1)
+                self.assertEqual(
+                    server.properties[server.atoms[b"_NET_CLIENT_LIST_STACKING"]],
+                    (server.atoms[b"CARDINAL"], 32, 0, [int(value, 16) for value in ids]),
+                )
 
 
 if __name__ == "__main__":
