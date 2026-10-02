@@ -25,6 +25,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     check_deny_config(root, &mut outcome);
     check_agent_inspection(root, &mut outcome);
     crate::inspection_renderer::check(root, &mut outcome);
+    check_inspection_capabilities(root, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
     outcome
@@ -537,6 +538,100 @@ fn check_inspection_overrides(file: &str, document: &Value, outcome: &mut Outcom
         if dependency_package(name, specification) == INSPECTION_CRATE {
             outcome.fail(file.to_string(), 1,
                 format!("`{INSPECTION_CRATE}` source override is forbidden; the audited workspace pin must be its only source"));
+        }
+    }
+}
+
+fn check_inspection_capabilities(root: &Path, outcome: &mut Outcome) {
+    let directory = root.join("src-tauri");
+    let capabilities = directory.join("capabilities");
+    for extension in ["json", "toml"] {
+        for path in scan::files_with_extension(&directory, extension) {
+            let capability = path.starts_with(&capabilities);
+            let config = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| {
+                    (extension == "json"
+                        && name.starts_with("tauri.")
+                        && name.ends_with("conf.json"))
+                        || (extension == "toml"
+                            && (name == "Tauri.toml"
+                                || (name.starts_with("Tauri.") && name.ends_with(".toml"))))
+                });
+            if !capability && !config {
+                continue;
+            }
+            let file = scan::relative(root, &path);
+            let document = scan::read(&path).and_then(|text| {
+                if extension == "toml" {
+                    cargo_toml::from_str::<Value>(&text)
+                        .map_err(|error| error.to_string())
+                        .and_then(|value| {
+                            serde_json::to_value(value).map_err(|error| error.to_string())
+                        })
+                } else {
+                    serde_json::from_str(&text).map_err(|error| error.to_string())
+                }
+            });
+            match document {
+                Ok(document) => {
+                    let grant = if capability {
+                        Some(&document)
+                    } else {
+                        document.pointer("/app/security/capabilities")
+                    };
+                    if let Some(grant) = grant {
+                        check_inspection_grant(&file, grant, outcome);
+                    }
+                }
+                Err(error) => outcome.fail(
+                    file,
+                    1,
+                    format!("cannot parse inspection capability policy: {error}"),
+                ),
+            }
+        }
+    }
+}
+
+fn check_inspection_grant(file: &str, capability: &serde_json::Value, outcome: &mut Outcome) {
+    if let Some(capabilities) = capability.as_array().or_else(|| {
+        capability
+            .get("capabilities")
+            .and_then(serde_json::Value::as_array)
+    }) {
+        for capability in capabilities {
+            check_inspection_grant(file, capability, outcome);
+        }
+        return;
+    }
+    let inspection = capability
+        .get("permissions")
+        .and_then(serde_json::Value::as_array)
+        .is_some_and(|permissions| {
+            permissions.iter().any(|permission| {
+                permission
+                    .as_str()
+                    .or_else(|| {
+                        permission
+                            .get("identifier")
+                            .and_then(serde_json::Value::as_str)
+                    })
+                    .is_some_and(|identifier| identifier.starts_with("mcp:"))
+            })
+        });
+    if inspection {
+        let overview = capability
+            .get("windows")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|windows| windows.len() == 1 && windows[0].as_str() == Some("overview"));
+        let webviews = capability
+            .get("webviews")
+            .and_then(serde_json::Value::as_array);
+        if !overview || webviews.is_some_and(|webviews| !webviews.is_empty()) {
+            outcome.fail(file.to_string(), 1,
+                "inspection permissions must be restricted to the overview window; other windows must retain their own command authority".to_string());
         }
     }
 }

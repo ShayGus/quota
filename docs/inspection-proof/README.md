@@ -1,6 +1,7 @@
 # Inspection proof
 
-These files were captured from the running app on 2026-10-02, on WSL2 with WSLg, through
+These files were captured before inspection was restricted to overview, from the running
+app on 2026-10-02, on WSL2 with WSLg, through
 the development-only inspection plugin. They are the evidence behind the table in
 [docs/inspecting-the-app.md](../inspecting-the-app.md#what-was-verified-on-this-machine).
 
@@ -44,5 +45,7 @@ bun x tauri-mcp-server
 ```
 
 `initialize`, then `notifications/initialized`, then `tools/call` with `take_screenshot`,
-`query_page`, `query_logs` and `read_text`. Every tool needs `window_label: "overview"` or
-`"settings"`; the plugin's default is `main`, which this application does not have.
+`query_page`, `query_logs` and `read_text`. Use `window_label: "overview"` for webview
+tools; settings keeps its own capabilities and has no guest handlers. Native screenshots
+may also use `window_label: "settings"` after showing that window. The plugin's default
+is `main`, which this application does not have.

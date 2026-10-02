@@ -1,7 +1,8 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "agent-inspection-capability",
-  "description": "Development-only. Grants the inspection plugin's guest binding commands for console.* forwarding and tool support. manage_ipc records only IPC calls an agent issues through the plugin's own tools; ordinary frontend invokes are not intercepted. No other plugin command is reachable from a window; every other inspection tool travels over the plugin's authenticated Unix socket, not through IPC. The plugin itself is registered only by a debug build that also selects the non-default `agent-inspection` feature, so this grant has no effect on a release artifact.",
-  "windows": ["overview", "settings"],
+  "$comment": "Guest ipc-invoke and execute-js events are not authenticated and execute under the receiving window's command permissions. Restrict inspection to overview and never install guest handlers in settings, whose stronger command permissions must remain its own.",
+  "description": "Development-only overview inspection. Grants console.* forwarding and guest tool support only to overview. Guest listeners require this window's host permission check before registration. manage_ipc records only IPC calls an agent issues through the plugin's own tools; ordinary frontend invokes are not intercepted. The socket requires authentication, but guest events do not. The plugin is registered only by a debug build selecting the non-default agent-inspection feature, so this grant has no effect on a release artifact.",
+  "windows": ["overview"],
   "permissions": ["mcp:default"]
 }

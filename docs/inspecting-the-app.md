@@ -1,10 +1,10 @@
 # Inspecting the running app from an AI agent
 
 A debug build of Quota can be inspected by an AI agent: a screenshot of either window, the
-DOM of either window, the console log, and the IPC calls an agent issues through the
-plugin's own tools. `manage_ipc` records only those agent-issued calls; ordinary frontend
-invokes are not intercepted. This is how a worker checks that the real interface matches a
-mockup and that behaviour is correct, instead of guessing from the source.
+DOM and console log of overview, and the IPC calls an agent issues through the plugin's
+own tools. `manage_ipc` records only those agent-issued calls; ordinary frontend invokes
+are not intercepted. This is how a worker checks that the real interface matches a mockup
+and that behaviour is correct, instead of guessing from the source.
 
 Nothing described here exists in a release build. See
 [Why it cannot reach a release](#why-it-cannot-reach-a-release). What works and what does
@@ -14,7 +14,20 @@ not on this particular machine is recorded under
 
 ## What an agent gets
 
-The plugin exposes nineteen tools over a Unix socket. The ones an agent uses most:
+The plugin exposes nineteen tools over a Unix socket. Agent-driven webview tools
+(`query_page`, `read_text`, `inspect_element`, input tools, `execute_js`, and `manage_ipc`
+invokes) work only in `overview`, using its command permissions. The `settings` window
+keeps its own capabilities and installs no guest request handlers, so an event sent to
+settings cannot execute a command or JavaScript there. Native screenshots can still
+capture either visible window. Webview console forwarding is restricted to overview.
+
+The renderer checks its actual window label and asks the host to authorize a no-op
+`mcp:push_ipc` call before importing the guest. Ordinary development runs without the
+inspection plugin or capability grant install no guest listeners. Socket clients require
+the token; guest events themselves do not authenticate their sender, which is why settings
+must not register their handlers.
+
+The ones an agent uses most:
 
 | Tool                                                  | What it answers                                                                                          |
 | ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -46,10 +59,10 @@ Both halves matter.
 - `--features agent-inspection` compiles the plugin. Without the feature the build
   succeeds and opens a socket nobody is listening on.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
-  a capability file the allowlist does not name, so without this console forwarding fails.
-  The allowlist in `src-tauri/tauri.conf.json` deliberately keeps the shipping two
-  capabilities only, because the plugin's permissions do not exist in a build that does
-  not compile it.
+  a capability file the allowlist does not name, so without this guest listeners stay
+  disabled and console forwarding is denied. The allowlist in `src-tauri/tauri.conf.json`
+  deliberately keeps the shipping two capabilities only, because the plugin's permissions
+  do not exist in a build that does not compile it.
 
 The renderer needs the Vite dev server on port 1420. If that port is taken, move both
 ends:
@@ -143,9 +156,10 @@ the screenshot:
 | `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window |
 | `take_screenshot`                                                                  | a 810x720 JPEG of the overview window, in `docs/inspection-proof/`               |
 
-The console output proves the capability grant works: `push_log` is the one command that
-has to pass through the capability allowlist, and without `agent-inspection-capability`
-the plugin records `ok: 0, err: N` instead.
+This capture predates the overview-only inspection scope; current sessions forward webview
+console logs only from overview. The console output proves the original capability grant
+worked: `push_log` is the one command that has to pass through the capability allowlist,
+and without `agent-inspection-capability` the plugin records `ok: 0, err: N` instead.
 
 The captured files are in [`docs/inspection-proof/`](inspection-proof/).
 

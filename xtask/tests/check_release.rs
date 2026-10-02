@@ -738,3 +738,101 @@ fn weak_optional_forwarding_does_not_activate_same_named_parent_feature() -> Out
     }
     Ok(())
 }
+
+fn capability_tree(root: &Path) -> Outcome {
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    fs::create_dir_all(root.join("src-tauri/capabilities")).map_err(|error| error.to_string())
+}
+
+#[test]
+fn inspection_grants_cannot_borrow_settings_command_authority() -> Outcome {
+    let grants = [
+        r#"{"identifier":"inspection","windows":["overview","settings"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","windows":["settings"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","windows":["*"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","windows":["over*"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","webviews":["settings"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","windows":["overview"],"webviews":["settings"],"permissions":["mcp:default"]}"#,
+        r#"{"identifier":"inspection","windows":["settings"],"permissions":[{"identifier":"mcp:allow-push-ipc"}]}"#,
+        r#"[{"identifier":"inspection","windows":["settings"],"permissions":["mcp:allow-push-log"]}]"#,
+        r#"{"capabilities":[{"identifier":"inspection","windows":["settings"],"permissions":["mcp:default"]}]}"#,
+    ];
+    for grant in grants {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        capability_tree(directory.path())?;
+        fs::write(
+            directory.path().join("src-tauri/capabilities/other.json"),
+            grant,
+        )
+        .map_err(|error| error.to_string())?;
+        fails_with(
+            directory.path(),
+            "inspection permissions must be restricted to the overview window",
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn inspection_scope_is_checked_in_toml_and_inline_capabilities() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    capability_tree(directory.path())?;
+    let grant = directory.path().join("src-tauri/capabilities/other.toml");
+    fs::write(
+        &grant,
+        "identifier = 'inspection'\nwindows = ['settings']\npermissions = ['mcp:default']\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(
+        directory.path(),
+        "inspection permissions must be restricted to the overview window",
+    )?;
+    fs::remove_file(grant).map_err(|error| error.to_string())?;
+    for name in ["tauri.conf.json", "tauri.linux.conf.json"] {
+        fs::write(directory.path().join("src-tauri").join(name),
+            r#"{"app":{"security":{"csp":"default-src 'self'","capabilities":[{"identifier":"inspection","windows":["settings"],"permissions":["mcp:default"]}]}}}"#)
+            .map_err(|error| error.to_string())?;
+        fails_with(
+            directory.path(),
+            "inspection permissions must be restricted to the overview window",
+        )?;
+        fs::remove_file(directory.path().join("src-tauri").join(name))
+            .map_err(|error| error.to_string())?;
+    }
+    for name in ["Tauri.toml", "Tauri.linux.toml"] {
+        fs::write(directory.path().join("src-tauri").join(name),
+            "[app.security]\ncapabilities = [{ identifier = 'inspection', windows = ['settings'], permissions = ['mcp:default'] }]\n")
+            .map_err(|error| error.to_string())?;
+        fails_with(
+            directory.path(),
+            "inspection permissions must be restricted to the overview window",
+        )?;
+        fs::remove_file(directory.path().join("src-tauri").join(name))
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+#[test]
+fn overview_inspection_leaves_settings_capabilities_independent() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    capability_tree(directory.path())?;
+    fs::write(
+        directory
+            .path()
+            .join("src-tauri/capabilities/inspection.json"),
+        r#"{"identifier":"inspection","windows":["overview"],"permissions":["mcp:default"]}"#,
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(directory.path().join("src-tauri/capabilities/settings.json"),
+        r#"{"identifier":"settings","windows":["settings"],"permissions":["allow-clear-local-history","allow-update-preferences"]}"#)
+        .map_err(|error| error.to_string())?;
+    let (passed, report) = gate(directory.path())?;
+    if !passed {
+        return Err(format!(
+            "overview-only inspection must preserve settings authority:\n{report}"
+        ));
+    }
+    Ok(())
+}
