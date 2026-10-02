@@ -75,6 +75,9 @@ function ManagedAccount({
         />
       </div>
       <p className="account-manage-card__meta">
+        {alias || account.identity?.principal_label || account.nickname}
+      </p>
+      <p className="account-manage-card__meta">
         {status.text} · {lastSuccess === null ? "None yet" : formatAge(lastSuccess, now)}{" "}
         · {account.account_id}
       </p>

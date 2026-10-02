@@ -55,9 +55,7 @@ function WindowCard({
   now,
   selected,
   onSelect,
-  hideLabels,
 }: {
-  readonly hideLabels: boolean;
   readonly window: QuotaWindow;
   readonly account: AccountSnapshot;
   readonly now: number;
@@ -66,7 +64,7 @@ function WindowCard({
 }): JSX.Element {
   // The same freshness the overview uses, so a window that has gone stale or
   // whose boundary has passed cannot look healthy here (spec 6, AC-15).
-  const scope = hideLabels ? "Scope hidden" : window.scope.label || "Allowance";
+  const scope = window.scope.label || "Allowance";
   const state = readingState(account, window, now);
   const severity = state === "current" ? severityOf(window.measurement) : "stale";
   const value = formatRemaining(window.measurement);
@@ -151,7 +149,7 @@ export function AccountDetail({
   const readingSource =
     shown === undefined
       ? "No reading"
-      : `${SOURCE_WORDS[shown.source]} · ${alias ? "Scope hidden" : shown.scope.label}`;
+      : `${SOURCE_WORDS[shown.source]} · ${shown.scope.label}`;
   return (
     <section className="detail" aria-label={`Account details for ${label}`}>
       <div className="detail__back">
@@ -188,7 +186,6 @@ export function AccountDetail({
             <WindowCard
               key={window.id}
               window={window}
-              hideLabels={alias !== ""}
               account={account}
               now={now}
               selected={window.id === selectedWindow}
@@ -255,9 +252,7 @@ export function AccountDetail({
         </div>
         {selected === null ? null : (
           <div>
-            <dt>
-              {alias ? "Scope hidden" : selected.scope.label || "Allowance"} boundary
-            </dt>
+            <dt>{selected.scope.label || "Allowance"} boundary</dt>
             <dd>
               {selected.boundary === null
                 ? "Not reported"
@@ -274,8 +269,8 @@ export function AccountDetail({
         </p>
       ) : (
         <p className="note">
-          Ranked by {alias ? "Scope hidden" : account.order.value.scope_label}:{" "}
-          {controllingValue}. Rule version {String(account.order.value.rule_version)}.
+          Ranked by {account.order.value.scope_label}: {controllingValue}. Rule version{" "}
+          {String(account.order.value.rule_version)}.
         </p>
       )}
       <div className="detail__bottom">

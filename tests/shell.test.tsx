@@ -641,11 +641,13 @@ describe("account details privacy", () => {
     (entry) => {
       const owner = account(
         "a2",
-        "codex",
+        "claude",
         2,
         [
-          quotaWindow("session", "session", percent(72), { label: "Private workspace" }),
-          quotaWindow("custom", "custom", percent(30), { label: "Private workspace" }),
+          quotaWindow("weekly-opus", "weekly", percent(72), { label: "Claude Opus" }),
+          quotaWindow("weekly-sonnet", "weekly", percent(30), { label: "Claude Sonnet" }),
+          quotaWindow("custom", "custom", percent(40), { label: "Extra usage" }),
+          quotaWindow("daily", "daily", percent(50), { label: "Daily credits" }),
         ],
         { nickname: "Private nickname", rank: 72 },
       );
@@ -667,6 +669,7 @@ describe("account details privacy", () => {
         const card = screen.getByRole("article", { name: "Manage Account 2" });
         expect(card.textContent).not.toContain("Private nickname");
         expect(card.textContent).not.toContain("Private workspace");
+        expect(card.textContent).not.toContain("private@example.test");
         expect(within(card).getByRole("button", { name: "Rename" })).toHaveProperty(
           "disabled",
           true,
@@ -688,8 +691,28 @@ describe("account details privacy", () => {
       expect(details.textContent).toContain("Workspace hidden");
       expect(details.textContent).toContain("72%");
       expect(details.textContent).toContain("Documented API");
-      fireEvent.click(within(details).getByRole("button", { name: /Scope hidden: 30%/ }));
-      expect(details.textContent).toContain("Scope hidden boundary");
+      expect(
+        within(details).getByRole("button", { name: /Claude Opus: 72%/ }),
+      ).toBeTruthy();
+      expect(within(details).getByText("Claude Opus")).toBeTruthy();
+      expect(within(details).getByText("Claude Sonnet")).toBeTruthy();
+      expect(details.textContent).toContain("Documented API · Claude Opus");
+      expect(details.textContent).toContain("Ranked by Claude Opus: 72%");
+      expect(within(details).getByRole("heading", { name: "Extra usage" })).toBeTruthy();
+      expect(
+        within(details).getByRole("heading", { name: "Daily credits" }),
+      ).toBeTruthy();
+      expect(
+        within(details).getByRole("button", { name: /Extra usage: 40%/ }),
+      ).toBeTruthy();
+      expect(
+        within(details).getByRole("button", { name: /Daily credits: 50%/ }),
+      ).toBeTruthy();
+      fireEvent.click(
+        within(details).getByRole("button", { name: /Claude Sonnet: 30%/ }),
+      );
+      expect(details.textContent).toContain("Claude Sonnet boundary");
+      expect(details.textContent).toContain("Documented API · Claude Sonnet");
 
       act(() => acceptPreferences(preferences({ revision: hidden.revision + 1 })));
       expect(
@@ -707,6 +730,11 @@ describe("account details privacy", () => {
         "Private workspace",
       ])
         expect(details.outerHTML).not.toContain(privateLabel);
+      expect(
+        within(details)
+          .getByRole("button", { name: /Claude Sonnet: 30%/ })
+          .getAttribute("aria-pressed"),
+      ).toBe("true");
     },
   );
 });
