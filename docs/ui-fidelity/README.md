@@ -38,9 +38,9 @@ does, in the same place and at the same length.
 - **Connection.** The wizard uses `begin_connection`, `confirm_connection`, and
   `cancel_connection`. A verified attempt is held by the host as a pending candidate, so
   nothing is saved and no monitoring starts until Add account. Verify shows the
-  candidate's account, workspace, and reading, asks for the nickname and the
-  confirmation check the wireframe draws, and saves it under that nickname. Back,
-  Cancel, closing the popover, or restarting the app discards the candidate.
+  candidate's account, workspace, and reading, asks for the nickname and the confirmation
+  check the wireframe draws, and saves it under that nickname. Back, Cancel, closing the
+  popover, or restarting the app discards the candidate.
 - **Launch at login** registers a login item through the autostart plugin. A launch at
   sign-in starts quietly in the tray, and the switch shows what the system reports.
 - **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus
@@ -49,16 +49,17 @@ does, in the same place and at the same length.
 - **Clear accounts** becomes Clear history: Quota clears stored quota history for every
   account, and disconnecting stays an explicit per-account action.
 - **Diagnostics** lists each account's sanitized connection and fetch state in place of
-  the prototype's interaction log, and keeps the Include identities export switch.
-- **Notification preview** stays inside the settings window; no host preview command
-  exists.
+  the prototype's interaction log. Export writes `quota-diagnostics-settings.json` to the
+  host's diagnostics folder and states where; the file never holds account identities, so
+  there is no switch to include them.
 - **Tray.** By the owner's direction the tray menu has three items, Settings, Show App,
   and Exit, with the wireframe's icons; a left click always opens the app, and closing a
   window hides it to the tray. Refresh, pin, and pause stay in the popover and settings.
   The tray icon is the Quota mark in the wireframe's light or dark accent, with the
   attention dot and tooltip ("Quota · Claude · 5h low") driven by the snapshot. Quota runs
   as a single instance.
-- **Notification preview** is built from the account closest to exhaustion, with its real
+- **Notification preview** stays inside the settings window, because no host preview
+  command exists, and is built from the account closest to exhaustion, with its real
   reading, rather than the wireframe's sample.
 - **Refresh feedback.** As in the wireframe, a refresh answers with a toast. A deferred
   read is stated there ("Manual refreshes for … are deferred. Next eligible read in 4m.")
@@ -67,13 +68,17 @@ does, in the same place and at the same length.
 ## Live verification
 
 The real application was checked with `bun run inspect`, which exposes the overview
-webview to an agent. The same measurement script ran in the live webview and in the
-wireframe (headless Chrome at the same 125% scale) and compared the computed font, colour,
-spacing, border, radius, and size of every shared element: popover header, toolbar, cards,
-rings, footer, compact rows, expanded limits, quota detail, the wizard's first two steps,
-every settings panel, the dialogs, and the notification preview. The remaining differences
-are data (which accounts exist and their values) and the text listed above. Native
-behaviour was driven with real input: the pinned header drags the window, unpinning
+webview to an agent. [`tools/ui-parity`](../../tools/ui-parity/README.md) runs the same
+measurement script in the live webview and in the wireframe (headless Chrome at the same
+125% scale) and compares the computed font, colour, spacing, border, radius, and size of
+every shared element: popover header, toolbar, cards, rings, footer, quota detail, the
+wizard's first two steps, and every settings panel. Its recorded results in
+[`tools/ui-parity/results`](../../tools/ui-parity/results/) show no difference in any of
+the ten cases; what each case ignores is data (which accounts exist and their values, the
+window width the native border takes) and the text listed above. Leaving the wizard was
+driven live as well: after a real verification reached Verify, Escape sent
+`cancel_connection` and never `confirm_connection`, and the account list was unchanged.
+Native behaviour was driven with real input: the pinned header drags the window, unpinning
 anchors the popover above the taskbar, Escape steps back and then hides, settings Details
 and Add account open the popover, and the tray's icon, tooltip, and menu were read from
 Windows. Each tray menu item was chosen: Settings opens settings, Show App restores the
@@ -82,4 +87,6 @@ click keeps it open. The popover's ×, Alt+F4, and the settings window's × hide
 while the process keeps running. A second launch keeps one process and brings the app
 forward, and a `--autostart` launch stays hidden. Launch at login wrote the `Quota` entry
 in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and removed it again. The
-popover's height follows its content up to 760 pixels, as the wireframe's does.
+popover's height follows its content between 320 and 760 pixels, as the wireframe's does:
+the renderer reports its content height and the host resizes the window inside the work
+area, keeping a tray popover anchored above the taskbar.
