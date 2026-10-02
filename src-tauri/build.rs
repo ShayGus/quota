@@ -1,4 +1,5 @@
-//! Build-time configuration: the application-command permission manifest.
+//! Build-time configuration: the application-command permission manifest, and
+//! the Windows application manifest.
 //!
 //! Tauri commands registered with `invoke_handler` are callable from every
 //! window by default unless application-command permissions are configured
@@ -33,6 +34,32 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "clear_local_history",
         "export_sanitized_diagnostics",
     ]);
-    tauri_build::try_build(tauri_build::Attributes::new().app_manifest(manifest))?;
+    // Tauri embeds its Windows application manifest as a resource linked into
+    // the application binary only. Test binaries then load the version 5 common
+    // controls, which lack entry points Tauri imports, and exit with
+    // STATUS_ENTRYPOINT_NOT_FOUND before any test runs. The same manifest is
+    // therefore handed to the linker for every target the package links.
+    let windows = tauri_build::WindowsAttributes::new_without_app_manifest();
+    tauri_build::try_build(
+        tauri_build::Attributes::new()
+            .app_manifest(manifest)
+            .windows_attributes(windows),
+    )?;
+    embed_windows_manifest();
     Ok(())
+}
+
+/// Embeds `windows-app-manifest.xml` into every binary the MSVC linker links:
+/// the application, its tests, and its examples.
+fn embed_windows_manifest() {
+    let windows = std::env::var("CARGO_CFG_TARGET_OS").is_ok_and(|os| os == "windows");
+    let msvc = std::env::var("CARGO_CFG_TARGET_ENV").is_ok_and(|env| env == "msvc");
+    if !(windows && msvc) {
+        return;
+    }
+    let manifest =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("windows-app-manifest.xml");
+    println!("cargo:rerun-if-changed=windows-app-manifest.xml");
+    println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
+    println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());
 }
