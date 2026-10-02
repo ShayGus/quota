@@ -86,8 +86,8 @@ const INSPECTION_OWNER: &str = "src-tauri/Cargo.toml";
 /// - the feature must be declared, and only as a non-default feature, because
 ///   a feature in a `default = [...]` list is selected by every ordinary
 ///   build of the host;
-/// - nothing may name the feature except that one declaration, so a dependent
-///   cannot switch it on with a `features = [...]` dependency entry;
+/// - default and unified dependency feature selections must not activate the
+///   feature or plugin, including through aliases and optional forwarding;
 /// - the git source must be pinned to a 40-character commit, because a branch
 ///   or tag can move after review.
 fn check_agent_inspection(root: &Path, outcome: &mut Outcome) {

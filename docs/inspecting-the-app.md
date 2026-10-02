@@ -6,7 +6,7 @@ own tools. `manage_ipc` records only those agent-issued calls; ordinary frontend
 are not intercepted. This is how a worker checks that the real interface matches a mockup
 and that behaviour is correct, instead of guessing from the source.
 
-Nothing described here exists in a release build. See
+Inspection is unavailable in shipping builds. See
 [Why it cannot reach a release](#why-it-cannot-reach-a-release). What works and what does
 not on this particular machine is recorded under
 [What was verified on this machine](#what-was-verified-on-this-machine) and
@@ -20,6 +20,9 @@ invokes) work only in `overview`, using its command permissions. The `settings` 
 keeps its own capabilities and installs no guest request handlers, so an event sent to
 settings cannot execute a command or JavaScript there. Native screenshots can still
 capture either visible window. Webview console forwarding is restricted to overview.
+
+Pass `window_label: "overview"` to tools that target a webview. Their default is `main`,
+which this application does not have.
 
 The renderer checks its actual window label and asks the host to authorize a no-op
 `mcp:push_ipc` call before importing the guest. Ordinary development runs without the
@@ -57,7 +60,8 @@ bun tauri dev --features agent-inspection --config '{"app":{"security":{"capabil
 Both halves matter.
 
 - `--features agent-inspection` compiles the plugin. Without the feature the build
-  succeeds and opens a socket nobody is listening on.
+  registers no inspection plugin and opens no inspection socket. Keep the capability
+  override paired with the feature, since it names permissions supplied by that plugin.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
   a capability file the allowlist does not name, so without this guest listeners stay
   disabled and console forwarding is denied. The allowlist in `src-tauri/tauri.conf.json`
@@ -129,9 +133,10 @@ relying on discovery, omp expands a value that starts with `!` as a shell comman
 
 MCP servers load when the agent starts. Restart the agent after writing the file.
 
-## Check the connection without an agent
+## Check the socket without an agent
 
-The socket is proof on its own:
+These checks establish that socket and token files exist; they do not prove that the
+current app accepts authenticated requests or that its guest handlers are ready:
 
 ```bash
 test -S "${TMPDIR:-/tmp}/tauri-mcp.sock" && echo "socket up"
@@ -158,8 +163,8 @@ the screenshot:
 
 This capture predates the overview-only inspection scope; current sessions forward webview
 console logs only from overview. The console output proves the original capability grant
-worked: `push_log` is the one command that has to pass through the capability allowlist,
-and without `agent-inspection-capability` the plugin records `ok: 0, err: N` instead.
+worked: console forwarding uses the capability-gated `push_log` command, and without
+`agent-inspection-capability` the plugin records `ok: 0, err: N` instead.
 
 The captured files are in [`docs/inspection-proof/`](inspection-proof/).
 
@@ -210,8 +215,8 @@ size.
 
 ## Native libraries a Linux debug build needs
 
-The plugin's screenshot stack needs two libraries that are not in the base WSLg image and
-that `cargo` cannot find on its own:
+The plugin's screenshot stack needs three native development dependencies that are not
+in the base WSLg image and that `cargo` cannot find on its own:
 
 | Library                               | Needed by                                        | Symptom when missing                                                                                     |
 | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -246,25 +251,43 @@ ln -sf /usr/lib/x86_64-linux-gnu/libgbm.so.1 \
   "$HOME/.local/pipewire/lib/x86_64-linux-gnu/libgbm.so"
 ```
 
-Only the debug build needs any of this. `cargo build --release`, `cargo test`, and clippy
-never compile the plugin.
+Only builds selecting `agent-inspection` need these extra dependencies. The ordinary
+`cargo build --release`, `cargo test`, and clippy commands do not select it.
 
 ## Why it cannot reach a release
 
-Three independent stops, checked by `cargo xtask check-release` and by
-`xtask/tests/check_release.rs`:
+Three independent stops keep inspection out of the shipping application:
 
 1. `tauri-plugin-mcp` is an `optional` dependency behind the non-default
    `agent-inspection` feature, so Cargo does not compile or link it unless that feature is
    selected. The gate fails if `optional = true` is dropped.
-2. Nothing selects the feature: it is not in any `default = [...]` list, and no dependency
-   entry names it. The gate fails if either changes, and fails outright if the declaration
-   is missing.
+2. Ordinary release feature selections do not activate it. The gate resolves feature
+   aliases, unifies incoming selections for each local package, and follows optional
+   dependency activation and forwarding. It rejects any resulting activation of
+   `agent-inspection` or the plugin, and also rejects a missing feature declaration.
 3. `src-tauri/src/bootstrap.rs` registers the plugin behind
    `#[cfg(all(debug_assertions, feature = "agent-inspection"))]`, so even
    `--features agent-inspection` cannot register it in a release build. The plugin also
    refuses to open its socket in a release build on its own.
 
-The git source is pinned to a full 40-character commit in the root manifest; the gate
-fails if it is ever a branch or a tag. The licence, and why `deny.toml` keeps an empty
+Explicitly selecting `--features agent-inspection` in a release build can still compile
+the dependency and its native libraries; the debug guard prevents registration, not
+dependency compilation. Shipping builds must keep the feature unselected.
+
+`cargo xtask check-release` runs entirely in Rust. It checks the manifest rules above,
+requires the desktop dependency to inherit the root workspace's full-commit git pin,
+and rejects inspection source overrides through `[patch]` or `[replace]`, including
+renamed entries. It also rejects inspection capability grants outside overview and
+guest imports outside an `import.meta.env.DEV` guard. These checks have regressions in
+[`xtask/tests/check_release.rs`](../xtask/tests/check_release.rs); the host's debug
+registration guard lives in [`src-tauri/src/bootstrap.rs`](../src-tauri/src/bootstrap.rs).
+
+The frontend CI job runs `bun run check:release:renderer`, which runs `bun run build`.
+The Vite build check rejects inspection modules or imports remaining in emitted chunks,
+including renamed packages. The guest import in `src/main.tsx` is removed by the
+development guard. Bundle-check regressions live in
+[`tests/release-renderer.test.ts`](../tests/release-renderer.test.ts), and listener
+authorization regressions in [`tests/inspection.test.ts`](../tests/inspection.test.ts).
+
+The licence, and why `deny.toml` keeps an empty
 `allow-git`, are recorded in [the dependency record](dependencies.md).

@@ -23,8 +23,8 @@ tauri-build = { workspace = true }
 [features]
 # Development-only agent inspection: screenshots, the DOM, the console log, and
 # IPC traffic, over a Unix socket an AI agent connects to. It is a non-default
-# feature, so `cargo build --release`, `cargo test`, and clippy never compile
-# the plugin or its native screenshot library. Cargo does not support
+# feature, so ordinary `cargo build --release`, `cargo test`, and clippy do not
+# compile the plugin or its native screenshot library. Cargo does not support
 # `cfg(debug_assertions)` for selecting a dependency, so the build profile
 # cannot do this job; `bootstrap.rs` still refuses to register the plugin
 # unless `debug_assertions` is also set, and `cargo xtask check-release` fails

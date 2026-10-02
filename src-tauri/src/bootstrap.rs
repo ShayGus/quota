@@ -461,8 +461,9 @@ pub fn start() -> Result<(), String> {
 /// The plugin opens a Unix socket an AI agent connects to for screenshots, the
 /// DOM, the console log, and IPC calls. Both conditions must hold: the
 /// `agent-inspection` feature, which no release feature set selects, and
-/// `debug_assertions`, so a release build compiles neither the plugin nor this
-/// call. The plugin's own release refusal stays armed as a third line. See
+/// `debug_assertions`, so a release build excludes this registration call even
+/// if the feature is explicitly selected and the dependency is compiled. The
+/// plugin's own release refusal stays armed as a third line. See
 /// `docs/inspecting-the-app.md` for the client side.
 #[cfg(all(debug_assertions, feature = "agent-inspection"))]
 fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {

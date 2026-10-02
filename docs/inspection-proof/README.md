@@ -12,40 +12,23 @@ the development-only inspection plugin. They are the evidence behind the table i
 | `overview-dom.html`       | `query_page` with `mode: "html"`, window `overview`     |
 | `element-map.txt`         | `query_page` with `mode: "map"`, window `overview`      |
 
-The screenshot is 810x720, the real size of the overview window. It needed two things this
-display does not give for free — `GDK_BACKEND=x11` before `bun run inspect`, and
-`docs/publish-x11-client-list.py 0x600010` after the overview appeared. Both are explained
-in [Screenshots on WSLg](../inspecting-the-app.md#screenshots-on-wslg). The image agrees
+The screenshot is 810x720, the real size of the overview window. The required display setup
+is owned by [Screenshots on WSLg](../inspecting-the-app.md#screenshots-on-wslg). The image agrees
 with `element-map.txt` line for line: `Quota`, `0 accounts · 0 providers`, `Floating`,
 `Least remaining first`, `No account matches the current filter or search text.`,
 `0 / 0 shown`, `Monitoring active`.
 
-A launch opens only overview. Settings is created hidden and opens when a person asks for it.
-
-`console-log.txt` is the important one. `push_log` is the single command that has to
-travel through the Tauri capability allowlist before the plugin can see it; the plugin
-counts a denied push as an error. Seeing real `console.*` lines here means the allowlist
-grant works end to end, which is what the `mcp:default` capability in
-`src-tauri/capabilities/agent-inspection-capability.json` exists for.
+`console-log.txt` records console forwarding through the capability-gated `push_log`
+command. The captured `console.*` lines show that the original
+allowlist grant worked at capture time. They include settings output from before the
+scope restriction and do not validate the current listener authorization boundary.
 
 ## Reproducing
 
-```bash
-export GDK_BACKEND=x11
-bun run inspect
-```
-
-then, from another shell, with the app running:
-
-```bash
-test -S "${TMPDIR:-/tmp}/tauri-mcp.sock" && echo "socket up"
-xwininfo -root -tree | grep '"Quota"'
-docs/publish-x11-client-list.py 0x600010   # the id from the line above
-bun x tauri-mcp-server
-```
+Follow [Start the app](../inspecting-the-app.md#start-the-app),
+[Connect an agent](../inspecting-the-app.md#connect-an-agent), and
+[Screenshots on WSLg](../inspecting-the-app.md#screenshots-on-wslg).
 
 `initialize`, then `notifications/initialized`, then `tools/call` with `take_screenshot`,
-`query_page`, `query_logs` and `read_text`. Use `window_label: "overview"` for webview
-tools; settings keeps its own capabilities and has no guest handlers. Native screenshots
-may also use `window_label: "settings"` after showing that window. The plugin's default
-is `main`, which this application does not have.
+`query_page`, `query_logs` and `read_text`. Window labels and current scope are owned by
+[What an agent gets](../inspecting-the-app.md#what-an-agent-gets).

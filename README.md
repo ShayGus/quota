@@ -42,14 +42,16 @@ Launching Quota again brings the running overview forward. Closing a window hide
 monitoring continues. Use Quit from the tray menu, or press Ctrl-C in the terminal, to
 stop the application.
 
+For development-only AI agent inspection, see [Inspecting the app](docs/inspecting-the-app.md).
+
 To produce a release build:
 
 ```bash
 bun tauri build
 ```
 
-There is no hand-written run command. The Tauri CLI owns starting, building and packaging
-the application; `cargo xtask` only runs the repository gates.
+The Tauri CLI owns starting, building and packaging the application; `cargo xtask` only
+runs the repository gates.
 
 ## Developer setup from a clean checkout
 
@@ -104,11 +106,8 @@ Run every check from the repository root.
 before that line runs locally. CI runs the same check through
 `EmbarkStudios/cargo-deny-action`, pinned by commit in `.github/workflows/`.
 
-The frontend checks run from the repository root, which is the frontend package:
-
-```bash
-bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
-```
+The frontend check commands are owned by
+[CONTRIBUTING.md](CONTRIBUTING.md#3-run-the-checks).
 
 `cargo xtask --help` lists the subcommands. An unknown subcommand prints the usage text
 and exits non-zero.

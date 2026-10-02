@@ -81,34 +81,24 @@ preference.
 
 ## Development-only agent inspection
 
-[`tauri-plugin-mcp`](https://github.com/P3GLEG/tauri-plugin-mcp) lets an AI agent read the
-running app: screenshots, the DOM, the console log, and IPC calls an agent issues through
-the plugin's own tools. `manage_ipc` records only those agent-issued calls; ordinary
-frontend invokes are not intercepted. It is not published to crates.io, so it is a git
-dependency pinned to the full commit `c7d271a06469bdf4744bfdeadca7458a1f3d02e5` in the
-root manifest. `cargo xtask check-release` fails if that ever becomes a branch or a tag.
-
-It is an `optional` dependency behind the non-default `agent-inspection` feature, and
-`src-tauri/src/bootstrap.rs` registers it only when both that feature and
-`debug_assertions` are set. `docs/inspecting-the-app.md` explains the workflow, the three
-stops that keep it out of a release artifact, and the two native libraries a Linux debug
-build needs.
+[`tauri-plugin-mcp`](https://github.com/P3GLEG/tauri-plugin-mcp) is a git dependency;
+[`Cargo.toml`](../Cargo.toml) owns its audited revision. The
+[inspection guide](inspecting-the-app.md) owns tool behavior, startup, Linux native
+prerequisites, and release exclusion rules.
 
 Two licence facts were checked rather than assumed, and both look like a mistake:
 
-- The crate's `Cargo.toml` at that commit declares no `license` field, and the repository
-  ships no `LICENSE` file (verified with `git ls-tree HEAD` in the pinned checkout, and
-  against `main` on GitHub).
+- The crate's `Cargo.toml` at the audited commit declares no `license` field, and the
+  repository ships no `LICENSE` file (verified with `git ls-tree HEAD` in the pinned
+  checkout, and against `main` on GitHub).
 - The npm package `tauri-plugin-mcp` 0.3.1 declares `"license": "MIT"`, which is the
   licence the project publishes under.
 
-`cargo deny check advisories licenses sources` reports clean. It does so because the crate
-is an unpublished git source and cargo-deny treats an unpublished crate as private and
-exempts it from licence resolution, not because a licence was matched. `deny.toml`
-therefore still holds `unknown-git = "deny"` and an empty `allow-git`: the crate never
-enters the graph cargo-deny inspects, because no default feature selects it. A future
-change that made it part of the default graph would fail the source check, and that is the
-review point.
+The recorded clean `cargo deny check advisories licenses sources` result covers the
+default graph, which excludes the optional inspection crate; it does not establish a
+matched licence for that crate. `deny.toml` still holds `unknown-git = "deny"` and an
+empty `allow-git`. A future change that made the crate part of the default graph would
+fail the source check, and that is the review point.
 
 ## How to re-verify
 
