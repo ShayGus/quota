@@ -10,8 +10,9 @@ import { useState, type JSX } from "react";
 import type {
   AccountId,
   AccountSnapshot,
-  AttemptRef,
   BeginConnectionRequest,
+  ConnectionAttemptAccepted,
+  ConnectionAttemptId,
   Preferences,
 } from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
@@ -52,7 +53,11 @@ export interface SettingsActions {
    */
   readonly beginConnection: (
     request: BeginConnectionRequest,
-  ) => Promise<AttemptRef | null>;
+  ) => Promise<ConnectionAttemptAccepted | null>;
+  /**
+   * Forgets a finished connection attempt once its result has been shown.
+   */
+  readonly clearConnectionAttempt: (attemptId: ConnectionAttemptId) => void;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
   /** Drops retained history for one account. The host has no all-accounts clear. */
@@ -95,22 +100,29 @@ export function Settings({
             Quota has not received the confirmed preferences yet. Settings appear as soon
             as the backend publishes them.
           </p>
-        ) : tab === "window" ? (
-          <WindowPanel
-            preferences={preferences}
-            nativeWindow={state.nativeWindow}
-            actions={actions}
-          />
-        ) : tab === "appearance" ? (
-          <AppearancePanel preferences={preferences} actions={actions} />
-        ) : tab === "accounts" ? (
-          <AccountsPanel
-            accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
-            now={now}
-            actions={actions}
-          />
         ) : (
-          <PrivacyPanel preferences={preferences} actions={actions} />
+          <>
+            <div hidden={tab !== "accounts"}>
+              <AccountsPanel
+                accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+                preferences={preferences}
+                attempts={state.attempts}
+                now={now}
+                actions={actions}
+              />
+            </div>
+            {tab === "window" ? (
+              <WindowPanel
+                preferences={preferences}
+                nativeWindow={state.nativeWindow}
+                actions={actions}
+              />
+            ) : tab === "appearance" ? (
+              <AppearancePanel preferences={preferences} actions={actions} />
+            ) : tab === "privacy" ? (
+              <PrivacyPanel preferences={preferences} actions={actions} />
+            ) : null}
+          </>
         )}
       </div>
     </section>

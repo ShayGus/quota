@@ -9,6 +9,7 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 use std::time::Duration;
 
+use quota_contracts::CommandError;
 use quota_contracts::commands::{BeginConnectionRequest, ConnectionAttemptAccepted};
 use quota_contracts::events::ConnectionProgress;
 use quota_contracts::refs::AttemptRef;
@@ -22,10 +23,23 @@ use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::snapshot::MonitoringState;
 use tokio::sync::{Semaphore, mpsc, watch};
 
-use connection::emit_connection_progress;
+use connection::AttemptReporter;
+
+/// The live handle to one connection attempt.
+///
+/// The attempt stays here until it reaches a terminal result, so a cancellation
+/// can reach it and a terminal event can be emitted under the same revision
+/// counter that emitted its progress.
+struct AttemptHandle {
+    /// The flag the running attempt watches.
+    cancel: watch::Sender<bool>,
+    /// The counter that numbers this attempt's progress.
+    reporter: Arc<AttemptReporter>,
+}
 
 mod connection;
 mod policy;
+mod queue;
 mod read_path;
 mod worker;
 
@@ -41,6 +55,8 @@ pub struct RefreshRequest {
     pub account_id: AccountId,
     /// The reason is logged as a closed vocabulary, never parsed from text.
     pub reason: RefreshReason,
+    #[expect(missing_docs)]
+    pub generation: u32,
 }
 
 /// Why the shared supervisor was asked to read an account.
@@ -48,6 +64,8 @@ pub struct RefreshRequest {
 pub enum RefreshReason {
     /// The user asked for a refresh.
     UserRequested,
+    #[expect(missing_docs)]
+    Reconnect,
     /// The shared provider-specific schedule became due.
     Scheduled,
     /// A reported quota boundary needs verification.
@@ -71,7 +89,7 @@ struct RuntimeState {
     providers: Arc<quota_providers::ProviderRegistry>,
     clock: Arc<SystemClock>,
     permits: Arc<Semaphore>,
-    pending: Arc<tokio::sync::Mutex<HashSet<AccountId>>>,
+    pending: Arc<tokio::sync::Mutex<HashSet<(AccountId, u32)>>>,
     /// Serialises every change that reads the registry, mutates it, writes it
     /// durably and publishes it. Without it a delayed write can resurrect an
     /// account a disconnect removed, or overwrite a concurrent rename.
@@ -83,7 +101,7 @@ struct RuntimeState {
 pub struct MonitoringRuntime {
     sender: mpsc::Sender<RefreshRequest>,
     shutdown: watch::Sender<bool>,
-    attempts: Arc<tokio::sync::Mutex<HashMap<ConnectionAttemptId, watch::Sender<bool>>>>,
+    attempts: Arc<tokio::sync::Mutex<HashMap<ConnectionAttemptId, AttemptHandle>>>,
     connection_gate: Arc<tokio::sync::Mutex<()>>,
     state: RuntimeState,
 }
@@ -163,26 +181,26 @@ impl MonitoringRuntime {
     ) -> Result<Vec<AccountId>, quota_contracts::CommandError> {
         let mut accepted = Vec::new();
         for account_id in account_ids {
-            let mut pending = self.state.pending.lock().await;
-            if !pending.insert(account_id.clone()) {
-                continue;
-            }
-            match self.sender.try_send(RefreshRequest {
-                account_id: account_id.clone(),
-                reason,
-            }) {
-                Ok(()) => accepted.push(account_id),
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    pending.remove(&account_id);
-                    return Err(quota_contracts::CommandError::ValidationFailed {
-                        field: "refresh_queue".into(),
-                        reason: "the shared refresh queue is full; try again shortly".into(),
-                    });
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    pending.remove(&account_id);
-                    return Err(quota_contracts::CommandError::Cancelled);
-                }
+            let generation = self
+                .state
+                .registry
+                .read()
+                .await
+                .get(&account_id)
+                .map(|entry| entry.binding.generation)
+                .ok_or(CommandError::AccountNotFound)?;
+            if queue::enqueue(
+                &self.sender,
+                &self.state.pending,
+                RefreshRequest {
+                    account_id: account_id.clone(),
+                    reason,
+                    generation,
+                },
+            )
+            .await?
+            {
+                accepted.push(account_id);
             }
         }
         Ok(accepted)
@@ -214,31 +232,56 @@ impl MonitoringRuntime {
             })?;
         let attempt_id = ConnectionAttemptId::generate();
         let (cancel, cancel_receiver) = watch::channel(false);
-        self.attempts
-            .lock()
-            .await
-            .insert(attempt_id.clone(), cancel);
+        let reporter = Arc::new(AttemptReporter::new());
+        self.attempts.lock().await.insert(
+            attempt_id.clone(),
+            AttemptHandle {
+                cancel,
+                reporter: Arc::clone(&reporter),
+            },
+        );
         let runtime = self.clone();
         let owned_attempt = attempt_id.clone();
         tauri::async_runtime::spawn(async move {
-            let result = connection::run_connection_attempt(
-                runtime.clone(),
-                adapter,
-                request,
-                owned_attempt.clone(),
-                cancel_receiver,
-            )
-            .await;
-            runtime.attempts.lock().await.remove(&owned_attempt);
-            if let Err(error) = result {
-                emit_connection_progress(
-                    &runtime.state,
-                    &owned_attempt,
-                    2,
-                    ConnectionProgress::Failed { error },
-                )
-                .await;
+            // The body runs as its own task so a panic comes back as a join
+            // error instead of unwinding past the cleanup below and leaving the
+            // attempt stuck as Started forever.
+            let body = tokio::spawn({
+                let runtime = runtime.clone();
+                let owned_attempt = owned_attempt.clone();
+                let inner_reporter = Arc::clone(&reporter);
+                async move {
+                    connection::run_connection_attempt(
+                        runtime,
+                        adapter,
+                        request,
+                        owned_attempt,
+                        cancel_receiver,
+                        inner_reporter,
+                    )
+                    .await
+                }
+            });
+            let failure = match body.await {
+                Err(joined) if joined.is_panic() => Some(CommandError::Internal {
+                    code: "connection_attempt_stopped_unexpectedly".into(),
+                }),
+                // A finished attempt already reported its own terminal result,
+                // a cancelled one reported `Cancelled`, and an aborted task has
+                // nobody left to report to.
+                Ok(Ok(()) | Err(CommandError::Cancelled)) | Err(_) => None,
+                Ok(Err(error)) => Some(error),
+            };
+            if let Some(error) = failure {
+                reporter
+                    .emit(
+                        &runtime.state,
+                        &owned_attempt,
+                        ConnectionProgress::Failed { error },
+                    )
+                    .await;
             }
+            runtime.attempts.lock().await.remove(&owned_attempt);
         });
         Ok(ConnectionAttemptAccepted {
             attempt_ref: AttemptRef::new(attempt_id.clone()),
@@ -256,12 +299,15 @@ impl MonitoringRuntime {
         // verified rather than cancelled, and one that has not reached the gate
         // sees the flag and stops.
         let _connection_gate = self.connection_gate.lock().await;
-        let cancel = self.attempts.lock().await.remove(attempt_id);
-        let Some(cancel) = cancel else {
-            return Err(quota_contracts::CommandError::Cancelled);
+        let handle = self.attempts.lock().await.remove(attempt_id);
+        let Some(handle) = handle else {
+            return Err(CommandError::Cancelled);
         };
-        cancel.send_replace(true);
-        emit_connection_progress(&self.state, attempt_id, 2, ConnectionProgress::Cancelled).await;
+        handle.cancel.send_replace(true);
+        handle
+            .reporter
+            .emit(&self.state, attempt_id, ConnectionProgress::Cancelled)
+            .await;
         Ok(())
     }
 
@@ -293,6 +339,7 @@ impl MonitoringRuntime {
         &self,
         account_id: &AccountId,
     ) -> Result<u32, quota_contracts::CommandError> {
+        let commit = self.state.commit.lock().await;
         let connection_id = self
             .state
             .registry
@@ -311,19 +358,17 @@ impl MonitoringRuntime {
                     owner: error.owner.to_owned(),
                 },
             )?;
-        let stored = {
-            let mut registry = self.state.registry.write().await;
-            registry
-                .set_generation(&connection_id, generation)
-                .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
-            registry
-                .set_connection_state(&connection_id, ConnectionState::Connecting)
-                .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
-            registry
-                .get(account_id)
-                .map(|entry| entry.stored.clone())
-                .ok_or(quota_contracts::CommandError::AccountNotFound)?
-        };
+        let mut registry = self.state.registry.write().await;
+        registry
+            .set_generation(&connection_id, generation)
+            .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
+        registry
+            .set_connection_state(&connection_id, ConnectionState::Connecting)
+            .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
+        let stored = registry
+            .get(account_id)
+            .map(|entry| entry.stored.clone())
+            .ok_or(quota_contracts::CommandError::AccountNotFound)?;
         self.state
             .accounts
             .upsert_account(stored)
@@ -333,8 +378,19 @@ impl MonitoringRuntime {
                     owner: error.owner.to_owned(),
                 },
             )?;
-        self.refresh([account_id.clone()], RefreshReason::UserRequested)
-            .await?;
+        let queued = queue::enqueue(
+            &self.sender,
+            &self.state.pending,
+            RefreshRequest {
+                account_id: account_id.clone(),
+                generation,
+                reason: RefreshReason::Reconnect,
+            },
+        )
+        .await;
+        drop(registry);
+        drop(commit);
+        queued?;
         // The reconnect itself changed the connection state the renderer shows.
         self.publish().await?;
         Ok(generation)

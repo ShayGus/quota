@@ -187,9 +187,9 @@ fn an_unusable_amount_scale_produces_a_typed_issue() {
     assert_eq!(extra.issues.len(), 1);
 }
 
-/// A usable named-limits array replaces the three fixed windows.
+/// A usable named-limits array fills the slots the fixed fields left empty.
 #[test]
-fn a_usable_limits_array_replaces_the_fixed_windows() {
+fn a_usable_limits_array_fills_the_slots_the_fixed_fields_left_empty() {
     let reading = decode_offline(
         ProviderId::Claude,
         &fixture("claude_limits.json"),
@@ -197,9 +197,10 @@ fn a_usable_limits_array_replaces_the_fixed_windows() {
         received_at(),
     )
     .unwrap();
-    // Three named limits and three windows: had the fixed set also been decoded,
-    // there would be six. The identities come from each limit's own group and
-    // model scope, so they do not depend on the order of the array.
+    // Three named limits and three windows: the fixed fields were not reported
+    // here, so each named limit took the slot for its own period instead of
+    // being reported as a missing window beside it. The identities come from
+    // each limit's own group and model scope, not from where it sits.
     assert_eq!(reading.windows.len(), 3);
     let identities: Vec<&str> = reading
         .windows
@@ -410,4 +411,260 @@ fn an_unusable_limit_invalidates_the_window_too() {
         Measurement::Unavailable(UnavailableReason::InvalidResponse),
         "an invalid limit was collapsed into absence"
     );
+}
+
+/// The two sources describe different allowances, so neither replaces the other.
+#[test]
+fn fixed_and_scoped_limits_are_merged_not_substituted() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_mixed_scoped.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    assert_eq!(
+        reading.windows.len(),
+        3,
+        "session, weekly and the model window"
+    );
+    assert!(
+        reading.is_complete(),
+        "nothing the payload reported was lost"
+    );
+    let remaining = |bucket: &str| {
+        reading
+            .windows
+            .iter()
+            .find(|window| window.provider_bucket_id.as_deref() == Some(bucket))
+            .expect("the window exists")
+            .measurement
+            .remaining_percent()
+            .expect("a reported percentage")
+            .value()
+    };
+    assert!((remaining("five-hour") - 72.0).abs() < f64::EPSILON);
+    assert!((remaining("weekly") - 55.0).abs() < f64::EPSILON);
+    assert!((remaining("weekly-scoped-claude-fable") - 87.0).abs() < f64::EPSILON);
+}
+
+/// An entry without a percentage states nothing, and must not shift the others.
+#[test]
+fn a_sparse_limits_array_never_panics_and_keeps_the_scoped_entry() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_sparse_limits.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(
+        reading.windows.iter().any(
+            |window| window.provider_bucket_id.as_deref() == Some("weekly-scoped-claude-fable")
+        ),
+        "the entry that does report a percentage survives the sparse array"
+    );
+}
+
+/// The model and product allowances arrive as fixed fields of their own.
+#[test]
+fn sonnet_and_product_windows_are_reported() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_product_windows.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    let buckets: Vec<&str> = reading
+        .windows
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    for expected in [
+        "weekly-sonnet",
+        "weekly-oauth-apps",
+        "weekly-design",
+        "weekly-routines",
+    ] {
+        assert!(buckets.contains(&expected), "{expected} in {buckets:?}");
+    }
+    let sonnet = reading
+        .windows
+        .iter()
+        .find(|window| window.provider_bucket_id.as_deref() == Some("weekly-sonnet"))
+        .expect("the Sonnet allowance exists");
+    assert_eq!(sonnet.scope.label(), "Claude Sonnet");
+    assert_eq!(sonnet.duration, Some(Duration::seconds(604_800)));
+}
+
+/// Two entries for one scope are separated rather than one being dropped.
+#[test]
+fn two_limits_for_the_same_scope_are_both_kept() {
+    let payload = r#"{"limits":[
+        {"kind":"seven_day","percent":10},
+        {"kind":"seven_day","percent":20}]}"#;
+    let reading =
+        decode_offline(ProviderId::Claude, payload, "claude-local", received_at()).unwrap();
+    let weekly: Vec<&str> = reading
+        .category(QuotaCategory::Weekly)
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    assert_eq!(weekly.len(), 2, "neither entry was dropped: {weekly:?}");
+}
+
+/// Extra spend with no cap is still a cap-shaped window with no ceiling.
+#[test]
+fn extra_spend_without_a_cap_is_not_a_percentage() {
+    let measurement = extra_usage_measurement(r#"{"usedCredits":2500}"#);
+    let Measurement::Money(money) = measurement else {
+        panic!("extra spend is an amount, not a percentage: {measurement:?}");
+    };
+    assert_eq!(money.limit_minor_units, None);
+    assert_eq!(money.used_minor_units, Some(2500));
+    assert_eq!(money.remaining_minor_units, None);
+}
+
+#[test]
+fn account_wide_named_limits_fill_missing_slots_beside_every_product_scope() {
+    for product in [
+        "seven_day_opus",
+        "seven_day_sonnet",
+        "seven_day_oauth_apps",
+        "seven_day_design",
+        "seven_day_routines",
+    ] {
+        for (group, other) in [("seven_day", "five_hour"), ("five_hour", "seven_day")] {
+            for scoped in [false, true] {
+                let mut payload = serde_json::json!({
+                    "limits": [{"group":group,"percent":20}]
+                });
+                payload[other] = serde_json::json!({"utilization":10});
+                payload[product] = serde_json::json!({"utilization":30});
+                if scoped {
+                    payload["limits"][0]["scope"] = serde_json::json!({"model":{"id":"model"}});
+                }
+                let reading = decode_offline(
+                    ProviderId::Claude,
+                    &payload.to_string(),
+                    "claude-local",
+                    received_at(),
+                )
+                .unwrap();
+                assert_eq!(reading.is_complete(), !scoped);
+                assert_eq!(reading.expected_but_missing.len(), usize::from(scoped));
+                assert_eq!(reading.windows.len(), 3 + usize::from(scoped));
+            }
+        }
+    }
+}
+
+#[test]
+fn fixed_windows_win_over_named_counterparts_in_every_scope() {
+    for (field, group, model, bucket, category) in fixed_counterparts() {
+        let mut named = serde_json::json!({"group": group, "percent":20});
+        if let Some(model) = model {
+            named["scope"] =
+                serde_json::json!({"model":{"id":model.to_uppercase().replace('-', "_")}});
+        }
+        let mut payload = serde_json::json!({
+            "five_hour":{"utilization":1}, "seven_day":{"utilization":1},
+            "limits":[named, {"group":group,"percent":100,"scope":{"model":{"id":"distinct"}}}]
+        });
+        payload[field] = serde_json::json!({"utilization":80});
+        let reading = decode_offline(
+            ProviderId::Claude,
+            &payload.to_string(),
+            "claude-local",
+            received_at(),
+        )
+        .unwrap();
+        assert!(reading.is_complete());
+        let matches: Vec<_> = reading
+            .windows
+            .iter()
+            .filter(|window| {
+                window.category == category
+                    && window.scope.resource().as_str() == model.unwrap_or("account")
+            })
+            .collect();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].provider_bucket_id.as_deref(), Some(bucket));
+        assert!(
+            (matches[0].measurement.remaining_percent().unwrap().value() - 20.0).abs()
+                < f64::EPSILON
+        );
+        assert!(
+            reading
+                .windows
+                .iter()
+                .any(|window| window.scope.resource().as_str() == "distinct")
+        );
+        let identities: std::collections::HashSet<_> =
+            reading.windows.iter().map(|window| &window.id).collect();
+        assert_eq!(identities.len(), reading.windows.len());
+    }
+}
+
+type FixedCounterpart = (
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+    &'static str,
+    QuotaCategory,
+);
+
+fn fixed_counterparts() -> [FixedCounterpart; 7] {
+    [
+        (
+            "five_hour",
+            "five_hour",
+            None,
+            "five-hour",
+            QuotaCategory::Session,
+        ),
+        (
+            "seven_day",
+            "seven_day",
+            None,
+            "weekly",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_opus",
+            "seven_day",
+            Some("opus"),
+            "weekly-opus",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_sonnet",
+            "seven_day",
+            Some("sonnet"),
+            "weekly-sonnet",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_oauth_apps",
+            "seven_day",
+            Some("oauth-apps"),
+            "weekly-oauth-apps",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_design",
+            "seven_day",
+            Some("design"),
+            "weekly-design",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_routines",
+            "seven_day",
+            Some("routines"),
+            "weekly-routines",
+            QuotaCategory::Weekly,
+        ),
+    ]
 }

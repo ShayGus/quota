@@ -39,6 +39,7 @@ pub mod registry;
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod opencode_go;
+pub(crate) mod platform_paths;
 
 #[cfg(feature = "test-fixtures")]
 pub mod fixture;

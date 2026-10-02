@@ -37,12 +37,12 @@ ways:
 - unknown fields are ignored, so an added provider field can neither fail the parse nor
   change what a number means.
 
-A payload that carries nothing usable becomes a typed failure:
-`ProviderError::InvalidData` for a body that is not a JSON object,
-`ProviderError::UnsupportedSchema` for a JSON object this build does not recognise. A
-value that is present but unusable becomes
-`Measurement::Unavailable(UnavailableReason::InvalidResponse)` with a `QuotaIssue`. No
-path turns a malformed payload into a zero.
+A body that is not a JSON object or is invalid JSON becomes `ProviderError::InvalidData`;
+a shape that cannot deserialize into the supported wire types becomes
+`ProviderError::UnsupportedSchema`. A recognised shape with no reported usage is rejected
+according to the provider's mapping rules below. A value that is present but unusable
+becomes `Measurement::Unavailable(UnavailableReason::InvalidResponse)` with a
+`QuotaIssue`. No path turns a malformed payload into a zero.
 
 ## Codex
 
@@ -50,24 +50,43 @@ Reads the quota the Codex CLI reports for its own login.
 
 - Endpoints: `GET https://chatgpt.com/backend-api/wham/usage`, then, when that yields
   nothing usable, `GET https://chatgpt.com/backend-api/codex/usage`. Both are
-  undocumented.
-- Credential: `$CODEX_HOME/auth.json`, defaulting to `~/.codex/auth.json`. Read from
-  `tokens.access_token`; the account identity is `account_id`.
+  undocumented. Authentication, authorization, and rate-limit failures stop immediately
+  without trying the fallback. A decisive failure from the fallback takes precedence;
+  otherwise, if both endpoints fail, the first error is retained.
+- Credential discovery: see the
+  [Codex credential reference](../../docs/providers.md#codex).
 - Credential owner: the Codex CLI. It owns and refreshes this file. This adapter never
   writes to, refreshes, or rotates it, and never runs the Codex CLI. An expired or
   rejected token becomes `ProviderError::Authentication` for the user to fix in Codex.
-- Request: the bearer token plus the `ChatGPT-Account-Id` header.
-- Decoded fields: `rate_limit`/`rateLimits`/`rate_limits` or the root object;
-  `primary_window`/`primary` and `secondary_window`/`secondary`; `code_review_rate_limit`;
-  `additional_rate_limits[]`; `rateLimitsByLimitId`. Used percent:
+- Request: the bearer token, `Accept: application/json`, and `ChatGPT-Account-Id` only
+  when the credential named an account. An empty header is not the same as an absent one.
+- Decoded fields: `rate_limit`/`rateLimits`/`rate_limits` and the root object, both read,
+  so a body that reports its review allowance at the root keeps it. The named container
+  wins for a repeated bucket; within a container, the additional list wins over its map;
+  `primary_window`/`primary` and `secondary_window`/`secondary`, either as a pair or as a
+  window carried directly on the block; `code_review_rate_limit` as a pair or a window;
+  `additional_rate_limits[]` with `limit_name`/`id`/`name` and a `rate_limit` pair or
+  window, or the legacy `window` field; `rateLimitsByLimitId`. Used percent:
   `used_percent`/`usedPercent`, as a number or a numeric string. Reset:
   `reset_at`/`resetsAt` (epoch seconds or a date string) or `reset_after_seconds`.
   Duration: `limit_window_seconds` (seconds) or `windowDurationMins` (minutes). Plan:
   `plan_type`/`planType`. Optional `credits.balance`/`credits.unlimited`.
+- A payload that carries only a non-negative numeric `credits.balance` or
+  `credits.unlimited: true` is a reading: it connects with no allowance invented for it.
+  Empty account, review, and additional-limit containers do not count as windows. Without
+  a non-empty rate-limit window or a usable credit measurement, decoding returns
+  `ProviderError::InvalidData`, including for an empty or unusable credits-only block.
+  Used percentages and credit balances are decoded from the body only.
 - Window mapping: exactly 18000 seconds maps to `QuotaCategory::Session`, exactly 604800
   seconds to `QuotaCategory::Weekly`, and any other duration keeps its own resource scope
-  under `QuotaCategory::Custom`. Codex has no monthly allowance, so no monthly window is
-  ever created for it.
+  under `QuotaCategory::Custom`. Account-wide windows are the exception: any such window
+  covering twenty days or more becomes `QuotaCategory::Monthly`, including in a pair. A
+  lone first window covering at least one day has no fabricated second allowance; a
+  shorter or unknown duration retains an unavailable secondary slot. A lone secondary
+  window takes the primary slot. These rules follow the TaskbarQuota provider
+  investigation report, section 12, Codex P1 row "Support credits-only and lone monthly
+  responses", with acceptance evidence "Credits-only connects. No fabricated secondary
+  allowance."
 - Roles: a window is `MetricRole::IncludedAllowance`. `credits` is
   `MetricRole::CreditBalance`, never included quota.
 - Cadence: an event-assisted policy with a five-minute verification interval; the minimum
@@ -82,9 +101,8 @@ Reads Claude subscription usage for the Claude Code login.
 - Endpoints: `GET https://api.anthropic.com/api/oauth/usage` for the reading and
   `GET https://api.anthropic.com/api/oauth/profile` for the identity. Both are
   undocumented, and both require the `anthropic-beta: oauth-2025-04-20` header.
-- Credential: `$CLAUDE_CONFIG_DIR/.credentials.json`, defaulting to
-  `~/.claude/.credentials.json`. Read from `claudeAiOauth.accessToken` or
-  `claudeAiOauth.access_token`.
+- Credential discovery: see the
+  [Claude credential reference](../../docs/providers.md#claude).
 - Credential owner: Claude Code. It owns and refreshes this file. This adapter never
   refreshes the token, never writes to the file, and never runs Claude Code. The optional
   inference-based quota path is out of scope and does not exist in this crate.
@@ -92,16 +110,20 @@ Reads Claude subscription usage for the Claude Code login.
   `ProviderError::InvalidData`, so an account with no reported identity reads as
   unverified rather than inventing one. The address is masked in any label this crate
   produces.
-- Decoded fields: `five_hour`, `seven_day`, and optional `seven_day_opus`, each with
-  `utilization` (percent points used) and `resets_at`/`reset_at`; a `limits[]` array with
-  `percent`, `group`/`kind`, `resets_at`, and optional `scope.model.id`/`display_name`;
-  optional `extra_usage` with `is_enabled`, `monthly_limit`, `used_credits`,
-  `decimal_places`.
-- Window mapping: a `limits[]` array that carries a percentage replaces the three fixed
-  windows outright, and each entry keeps its own group and model scope. A fixed window the
-  source did not report becomes `Unavailable(NotReported)` and is recorded in
-  `expected_but_missing`. The Opus weekly window is optional: a plan without it simply has
-  no such window.
+- Decoded fields: `five_hour`, `seven_day`, and optional `seven_day_opus`,
+  `seven_day_sonnet`, `seven_day_oauth_apps`, `seven_day_design`, and
+  `seven_day_routines`, each with `utilization` (percent points used) and
+  `resets_at`/`reset_at`; a `limits[]` array with `percent`, `group`/`kind`, `resets_at`,
+  and optional `scope.model.id`/`display_name`; optional `extra_usage` with `is_enabled`,
+  `monthly_limit`, `used_credits`, `decimal_places`.
+- Window mapping: the fixed fields and the `limits[]` array are merged, never substituted
+  for one another. A fixed field wins over a named counterpart for the same period and
+  resource; other entries keep their own group and model scope. Only the two account-wide
+  windows are expected: one the payload does not report becomes `Unavailable(NotReported)`
+  and is recorded in `expected_but_missing`, unless a named limit with a reported
+  percentage already describes that same account-wide period. Entries without a percentage
+  are skipped. A model-specific or product allowance the payload does not mention is
+  simply absent rather than missing.
 - Extra usage: `MetricRole::ExtraSpendCap`, never included quota, and never ranked. It is
   a `MoneyMeasurement`. The reported amounts are read as minor units with `decimal_places`
   as their scale, so `monthly_limit: 5000` with `decimal_places: 2` is 50.00; the scale
@@ -119,9 +141,8 @@ Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
 
 - Endpoint: `GET https://opencode.ai/zen/go/v1/usage` with a bearer key and a JSON accept
   header. It is undocumented.
-- Credential: `$XDG_DATA_HOME/opencode/auth.json`, defaulting to
-  `~/.local/share/opencode/auth.json`. The `opencode-go` entry is preferred, then
-  `opencode`, taking a literal `key`, `apiKey`, `api_key`, `access`, or `token`.
+- Credential discovery: see the
+  [OpenCode Go credential reference](../../docs/providers.md#opencode-go).
 - Credential owner: the `OpenCode` login. Quota has no refresh path for this credential at
   all, and never writes to the file.
 - Decoded fields: `usage` or the root object; `rollingUsage`/`rolling`,
@@ -131,7 +152,7 @@ Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
   string or epoch seconds) or `resetInSec`/`reset_in_sec`. Numbers or numeric strings.
 - Window mapping: the rolling window is five hours (18000 seconds) and the weekly window
   is seven days (604800 seconds). The monthly window is mapped to `QuotaCategory::Monthly`
-  and is never dropped: this is the only connector in scope that reports one.
+  and is never dropped.
 - **Known limitation.** The usage response carries no account, workspace, or entitlement
   identity. This adapter does not invent one. It uses a stable local `QuotaPoolId` derived
   from the credential profile label and leaves the optional principal, workspace, and

@@ -1,0 +1,12 @@
+{
+  "_note": "Synthetic fixture. No value here came from a real account.",
+  "five_hour": { "utilization": 28 },
+  "seven_day": { "utilization": 45 },
+  "limits": [
+    {
+      "kind": "weekly_scoped",
+      "percent": 13,
+      "scope": { "model": { "id": "claude-fable", "display_name": "Fable" } }
+    }
+  ]
+}

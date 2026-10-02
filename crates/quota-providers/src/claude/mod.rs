@@ -6,6 +6,7 @@
 //! account identity the reading is refused, because an unverified identity must
 //! not be invented.
 
+pub(crate) mod fixed;
 pub(crate) mod mapping;
 pub(crate) mod wire;
 
@@ -53,6 +54,7 @@ const PROFILE_URL: &str = "https://api.anthropic.com/api/oauth/profile";
 const BETA_HEADER: &str = "oauth-2025-04-20";
 
 /// The account identity the profile route proved, plus its display form.
+#[derive(Debug)]
 struct VerifiedProfile {
     /// The account identifier the source reported. This is the verified identity.
     account_uuid: String,

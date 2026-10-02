@@ -1,0 +1,11 @@
+{
+  "_note": "Synthetic fixture. No value here came from a real account.",
+  "limits": [
+    { "kind": "weekly", "percent": null },
+    {
+      "kind": "weekly_scoped",
+      "percent": 13,
+      "scope": { "model": { "id": "claude-fable", "display_name": "Fable" } }
+    }
+  ]
+}

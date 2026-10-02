@@ -313,3 +313,265 @@ fn an_unknown_field_is_ignored() {
         (session[0].measurement.remaining_percent().unwrap().value() - 72.0).abs() < f64::EPSILON
     );
 }
+
+/// A body that carries its review and extra allowances at the root keeps them.
+#[test]
+fn a_root_review_and_extra_pair_are_not_dropped() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_root_review_and_extras.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "every reported window arrived");
+    let buckets: Vec<&str> = reading
+        .windows
+        .iter()
+        .filter_map(|window| window.provider_bucket_id.as_deref())
+        .collect();
+    assert_eq!(
+        buckets,
+        vec![
+            "primary",
+            "secondary",
+            "code-review",
+            "gpt-5-4-codex-spark",
+            "gpt-5-4-codex-spark-secondary",
+        ]
+    );
+    let review = reading
+        .windows
+        .iter()
+        .find(|window| window.provider_bucket_id.as_deref() == Some("code-review"))
+        .expect("the review allowance exists");
+    assert_eq!(review.category, QuotaCategory::Weekly);
+}
+
+/// A prepaid plan reports credits and no allowance at all.
+#[test]
+fn a_credits_only_payload_connects_without_an_allowance() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_credits_only.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "no allowance was expected of it");
+    assert_eq!(reading.windows.len(), 1, "only the balance is reported");
+    let credits = &reading.windows[0];
+    assert_eq!(credits.provider_bucket_id.as_deref(), Some("credits"));
+    assert!(!credits.metric_role.is_included_allowance());
+    assert_eq!(credits.measurement.remaining_percent(), None);
+}
+
+/// A plan whose only allowance covers a month reports one window, not two.
+#[test]
+fn a_lone_monthly_allowance_does_not_invent_a_second_one() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &fixture("codex_monthly_only.json"),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete(), "nothing was missing from it");
+    assert_eq!(reading.windows.len(), 1);
+    assert_eq!(reading.windows[0].category, QuotaCategory::Monthly);
+    assert_eq!(
+        reading.windows[0].duration,
+        Some(Duration::seconds(2_592_000))
+    );
+}
+
+#[test]
+fn empty_containers_cannot_become_a_complete_reading() {
+    for payload in [
+        r"{}",
+        r#"{"rate_limit":{}}"#,
+        r#"{"rateLimits":{}}"#,
+        r#"{"rate_limit":{"primary_window":{}}}"#,
+        r#"{"secondary_window":{}}"#,
+        r#"{"rateLimitsByLimitId":{"model":{}}}"#,
+        r#"{"additional_rate_limits":[{"id":"model","window":{}}]}"#,
+        r#"{"code_review_rate_limit":{}}"#,
+        r#"{"rate_limit":{"code_review_rate_limit":{}}}"#,
+        r#"{"additional_rate_limits":[{"id":"model"}]}"#,
+        r#"{"additional_rate_limits":[{"id":"model","rate_limit":{}}]}"#,
+        r#"{"rate_limit":{"additional_rate_limits":[{"id":"model","rate_limit":{}}]}}"#,
+        r#"{"credits":{}}"#,
+        r#"{"rate_limit":{},"credits":{"unlimited":false}}"#,
+    ] {
+        let error = decode_offline(ProviderId::Codex, payload, "codex-local", received_at())
+            .expect_err("an empty wrapper is not a reading");
+        assert_eq!(error.diagnostic_code(), "invalid_data");
+    }
+}
+
+#[test]
+fn empty_containers_do_not_hide_a_reported_credit_balance() {
+    for credits in [r#"{"balance":0}"#, r#"{"unlimited":true}"#] {
+        let payload =
+            format!(r#"{{"rate_limit":{{}},"code_review_rate_limit":{{}},"credits":{credits}}}"#);
+        let reading =
+            decode_offline(ProviderId::Codex, &payload, "codex-local", received_at()).unwrap();
+        assert_eq!(reading.windows.len(), 1);
+        assert!(reading.is_complete());
+    }
+}
+
+#[test]
+fn named_buckets_keep_container_then_list_precedence_without_duplicate_identities() {
+    let payload = serde_json::json!({
+        "rate_limit": {
+            "primary_window": {"used_percent": 5, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800},
+            "code_review_rate_limit": {
+                "primary_window": {"used_percent": 80, "limit_window_seconds": 18000},
+                "secondary_window": {"used_percent": 70, "limit_window_seconds": 604_800}
+            },
+            "additional_rate_limits": [{"id": "spark", "rate_limit": {
+                "primary_window": {"used_percent": 60, "limit_window_seconds": 18000},
+                "secondary_window": {"used_percent": 50, "limit_window_seconds": 604_800}
+            }}],
+            "rateLimitsByLimitId": {"spark": {"used_percent": 20, "limit_window_seconds": 18000}}
+        },
+        "code_review_rate_limit": {
+            "primary_window": {"used_percent": 20, "limit_window_seconds": 18000},
+            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
+        },
+        "additional_rate_limits": [
+            {"id": "spark", "rate_limit": {
+                "primary_window": {"used_percent": 20, "limit_window_seconds": 18000},
+                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
+            }},
+            {"id": "other", "rate_limit": {"used_percent": 100, "limit_window_seconds": 18000}}
+        ],
+        "rateLimitsByLimitId": {"spark": {"used_percent": 10, "limit_window_seconds": 18000}}
+    });
+    let reading = decode_offline(
+        ProviderId::Codex,
+        &payload.to_string(),
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert!(reading.is_complete());
+    assert_eq!(reading.windows.len(), 7);
+    let identities: std::collections::HashSet<_> =
+        reading.windows.iter().map(|window| &window.id).collect();
+    assert_eq!(identities.len(), reading.windows.len());
+    for (bucket, remaining) in [
+        ("code-review", 20.0),
+        ("code-review-secondary", 30.0),
+        ("spark", 40.0),
+        ("spark-secondary", 50.0),
+        ("other", 0.0),
+    ] {
+        let windows: Vec<_> = reading
+            .windows
+            .iter()
+            .filter(|window| window.provider_bucket_id.as_deref() == Some(bucket))
+            .collect();
+        assert_eq!(windows.len(), 1);
+        assert!(
+            (windows[0].measurement.remaining_percent().unwrap().value() - remaining).abs()
+                < f64::EPSILON
+        );
+    }
+}
+
+#[test]
+fn root_named_slots_fill_missing_container_slots() {
+    let payload = r#"{"rate_limit":{
+        "code_review_rate_limit":{"primary_window":{"used_percent":80,"limit_window_seconds":18000}},
+        "additional_rate_limits":[{"id":"spark","rate_limit":{"primary_window":{"used_percent":70,"limit_window_seconds":18000}}}]
+    },"code_review_rate_limit":{
+        "primary_window":{"used_percent":20,"limit_window_seconds":18000},
+        "secondary_window":{"used_percent":30,"limit_window_seconds":604800}
+    },"additional_rate_limits":[{"id":"spark","rate_limit":{
+        "primary_window":{"used_percent":10,"limit_window_seconds":18000},
+        "secondary_window":{"used_percent":40,"limit_window_seconds":604800}
+    }}]}"#;
+    let reading = decode_offline(ProviderId::Codex, payload, "codex-local", received_at()).unwrap();
+    assert_eq!(reading.windows.len(), 4);
+    for (bucket, remaining) in [
+        ("code-review", 20.0),
+        ("code-review-secondary", 70.0),
+        ("spark", 30.0),
+        ("spark-secondary", 60.0),
+    ] {
+        let window = reading
+            .windows
+            .iter()
+            .find(|window| window.provider_bucket_id.as_deref() == Some(bucket))
+            .unwrap();
+        assert!(
+            (window.measurement.remaining_percent().unwrap().value() - remaining).abs()
+                < f64::EPSILON
+        );
+    }
+}
+
+#[test]
+fn legacy_additional_windows_survive_at_root_and_in_the_container() {
+    for container in [false, true] {
+        for pair in [
+            serde_json::json!({}),
+            serde_json::json!({
+                "primary_window": {"used_percent": 80, "limit_window_seconds": 18000},
+                "secondary_window": {"used_percent": 40, "limit_window_seconds": 604_800}
+            }),
+        ] {
+            let mut payload = serde_json::json!({"rate_limit": {
+                "primary_window": {"used_percent": 5, "limit_window_seconds": 18000},
+                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
+            }});
+            let target = if container {
+                &mut payload["rate_limit"]
+            } else {
+                &mut payload
+            };
+            target["additional_rate_limits"] = serde_json::json!([{
+                "id": "spark", "rate_limit": pair,
+                "window": {"used_percent": 100, "limit_window_seconds": 18000}
+            }]);
+            let reading = decode_offline(
+                ProviderId::Codex,
+                &payload.to_string(),
+                "codex-local",
+                received_at(),
+            )
+            .unwrap();
+            assert!(reading.is_complete());
+            let spark = reading
+                .windows
+                .iter()
+                .find(|window| window.provider_bucket_id.as_deref() == Some("spark"))
+                .unwrap();
+            let paired = !pair.as_object().unwrap().is_empty();
+            assert!(
+                (spark.measurement.remaining_percent().unwrap().value()
+                    - if paired { 20.0 } else { 0.0 })
+                .abs()
+                    < f64::EPSILON
+            );
+            assert_eq!(reading.windows.len(), if paired { 4 } else { 3 });
+        }
+    }
+}
+
+#[test]
+fn an_empty_limits_wrapper_preserves_the_reported_plan_and_credits() {
+    let reading = decode_offline(
+        ProviderId::Codex,
+        r#"{"rate_limit":{"plan_type":"pro"},"credits":{"balance":12.5}}"#,
+        "codex-local",
+        received_at(),
+    )
+    .unwrap();
+    assert_eq!(reading.plan_label.as_deref(), Some("pro"));
+    assert_eq!(reading.windows.len(), 1);
+    assert!(reading.is_complete());
+}

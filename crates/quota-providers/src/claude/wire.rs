@@ -22,7 +22,33 @@ pub(crate) struct ClaudeUsage {
     /// The weekly allowance for the Opus models, when the plan has one.
     #[serde(default, alias = "sevenDayOpus")]
     pub(crate) seven_day_opus: Option<ClaudeWindow>,
-    /// A named-limits array. A usable array replaces the three fixed windows.
+    /// The weekly allowance for the Sonnet models, when the plan has one.
+    #[serde(default, alias = "sevenDaySonnet")]
+    pub(crate) seven_day_sonnet: Option<ClaudeWindow>,
+    /// The weekly allowance for the OAuth apps a build can create.
+    #[serde(
+        default,
+        alias = "sevenDayOauthApps",
+        alias = "seven_day_claude_oauth_apps"
+    )]
+    pub(crate) seven_day_oauth_apps: Option<ClaudeWindow>,
+    /// The weekly allowance for Claude Design.
+    #[serde(
+        default,
+        alias = "sevenDayDesign",
+        alias = "seven_day_claude_design",
+        alias = "seven_day_omelette"
+    )]
+    pub(crate) seven_day_design: Option<ClaudeWindow>,
+    /// The weekly allowance for Routines.
+    #[serde(
+        default,
+        alias = "sevenDayRoutines",
+        alias = "seven_day_claude_routines",
+        alias = "seven_day_cowork"
+    )]
+    pub(crate) seven_day_routines: Option<ClaudeWindow>,
+    /// A named-limits array, merged with the fixed windows above.
     #[serde(default)]
     pub(crate) limits: Vec<ClaudeLimit>,
     /// The paid extra-usage summary, when the plan has one.
@@ -31,11 +57,22 @@ pub(crate) struct ClaudeUsage {
 }
 
 impl ClaudeUsage {
+    /// Every fixed field, in the order the reading reports them.
+    pub(crate) fn fixed(&self) -> [Option<&ClaudeWindow>; 7] {
+        [
+            self.five_hour.as_ref(),
+            self.seven_day.as_ref(),
+            self.seven_day_opus.as_ref(),
+            self.seven_day_sonnet.as_ref(),
+            self.seven_day_oauth_apps.as_ref(),
+            self.seven_day_design.as_ref(),
+            self.seven_day_routines.as_ref(),
+        ]
+    }
+
     /// Whether the payload carried no window and no usable limit entry at all.
     pub(crate) fn is_empty(&self) -> bool {
-        self.five_hour.is_none()
-            && self.seven_day.is_none()
-            && self.seven_day_opus.is_none()
+        self.fixed().iter().all(Option::is_none)
             && !self
                 .limits
                 .iter()
@@ -77,12 +114,19 @@ pub(crate) struct ClaudeLimit {
     /// The named group shown for this limit.
     #[serde(default)]
     pub(crate) group: Option<String>,
-    /// The reset instant for this limit.
-    #[serde(default)]
+    /// The reset instant for this limit, under either documented spelling.
+    #[serde(default, alias = "resetsAt", alias = "reset_at")]
     pub(crate) resets_at: Option<Numberish>,
     /// The model this limit applies to, when it is model-specific.
     #[serde(default)]
     pub(crate) scope: Option<ClaudeLimitScope>,
+}
+
+impl ClaudeLimit {
+    /// The reported reset instant for this limit.
+    pub(crate) fn reset(&self) -> Option<&Numberish> {
+        self.resets_at.as_ref()
+    }
 }
 
 /// The model scope of one named limit.

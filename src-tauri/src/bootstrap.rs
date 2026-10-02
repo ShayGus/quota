@@ -25,22 +25,18 @@ use crate::state::AppState;
 #[must_use]
 pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
     match provider_id {
-        ProviderId::Codex | ProviderId::Claude => ProviderCapabilities {
-            provider_id,
-            cardinality: quota_domain::account::AccountCardinality::SingleProfile,
-            supports_app_owned_authorization: false,
-            supports_external_profile: true,
-            reports_monthly_window: false,
-            minimum_interval_seconds: 300,
-        },
-        ProviderId::OpenCodeGo => ProviderCapabilities {
-            provider_id,
-            cardinality: quota_domain::account::AccountCardinality::SingleProfile,
-            supports_app_owned_authorization: false,
-            supports_external_profile: true,
-            reports_monthly_window: true,
-            minimum_interval_seconds: 300,
-        },
+        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo => {
+            ProviderCapabilities {
+                provider_id,
+                cardinality: quota_domain::account::AccountCardinality::SingleProfile,
+                supports_app_owned_authorization: false,
+                supports_external_profile: true,
+                // A plan whose only allowance covers a month reports one
+                // window. Claude's account-wide allowances never do.
+                reports_monthly_window: !matches!(provider_id, ProviderId::Claude),
+                minimum_interval_seconds: 300,
+            }
+        }
         ProviderId::Fixture => ProviderCapabilities {
             provider_id,
             cardinality: quota_domain::account::AccountCardinality::SingleProfile,

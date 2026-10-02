@@ -10,6 +10,7 @@
  * tests without a renderer.
  */
 import type {
+  ConnectionAttemptId,
   AccountId,
   AppSnapshot,
   MonitoringState,
@@ -116,17 +117,40 @@ export function acceptNativeWindow(nativeWindow: OverviewWindowState): void {
   commit({ ...state, nativeWindow });
 }
 
-/** Records the latest progress of one connection attempt. */
+/**
+ * Records the latest progress of one connection attempt.
+ *
+ * Only a strictly newer revision is accepted within one attempt. The command
+ * response and the progress event for the same attempt race: the backend can
+ * report a terminal failure before the reply that started it arrives. Comparing
+ * revisions before filtering the old entry keeps that failure on screen instead
+ * of letting a later, older `Started` event replace it.
+ */
 export function acceptAttempt(attempt: AttemptProgress): void {
-  const others = state.attempts.filter((entry) => entry.attemptId !== attempt.attemptId);
-  const stale = others.some(
-    (entry) =>
-      entry.attemptId === attempt.attemptId && entry.revision >= attempt.revision,
-  );
-  if (stale) {
+  const current = state.attempts.find((entry) => entry.attemptId === attempt.attemptId);
+  if (current !== undefined && current.revision >= attempt.revision) {
     return;
   }
+  const others = state.attempts.filter((entry) => entry.attemptId !== attempt.attemptId);
   commit({ ...state, attempts: [...others, attempt] });
+}
+
+/**
+ * Drops a finished attempt once its result is on screen.
+ *
+ * Without this the store would keep one entry per connection for the life of
+ * the process. Only a terminal progress value may be dropped, so an attempt
+ * that is still running can never be forgotten.
+ */
+export function clearAttempt(attemptId: ConnectionAttemptId): void {
+  const current = state.attempts.find((entry) => entry.attemptId === attemptId);
+  if (current === undefined || current.progress.kind === "started") {
+    return;
+  }
+  commit({
+    ...state,
+    attempts: state.attempts.filter((entry) => entry.attemptId !== attemptId),
+  });
 }
 
 /**

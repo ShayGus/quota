@@ -8,6 +8,9 @@
 pub(crate) mod mapping;
 pub(crate) mod wire;
 
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -39,6 +42,20 @@ const PRIMARY_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 /// The second usage endpoint, tried when the first yields nothing usable.
 const FALLBACK_URL: &str = "https://chatgpt.com/backend-api/codex/usage";
 
+/// Whether a failure must stop endpoint fallback.
+///
+/// A rejected credential, a refused request, and a rate limit all describe the
+/// account rather than the endpoint, so the second endpoint cannot answer them
+/// any better. Retrying would only replace that clear reason with a vaguer one.
+fn is_decisive(error: &ProviderError) -> bool {
+    matches!(
+        error,
+        ProviderError::Authentication
+            | ProviderError::Authorization
+            | ProviderError::RateLimited { .. }
+    )
+}
+
 /// The adapter for the Codex CLI's own usage report.
 #[derive(Debug)]
 pub(crate) struct CodexAdapter {
@@ -65,17 +82,27 @@ impl CodexAdapter {
         context: ReadContext,
     ) -> Result<DecodedUsage, ProviderError> {
         let authorization = format!("Bearer {}", credential.token.expose());
-        let account_id = credential.account_id.clone().unwrap_or_default();
-        let headers = [
-            ("Authorization", authorization.as_str()),
-            ("ChatGPT-Account-Id", account_id.as_str()),
-            ("Accept", "application/json"),
+        // The account header travels only when the credential named an account:
+        // an empty header is not the same as an absent one to the endpoint.
+        let mut headers = vec![
+            ("Authorization", authorization),
+            ("Accept", "application/json".to_owned()),
         ];
+        headers.extend(
+            credential
+                .account_id
+                .clone()
+                .map(|id| ("ChatGPT-Account-Id", id)),
+        );
+        let header_refs: Vec<(&str, &str)> = headers
+            .iter()
+            .map(|(name, value)| (*name, value.as_str()))
+            .collect();
         let reply = self
             .http
             .get(GetRequest {
                 url,
-                headers: &headers,
+                headers: &header_refs,
                 deadline: context.deadline,
             })
             .await?;
@@ -126,28 +153,39 @@ impl CodexAdapter {
             credential.account_id.as_deref(),
             Some(profile_label.as_str()),
         )?;
-        let mut last_error = None;
-        for url in [PRIMARY_URL, FALLBACK_URL] {
-            match self
-                .read_endpoint(url, &credential, &pool, context.clone())
-                .await
-            {
-                Ok(usage) => {
-                    let identity = verified_identity(
-                        usage
-                            .principal_label
-                            .clone()
-                            .unwrap_or_else(|| profile_label.clone()),
-                        usage.plan_label.clone(),
-                    );
-                    return Ok(usage.into_outcome(identity));
-                }
-                Err(error) => last_error = Some(error),
-            }
+        let usage = self
+            .read_usage(&credential, &pool, context, [PRIMARY_URL, FALLBACK_URL])
+            .await?;
+        let identity = verified_identity(
+            usage.principal_label.clone().unwrap_or(profile_label),
+            usage.plan_label.clone(),
+        );
+        Ok(usage.into_outcome(identity))
+    }
+
+    async fn read_usage(
+        &self,
+        credential: &CodexCredential,
+        pool: &QuotaPoolId,
+        context: ReadContext,
+        endpoints: [&str; 2],
+    ) -> Result<DecodedUsage, ProviderError> {
+        let first_error = match self
+            .read_endpoint(endpoints[0], credential, pool, context.clone())
+            .await
+        {
+            Ok(usage) => return Ok(usage),
+            Err(error) if is_decisive(&error) => return Err(error),
+            Err(error) => error,
+        };
+        match self
+            .read_endpoint(endpoints[1], credential, pool, context)
+            .await
+        {
+            Ok(usage) => Ok(usage),
+            Err(error) if is_decisive(&error) => Err(error),
+            Err(_) => Err(first_error),
         }
-        Err(last_error.unwrap_or(ProviderError::Transient {
-            detail: "no Codex usage endpoint answered".to_owned(),
-        }))
     }
 }
 
@@ -162,8 +200,8 @@ impl ProviderAdapter for CodexAdapter {
             cardinality: AccountCardinality::SingleProfile,
             supports_app_owned_authorization: false,
             supports_external_profile: true,
-            // Codex has no monthly allowance.
-            reports_monthly_window: false,
+            // A plan whose only allowance covers a month reports one window.
+            reports_monthly_window: true,
             minimum_interval_seconds: VERIFICATION_SECONDS,
         }
     }

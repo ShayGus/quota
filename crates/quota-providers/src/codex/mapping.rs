@@ -2,9 +2,16 @@
 //!
 //! The rules this mapping will not break: a window is only labelled a session
 //! when the source itself reported a 18000-second duration, and only labelled
-//! weekly at 604800 seconds; anything else keeps its own scope and its own
-//! category. Codex has no monthly allowance, so no monthly window is ever
-//! created for it. A credit balance is a balance, never included quota.
+//! weekly at 604800 seconds; a named bucket keeps its own category. The one
+//! exception is an account-wide duration of at least twenty days, interpreted
+//! as monthly even in a pair. A lone first allowance lasting at least one day
+//! has no missing secondary slot; a lone secondary allowance takes the primary
+//! slot. This follows the `TaskbarQuota` provider investigation report, section 12,
+//! Codex P1 row "Support credits-only and lone monthly responses", with acceptance
+//! evidence "Credits-only connects. No fabricated secondary allowance."
+//! A credit balance is a balance, never included quota.
+
+use std::collections::HashSet;
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
@@ -15,7 +22,7 @@ use quota_domain::quota::measurement::{Measurement, QuantityMeasurement, Unavail
 use quota_domain::quota::units::QuotaUnit;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
 
-use crate::codex::wire::{CodexCredits, CodexEnvelope, CodexWindow};
+use crate::codex::wire::{CodexCredits, CodexEnvelope, CodexLimitSet, CodexWindow};
 use crate::decode::{self, DecodedUsage, Numberish, WindowDraft, masked_address, percentage};
 
 /// The duration that proves a session window, in seconds.
@@ -23,6 +30,12 @@ const SESSION_SECONDS: i64 = 18_000;
 
 /// The duration that proves a weekly window, in seconds.
 const WEEKLY_SECONDS: i64 = 604_800;
+
+/// The shortest duration that covers a whole named period, in seconds.
+const WHOLE_PERIOD_SECONDS: i64 = 86_400;
+
+/// The duration that proves a monthly allowance, in seconds.
+const MONTHLY_SECONDS: i64 = 20 * WHOLE_PERIOD_SECONDS;
 
 /// The field name reported when the used percentage is unusable.
 const USED_FIELD: &str = "used_percent";
@@ -33,57 +46,167 @@ pub(crate) fn decode(
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
 ) -> Result<DecodedUsage, ProviderError> {
-    let limits = envelope.rate_limit.as_ref().unwrap_or(&envelope.root);
-    if limits.is_empty() {
-        return Err(ProviderError::InvalidData {
-            detail: "the payload carried no rate-limit block".to_owned(),
-        });
-    }
+    let sets = envelope.limit_sets();
     let mut usage = DecodedUsage::new();
     usage.plan_label = envelope
         .plan_type
         .clone()
-        .or_else(|| limits.plan_type.clone());
+        .or_else(|| {
+            envelope
+                .rate_limit
+                .as_ref()
+                .and_then(|set| set.plan_type.clone())
+        })
+        .or_else(|| sets.iter().find_map(|set| set.plan_type.clone()));
     usage.principal_label = envelope.email.as_deref().map(masked_address);
-
-    // The pair the source reports: the first window and, when the source offers
-    // a second period, the window after it. A pair member the source did not
-    // report keeps its place as a not-reported window, named by the pair slot
-    // rather than by a period nobody claimed.
-    for (bucket, wire) in [
-        ("primary", limits.primary_window.as_ref()),
-        ("secondary", limits.secondary_window.as_ref()),
-    ] {
-        if let Some(window) = wire {
-            let duration = window.duration_seconds();
-            let draft = account_draft(pool, bucket, category_for(duration), duration, received_at);
-            let (measurement, boundary, issues) = read_window(window, received_at);
-            usage.push(draft.build(measurement, boundary, issues)?);
-        } else {
-            let draft = account_draft(pool, bucket, QuotaCategory::Custom, None, received_at);
-            usage.push(draft.reported_missing()?);
-        }
-    }
-
-    if let Some(window) = limits.code_review_rate_limit.as_ref() {
-        usage.push(named_window(
-            window,
-            pool,
-            "code-review",
-            "Code review",
-            received_at,
-        )?);
-    }
-
-    for (bucket, label, window) in limits.buckets() {
-        usage.push(named_window(window, pool, &bucket, &label, received_at)?);
-    }
-
+    account_windows(&sets, pool, received_at, &mut usage)?;
+    named_windows(&sets, pool, received_at, &mut usage)?;
     if let Some(credits) = envelope.credits.as_ref() {
         usage.push(credit_window(credits, pool, received_at)?);
     }
-
+    if !usage.windows.iter().any(|window| {
+        window.metric_role != MetricRole::CreditBalance
+            || matches!(
+                &window.measurement,
+                Measurement::Quantity(_) | Measurement::Unlimited
+            )
+    }) {
+        return Err(ProviderError::InvalidData {
+            detail: "the payload carried neither a rate-limit window nor a credit balance"
+                .to_owned(),
+        });
+    }
     Ok(usage)
+}
+
+/// The account's own allowance windows, from the first block that reports one.
+fn account_windows(
+    sets: &[&CodexLimitSet],
+    pool: &QuotaPoolId,
+    received_at: DateTime<Utc>,
+    usage: &mut DecodedUsage,
+) -> Result<(), ProviderError> {
+    let reported = sets.iter().find_map(|set| {
+        let (first, second) = set.pair();
+        (first.is_some() || second.is_some()).then_some((first, second))
+    });
+    let Some((primary, secondary)) = reported else {
+        return Ok(());
+    };
+    match (primary, secondary) {
+        (Some(first), Some(second)) => {
+            usage.push(account_window(first, "primary", pool, received_at)?);
+            usage.push(account_window(second, "secondary", pool, received_at)?);
+        }
+        // A lone first window is promoted rather than paired, so a plan with one
+        // allowance is not reported as permanently missing a second one.
+        (Some(only), None) => {
+            usage.push(account_window(only, "primary", pool, received_at)?);
+            if only.duration_seconds().is_none_or(is_shorter_than) {
+                usage.push(
+                    account_draft(pool, "secondary", QuotaCategory::Custom, None, received_at)
+                        .reported_missing()?,
+                );
+            }
+        }
+        // A lone second window is the account's only allowance, so it takes the
+        // first slot rather than being reported as a missing pair.
+        (None, Some(only)) => {
+            usage.push(account_window(only, "primary", pool, received_at)?);
+        }
+        // Unreachable: the search only returns a pair that has a member.
+        (None, None) => {}
+    }
+    Ok(())
+}
+
+/// Whether a duration is too short to stand as a whole period of its own.
+fn is_shorter_than(duration: i64) -> bool {
+    duration < WHOLE_PERIOD_SECONDS
+}
+
+/// The review, model, and other named allowances a body reported.
+///
+/// Every block is walked, because a body may report these at its root while the
+/// account pair sits under a named container.
+fn named_windows(
+    sets: &[&CodexLimitSet],
+    pool: &QuotaPoolId,
+    received_at: DateTime<Utc>,
+    usage: &mut DecodedUsage,
+) -> Result<(), ProviderError> {
+    let mut reported = HashSet::new();
+    for set in sets {
+        if let Some(review) = set.code_review_rate_limit.as_ref() {
+            for (suffix, window) in [("", review.pair().0), ("-secondary", review.pair().1)] {
+                if let Some(window) = window {
+                    let bucket = format!("code-review{suffix}");
+                    if !reported.insert(bucket.clone()) {
+                        continue;
+                    }
+                    usage.push(named_window(
+                        window,
+                        pool,
+                        &bucket,
+                        "Code review",
+                        received_at,
+                    )?);
+                }
+            }
+        }
+        for (identifier, label, pair) in set.buckets() {
+            for (suffix, window) in [("", pair.0), ("-secondary", pair.1)] {
+                let Some(window) = window else { continue };
+                let bucket = format!("{identifier}{suffix}");
+                if !reported.insert(bucket.clone()) {
+                    continue;
+                }
+                usage.push(named_window(window, pool, &bucket, &label, received_at)?);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Builds one account-wide window, labelled by its own reported duration.
+fn account_window(
+    wire: &CodexWindow,
+    bucket: &str,
+    pool: &QuotaPoolId,
+    received_at: DateTime<Utc>,
+) -> Result<QuotaWindow, ProviderError> {
+    let duration = wire.duration_seconds();
+    let draft = account_draft(
+        pool,
+        bucket,
+        account_category(duration),
+        duration,
+        received_at,
+    );
+    let (measurement, boundary, issues) = read_window(wire, received_at);
+    draft.build(measurement, boundary, issues)
+}
+
+/// Builds the draft for an account-wide primary or secondary window.
+fn account_draft<'a>(
+    pool: &'a QuotaPoolId,
+    bucket: &'a str,
+    category: QuotaCategory,
+    duration_seconds: Option<i64>,
+    received_at: DateTime<Utc>,
+) -> WindowDraft<'a> {
+    WindowDraft {
+        provider: ProviderId::Codex,
+        pool_id: pool,
+        category,
+        resource: "account",
+        resource_label: "Codex account",
+        bucket_id: Some(bucket),
+        metric_role: MetricRole::IncludedAllowance,
+        semantics: WindowSemantics::Unknown,
+        duration_seconds,
+        received_at,
+    }
 }
 
 /// Builds one named bucket window, such as a model-specific allowance.
@@ -111,28 +234,6 @@ fn named_window(
     };
     let (measurement, boundary, issues) = read_window(wire, received_at);
     draft.build(measurement, boundary, issues)
-}
-
-/// Builds the draft for an account-wide primary or secondary window.
-fn account_draft<'a>(
-    pool: &'a QuotaPoolId,
-    bucket: &'a str,
-    category: QuotaCategory,
-    duration_seconds: Option<i64>,
-    received_at: DateTime<Utc>,
-) -> WindowDraft<'a> {
-    WindowDraft {
-        provider: ProviderId::Codex,
-        pool_id: pool,
-        category,
-        resource: "account",
-        resource_label: "Codex account",
-        bucket_id: Some(bucket),
-        metric_role: MetricRole::IncludedAllowance,
-        semantics: WindowSemantics::Unknown,
-        duration_seconds,
-        received_at,
-    }
 }
 
 /// Builds the informational credit balance, which is never included quota.
@@ -178,13 +279,30 @@ fn credit_window(
     }
 }
 
-/// The category a reported duration proves, never a guess.
+/// The category a named bucket's own duration proves, never a guess.
 fn category_for(duration_seconds: Option<i64>) -> QuotaCategory {
     match duration_seconds {
         Some(SESSION_SECONDS) => QuotaCategory::Session,
         Some(WEEKLY_SECONDS) => QuotaCategory::Weekly,
         _ => QuotaCategory::Custom,
     }
+}
+
+/// The category assigned to an account-wide window from its duration.
+///
+/// Any account window covering twenty days or more is interpreted as monthly.
+/// Named buckets deliberately keep [`category_for`], because a bucket's name is
+/// what identifies it, not its length.
+fn account_category(duration_seconds: Option<i64>) -> QuotaCategory {
+    match category_for(duration_seconds) {
+        QuotaCategory::Custom if duration_seconds.is_some_and(is_monthly) => QuotaCategory::Monthly,
+        other => other,
+    }
+}
+
+/// Whether a duration is at least the longest period Codex reports.
+fn is_monthly(duration_seconds: i64) -> bool {
+    duration_seconds >= MONTHLY_SECONDS
 }
 
 /// Reads the used percentage, the reported boundary, and any validation issue.

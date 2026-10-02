@@ -244,6 +244,32 @@ impl AccountRegistry {
         Ok(())
     }
 
+    /// Records that a read is being sent, without claiming it succeeded.
+    ///
+    /// A dispatched read is not an accepted reading. Recording it through
+    /// [`Self::record_attempt`] would advance `last_success_at` whenever the
+    /// account was idle, so a read that then failed would still look like it
+    /// had produced a fresh value.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn record_dispatch(
+        &mut self,
+        account_id: &AccountId,
+        binding: &ConnectionBinding,
+        dispatched_at: DateTime<Utc>,
+        next_attempt_at: Option<DateTime<Utc>>,
+    ) -> Result<&RegisteredAccount, CoreError> {
+        let entry = self.entry_mut(account_id)?;
+        if !entry.binding.accepts(binding) {
+            return Err(CoreError::StaleResult);
+        }
+        entry.stored.fetch_state = quota_domain::account::FetchState::Fetching;
+        entry.stored.last_attempt_at = Some(dispatched_at);
+        entry.stored.next_attempt_at = next_attempt_at;
+        Ok(entry)
+    }
+
     /// Updates the binding generation for every account on one connection.
     ///
     /// # Errors

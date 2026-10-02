@@ -1,0 +1,9 @@
+{
+  "_note": "Synthetic fixture. No value here came from a real account.",
+  "five_hour": { "utilization": 28 },
+  "seven_day": { "utilization": 45 },
+  "seven_day_sonnet": { "utilization": 60 },
+  "seven_day_oauth_apps": { "utilization": 5 },
+  "seven_day_design": { "utilization": 7 },
+  "seven_day_cowork": { "utilization": 9 }
+}
