@@ -9,13 +9,58 @@
 // because @rolldown/plugin-babel 0.2.4 ships declarations that contradict both
 // supported @babel/core lines under `skipLibCheck: false`.
 import react from "@vitejs/plugin-react";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, join } from "node:path";
 import process from "node:process";
 import { defineConfig } from "vite";
+import type { Plugin } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+function inspectionModule(id: string): boolean {
+  let directory = dirname(id.split("?")[0] ?? id);
+  if (!isAbsolute(directory)) return false;
+  while (true) {
+    const manifest = join(directory, "package.json");
+    if (existsSync(manifest)) {
+      const metadata: unknown = JSON.parse(readFileSync(manifest, "utf8"));
+      return (
+        typeof metadata === "object" &&
+        metadata !== null &&
+        "name" in metadata &&
+        metadata.name === "tauri-plugin-mcp"
+      );
+    }
+    const parent = dirname(directory);
+    if (parent === directory) return false;
+    directory = parent;
+  }
+}
+
+export function inspectionReleaseCheck(): Plugin {
+  return {
+    name: "quota-release-inspection",
+    apply: "build",
+    generateBundle(_options, bundle) {
+      for (const output of Object.values(bundle)) {
+        if (output.type !== "chunk") continue;
+        if (
+          [...output.imports, ...output.dynamicImports].some(
+            (id) => id === "tauri-plugin-mcp" || id.startsWith("tauri-plugin-mcp/"),
+          ) ||
+          Object.entries(output.modules).some(
+            ([id, module]) => module.renderedLength > 0 && inspectionModule(id),
+          )
+        ) {
+          this.error("production renderer includes tauri-plugin-mcp");
+        }
+      }
+    },
+  };
+}
+
 export default defineConfig(() => ({
-  plugins: [react({ compiler: { logDiagnostics: true } })],
+  plugins: [react({ compiler: { logDiagnostics: true } }), inspectionReleaseCheck()],
   build: {
     // Vite transpiles; `bun run typecheck` is the separate type gate (spec 7.8.1).
     outDir: "dist",

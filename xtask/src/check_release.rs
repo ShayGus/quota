@@ -2,7 +2,6 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
-use std::process::Command;
 
 use cargo_toml::Value;
 
@@ -25,7 +24,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     cargo_manifest::check_dependency_feature_selection(root, &mut outcome);
     check_deny_config(root, &mut outcome);
     check_agent_inspection(root, &mut outcome);
-    check_inspection_renderer(root, &mut outcome);
+    crate::inspection_renderer::check(root, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
     outcome
@@ -450,6 +449,21 @@ fn unified_features(
         for (index, (_, document)) in manifests.iter().enumerate() {
             let mut pending: Vec<String> = selected[index].iter().cloned().collect();
             while let Some(feature) = pending.pop() {
+                if let Some((alias, _)) = feature.split_once('/') {
+                    let features = document.get("features").and_then(Value::as_table);
+                    let hidden = features.into_iter().flatten().any(|(_, values)| {
+                        string_array(Some(values)).contains(&format!("dep:{alias}").as_str())
+                    });
+                    if graph[index]
+                        .iter()
+                        .any(|dependency| dependency.optional && dependency.alias == alias)
+                        && (features.is_some_and(|features| features.contains_key(alias))
+                            || !hidden)
+                        && selected[index].insert(alias.to_string())
+                    {
+                        pending.push(alias.to_string());
+                    }
+                }
                 for enabled in string_array(
                     document
                         .get("features")
@@ -524,51 +538,6 @@ fn check_inspection_overrides(file: &str, document: &Value, outcome: &mut Outcom
             outcome.fail(file.to_string(), 1,
                 format!("`{INSPECTION_CRATE}` source override is forbidden; the audited workspace pin must be its only source"));
         }
-    }
-}
-
-fn check_inspection_renderer(root: &Path, outcome: &mut Outcome) {
-    if !root.join("index.html").is_file() && !root.join("src/main.tsx").is_file() {
-        return;
-    }
-    let directory = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let script = directory.join("check-release-renderer.mjs");
-    let root = match std::path::absolute(root) {
-        Ok(root) => root,
-        Err(error) => {
-            outcome.fail(
-                "src/main.tsx".to_string(),
-                1,
-                format!("cannot resolve production renderer root: {error}"),
-            );
-            return;
-        }
-    };
-    match Command::new("bun")
-        .arg(script)
-        .arg(root)
-        .current_dir(directory)
-        .output()
-    {
-        Ok(output) if output.status.success() => {
-            outcome.note("production renderer excludes the inspection guest module".to_string());
-        }
-        Ok(output) => {
-            outcome.fail(
-                "src/main.tsx".to_string(),
-                1,
-                format!(
-                    "production renderer inspection check failed: {}{}",
-                    String::from_utf8_lossy(&output.stdout),
-                    String::from_utf8_lossy(&output.stderr)
-                ),
-            );
-        }
-        Err(error) => outcome.fail(
-            "src/main.tsx".to_string(),
-            1,
-            format!("cannot check production renderer: {error}"),
-        ),
     }
 }
 

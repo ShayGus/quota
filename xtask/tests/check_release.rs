@@ -598,71 +598,65 @@ fn unrelated_source_overrides_remain_allowed() -> Outcome {
 fn renderer_tree(root: &Path, main: &str) -> Outcome {
     tree(root, &workspace_manifest(), &member_manifest())?;
     fs::create_dir_all(root.join("src")).map_err(|error| error.to_string())?;
-    fs::create_dir_all(root.join("node_modules/tauri-plugin-mcp"))
-        .map_err(|error| error.to_string())?;
-    fs::write(
-        root.join("index.html"),
-        "<script type='module' src='/src/main.tsx'></script>",
-    )
-    .map_err(|error| error.to_string())?;
-    fs::write(root.join("src/main.tsx"), main).map_err(|error| error.to_string())?;
-    fs::write(
-        root.join("package.json"),
-        "{\"name\":\"quota-renderer-fixture\",\"private\":true}",
-    )
-    .map_err(|error| error.to_string())?;
-    fs::write(
-        root.join("node_modules/tauri-plugin-mcp/package.json"),
-        "{\"name\":\"tauri-plugin-mcp\",\"type\":\"module\",\"exports\":\"./index.js\"}",
-    )
-    .map_err(|error| error.to_string())?;
-    fs::write(root.join("node_modules/tauri-plugin-mcp/index.js"),
-        "globalThis.inspectionLoaded = true; export function setupPluginListeners() { return Promise.resolve(); }")
-        .map_err(|error| error.to_string())
+    fs::write(root.join("src/main.tsx"), main).map_err(|error| error.to_string())
 }
 
 #[test]
-fn production_renderer_rejects_inspection_imports_in_every_reachable_module() -> Outcome {
+fn renderer_source_rejects_unguarded_inspection_without_javascript_runtime() -> Outcome {
     for main in [
         "import { setupPluginListeners } from 'tauri-plugin-mcp'; if (import.meta.env.DEV) setupPluginListeners();",
-        "import './inspection.js';",
         "import('tauri-plugin-mcp');",
         "export { setupPluginListeners } from 'tauri-plugin-mcp';",
         "import '../node_modules/tauri-plugin-mcp/index.js';",
+        "if (!import.meta.env.DEV) { import('tauri-plugin-mcp'); }",
+        "if (import.meta.env.DEV) {} else { import('tauri-plugin-mcp'); }",
+        "if (import.meta.env.DEV || true) { import('tauri-plugin-mcp'); }",
+        "if (import.meta.env.DEV) { console.log('development'); } import('tauri-plugin-mcp');",
+        "function load() { return import('tauri-plugin-mcp'); } if (import.meta.env.DEV) load();",
+        "require('tauri-plugin-mcp');",
+        "import inspection = require('tauri-plugin-mcp');",
+        r"import 'tauri\u002dplugin-mcp';",
+        r"import('tauri\u002dplugin-mcp');",
+        "import('tauri-' + 'plugin-mcp');",
+        "import(`tauri-plugin-mcp`);",
     ] {
         let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
         renderer_tree(directory.path(), main)?;
-        fs::write(
-            directory.path().join("src/inspection.js"),
-            "import 'tauri-plugin-mcp';",
-        )
-        .map_err(|error| error.to_string())?;
-        fails_with(
-            directory.path(),
-            "production renderer includes tauri-plugin-mcp",
-        )?;
+        let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
+            .args(["check-release", "--root"])
+            .arg(directory.path())
+            .env("PATH", "")
+            .output()
+            .map_err(|error| error.to_string())?;
+        let report = String::from_utf8_lossy(&output.stdout);
+        if output.status.success() || !report.contains("inspection guest imports must be dynamic") {
+            return Err(format!("unguarded guest import passed: {main}\n{report}"));
+        }
     }
     Ok(())
 }
 
 #[test]
-fn production_renderer_accepts_development_guarded_dynamic_imports() -> Outcome {
+fn renderer_source_accepts_development_import_and_ordinary_renderer() -> Outcome {
     for main in [
         "if (import.meta.env.DEV) { import('tauri-plugin-mcp').then(({ setupPluginListeners }) => setupPluginListeners()).catch(console.error); } document.title = 'Quota';",
-        "if (import.meta.env.DEV) { import('./inspection.js'); } document.title = 'Quota';",
+        "if (import.meta.env.DEV) { if (document.hidden) { import('tauri-plugin-mcp'); } }",
         "// import 'tauri-plugin-mcp'\ndocument.title = 'tauri-plugin-mcp is a development tool';",
+        "/* if (import.meta.env.DEV) { */ import { invoke } from '@tauri-apps/api/core';",
+        r#"const view = <div title="tauri-plugin-mcp">Quota</div>;"#,
     ] {
         let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
         renderer_tree(directory.path(), main)?;
-        fs::write(
-            directory.path().join("src/inspection.js"),
-            "import 'tauri-plugin-mcp';",
-        )
-        .map_err(|error| error.to_string())?;
-        let (passed, report) = gate(directory.path())?;
-        if !passed {
+        let output = Command::new(env!("CARGO_BIN_EXE_xtask"))
+            .args(["check-release", "--root"])
+            .arg(directory.path())
+            .env("PATH", "")
+            .output()
+            .map_err(|error| error.to_string())?;
+        if !output.status.success() {
             return Err(format!(
-                "a production renderer without inspection must pass:\n{report}"
+                "ordinary renderer failed: {main}\n{}",
+                String::from_utf8_lossy(&output.stdout)
             ));
         }
     }
@@ -670,30 +664,77 @@ fn production_renderer_accepts_development_guarded_dynamic_imports() -> Outcome 
 }
 
 #[test]
-fn production_renderer_rejects_renamed_and_external_inspection_modules() -> Outcome {
+fn renderer_source_checks_sibling_modules_and_rejects_parse_errors() -> Outcome {
     let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
-    renderer_tree(directory.path(), "import 'inspection-alias';")?;
-    fs::rename(
-        directory.path().join("node_modules/tauri-plugin-mcp"),
-        directory.path().join("node_modules/inspection-alias"),
+    renderer_tree(directory.path(), "import './inspection.js';")?;
+    fs::write(
+        directory.path().join("src/inspection.js"),
+        "import 'tauri-plugin-mcp';",
     )
     .map_err(|error| error.to_string())?;
-    fails_with(
-        directory.path(),
-        "production renderer includes tauri-plugin-mcp",
+    fails_with(directory.path(), "inspection guest imports must be dynamic")?;
+    fs::write(
+        directory.path().join("src/inspection.js"),
+        "if (import.meta.env.DEV { import('tauri-plugin-mcp'); }",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(directory.path(), "cannot parse renderer source")
+}
+
+#[test]
+fn strong_optional_forwarding_activates_same_named_parent_feature() -> Outcome {
+    for table in [
+        "dependencies",
+        "build-dependencies",
+        "target.'cfg(unix)'.dependencies",
+    ] {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let root = directory.path();
+        tree(root, &workspace_manifest(), &member_manifest())?;
+        write_manifest(
+            root,
+            "bridge",
+            &format!(
+                "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[{table}]\ndesktop = {{ package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }}\n"
+            ),
+        )?;
+        fails_with(root, "a release build must never select it")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn strong_optional_forwarding_activates_implicit_parent_feature() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = directory.path();
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    write_manifest(
+        root,
+        "bridge",
+        "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
     )?;
-    fs::write(
-        directory.path().join("src/main.tsx"),
-        "import('tauri-plugin-mcp');",
-    )
-    .map_err(|error| error.to_string())?;
-    fs::write(
-        directory.path().join("vite.config.mjs"),
-        "export default { build: { rolldownOptions: { external: ['tauri-plugin-mcp'] } } };",
-    )
-    .map_err(|error| error.to_string())?;
-    fails_with(
-        directory.path(),
-        "production renderer includes tauri-plugin-mcp",
-    )
+    fails_with(root, "a release build must never select it")
+}
+
+#[test]
+fn weak_optional_forwarding_does_not_activate_same_named_parent_feature() -> Outcome {
+    for selection in ["desktop?/custom-protocol", "dep:desktop"] {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let root = directory.path();
+        tree(root, &workspace_manifest(), &member_manifest())?;
+        write_manifest(
+            root,
+            "bridge",
+            &format!(
+                "[package]\nname = 'bridge'\n[features]\ndefault = ['{selection}']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = {{ package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }}\n"
+            ),
+        )?;
+        let (passed, report) = gate(root)?;
+        if !passed {
+            return Err(format!(
+                "weak or dep: forwarding activated a parent feature:\n{report}"
+            ));
+        }
+    }
+    Ok(())
 }
