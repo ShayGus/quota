@@ -1,8 +1,7 @@
 //! Where the credentials other clients keep are found on this machine.
 //!
-//! A Windows install does not set `HOME`. Every path this crate used to build
-//! came from `HOME`, so on Windows all three credentials resolved to a file
-//! that does not exist and every connection failed before a request was made.
+//! Windows need not supply `HOME`; default credential discovery must work from
+//! its native profile variable without a shell-provided home override.
 //!
 //! One rule holds: a provider's own directory override always wins, then the
 //! operating system's user directory, then a shell variable. A profile path is
@@ -26,8 +25,8 @@ fn variable(lookup: Lookup<'_>, name: &str) -> Option<PathBuf> {
 /// The current user's profile directory, or `None` when nothing declares one.
 ///
 /// On Windows this is `USERPROFILE`, which Windows exports to every process
-/// from the same profile its known-folder API returns. Everywhere else it is
-/// `HOME`, the only home variable those platforms set.
+/// from the same profile its known-folder API returns, with `HOME` as a fallback
+/// if `USERPROFILE` is absent or blank. Everywhere else it is `HOME`.
 ///
 /// Every credential this crate reads lives directly under this directory
 /// (`.codex`, `.claude`, `.local/share/opencode`). The roaming and local

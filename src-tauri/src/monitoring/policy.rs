@@ -31,10 +31,12 @@ pub(crate) struct ReadSchedule<'a> {
 
 /// The earliest instant this account may be read again.
 ///
-/// Three floors apply at once, and the latest one wins: the strategy's own
-/// spacing, the provider's minimum measured from the last accepted reading, and
-/// the moment the current reading goes stale. A boundary-aware strategy moves a
-/// read towards a reported reset but never past any of those floors.
+/// Ordinary reads respect strategy spacing, the provider's minimum measured
+/// from the later of the last attempt and success, and persisted backoff. An
+/// upcoming expiry or a boundary-aware early check may shorten strategy spacing,
+/// but never the provider minimum or backoff. Callers use `Reconnect` only for
+/// its first verification, which bypasses these deadlines; retries use ordinary
+/// reasons.
 ///
 /// The strategy's spacing is measured from the last real attempt, never from
 /// `now`. Measuring it from `now` would make every check move the next read
@@ -85,8 +87,8 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
         None => now,
     };
 
-    // The provider's minimum is measured from the last accepted reading, so a
-    // repeated manual refresh cannot outrun it.
+    // A failed attempt still consumes the provider's minimum interval, so a
+    // repeated manual refresh cannot outrun it by failing before acceptance.
     let provider_floor = last_attempt
         .iter()
         .chain(last_success)

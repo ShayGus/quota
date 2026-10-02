@@ -51,6 +51,33 @@ bun tauri build
 There is no hand-written run command. The Tauri CLI owns starting, building and packaging
 the application; `cargo xtask` only runs the repository gates.
 
+## Connect and refresh accounts
+
+In Settings → Accounts, choose a provider, optionally enter a label, and press Connect.
+Quota reads an existing credential from the provider's client; it does not sign you in.
+The button stays busy until verification finishes, then shows the result. If a credential
+is missing or rejected, follow the provider-specific recovery guidance:
+
+- Codex: run `codex login` in a terminal.
+- Claude: run `claude` in a terminal and sign in to Claude Code.
+- OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
+  environment.
+
+After signing in, press Connect again. Dismiss clears a finished result.
+[Provider credential discovery](docs/providers.md) owns the supported locations and
+overrides, including Windows defaults that work without `HOME`.
+
+Ordinary refreshes, including manual requests, wait for the polling interval and any
+backoff deadline. Checks that do not send a request leave the due time unchanged. The
+overview and Accounts panel show a formatted countdown to the next eligible read when a
+manual refresh is deferred; a short provider retry delay cannot shorten the policy's
+minimum interval. With Hide account labels enabled, these notices use the same replacement
+labels as the overview rows.
+
+Reconnect immediately verifies the account once, even while monitoring is paused. If
+verification fails, subsequent ordinary retries respect the interval, backoff, and
+monitoring pause. A countdown names eligibility, not a guarantee of immediate completion.
+
 ## Developer setup from a clean checkout
 
 Prerequisites: `rustup`, and [Bun](https://bun.sh) for the frontend.

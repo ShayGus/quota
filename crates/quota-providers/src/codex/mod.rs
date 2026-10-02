@@ -42,7 +42,7 @@ const PRIMARY_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 /// The second usage endpoint, tried when the first yields nothing usable.
 const FALLBACK_URL: &str = "https://chatgpt.com/backend-api/codex/usage";
 
-/// Whether a failure from the first endpoint is worth trying the second for.
+/// Whether a failure must stop endpoint fallback.
 ///
 /// A rejected credential, a refused request, and a rate limit all describe the
 /// account rather than the endpoint, so the second endpoint cannot answer them

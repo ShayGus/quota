@@ -3,10 +3,10 @@
 //! The rules this mapping will not break: a window is only labelled a session
 //! when the source itself reported a 18000-second duration, and only labelled
 //! weekly at 604800 seconds; a named bucket keeps its own category. The one
-//! addition is the account's own first window: a plan that reports a single
-//! allowance covering at least one whole period is that allowance, so it is
-//! labelled for the period it reports and no second allowance is invented for
-//! it. This follows the TaskbarQuota provider investigation report, section 12,
+//! exception is an account-wide duration of at least twenty days, interpreted
+//! as monthly even in a pair. A lone first allowance lasting at least one day
+//! has no missing secondary slot; a lone secondary allowance takes the primary
+//! slot. This follows the TaskbarQuota provider investigation report, section 12,
 //! Codex P1 row "Support credits-only and lone monthly responses", with acceptance
 //! evidence "Credits-only connects. No fabricated secondary allowance."
 //! A credit balance is a balance, never included quota.
@@ -288,11 +288,11 @@ fn category_for(duration_seconds: Option<i64>) -> QuotaCategory {
     }
 }
 
-/// The category the account's own first window proves from its duration.
+/// The category assigned to an account-wide window from its duration.
 ///
-/// A lone window covering twenty days or more is a monthly allowance. Named
-/// buckets deliberately keep [`category_for`], because a bucket's name is what
-/// identifies it, not its length.
+/// Any account window covering twenty days or more is interpreted as monthly.
+/// Named buckets deliberately keep [`category_for`], because a bucket's name is
+/// what identifies it, not its length.
 fn account_category(duration_seconds: Option<i64>) -> QuotaCategory {
     match category_for(duration_seconds) {
         QuotaCategory::Custom if duration_seconds.is_some_and(is_monthly) => QuotaCategory::Monthly,
