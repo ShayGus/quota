@@ -32,6 +32,15 @@ export default tseslint.config(
   },
   js.configs.recommended,
   {
+    // UI parity tooling: Node scripts, and one script evaluated in a page.
+    files: ["tools/**/*.mjs"],
+    languageOptions: { globals: globals.node },
+  },
+  {
+    files: ["tools/**/measure.js"],
+    languageOptions: { sourceType: "script", globals: globals.browser },
+  },
+  {
     files: TYPED_FILES,
     extends: [...tseslint.configs.strictTypeChecked],
     languageOptions: {
