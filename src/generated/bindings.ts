@@ -36,7 +36,8 @@ export const commands = {
 	/**  Cancels one running attempt, or discards one verified candidate. */
 	cancelConnection: (attemptRef: AttemptRef) => typedError<null, CommandError>(__TAURI_INVOKE("cancel_connection", { attemptRef })),
 	/**
-	 *  Saves the verified candidate one attempt is holding.
+	 *  Saves the verified candidate one attempt is holding, under the nickname the
+	 *  person confirmed.
 	 * 
 	 *  Nothing is written until this command runs, so declining a verified
 	 *  connection in the wizard leaves storage untouched.
