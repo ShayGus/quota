@@ -1,6 +1,8 @@
 import { useState, type JSX } from "react";
 
 import type { AttemptRef, ProviderId } from "../../generated/bindings";
+import { accountLabel, displayName } from "../../shared/format/alias";
+import { formatRemaining, hasReading } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
 import type { RendererState } from "../../shared/state/types";
@@ -29,6 +31,11 @@ export function ConnectionWizard({
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
   const verified = progress?.kind === "verified";
+  const accounts = state.snapshot?.accounts ?? [];
+  const savedAccounts = accounts.filter(
+    (account) =>
+      account.provider_id === provider && account.connection_state === "connected",
+  );
   const busy =
     starting ||
     (attempt !== null &&
@@ -139,10 +146,61 @@ export function ConnectionWizard({
               <dd>{progress.context.state}</dd>
             </div>
           </dl>
+          <h3>Saved {providerLabel(provider)} accounts</h3>
+          {savedAccounts.length === 0 ? (
+            <p className="note">
+              Account, workspace, and quota reading have not arrived in the account
+              snapshot yet.
+            </p>
+          ) : (
+            savedAccounts.map((account) => {
+              const alias = accountLabel(state.preferences, accounts, account.account_id);
+              return (
+                <article
+                  key={account.account_id}
+                  aria-label={`Saved ${displayName(state.preferences, accounts, account)}`}
+                >
+                  <h4>{displayName(state.preferences, accounts, account)}</h4>
+                  <dl className="detail__list">
+                    <div>
+                      <dt>Account</dt>
+                      <dd>
+                        {alias || account.identity?.principal_label || "Not reported"}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Workspace</dt>
+                      <dd>
+                        {alias
+                          ? "Workspace hidden"
+                          : (account.identity?.workspace_label ?? "Not reported")}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Quota reading</dt>
+                      <dd>
+                        {account.windows.length === 0
+                          ? "Not reported"
+                          : account.windows.map((window) => (
+                              <p key={window.id}>
+                                {window.scope.label || "Allowance"}:{" "}
+                                {formatRemaining(window.measurement)}{" "}
+                                {hasReading(window.measurement)
+                                  ? "remaining (last reported)"
+                                  : "(not reported)"}
+                              </p>
+                            ))}
+                      </dd>
+                    </div>
+                  </dl>
+                </article>
+              );
+            })
+          )}
           <p className="note">
-            The host saves verified accounts before this step. Its attempt event reports
-            connection state but does not identify the account or workspace; review those
-            in Accounts.
+            The host saves verified accounts before this review. The attempt result does
+            not identify which account it saved; these are the provider's saved accounts
+            from the latest snapshot. Confirmation before saving is not available yet.
           </p>
           <label className="checkline">
             <input

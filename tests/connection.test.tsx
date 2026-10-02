@@ -17,7 +17,13 @@ import {
   getRendererState,
 } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
-import { account, preferences, snapshot } from "./fixtures";
+import {
+  account,
+  percent,
+  preferences,
+  snapshot,
+  window as quotaWindow,
+} from "./fixtures";
 
 function settingsActions(): SettingsActions {
   return {
@@ -99,6 +105,106 @@ describe("Provider → Connect → Verify", () => {
     await waitFor(() =>
       expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy(),
     );
+  });
+
+  it("starts a fresh wizard when Add reopens settings on the same connection section", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const actions = settingsActions();
+    const { container } = render(<Harness actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    fireEvent.change(screen.getByLabelText("Account nickname"), {
+      target: { value: "Work" },
+    });
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
+    );
+    act(() =>
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 2,
+        progress: { kind: "verified", context: { state: "connected" } },
+      }),
+    );
+    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
+    container.hidden = true;
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    container.hidden = false;
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
+    expect((screen.getByLabelText("Account nickname") as HTMLInputElement).value).toBe(
+      "Personal",
+    );
+    vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
+    );
+    act(() =>
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: { kind: "verified", context: { state: "connected" } },
+      }),
+    );
+    expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
+  });
+
+  it("shows snapshot identities and readings without attributing saved accounts to the attempt", async () => {
+    const actions = settingsActions();
+    render(<Harness actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
+    );
+    act(() =>
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 2,
+        progress: { kind: "verified", context: { state: "connected" } },
+      }),
+    );
+    expect(
+      screen.getByText(/Account, workspace, and quota reading have not arrived/),
+    ).toBeTruthy();
+    act(() =>
+      acceptSnapshot(
+        snapshot("instance-1", 2, [
+          account("a", "claude", 1, []),
+          account("b", "codex", 2, [quotaWindow("quota", "session", percent(72))]),
+        ]),
+      ),
+    );
+    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
+      "b@example.test",
+    );
+    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
+      "Home",
+    );
+    expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
+      "72% remaining (last reported)",
+    );
+    expect(screen.queryByText("a@example.test")).toBeNull();
+    expect(screen.getByText(/does not identify which account it saved/)).toBeTruthy();
+    act(() =>
+      acceptPreferences(
+        preferences({
+          privacy: {
+            alias_mode: "stable_aliases",
+            retain_history: false,
+            export_identities: false,
+          },
+        }),
+      ),
+    );
+    expect(
+      screen.getByRole("article", { name: "Saved Account 2" }).textContent,
+    ).toContain("Workspace hidden");
+    expect(screen.queryByText("b@example.test")).toBeNull();
+    expect(screen.queryByText("Home")).toBeNull();
   });
 
   it("shows connection failures and cancels a running attempt by its identity", async () => {

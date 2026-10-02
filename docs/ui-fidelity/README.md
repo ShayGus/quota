@@ -16,19 +16,30 @@ width, with the prototype's guide above it. The app images are the real renderer
 same width, driven by one deterministic snapshot with the ten sample accounts the
 wireframe draws.
 
-The approved controls are wired to the host: mode and topmost remain separate, hide uses
-the authorized native close handler that keeps the overview alive, and every Add account
-entry opens Provider → Connect → Verify in the settings window. Details retain Settings,
+The approved controls remain visible: mode and topmost remain separate, hide uses the
+authorized native close handler that keeps the overview alive, and every Add account entry
+opens Provider → Connect → Verify in the settings window. Details retain Settings,
 Provider usage page, and Manage accounts. The overview explains ordering, clears hidden
 searches, and counts fully visible rows over the filtered rows.
 
 The connection wizard uses `begin_connection`, `cancel_connection`, and the existing
-attempt events; it never simulates verification. The host commits the verified account
-before publishing `verified`, so there is no separate confirm-and-add command. Attempt
-events contain connection state but no account ID or verified workspace, which prevents an
-exact account identity confirmation in the wizard. The requested nickname is sent before
-connection; the verified identity is available in Accounts after publication. Provider
-sign-in and connection adapter implementation belong to the connection task.
+attempt events; it never simulates verification. Each explicit Add account request opens a
+fresh connection route, including when settings was hidden on a completed attempt.
+Verification displays Account, Workspace, and Quota reading from the provider's saved
+account snapshots as they arrive, respecting account aliases. The attempt result does not
+name an account, so these records are labelled as saved provider accounts rather than
+attributed to this attempt. Provider sign-in and connection adapter implementation belong
+to the connection task.
+
+## Known gaps
+
+Confirmation currently happens **after the host saves the account**, rather than before
+adding it to the overview. The owner explicitly deferred confirm-before-adding to a
+follow-up task after [Quota PR 4](https://github.com/ShayGus/quota/pull/4), which is
+rewriting the connection code, merges. This PR does not extend the host protocol. Attempt
+events provide connection state but no account ID, verified workspace, or quota reading;
+those details are available through saved account snapshots. The delivery description in
+[PR-description.md](PR-description.md) carries the same approved deferral.
 
 Notifications use the existing policy. It has one critical threshold, so 10% and 0% are
 mutually exclusive. Quiet hours are UTC. Notification preview stays inside the renderer
@@ -37,12 +48,11 @@ fidelity implementation, before review fixes; they are historical evidence rathe
 captures of the updated settings and wizard.
 
 General includes Window width, Move with keys, Launch at login, Pause monitoring, and
-Background refresh. The host exposes Fit and Reset but no narrow-width or keyboard
-movement command: Use wide view fits all accounts; Try narrow view and Move with keys
-reset the floating window for manual resizing or dragging. `launch_behavior` controls
-quiet tray startup versus restoring the last mode; there is no login registration command
-or stored enabled flag. The Launch at login switch saves that nearest startup preference
-and states the limitation beside the control.
+Background refresh. Use wide view runs the existing Fit command. Try narrow view and Move
+with keys are disabled: the host has no narrow-width or keyboard movement commands. Launch
+at login is disabled: the host has no login registration command or confirmed enabled
+flag. These controls state the exact missing capabilities and have no substitute effects
+on position or startup behavior. The separate Reset position control remains available.
 
 Pause monitoring and the overview Resume action share `set_monitoring_state`. Background
 refresh saves each provider's existing polling strategy via `set_polling_preferences`,
@@ -53,5 +63,7 @@ no distinct hidden-window schedule yet.
 
 Fit from overview or settings uses one native transition: floating chrome and confirmed
 mode, fitted geometry, and an overview reset that clears filter/search and returns from
-details. Viewport counts also observe the overview content so opening or closing ordering
-help updates the fully visible row count.
+details. Mode selection, Fit, Reset, and topmost publication hold the shared window
+controller lock through their complete transitions, including persistence. Viewport counts
+also observe the overview content so opening or closing ordering help updates the fully
+visible row count.

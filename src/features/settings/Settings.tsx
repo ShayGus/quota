@@ -60,6 +60,66 @@ export interface SettingsActions {
    */
   readonly beginConnection: (
     request: BeginConnectionRequest,
+  ) => Promise<AttemptRef | null>;
+  readonly cancelConnection: (attempt: AttemptRef) => Promise<void>;
+  /** Re-verifies one account under a new connection generation. */
+  readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
+  /** Drops retained history for one account. The host has no all-accounts clear. */
+  readonly clearHistory: (accountId: AccountId) => void;
+  /** Writes a diagnostic export to the destination the host will validate. */
+  readonly exportDiagnostics: (destination: string) => void;
+}
+
+/** The settings surface. */
+export function Settings({
+  state,
+  actions,
+}: {
+  readonly state: RendererState;
+  readonly actions: SettingsActions;
+}): JSX.Element {
+  const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
+  const tab = route.split("/")[2] ?? "general";
+  const navigate = (next: SettingsTab | "connect"): void => {
+    window.location.hash = `#/settings/${next}`;
+  };
+  const now = useNow();
+  const preferences = state.preferences;
+  if (tab === "connect") {
+    return (
+      <div className="settings__content settings__connection">
+        <ConnectionWizard
+          key={route}
+          state={state}
+          actions={actions}
+          onDone={() => navigate("accounts")}
+        />
+      </div>
+    );
+  }
+  return (
+    <section className="settings" aria-label="Quota settings">
+      <nav className="settings__nav" aria-label="Settings sections">
+        {TABS.map(([id, label, icon]) => (
+          <button
+            key={id}
+            type="button"
+            aria-current={tab === id ? "page" : undefined}
+            onClick={() => {
+              navigate(id);
+            }}
+          >
+            <Icon name={icon} size={15} />
+            {label}
+          </button>
+        ))}
+      </nav>
+      <div className="settings__content">
+        {preferences === null ? (
+          <p className="note">
+            Quota has not received the confirmed preferences yet. Settings appear as soon
+            as the backend publishes them.
+          </p>
         ) : tab === "general" ? (
           <WindowPanel
             preferences={preferences}

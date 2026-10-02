@@ -77,14 +77,10 @@ export function WindowPanel({
       />
       <SettingRow
         label="Window width"
-        description="Use the wider view to compare accounts. A narrow-width command is unavailable; Try narrow view resets the floating window so you can resize its borders."
+        description="Use the wider view to compare accounts. Try narrow view is unavailable because the host has no narrow-width command."
         control={
           <span className="setting-row__actions">
-            <button
-              type="button"
-              className="button button--small"
-              onClick={actions.resetPosition}
-            >
+            <button type="button" className="button button--small" disabled>
               Try narrow view
             </button>
             <button
@@ -99,30 +95,24 @@ export function WindowPanel({
       />
       <SettingRow
         label="Window position"
-        description="Keyboard movement is unavailable in the host. Move with keys currently resets the window to a visible floating position; use the title bar to move it."
+        description="Move with keys is unavailable because the host has no keyboard movement command. Use the floating window title bar to move it."
         control={
-          <button
-            type="button"
-            className="button button--small"
-            onClick={actions.resetPosition}
-          >
+          <button type="button" className="button button--small" disabled>
             Move with keys
           </button>
         }
       />
       <SettingRow
         label="Launch at login"
-        description="This saves startup behavior: on restores the chosen mode, off starts quietly in the tray. The host cannot register or unregister login startup yet."
+        description="Launch at login is unavailable because the host cannot register or unregister login startup and does not report its enabled state."
         control={
-          <Switch
-            label="Launch at login"
-            checked={preferences.launch_behavior === "restore_last_mode"}
-            onChange={(enabled) =>
-              actions.savePreferences({
-                ...preferences,
-                launch_behavior: enabled ? "restore_last_mode" : "quiet_in_tray",
-              })
-            }
+          <button
+            type="button"
+            role="switch"
+            className="switch"
+            aria-label="Launch at login"
+            aria-checked={false}
+            disabled
           />
         }
       />

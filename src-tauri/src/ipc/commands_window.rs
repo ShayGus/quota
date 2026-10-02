@@ -20,14 +20,13 @@ pub async fn set_overview_mode(
     state: State<'_, AppState>,
     mode: OverviewMode,
 ) -> Result<WindowModeChange, CommandError> {
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     window::apply_mode_chrome(&native, mode)?;
     if mode == OverviewMode::Tray {
         window::anchor_to_tray(&state.app)?;
     }
-    let mut controller = state.window.lock().await;
     let confirmed = controller.set_mode(mode);
-    drop(controller);
     crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
         preferences.overview_mode = mode;
     })
@@ -45,6 +44,7 @@ pub async fn set_overview_always_on_top(
     state: State<'_, AppState>,
     always_on_top: bool,
 ) -> Result<WindowStateResponse, CommandError> {
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     native
         .set_always_on_top(always_on_top)
@@ -56,9 +56,7 @@ pub async fn set_overview_always_on_top(
     {
         return Err(window::failed("confirm_always_on_top"));
     }
-    let mut controller = state.window.lock().await;
     let confirmed = controller.set_always_on_top(always_on_top);
-    drop(controller);
     crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
         preferences.always_on_top = always_on_top;
     })
@@ -84,6 +82,7 @@ pub async fn fit_overview_to_accounts(
             reason: "there are no accounts to fit".into(),
         });
     }
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     let monitor = native
         .current_monitor()
@@ -114,7 +113,6 @@ pub async fn fit_overview_to_accounts(
         preferences.overview_mode = OverviewMode::Floating;
     })
     .await?;
-    let mut controller = state.window.lock().await;
     controller.set_mode(OverviewMode::Floating);
     native
         .eval("window.dispatchEvent(new Event('quota-fit-overview'));")
@@ -131,6 +129,7 @@ pub async fn fit_overview_to_accounts(
 pub async fn reset_overview_position(
     state: State<'_, AppState>,
 ) -> Result<WindowStateResponse, CommandError> {
+    let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
     let monitor = native
         .current_monitor()
@@ -156,11 +155,9 @@ pub async fn reset_overview_position(
         .set_skip_taskbar(false)
         .map_err(|_| window::failed("set_taskbar_visibility"))?;
     let visible = window::set_visible(&state.app, "overview", true, true)?;
-    let mut controller = state.window.lock().await;
     controller.set_visible(visible);
     controller.detach_to_floating();
     let confirmed = controller.record_geometry_change();
-    drop(controller);
     // Detaching is a mode change, so the preference it produced is saved rather
     // than left for the next restart to undo.
     crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
@@ -211,12 +208,15 @@ pub async fn open_settings_window(
 ) -> Result<(), CommandError> {
     let native = window::get(&state.app, "settings")?;
     let script = match destination {
-        SettingsDestination::General => "window.location.hash = '#/settings';",
-        SettingsDestination::Accounts => "window.location.hash = '#/settings/accounts';",
-        SettingsDestination::Connect => "window.location.hash = '#/settings/connect';",
+        SettingsDestination::General => "window.location.hash = '#/settings';".to_owned(),
+        SettingsDestination::Accounts => "window.location.hash = '#/settings/accounts';".to_owned(),
+        SettingsDestination::Connect => format!(
+            "window.location.hash = '#/settings/connect/{}';",
+            uuid::Uuid::new_v4()
+        ),
     };
     native
-        .eval(script)
+        .eval(&script)
         .map_err(|_| window::failed("navigate_settings"))?;
     native
         .show()

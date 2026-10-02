@@ -318,51 +318,40 @@ describe("approved control actions", () => {
 });
 
 describe("General settings controls", () => {
-  it("uses existing geometry actions and waits for startup and monitoring confirmation", async () => {
+  it("disables unavailable operations and preserves the real geometry and monitoring actions", async () => {
     window.location.hash = "#/settings";
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-    const initial = preferences();
-    acceptPreferences(initial);
+    acceptPreferences(preferences({ launch_behavior: "restore_last_mode" }));
     render(<App />);
+    for (const [role, name] of [
+      ["button", "Try narrow view"],
+      ["button", "Move with keys"],
+      ["switch", "Launch at login"],
+    ] as const) {
+      const control = screen.getByRole(role, { name }) as HTMLButtonElement;
+      expect(control.disabled).toBe(true);
+      fireEvent.click(control);
+    }
+    expect(commandsMatching("reset_overview_position")).toHaveLength(0);
+    expect(commandsMatching("update_preferences")).toHaveLength(0);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Try narrow view" }));
-      fireEvent.click(screen.getByRole("button", { name: "Move with keys" }));
       fireEvent.click(screen.getByRole("button", { name: "Use wide view" }));
       fireEvent.click(screen.getByRole("button", { name: "Fit all accounts" }));
-      fireEvent.click(screen.getByRole("switch", { name: "Launch at login" }));
+      fireEvent.click(screen.getByRole("button", { name: "Reset position" }));
       fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" }));
     });
-    expect(commandsMatching("reset_overview_position")).toHaveLength(2);
     expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(2);
-    expect(commandsMatching("update_preferences")[0]?.args).toEqual({
-      preferences: { ...initial, launch_behavior: "restore_last_mode" },
-    });
+    expect(commandsMatching("reset_overview_position")).toHaveLength(1);
     expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: true });
-    expect(
-      screen
-        .getByRole("switch", { name: "Launch at login" })
-        .getAttribute("aria-checked"),
-    ).toBe("false");
     expect(
       screen
         .getByRole("switch", { name: "Pause monitoring" })
         .getAttribute("aria-checked"),
     ).toBe("false");
-    act(() => {
-      acceptPreferences({
-        ...initial,
-        revision: 8,
-        launch_behavior: "restore_last_mode",
-      });
-      acceptMonitoring({ kind: "paused" });
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole("switch", { name: "Launch at login" }));
-      fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" }));
-    });
-    expect(commandsMatching("update_preferences")[1]?.args).toEqual({
-      preferences: { ...initial, revision: 8, launch_behavior: "quiet_in_tray" },
-    });
+    act(() => acceptMonitoring({ kind: "paused" }));
+    await act(async () =>
+      fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" })),
+    );
     expect(commandsMatching("set_monitoring_state")[1]?.args).toEqual({ paused: false });
   });
 
