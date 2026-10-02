@@ -369,8 +369,8 @@ async fn install_managed_state(
     controller.set_visible(visible);
     let saved_mode = state.preferences_state.read().await.overview_mode;
     // The saved mode's chrome needs no tray geometry, so it applies now. The
-    // anchor waits for the first tray event, which is when the positioner
-    // learns where the icon is.
+    // anchor reads the tray icon's rectangle from the system; if the icon is
+    // not placed yet, the next tray event completes it.
     crate::platform::window::apply_mode_chrome(&native, saved_mode, &mut controller)
         .map_err(|_| "window_mode_chrome_restore_failed")?;
     drop(controller);
@@ -438,7 +438,6 @@ pub fn start() -> Result<(), String> {
             .plugin(tauri_plugin_store::Builder::new().build())
             .plugin(tauri_plugin_sql::Builder::default().build())
             .plugin(window_state)
-            .plugin(tauri_plugin_positioner::init())
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_notification::init()),
     )

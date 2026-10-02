@@ -103,7 +103,6 @@ tauri-plugin-mcp = { git = "https://github.com/P3GLEG/tauri-plugin-mcp", rev = "
 tauri-plugin-autostart = "2.7.0"
 tauri-plugin-notification = "2.5.0"
 tauri-plugin-opener = "2.7.0"
-tauri-plugin-positioner = "2.4.0"
 tauri-plugin-single-instance = "2.5.1"
 tauri-plugin-sql = { version = "2.5.0", features = ["sqlite"] }
 tauri-plugin-store = "2.5.0"
