@@ -152,7 +152,9 @@ export function OverviewToolbar({
           <button
             type="button"
             className="text-button"
-            onClick={() => setHelpOpen(false)}
+            onClick={() => {
+              setHelpOpen(false);
+            }}
           >
             Close ordering help
           </button>

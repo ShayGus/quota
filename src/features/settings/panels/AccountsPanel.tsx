@@ -171,9 +171,15 @@ export function AccountsPanel({
         account={selected}
         label={selected.nickname}
         now={now}
-        onBack={() => setSelectedId(null)}
-        onUsagePage={() => actions.openUsagePage(selected.account_id)}
-        onManageAccounts={() => setSelectedId(null)}
+        onBack={() => {
+          setSelectedId(null);
+        }}
+        onUsagePage={() => {
+          actions.openUsagePage(selected.account_id);
+        }}
+        onManageAccounts={() => {
+          setSelectedId(null);
+        }}
       />
     );
   }
@@ -202,7 +208,9 @@ export function AccountsPanel({
           account={account}
           now={now}
           actions={actions}
-          onDetails={() => setSelectedId(account.account_id)}
+          onDetails={() => {
+            setSelectedId(account.account_id);
+          }}
         />
       ))}
     </>

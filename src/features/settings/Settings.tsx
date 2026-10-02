@@ -5,13 +5,13 @@
  * preference itself, and it never shows a saved state before the backend
  * confirms it (spec 13.2).
  */
-import { useSyncExternalStore, type JSX } from "react";
+import { useCallback, useSyncExternalStore, type JSX } from "react";
 
 import type {
   AccountId,
   AccountSnapshot,
-  BeginConnectionRequest,
   AttemptRef,
+  BeginConnectionRequest,
   Preferences,
   ProviderPollingPolicy,
 } from "../../generated/bindings";
@@ -80,9 +80,9 @@ export function Settings({
 }): JSX.Element {
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
-  const navigate = (next: SettingsTab | "connect"): void => {
+  const navigate = useCallback((next: SettingsTab | "connect"): void => {
     window.location.hash = `#/settings/${next}`;
-  };
+  }, []);
   const now = useNow();
   const preferences = state.preferences;
   if (tab === "connect") {
@@ -92,7 +92,9 @@ export function Settings({
           key={route}
           state={state}
           actions={actions}
-          onDone={() => navigate("accounts")}
+          onDone={() => {
+            navigate("accounts");
+          }}
         />
       </div>
     );
@@ -135,7 +137,9 @@ export function Settings({
             preferences={preferences}
             now={now}
             actions={actions}
-            onAddAccount={() => navigate("connect")}
+            onAddAccount={() => {
+              navigate("connect");
+            }}
           />
         ) : tab === "notifications" ? (
           <NotificationsPanel preferences={preferences} actions={actions} />
@@ -165,3 +169,27 @@ export function Settings({
         ) : tab === "privacy" ? (
           <PrivacyPanel preferences={preferences} actions={actions} />
         ) : null}
+      </div>
+    </section>
+  );
+}
+
+/** The accounts a management panel lists, in a stable order. */
+export function accountsForManagement(
+  accounts: readonly AccountSnapshot[],
+): readonly AccountSnapshot[] {
+  return [...accounts].sort((a, b) =>
+    a.connection_ordinal === b.connection_ordinal
+      ? a.account_id < b.account_id
+        ? -1
+        : 1
+      : a.connection_ordinal - b.connection_ordinal,
+  );
+}
+
+function subscribeRoute(notify: () => void): () => void {
+  window.addEventListener("hashchange", notify);
+  return () => {
+    window.removeEventListener("hashchange", notify);
+  };
+}

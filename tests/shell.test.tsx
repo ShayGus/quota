@@ -169,11 +169,11 @@ describe("the settings window route", () => {
 });
 
 describe("approved control actions", () => {
-  it("saves only indicator style from either overview control", async () => {
+  it("saves only indicator style from either overview control", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences());
     render(<App />);
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Bar indicators" }));
       fireEvent.click(screen.getByRole("button", { name: "Ring indicators" }));
     });
@@ -192,23 +192,23 @@ describe("approved control actions", () => {
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a1" } });
     fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
     fireEvent.click(screen.getByRole("button", { name: "All accounts" }));
-    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("a1");
+    expect(screen.getByRole("searchbox")).toHaveProperty("value", "a1");
     fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(screen.getByRole("article")).toBeTruthy();
   });
 
-  it("wires mode, hide, Add account, and detail actions", async () => {
+  it("wires mode, hide, Add account, and detail actions", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences());
     render(<App />);
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Switch to tray popover" }));
       fireEvent.click(screen.getByRole("button", { name: "Hide Quota to tray" }));
       fireEvent.click(screen.getByRole("button", { name: "Add account" }));
       fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
     });
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Provider usage page" }));
       fireEvent.click(screen.getByRole("button", { name: "Manage accounts" }));
       fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
@@ -228,7 +228,7 @@ describe("approved control actions", () => {
   it("opens the same wizard from first launch", async () => {
     acceptSnapshot(snapshot("instance-1", 1, []));
     render(<App />);
-    await act(async () =>
+    await act(() =>
       fireEvent.click(screen.getByRole("button", { name: "Add your first account" })),
     );
     expect(commandsMatching("open_settings_window")[0]?.args).toEqual({
@@ -306,7 +306,11 @@ describe("approved control actions", () => {
     render(<App />);
     expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
     offset = 60;
-    fireEvent.scroll(document.querySelector(".shell__main")!);
+    const list = document.querySelector(".shell__main");
+    if (list === null) {
+      throw new Error("the account list must be on screen");
+    }
+    fireEvent.scroll(list);
     expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
     bottom = 280;
     fireEvent(window, new Event("resize"));
@@ -328,13 +332,13 @@ describe("General settings controls", () => {
       ["button", "Move with keys"],
       ["switch", "Launch at login"],
     ] as const) {
-      const control = screen.getByRole(role, { name }) as HTMLButtonElement;
-      expect(control.disabled).toBe(true);
+      const control = screen.getByRole(role, { name });
+      expect(control).toHaveProperty("disabled", true);
       fireEvent.click(control);
     }
     expect(commandsMatching("reset_overview_position")).toHaveLength(0);
     expect(commandsMatching("update_preferences")).toHaveLength(0);
-    await act(async () => {
+    act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Use wide view" }));
       fireEvent.click(screen.getByRole("button", { name: "Fit all accounts" }));
       fireEvent.click(screen.getByRole("button", { name: "Reset position" }));
@@ -348,8 +352,10 @@ describe("General settings controls", () => {
         .getByRole("switch", { name: "Pause monitoring" })
         .getAttribute("aria-checked"),
     ).toBe("false");
-    act(() => acceptMonitoring({ kind: "paused" }));
-    await act(async () =>
+    act(() => {
+      acceptMonitoring({ kind: "paused" });
+    });
+    await act(() =>
       fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" })),
     );
     expect(commandsMatching("set_monitoring_state")[1]?.args).toEqual({ paused: false });
@@ -358,12 +364,12 @@ describe("General settings controls", () => {
   it("offers Resume until monitoring is confirmed running", async () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount(), { kind: "paused" }));
     render(<App />);
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Resume" })),
-    );
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Resume" })));
     expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: false });
     expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
-    act(() => acceptMonitoring({ kind: "running" }));
+    act(() => {
+      acceptMonitoring({ kind: "running" });
+    });
     expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
   });
 
@@ -445,20 +451,21 @@ describe("General settings controls", () => {
       acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
       acceptPreferences(preferences({ polling: [policy] }));
       render(<App />);
-      const select = screen.getByRole("combobox", {
-        name: "Background refresh",
-      }) as HTMLSelectElement;
-      expect(select.value).toBe("300");
-      await act(async () => fireEvent.change(select, { target: { value: requested } }));
+      const select = screen.getByRole("combobox", { name: "Background refresh" });
+      expect(select).toHaveProperty("value", "300");
+      await act(() => fireEvent.change(select, { target: { value: requested } }));
       const saved = { ...policy, strategy: expected };
       expect(commandsMatching("set_polling_preferences")[0]?.args).toEqual({
         providerId: "codex",
         policy: saved,
       });
       expect(commandsMatching("update_preferences")).toHaveLength(0);
-      expect(select.value).toBe("300");
-      act(() => acceptPreferences(preferences({ revision: 8, polling: [saved] })));
-      expect(select.value).toBe(
+      expect(select).toHaveProperty("value", "300");
+      act(() => {
+        acceptPreferences(preferences({ revision: 8, polling: [saved] }));
+      });
+      expect(select).toHaveProperty(
+        "value",
         requested === "900" && strategy.kind === "boundary_aware" ? "900" : "",
       );
     },
@@ -486,11 +493,9 @@ describe("General settings controls", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences({ polling: [policy, sibling] }));
     render(<App />);
-    const select = screen.getByRole("combobox", {
-      name: "Background refresh",
-    }) as HTMLSelectElement;
-    expect(select.value).toBe("");
-    await act(async () => fireEvent.change(select, { target: { value: "300" } }));
+    const select = screen.getByRole("combobox", { name: "Background refresh" });
+    expect(select).toHaveProperty("value", "");
+    await act(() => fireEvent.change(select, { target: { value: "300" } }));
     expect(commandsMatching("set_polling_preferences").map((call) => call.args)).toEqual([
       { providerId: "codex", policy },
       {
@@ -523,19 +528,23 @@ describe("Fit presentation and layout changes", () => {
     fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a2" } });
     expect(screen.getAllByRole("article")).toHaveLength(1);
-    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fit 2" })));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Fit 2" })));
     expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(1);
     expect(screen.getAllByRole("article")).toHaveLength(1);
-    act(() => window.dispatchEvent(new Event("quota-fit-overview")));
+    act(() => {
+      window.dispatchEvent(new Event("quota-fit-overview"));
+    });
     expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(screen.queryByRole("searchbox")).toBeNull();
     expect(
       screen.getByRole("button", { name: /^All accounts/ }).getAttribute("aria-pressed"),
     ).toBe("true");
     fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+    expect(screen.getByRole("searchbox")).toHaveProperty("value", "");
     fireEvent.click(screen.getByRole("button", { name: "Details for a2" }));
-    act(() => window.dispatchEvent(new Event("quota-fit-overview")));
+    act(() => {
+      window.dispatchEvent(new Event("quota-fit-overview"));
+    });
     expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(screen.queryByRole("button", { name: "All accounts" })).toBeNull();
   });
@@ -547,7 +556,12 @@ describe("Fit presentation and layout changes", () => {
       class implements ResizeObserver {
         readonly targets = new Set<Element>();
         constructor(callback: ResizeObserverCallback) {
-          observers.push({ targets: this.targets, notify: () => callback([], this) });
+          observers.push({
+            targets: this.targets,
+            notify: () => {
+              callback([], this);
+            },
+          });
         }
         observe(target: Element): void {
           this.targets.add(target);
@@ -597,7 +611,10 @@ describe("Fit presentation and layout changes", () => {
     );
     applyPendingOrder();
     render(<App />);
-    const content = document.querySelector(".overview")!;
+    const content = document.querySelector(".overview");
+    if (content === null) {
+      throw new Error("the overview must be on screen");
+    }
     const resized = (): void => {
       for (const observer of observers)
         if (observer.targets.has(content)) observer.notify();

@@ -591,6 +591,22 @@ export type MonitoringStateChangedPayload = {
 	monitoring_state: MonitoringState,
 };
 
+/**
+ *  Which of the three allowance alerts are switched on.
+ * 
+ *  Each alert is its own choice: the approved design offers 20%, 10%, and 0% as
+ *  three separate selections, so one shared percentage cannot stand in for
+ *  them, and a deselected alert is never written as a null percentage.
+ */
+export type NotificationAlerts = {
+	/**  Notify when an allowance reaches the low threshold. */
+	low: boolean,
+	/**  Notify when an allowance reaches the critical threshold. */
+	critical: boolean,
+	/**  Notify when an allowance is exhausted. */
+	exhausted: boolean,
+};
+
 /**  What the user wants to be told. */
 export type NotificationPolicy = {
 	/**  Whether notifications are enabled at all. */
@@ -611,6 +627,8 @@ export type NotificationThresholds = {
 	critical_percent: number | null,
 	/**  How far past a threshold a reading must recover before it re-arms. */
 	hysteresis_percent: number | null,
+	/**  Which of the three alerts are switched on. */
+	alerts?: NotificationAlerts,
 };
 
 /**  One account's position in the canonical order. */

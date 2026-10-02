@@ -10,7 +10,9 @@ use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::{
     Density, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
 };
-pub use quota_domain::preferences::{NotificationPolicy, NotificationThresholds, QuietHours};
+pub use quota_domain::preferences::{
+    NotificationAlerts, NotificationPolicy, NotificationThresholds, QuietHours,
+};
 
 /// The wire schema version of the preference aggregate.
 pub const PREFERENCES_SCHEMA_VERSION: u32 = 1;

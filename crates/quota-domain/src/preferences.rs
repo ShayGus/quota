@@ -86,6 +86,34 @@ pub struct NotificationThresholds {
     pub critical_percent: f64,
     /// How far past a threshold a reading must recover before it re-arms.
     pub hysteresis_percent: f64,
+    /// Which of the three alerts are switched on.
+    #[serde(default)]
+    pub alerts: NotificationAlerts,
+}
+
+/// Which of the three allowance alerts are switched on.
+///
+/// Each alert is its own choice: the approved design offers 20%, 10%, and 0% as
+/// three separate selections, so one shared percentage cannot stand in for
+/// them, and a deselected alert is never written as a null percentage.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct NotificationAlerts {
+    /// Notify when an allowance reaches the low threshold.
+    pub low: bool,
+    /// Notify when an allowance reaches the critical threshold.
+    pub critical: bool,
+    /// Notify when an allowance is exhausted.
+    pub exhausted: bool,
+}
+
+impl Default for NotificationAlerts {
+    fn default() -> Self {
+        Self {
+            low: true,
+            critical: true,
+            exhausted: true,
+        }
+    }
 }
 
 impl Default for NotificationThresholds {
@@ -94,6 +122,7 @@ impl Default for NotificationThresholds {
             low_percent: 20.0,
             critical_percent: 10.0,
             hysteresis_percent: 3.0,
+            alerts: NotificationAlerts::default(),
         }
     }
 }

@@ -78,7 +78,9 @@ export function ConnectionWizard({
           type="button"
           className="back-button"
           disabled={starting}
-          onClick={() => launch(cancel())}
+          onClick={() => {
+            launch(cancel());
+          }}
         >
           <Icon name="arrow-left" size={13} />
           Cancel
@@ -107,7 +109,9 @@ export function ConnectionWizard({
               key={id}
               type="button"
               className="provider-pick"
-              onClick={() => setProvider(id)}
+              onClick={() => {
+                setProvider(id);
+              }}
             >
               <ProviderMark providerId={id} />
               <span>
@@ -206,7 +210,9 @@ export function ConnectionWizard({
             <input
               type="checkbox"
               checked={confirmed}
-              onChange={(event) => setConfirmed(event.currentTarget.checked)}
+              onChange={(event) => {
+                setConfirmed(event.currentTarget.checked);
+              }}
             />
             I will review the connected account in Accounts.
           </label>
@@ -247,7 +253,9 @@ export function ConnectionWizard({
             maxLength={64}
             value={nickname}
             disabled={busy}
-            onChange={(event) => setNickname(event.currentTarget.value)}
+            onChange={(event) => {
+              setNickname(event.currentTarget.value);
+            }}
           />
           {progress?.kind === "awaiting_user" ? (
             <p className="note" role="status">
@@ -286,7 +294,9 @@ export function ConnectionWizard({
               type="button"
               className="button button--primary"
               disabled={busy || nickname.trim().length === 0}
-              onClick={() => launch(connect())}
+              onClick={() => {
+                launch(connect());
+              }}
             >
               <Icon name={busy ? "clock" : "link"} size={14} />
               {busy ? "Verifying…" : "Connect"}

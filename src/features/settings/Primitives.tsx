@@ -60,7 +60,7 @@ export function Select<T extends string>({
 }: {
   readonly label: string;
   readonly value: T;
-  readonly options: readonly (readonly [T, string])[];
+  readonly options: readonly (readonly [T, string, disabled?: boolean])[];
   readonly onChange: (value: T) => void;
 }): JSX.Element {
   const id = useId();
@@ -82,8 +82,8 @@ export function Select<T extends string>({
           }
         }}
       >
-        {options.map(([candidate, text]) => (
-          <option key={candidate} value={candidate}>
+        {options.map(([candidate, text, unsupported]) => (
+          <option key={candidate} value={candidate} disabled={unsupported === true}>
             {text}
           </option>
         ))}

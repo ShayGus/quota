@@ -127,3 +127,68 @@ export function acceptNativeWindow(nativeWindow: OverviewWindowState): void {
  * of letting a later, older `Started` event replace it.
  */
 export function acceptAttempt(attempt: AttemptProgress): void {
+  const current = state.attempts.find((entry) => entry.attemptId === attempt.attemptId);
+  if (current !== undefined && current.revision >= attempt.revision) {
+    return;
+  }
+  const others = state.attempts.filter((entry) => entry.attemptId !== attempt.attemptId);
+  commit({ ...state, attempts: [...others, attempt] });
+}
+
+/**
+ * Drops a finished attempt once its result is on screen.
+ *
+ * Without this the store would keep one entry per connection for the life of
+ * the process. Only a terminal progress value may be dropped, so an attempt
+ * that is still running can never be forgotten.
+ */
+export function clearAttempt(attemptId: ConnectionAttemptId): void {
+  const current = state.attempts.find((entry) => entry.attemptId === attemptId);
+  if (current === undefined || current.progress.kind === "started") {
+    return;
+  }
+  commit({
+    ...state,
+    attempts: state.attempts.filter((entry) => entry.attemptId !== attemptId),
+  });
+}
+
+/**
+ * Applies the staged presentation order.
+ *
+ * Called when the overview is first opened, from the “Update order” control, and
+ * from the deferred reorder timer once the list is idle (spec 4.3). Row identity
+ * and focus are unaffected, because the order is keyed by account ID.
+ */
+export function applyPendingOrder(): void {
+  const order = state.pendingOrder;
+  if (order === null) {
+    return;
+  }
+  commit({ ...state, appliedOrder: order, pendingOrder: null });
+}
+
+/**
+ * The current order for one snapshot, for a caller that has none in the store.
+ *
+ * Used by the error-recovery path, which rebuilds presentation order without
+ * clearing accounts or restarting polling.
+ */
+export function orderFor(snapshot: AppSnapshot): readonly AccountId[] {
+  return canonicalOrder(snapshot.accounts);
+}
+
+/** Clears every cached value. Used only when the backend instance is replaced. */
+export function resetRendererState(): void {
+  commit(initialRendererState);
+}
+
+/** The number of live subscribers. Used by the Strict Mode subscription test. */
+export function subscriberCount(): number {
+  return listeners.size;
+}
+
+/** The confirmed native state, when the mode and topmost values are known. */
+export function currentNativeWindow(): OverviewWindowState | null {
+  return state.nativeWindow;
+}

@@ -38,9 +38,9 @@ function settingsActions(): SettingsActions {
     renameAccount: vi.fn(),
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
-    beginConnection: vi.fn(async () => ({ id: "attempt-1" })),
-    cancelConnection: vi.fn(async () => undefined),
-    reconnectAccount: vi.fn(async () => undefined),
+    beginConnection: vi.fn(() => Promise.resolve({ id: "attempt-1" })),
+    cancelConnection: vi.fn(() => Promise.resolve(undefined)),
+    reconnectAccount: vi.fn(() => Promise.resolve(undefined)),
     clearHistory: vi.fn(),
     exportDiagnostics: vi.fn(),
   };
@@ -66,45 +66,41 @@ describe("Provider → Connect → Verify", () => {
     fireEvent.change(screen.getByLabelText("Account nickname"), {
       target: { value: "Work" },
     });
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
     expect(actions.beginConnection).toHaveBeenCalledWith({
       provider_id: "claude",
       nickname: "Work",
       profile_label: null,
     });
     expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    act(() =>
+    act(() => {
       acceptAttempt({
         attemptId: "another-attempt",
         revision: 2,
         progress: { kind: "verified", context: { state: "connected" } },
-      }),
-    );
+      });
+    });
     expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
-    act(() =>
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
         progress: { kind: "verified", context: { state: "connected" } },
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
     expect(screen.getByText("Work")).toBeTruthy();
-    const manage = screen.getByRole("button", {
-      name: "Manage accounts",
-    }) as HTMLButtonElement;
-    expect(manage.disabled).toBe(true);
+    const manage = screen.getByRole("button", { name: "Manage accounts" });
+    expect(manage).toHaveProperty("disabled", true);
     fireEvent.click(screen.getByRole("checkbox"));
     fireEvent.click(manage);
-    await waitFor(() =>
-      expect(screen.getByRole("article", { name: "Manage a" })).toBeTruthy(),
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("article", { name: "Manage a" })).toBeTruthy();
+    });
     fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    await waitFor(() =>
-      expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy(),
-    );
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    });
   });
 
   it("starts a fresh wizard when Add reopens settings on the same connection section", async () => {
@@ -115,16 +111,14 @@ describe("Provider → Connect → Verify", () => {
     fireEvent.change(screen.getByLabelText("Account nickname"), {
       target: { value: "Work" },
     });
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
-    act(() =>
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
         progress: { kind: "verified", context: { state: "connected" } },
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
     container.hidden = true;
     act(() => {
@@ -135,20 +129,16 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
     expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    expect((screen.getByLabelText("Account nickname") as HTMLInputElement).value).toBe(
-      "Personal",
-    );
+    expect(screen.getByLabelText("Account nickname")).toHaveProperty("value", "Personal");
     vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
-    act(() =>
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 3,
         progress: { kind: "verified", context: { state: "connected" } },
-      }),
-    );
+      });
+    });
     expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
     expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
   });
@@ -157,27 +147,25 @@ describe("Provider → Connect → Verify", () => {
     const actions = settingsActions();
     render(<Harness actions={actions} />);
     fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
-    act(() =>
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
         progress: { kind: "verified", context: { state: "connected" } },
-      }),
-    );
+      });
+    });
     expect(
       screen.getByText(/Account, workspace, and quota reading have not arrived/),
     ).toBeTruthy();
-    act(() =>
+    act(() => {
       acceptSnapshot(
         snapshot("instance-1", 2, [
           account("a", "claude", 1, []),
           account("b", "codex", 2, [quotaWindow("quota", "session", percent(72))]),
         ]),
-      ),
-    );
+      );
+    });
     expect(screen.getByRole("article", { name: "Saved b" }).textContent).toContain(
       "b@example.test",
     );
@@ -189,7 +177,7 @@ describe("Provider → Connect → Verify", () => {
     );
     expect(screen.queryByText("a@example.test")).toBeNull();
     expect(screen.getByText(/does not identify which account it saved/)).toBeTruthy();
-    act(() =>
+    act(() => {
       acceptPreferences(
         preferences({
           privacy: {
@@ -198,8 +186,8 @@ describe("Provider → Connect → Verify", () => {
             export_identities: false,
           },
         }),
-      ),
-    );
+      );
+    });
     expect(
       screen.getByRole("article", { name: "Saved Account 2" }).textContent,
     ).toContain("Workspace hidden");
@@ -211,10 +199,8 @@ describe("Provider → Connect → Verify", () => {
     const actions = settingsActions();
     render(<Harness actions={actions} />);
     fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
-    act(() =>
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
@@ -222,56 +208,54 @@ describe("Provider → Connect → Verify", () => {
           kind: "failed",
           context: { error: { kind: "secure_store_unavailable" } },
         },
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("alert").textContent).toContain("key store is unavailable");
     vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" })),
-    );
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Cancel" })));
     expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-2" });
   });
 
   it("preserves verification received before the begin command returns", async () => {
-    invoke.mockImplementation(async () => {
+    invoke.mockImplementation(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 2,
         progress: { kind: "verified", context: { state: "connected" } },
       });
-      return { attempt_ref: { id: "attempt-1" }, attempt_id: "attempt-1" };
+      return Promise.resolve({
+        attempt_ref: { id: "attempt-1" },
+        attempt_id: "attempt-1",
+      });
     });
     const actions = {
       ...settingsActions(),
-      beginConnection: hostActions.beginConnection,
+      beginConnection: hostActions.beginConnection.bind(hostActions),
     };
     render(<Harness actions={actions} />);
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
     expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
-    act(() =>
+    act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
         revision: 1,
         progress: { kind: "started" },
-      }),
-    );
+      });
+    });
     expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeTruthy();
     expect(getRendererState().attempts[0]?.revision).toBe(2);
   });
 
   it("keeps a refused connection on Connect with a useful message", async () => {
-    const actions = { ...settingsActions(), beginConnection: vi.fn(async () => null) };
+    const actions = {
+      ...settingsActions(),
+      beginConnection: vi.fn(() => Promise.resolve(null)),
+    };
     render(<Harness actions={actions} />);
     fireEvent.click(screen.getByRole("button", { name: /^OpenCode Go/ }));
-    await act(async () =>
-      fireEvent.click(screen.getByRole("button", { name: "Connect" })),
-    );
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
     expect(screen.getByRole("alert").textContent).toContain("connection was refused");
     expect(screen.queryByRole("heading", { name: "Verify your connection" })).toBeNull();
   });

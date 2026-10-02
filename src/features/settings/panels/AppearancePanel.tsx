@@ -46,7 +46,9 @@ export function AppearancePanel({
             type="button"
             className="theme-option"
             aria-pressed={preferences.theme === theme}
-            onClick={() => actions.savePreferences(withTheme(preferences, theme))}
+            onClick={() => {
+              actions.savePreferences(withTheme(preferences, theme));
+            }}
           >
             <div className={`theme-thumbnail theme-thumbnail--${theme}`}>
               <span>

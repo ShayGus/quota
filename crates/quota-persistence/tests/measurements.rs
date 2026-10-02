@@ -332,6 +332,7 @@ async fn opting_out_of_local_history_stops_new_history_rows() {
                 low_percent: 20.0,
                 critical_percent: 10.0,
                 hysteresis_percent: 3.0,
+                ..NotificationThresholds::default()
             },
             recovery_enabled: false,
             quiet_hours: QuietHours::Never,

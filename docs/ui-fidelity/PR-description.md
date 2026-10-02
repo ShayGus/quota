@@ -15,3 +15,8 @@ transitions are serialized through persistence and publication.
 - Try narrow view, Move with keys, and Launch at login remain visible and disabled with
   precise capability notices. The host lacks narrow-width and keyboard movement commands,
   login registration, and a confirmed login-enabled flag.
+- Local history retention is the approved selector, but only **Disabled** and **Keep
+  indefinitely** are selectable. The host has no retention sweep, so the mockup's 7 days
+  and 30 days periods are shown disabled with a precise notice. The current state is named
+  by an extra option the mockup does not list, so the control never claims a period the
+  host does not apply.

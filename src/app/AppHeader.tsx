@@ -41,7 +41,9 @@ export function AppHeader({
           type="button"
           className="icon-button"
           aria-label="Close settings"
-          onClick={() => launch(actions.closeWindow())}
+          onClick={() => {
+            launch(actions.closeWindow());
+          }}
         >
           <Icon name="close" size={17} />
         </button>
@@ -67,9 +69,9 @@ export function AppHeader({
           aria-label={
             mode === "floating" ? "Switch to tray popover" : "Switch to floating window"
           }
-          onClick={() =>
-            launch(actions.setOverviewMode(mode === "floating" ? "tray" : "floating"))
-          }
+          onClick={() => {
+            launch(actions.setOverviewMode(mode === "floating" ? "tray" : "floating"));
+          }}
         >
           <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
           {mode === "floating" ? "Floating" : "Tray"}
@@ -112,7 +114,9 @@ export function AppHeader({
           className="icon-button"
           aria-label="Hide Quota to tray"
           title="Hide to tray; keep monitoring"
-          onClick={() => launch(actions.closeWindow())}
+          onClick={() => {
+            launch(actions.closeWindow());
+          }}
         >
           <Icon name="close" size={17} />
         </button>

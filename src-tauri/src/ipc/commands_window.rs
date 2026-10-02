@@ -109,10 +109,18 @@ pub async fn fit_overview_to_accounts(
             f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
         ))
         .map_err(|_| window::failed("center_fitted_window"))?;
-    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+    // Applying the chrome and recording the mode are one transition. If the
+    // saved preference never takes, the window goes back to the chrome it had,
+    // rather than floating with no recorded mode behind it.
+    let previous_mode = controller.state().mode;
+    if let Err(error) = crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
         preferences.overview_mode = OverviewMode::Floating;
     })
-    .await?;
+    .await
+    {
+        let _ = window::apply_mode_chrome(&native, previous_mode);
+        return Err(error);
+    }
     controller.set_mode(OverviewMode::Floating);
     native
         .eval("window.dispatchEvent(new Event('quota-fit-overview'));")

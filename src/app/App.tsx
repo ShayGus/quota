@@ -127,7 +127,9 @@ function QuotaWindow(): JSX.Element {
       setView({ name: "overview" });
     };
     window.addEventListener("quota-fit-overview", fit);
-    return () => window.removeEventListener("quota-fit-overview", fit);
+    return () => {
+      window.removeEventListener("quota-fit-overview", fit);
+    };
   }, [isSettingsWindow]);
 
   useLayoutEffect(() => {
@@ -229,8 +231,12 @@ function QuotaWindow(): JSX.Element {
                 account,
               )}
               now={now}
-              onUsagePage={() => launch(actions.openUsagePage(account.account_id))}
-              onManageAccounts={() => launch(actions.openSettings("accounts"))}
+              onUsagePage={() => {
+                launch(actions.openUsagePage(account.account_id));
+              }}
+              onManageAccounts={() => {
+                launch(actions.openSettings("accounts"));
+              }}
               onBack={() => {
                 setView({ name: "overview" });
               }}
@@ -241,7 +247,9 @@ function QuotaWindow(): JSX.Element {
       {isSettingsWindow ? null : (
         <WindowFooter
           counts={account !== null ? null : counts}
-          onAddAccount={() => launch(actions.openSettings("connect"))}
+          onAddAccount={() => {
+            launch(actions.openSettings("connect"));
+          }}
         />
       )}
     </div>

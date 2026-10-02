@@ -651,7 +651,7 @@ describe("review regressions", () => {
     acceptSnapshot(snapshot("instance-1", 1, initial));
     applyPendingOrder();
     render(<Harness />);
-    act(() =>
+    act(() => {
       acceptSnapshot(
         snapshot(
           "instance-1",
@@ -665,8 +665,8 @@ describe("review regressions", () => {
             });
           }),
         ),
-      ),
-    );
+      );
+    });
     expect(rowOrder()).toEqual(["a1", "a2", "a3"]);
     const headings = [...document.querySelectorAll(".section-separator strong")].map(
       (element) => element.textContent,

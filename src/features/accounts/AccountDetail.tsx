@@ -138,6 +138,12 @@ export function AccountDetail({
     controlling === undefined
       ? "no current reading"
       : formatRemaining(controlling.measurement);
+  // The reading the person is looking at: the card they chose, else the first.
+  const shown = selected ?? account.windows[0];
+  const readingSource =
+    shown === undefined
+      ? "No reading"
+      : `${SOURCE_WORDS[shown.source]} · ${shown.scope.label}`;
   return (
     <section className="detail" aria-label={`Account details for ${label}`}>
       <div className="detail__back">
@@ -187,7 +193,11 @@ export function AccountDetail({
       <dl className="detail__list">
         <div>
           <dt>Account</dt>
-          <dd>{account.nickname}</dd>
+          <dd>{account.identity?.principal_label ?? account.nickname}</dd>
+        </div>
+        <div>
+          <dt>Local account ID</dt>
+          <dd>{account.account_id}</dd>
         </div>
         <div>
           <dt>Provider</dt>
@@ -208,6 +218,10 @@ export function AccountDetail({
               ? "Not verified"
               : SOURCE_WORDS[account.identity.source]}
           </dd>
+        </div>
+        <div>
+          <dt>Reading source</dt>
+          <dd>{readingSource}</dd>
         </div>
         <div>
           <dt>Connection</dt>

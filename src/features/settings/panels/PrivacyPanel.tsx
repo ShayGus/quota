@@ -20,6 +20,22 @@ const ALIAS_MODES: readonly (readonly [PrivacyAliasMode, string])[] = [
 ];
 
 /**
+ * The retention periods, and which of them this build can actually apply.
+ *
+ * The host has no retention sweep, so only Disabled and keeping indefinitely are
+ * real choices; the two durations the mockup offers are shown but refused.
+ */
+const RETENTION: readonly (readonly [
+  "indefinite" | "0" | "7" | "30",
+  string,
+  boolean?,
+])[] = [
+  ["indefinite", "Keep indefinitely"],
+  ["0", "Disabled"],
+  ["7", "7 days", true],
+  ["30", "30 days", true],
+];
+/**
  * The diagnostic export row.
  *
  * The destination is chosen by the person and validated by the host. This window
@@ -111,18 +127,23 @@ export function PrivacyPanel({
         }
       />
       <SettingRow
-        label="Retain local history"
+        label="Local history retention"
         description="Keeps normalized history for the retention period. Current readings and backoff are always kept."
         control={
-          <Switch
-            checked={preferences.privacy.retain_history}
-            label="Retain local history"
-            onChange={(next) => {
-              actions.savePreferences(withRetainHistory(preferences, next));
+          <Select
+            label="Local history retention"
+            value={preferences.privacy.retain_history ? "indefinite" : "0"}
+            options={RETENTION}
+            onChange={(value) => {
+              actions.savePreferences(withRetainHistory(preferences, value !== "0"));
             }}
           />
         }
       />
+      <p className="note">
+        This build has no retention sweep, so history is kept until you clear it. The 7
+        days and 30 days periods cannot be selected yet.
+      </p>
       <SettingRow
         label="Include identities in diagnostics"
         description="Off by default. The export never contains tokens, cookies, or provider payloads."
