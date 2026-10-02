@@ -52,11 +52,14 @@ cargo xtask bindings --check
 From `the repository root`:
 
 ```bash
-bun run typecheck && bun run lint && bun run format:check && bun run test && bun run build
+bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
 ```
 
 CI runs exactly these commands. If a command passes locally and fails in CI, the
 difference is the environment, not the command.
+
+The inspection checks are described in
+[the inspection guide](docs/inspecting-the-app.md#why-it-cannot-reach-a-release).
 
 ### Measured times
 

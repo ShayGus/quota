@@ -9,6 +9,7 @@ mod bindings;
 mod cargo_manifest;
 mod check_architecture;
 mod check_release;
+mod inspection_renderer;
 mod outcome;
 mod scan;
 mod toml;

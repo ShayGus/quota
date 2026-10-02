@@ -79,6 +79,27 @@ The workspace therefore pins `sqlx 0.8.6`. Moving to the 0.9 line is blocked unt
 specification forbids. This is a compatibility hold with a known unlock condition, not a
 preference.
 
+## Development-only agent inspection
+
+[`tauri-plugin-mcp`](https://github.com/P3GLEG/tauri-plugin-mcp) is a git dependency;
+[`Cargo.toml`](../Cargo.toml) owns its audited revision. The
+[inspection guide](inspecting-the-app.md) owns tool behavior, startup, Linux native
+prerequisites, and release exclusion rules.
+
+Two licence facts were checked rather than assumed, and both look like a mistake:
+
+- The crate's `Cargo.toml` at the audited commit declares no `license` field, and the
+  repository ships no `LICENSE` file (verified with `git ls-tree HEAD` in the pinned
+  checkout, and against `main` on GitHub).
+- The npm package `tauri-plugin-mcp` 0.3.1 declares `"license": "MIT"`, which is the
+  licence the project publishes under.
+
+The recorded clean `cargo deny check advisories licenses sources` result covers the
+default graph, which excludes the optional inspection crate; it does not establish a
+matched licence for that crate. `deny.toml` still holds `unknown-git = "deny"` and an
+empty `allow-git`. A future change that made the crate part of the default graph would
+fail the source check, and that is the review point.
+
 ## How to re-verify
 
 ```bash

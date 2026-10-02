@@ -21,8 +21,8 @@ quota-desktop (src-tauri) — composition, thin commands, OS adapters
   └── platform modules — tray and floating window
 ```
 
-`xtask` is a build tool. It depends on `quota-domain` and `serde_json` only, and nothing
-in the application depends on it.
+`xtask` is a build tool, and nothing in the application depends on it.
+[`xtask/Cargo.toml`](../xtask/Cargo.toml) owns its dependencies.
 
 ## Allowed dependency directions
 
@@ -74,11 +74,16 @@ into those tables.
 
 Rust is the contract source of truth. Commands and events are Rust structs and enums with
 Serde and Specta derives; TypeScript definitions are generated from them. The renderer
-calls generated typed wrappers only. Raw `invoke(`, `listen(`, and `emit(` are confined to
-`src/generated/` and an audited integration wrapper under `src/shared/ipc/`.
+uses generated typed wrappers for application commands. Raw `invoke(`, `listen(`, and
+`emit(` are confined to `src/generated/` and audited integration wrappers under
+`src/shared/ipc/`.
 
 An event is transient delivery, not a durable log and not a mutation authority. No backend
 listener accepts a renderer-originated event as a command.
+
+Development-only agent inspection has guest event handlers; their window authorization
+boundary is documented in
+[the inspection guide](inspecting-the-app.md#what-an-agent-gets).
 
 ## Decision records
 

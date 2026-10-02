@@ -65,6 +65,12 @@ sqlx = { version = "0.8.6", default-features = false, features = [
 ] }
 tauri = { version = "2.12.1", features = [] }
 tauri-build = { version = "2.7.1", features = [] }
+# Development-only agent inspection (screenshots, DOM, console logs, IPC). The
+# member manifest makes it an optional dependency behind the non-default
+# `agent-inspection` feature, so ordinary release builds do not compile or link
+# it, and `cargo xtask check-release` fails if that ever stops being true. The pin is a
+# full commit: a branch or tag can be moved after review.
+tauri-plugin-mcp = { git = "https://github.com/P3GLEG/tauri-plugin-mcp", rev = "c7d271a06469bdf4744bfdeadca7458a1f3d02e5" }
 tauri-plugin-notification = "2.5.0"
 tauri-plugin-opener = "2.7.0"
 tauri-plugin-positioner = "2.4.0"
@@ -73,6 +79,7 @@ tauri-plugin-sql = { version = "2.5.0", features = ["sqlite"] }
 tauri-plugin-store = "2.5.0"
 tauri-plugin-window-state = "2.5.0"
 tauri-specta = "=2.0.0-rc.25"
+tempfile = "3.27.0"
 thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
 tracing = "0.1.44"

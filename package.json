@@ -7,12 +7,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "check:release:renderer": "bun run build",
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.test.json --noEmit",
     "lint": "eslint .",
     "format:check": "prettier --check .",
     "format": "prettier --write .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "inspect": "tauri dev --features agent-inspection --config '{\"app\":{\"security\":{\"capabilities\":[\"overview-capability\",\"settings-capability\",\"agent-inspection-capability\"]}}}'"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.1",
@@ -35,6 +37,8 @@
     "jsdom": "30.1.1",
     "oxc-transform-react": "0.152.0",
     "prettier": "3.9.9",
+    "tauri-plugin-mcp": "0.3.1",
+    "tauri-plugin-mcp-server": "0.3.1",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.0",
     "vite": "8.3.1",

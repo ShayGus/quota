@@ -18,6 +18,22 @@ import "./shared/ui/overview.css";
 import "./shared/ui/surfaces.css";
 import "./shared/ui/settings.css";
 
+// Development-only overview listeners. `manage_ipc` records only calls an
+// agent issues through the plugin's tools; ordinary frontend invokes are not
+// intercepted. Vite removes this guarded import from a production build.
+if (import.meta.env.DEV) {
+  import("./shared/ipc/inspection")
+    .then(async ({ canInspectCurrentWindow }) => {
+      if (await canInspectCurrentWindow()) {
+        const { setupPluginListeners } = await import("tauri-plugin-mcp");
+        await setupPluginListeners();
+      }
+    })
+    .catch((error: unknown) => {
+      console.error("agent inspection listeners failed", error);
+    });
+}
+
 const container = document.getElementById("root");
 if (container === null) {
   throw new Error("the renderer root element is missing from index.html");
