@@ -41,7 +41,6 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_tray_icon_event(move |tray, event| {
             let app = tray.app_handle();
-            tauri_plugin_positioner::on_tray_event(app, &event);
             // A saved Tray mode whose startup anchor failed, because the icon
             // was not placed yet, is completed by the next tray event.
             // The lock is only inspected here, never held, so a busy controller
