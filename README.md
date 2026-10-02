@@ -89,8 +89,8 @@ intended, and choose Add account. Nothing is saved and no monitoring starts befo
 choice; Back, Cancel, closing the popover, or restarting the app discards the verified
 result and leaves no account behind. With Hide account labels enabled, a pending identity
 is replaced exactly as a saved one is. Starting a new Add account request opens a fresh
-wizard. [Provider credential discovery](docs/providers.md) owns the supported locations and
-overrides, including Windows defaults that work without `HOME`.
+wizard. [Provider credential discovery](docs/providers.md) owns the supported locations
+and overrides, including Windows defaults that work without `HOME`.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any
 backoff deadline. Checks that do not send a request leave the due time unchanged. When you

@@ -10,8 +10,7 @@ fn failed_document_writes_restore_cache_before_a_later_plugin_save() {
         .plugin(tauri_plugin_store::Builder::default().build())
         .build(mock_context(noop_assets()))
         .unwrap();
-    let directory =
-        tempfile::tempdir_in(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target")).unwrap();
+    let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("preferences.json");
     let store = app
         .store_builder(&path)
