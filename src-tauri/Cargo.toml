@@ -21,6 +21,15 @@ path = "src/main.rs"
 tauri-build = { workspace = true }
 
 [features]
+# Development-only agent inspection: screenshots, the DOM, the console log, and
+# IPC traffic, over a Unix socket an AI agent connects to. It is a non-default
+# feature, so `cargo build --release`, `cargo test`, and clippy never compile
+# the plugin or its native screenshot library. Cargo does not support
+# `cfg(debug_assertions)` for selecting a dependency, so the build profile
+# cannot do this job; `bootstrap.rs` still refuses to register the plugin
+# unless `debug_assertions` is also set, and `cargo xtask check-release` fails
+# if this feature or the plugin enters any release feature set.
+agent-inspection = ["dep:tauri-plugin-mcp"]
 # Loads the built renderer from `frontendDist` instead of the dev server URL.
 # This is how the app is started locally; it is not a default feature.
 custom-protocol = ["tauri/custom-protocol"]
@@ -42,6 +51,7 @@ serde_json = { workspace = true }
 specta = { workspace = true, features = ["derive"] }
 specta-typescript = { workspace = true }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
+tauri-plugin-mcp = { workspace = true, optional = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-positioner = { workspace = true, features = ["tray-icon"] }

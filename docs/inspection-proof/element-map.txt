@@ -1,0 +1,148 @@
+{
+  "content": "All accounts Needs attention Least remaining first Position is relative depletion of the lowest known included allowance. It is not a forecast of when an allowance empties. No account matches the current filter or search text. / shown Quota 0 accounts · providers Floating Monitoring active",
+  "elements": [
+    {
+      "depth": 1,
+      "id": "root",
+      "ref": 1,
+      "tag": "div",
+      "text": "Quota\n0 accounts · 0 providers\n\nFloating\n\nAll accounts 0\nNeeds attention 0\nLeast remaining first\n..."
+    },
+    {
+      "context": "header.shell__header",
+      "depth": 3,
+      "interactive": false,
+      "parentRef": 1,
+      "ref": 2,
+      "tag": "header",
+      "text": "Quota\n0 accounts · 0 providers\n\nFloating"
+    },
+    {
+      "context": "header.shell__header",
+      "depth": 6,
+      "interactive": false,
+      "parentRef": 2,
+      "ref": 3,
+      "tag": "h1",
+      "text": "Quota"
+    },
+    {
+      "context": "header.shell__header",
+      "depth": 6,
+      "interactive": false,
+      "parentRef": 2,
+      "ref": 4,
+      "tag": "p",
+      "text": "0 accounts · 0 providers"
+    },
+    {
+      "checked": false,
+      "context": "header.shell__header",
+      "depth": 5,
+      "parentRef": 2,
+      "ref": 5,
+      "tag": "button",
+      "text": "Keep the window on top"
+    },
+    {
+      "context": "header.shell__header",
+      "depth": 5,
+      "parentRef": 2,
+      "ref": 6,
+      "tag": "button",
+      "text": "Open settings"
+    },
+    {
+      "context": "main.shell__main",
+      "depth": 3,
+      "interactive": false,
+      "parentRef": 1,
+      "ref": 7,
+      "tag": "main",
+      "text": "All accounts 0\nNeeds attention 0\nLeast remaining first\nSearch accounts\nPosition is relative deple..."
+    },
+    {
+      "ariaLabel": "Filter accounts",
+      "context": "main.shell__main",
+      "depth": 7,
+      "interactive": false,
+      "parentRef": 7,
+      "ref": 8,
+      "role": "group",
+      "tag": "div",
+      "text": "All accounts 0\nNeeds attention 0"
+    },
+    {
+      "checked": true,
+      "context": "main.shell__main",
+      "depth": 8,
+      "parentRef": 8,
+      "ref": 9,
+      "tag": "button",
+      "text": "All accounts 0"
+    },
+    {
+      "checked": false,
+      "context": "main.shell__main",
+      "depth": 8,
+      "parentRef": 8,
+      "ref": 10,
+      "tag": "button",
+      "text": "Needs attention 0"
+    },
+    {
+      "context": "main.shell__main",
+      "depth": 6,
+      "interactive": false,
+      "parentRef": 7,
+      "ref": 11,
+      "tag": "label",
+      "text": "Search accounts",
+      "visible": false
+    },
+    {
+      "context": "main.shell__main",
+      "depth": 6,
+      "id": "_r_0_",
+      "parentRef": 7,
+      "placeholder": "Search accounts",
+      "ref": 12,
+      "tag": "input",
+      "text": "Search accounts",
+      "type": "search"
+    },
+    {
+      "context": "main.shell__main",
+      "depth": 5,
+      "interactive": false,
+      "parentRef": 7,
+      "ref": 13,
+      "tag": "p",
+      "text": "Position is relative depletion of the lowest known included allowance. It is not a forecast of wh..."
+    },
+    {
+      "context": "main.shell__main",
+      "depth": 5,
+      "interactive": false,
+      "parentRef": 7,
+      "ref": 14,
+      "tag": "p",
+      "text": "0 / 0 shown"
+    },
+    {
+      "context": "footer.shell__footer",
+      "depth": 3,
+      "interactive": false,
+      "parentRef": 1,
+      "ref": 15,
+      "tag": "footer",
+      "text": "Monitoring active"
+    }
+  ],
+  "title": "Quota",
+  "url": "http://localhost:1420/",
+  "viewport": {
+    "height": 720,
+    "width": 810
+  }
+}

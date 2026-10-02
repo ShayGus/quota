@@ -1,0 +1,11 @@
+# logs: showing 6/6 matched (buffer 16/5000, dropped 0)
+# counts: error=2 warn=0 info=0 debug=4 trace=10 | rust=0 js=16 marker=0
+# 10 plugin-internal entries hidden (pass include_plugin=true to see them)
+# nextCursor=7 (pass as since_id to paginate)
+
+[00:25:47.616][ERROR][JS    ] localhost:1420/index.html UnhandledRejection: notification.is_permission_granted not allowed. Permissions associated with this command: notification:allow-is-permission-granted, notification:default
+[00:25:47.616][ERROR][JS    ] localhost:1420/ UnhandledRejection: notification.is_permission_granted not allowed. Permissions associated with this command: notification:allow-is-permission-granted, notification:default
+[00:25:47.735][DEBUG][JS    ] localhost:1420/ [vite] connecting...
+[00:25:47.783][DEBUG][JS    ] localhost:1420/index.html [vite] connecting...
+[00:25:47.803][DEBUG][JS    ] localhost:1420/ [vite] connected.
+[00:25:47.826][DEBUG][JS    ] localhost:1420/index.html [vite] connected.

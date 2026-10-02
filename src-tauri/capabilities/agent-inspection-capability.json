@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "agent-inspection-capability",
+  "description": "Development-only. Grants the two commands the inspection plugin's guest binding uses to forward console.* calls and observed IPC traffic into the plugin's ring buffers, so an agent can read them. No other plugin command is reachable from a window; every other inspection tool travels over the plugin's authenticated Unix socket, not through IPC. The plugin itself is registered only by a debug build that also selects the non-default `agent-inspection` feature, so this grant has no effect on a release artifact.",
+  "windows": ["overview", "settings"],
+  "permissions": ["mcp:default"]
+}

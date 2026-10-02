@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "quota-inspection": {
+      "command": "bun",
+      "args": ["x", "tauri-mcp-server"]
+    }
+  }
+}

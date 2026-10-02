@@ -421,35 +421,60 @@ pub fn start() -> Result<(), String> {
     let window_state = tauri_plugin_window_state::Builder::default()
         .with_state_flags(state_flags)
         .build();
-    tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            // A second launch only brings the running overview forward. It
-            // never opens the settings window, which stays as the person left
-            // it.
-            let _ = crate::platform::window::activate_overview(app);
-        }))
-        .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_sql::Builder::default().build())
-        .plugin(window_state)
-        .plugin(tauri_plugin_positioner::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_notification::init())
-        .invoke_handler(registry.invoke_handler())
-        .setup(move |app| {
-            registry.mount_events(app);
-            let handle = app.handle().clone();
-            crate::platform::tray::install(&handle)?;
-            crate::platform::window::install_close_handlers(&handle);
-            // The overview is the only window a launch opens. The settings
-            // window was created hidden and waits for a person to ask for it.
-            crate::platform::window::activate_overview(&handle)?;
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) = initialize_backend(handle).await {
-                    tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
-                }
-            });
-            Ok(())
-        })
-        .run(tauri::generate_context!())
-        .map_err(|error| format!("desktop_host_start_failed:{error}"))
+    with_agent_inspection(
+        tauri::Builder::default()
+            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+                // A second launch only brings the running overview forward. It
+                // never opens the settings window, which stays as the person left
+                // it.
+                let _ = crate::platform::window::activate_overview(app);
+            }))
+            .plugin(tauri_plugin_store::Builder::new().build())
+            .plugin(tauri_plugin_sql::Builder::default().build())
+            .plugin(window_state)
+            .plugin(tauri_plugin_positioner::init())
+            .plugin(tauri_plugin_opener::init())
+            .plugin(tauri_plugin_notification::init()),
+    )
+    .invoke_handler(registry.invoke_handler())
+    .setup(move |app| {
+        registry.mount_events(app);
+        let handle = app.handle().clone();
+        crate::platform::tray::install(&handle)?;
+        crate::platform::window::install_close_handlers(&handle);
+        // The overview is the only window a launch opens. The settings
+        // window was created hidden and waits for a person to ask for it.
+        crate::platform::window::activate_overview(&handle)?;
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = initialize_backend(handle).await {
+                tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
+            }
+        });
+        Ok(())
+    })
+    .run(tauri::generate_context!())
+    .map_err(|error| format!("desktop_host_start_failed:{error}"))
+}
+
+/// Registers the agent inspection plugin, which no release build can reach.
+///
+/// The plugin opens a Unix socket an AI agent connects to for screenshots, the
+/// DOM, the console log, and IPC calls. Both conditions must hold: the
+/// `agent-inspection` feature, which no release feature set selects, and
+/// `debug_assertions`, so a release build compiles neither the plugin nor this
+/// call. The plugin's own release refusal stays armed as a third line. See
+/// `docs/inspecting-the-app.md` for the client side.
+#[cfg(all(debug_assertions, feature = "agent-inspection"))]
+fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    // The defaults start the socket server on a random authentication token,
+    // which is written beside the socket as `/tmp/tauri-mcp.sock.token`.
+    builder.plugin(tauri_plugin_mcp::init_with_config(
+        tauri_plugin_mcp::PluginConfig::new("Quota".to_string()),
+    ))
+}
+
+/// Every other build registers no inspection plugin; see the enabled twin.
+#[cfg(not(all(debug_assertions, feature = "agent-inspection")))]
+fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    builder
 }
