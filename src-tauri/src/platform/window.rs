@@ -110,7 +110,7 @@ pub fn install_close_handlers(app: &AppHandle) {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 if let Err(error) = native_for_event.hide() {
-                    tracing::warn!(%error, "the overview could not be hidden on close");
+                    tracing::warn!(%error, %label, "the window could not be hidden on close");
                 }
                 if label == "overview"
                     && let Some(state) = app.try_state::<crate::state::AppState>()
