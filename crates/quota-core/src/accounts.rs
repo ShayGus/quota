@@ -264,6 +264,7 @@ impl AccountRegistry {
         if !entry.binding.accepts(binding) {
             return Err(CoreError::StaleResult);
         }
+        entry.stored.fetch_state = quota_domain::account::FetchState::Fetching;
         entry.stored.last_attempt_at = Some(dispatched_at);
         entry.stored.next_attempt_at = next_attempt_at;
         Ok(entry)

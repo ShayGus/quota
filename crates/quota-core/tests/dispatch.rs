@@ -72,6 +72,7 @@ fn reconnect_before_dispatch_rejects_the_old_binding_without_stamping() {
         )
         .unwrap();
     assert_eq!(dispatched.binding, before.binding);
+    assert_eq!(dispatched.stored.fetch_state, FetchState::Fetching);
     assert_eq!(dispatched.stored.last_attempt_at, Some(now));
     assert_eq!(dispatched.stored.last_success_at, None);
     assert_eq!(

@@ -22,6 +22,12 @@ unrelated account content to the UI.
 | Live verification         | Not performed. No Codex login was read on this machine.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 | Undocumented-schema risk  | High. The `/backend-api` routes are undocumented and carry no pinned schema version, so a field rename or a new wrapper object must degrade to a typed "unsupported" state rather than a fabricated zero.                                                                                                                                                                                                                                                                                                                                            |
 
+The single-window interpretation follows the TaskbarQuota provider investigation report,
+section 12, Codex P1 row "Support credits-only and lone monthly responses", with acceptance
+evidence "Credits-only connects. No fabricated secondary allowance." A lone account
+window of twenty days or more is monthly; a lone first window of at least one day has no
+fabricated secondary allowance, and a lone secondary window takes the primary slot.
+
 The app-server path is the preferred route in the specification because it is a documented
 interface. Before it is adopted, its startup behaviour must be verified for each supported
 version, and it must run with an isolated configuration and a neutral working directory so

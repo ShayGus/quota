@@ -7,6 +7,7 @@
 
 mod support;
 
+use quota_core::AccountRegistry;
 use quota_core::ports::{
     AccountRepository as AccountPort, HistoryRepository as HistoryPort, MonitoringRepository,
 };
@@ -171,5 +172,82 @@ async fn monitoring_state_defaults_once_and_then_round_trips() {
     assert_eq!(
         MonitoringState::Paused,
         port.load_monitoring_state().await.unwrap()
+    );
+}
+
+#[tokio::test]
+async fn metadata_during_dispatch_does_not_persist_a_successful_read() {
+    let directory = TempDir::new("dispatch-metadata");
+    let repositories = SqliteRepositories::new(migrated(&directory).await);
+    let account_id = AccountId::new("acct-a").unwrap();
+    let connection_id = ConnectionId::new("conn-a").unwrap();
+    repositories
+        .accounts()
+        .upsert_connection(&connection("conn-a"))
+        .await
+        .unwrap();
+    repositories
+        .accounts()
+        .upsert_account(&account("acct-a", "conn-a", 1, "Personal"))
+        .await
+        .unwrap();
+    repositories
+        .accounts()
+        .record_attempt(&account_id, FetchState::Idle, at(1), None)
+        .await
+        .unwrap();
+    let port = SqliteAccountPortAdapter::new(repositories);
+    let mut registry = AccountRegistry::from_stored(port.load_accounts().await.unwrap());
+    let binding = registry.get(&account_id).unwrap().binding.clone();
+    registry
+        .record_dispatch(&account_id, &binding, at(2), Some(at(3)))
+        .unwrap();
+    registry.rename(&account_id, "Renamed").unwrap();
+    port.upsert_account(registry.get(&account_id).unwrap().stored.clone())
+        .await
+        .unwrap();
+    registry.set_enabled(&account_id, false).unwrap();
+    port.upsert_account(registry.get(&account_id).unwrap().stored.clone())
+        .await
+        .unwrap();
+    let generation = port.bump_generation(&connection_id).await.unwrap();
+    registry.set_generation(&connection_id, generation).unwrap();
+    registry
+        .set_connection_state(&connection_id, ConnectionState::Connecting)
+        .unwrap();
+    port.upsert_account(registry.get(&account_id).unwrap().stored.clone())
+        .await
+        .unwrap();
+    let pending = port.load_accounts().await.unwrap().remove(0);
+    assert_eq!(pending.last_success_at, Some(at(1)));
+    assert_eq!(pending.last_attempt_at, Some(at(2)));
+    assert_eq!(pending.fetch_state, FetchState::Fetching);
+    assert_eq!(pending.nickname, "Renamed");
+    assert!(!pending.monitoring_enabled);
+    assert_eq!(pending.connection.generation, generation);
+
+    for failure in [FetchState::Error, FetchState::Backoff, FetchState::Offline] {
+        registry
+            .record_attempt(&account_id, failure, at(3), Some(at(4)))
+            .unwrap();
+        port.upsert_account(registry.get(&account_id).unwrap().stored.clone())
+            .await
+            .unwrap();
+        let restored = AccountRegistry::from_stored(port.load_accounts().await.unwrap());
+        assert_eq!(
+            restored.get(&account_id).unwrap().stored.last_success_at,
+            Some(at(1))
+        );
+    }
+    registry
+        .record_attempt(&account_id, FetchState::Idle, at(4), Some(at(5)))
+        .unwrap();
+    port.upsert_account(registry.get(&account_id).unwrap().stored.clone())
+        .await
+        .unwrap();
+    let restored = AccountRegistry::from_stored(port.load_accounts().await.unwrap());
+    assert_eq!(
+        restored.get(&account_id).unwrap().stored.last_success_at,
+        Some(at(4))
     );
 }

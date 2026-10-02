@@ -100,23 +100,28 @@ export function Settings({
             Quota has not received the confirmed preferences yet. Settings appear as soon
             as the backend publishes them.
           </p>
-        ) : tab === "window" ? (
-          <WindowPanel
-            preferences={preferences}
-            nativeWindow={state.nativeWindow}
-            actions={actions}
-          />
-        ) : tab === "appearance" ? (
-          <AppearancePanel preferences={preferences} actions={actions} />
-        ) : tab === "accounts" ? (
-          <AccountsPanel
-            accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
-            attempts={state.attempts}
-            now={now}
-            actions={actions}
-          />
         ) : (
-          <PrivacyPanel preferences={preferences} actions={actions} />
+          <>
+            <div hidden={tab !== "accounts"}>
+              <AccountsPanel
+                accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+                attempts={state.attempts}
+                now={now}
+                actions={actions}
+              />
+            </div>
+            {tab === "window" ? (
+              <WindowPanel
+                preferences={preferences}
+                nativeWindow={state.nativeWindow}
+                actions={actions}
+              />
+            ) : tab === "appearance" ? (
+              <AppearancePanel preferences={preferences} actions={actions} />
+            ) : tab === "privacy" ? (
+              <PrivacyPanel preferences={preferences} actions={actions} />
+            ) : null}
+          </>
         )}
       </div>
     </section>

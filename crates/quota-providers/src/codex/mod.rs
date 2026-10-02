@@ -42,22 +42,6 @@ const PRIMARY_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
 /// The second usage endpoint, tried when the first yields nothing usable.
 const FALLBACK_URL: &str = "https://chatgpt.com/backend-api/codex/usage";
 
-/// The response header that overrides the account's first used percentage.
-pub(crate) const PRIMARY_USED_HEADER: &str = "x-codex-primary-used-percent";
-
-/// The response header that overrides the account's second used percentage.
-pub(crate) const SECONDARY_USED_HEADER: &str = "x-codex-secondary-used-percent";
-
-/// The response header that overrides the remaining credit balance.
-pub(crate) const CREDITS_BALANCE_HEADER: &str = "x-codex-credits-balance";
-
-/// The only response headers this adapter reads.
-const RESPONSE_HEADERS: &[&str] = &[
-    PRIMARY_USED_HEADER,
-    SECONDARY_USED_HEADER,
-    CREDITS_BALANCE_HEADER,
-];
-
 /// Whether a failure from the first endpoint is worth trying the second for.
 ///
 /// A rejected credential, a refused request, and a rate limit all describe the
@@ -120,7 +104,6 @@ impl CodexAdapter {
                 url,
                 headers: &header_refs,
                 deadline: context.deadline,
-                response_headers: RESPONSE_HEADERS,
             })
             .await?;
         if let Some(failure) = classify_status(reply.status, reply.retry_after) {
@@ -140,19 +123,7 @@ impl CodexAdapter {
                 detail: "the payload belongs to another account".to_owned(),
             });
         }
-        mapping::decode(
-            &envelope,
-            pool,
-            Utc::now(),
-            &mapping::HeaderOverrides {
-                primary: reply.headers.get(PRIMARY_USED_HEADER).map(String::as_str),
-                secondary: reply.headers.get(SECONDARY_USED_HEADER).map(String::as_str),
-                credits: reply
-                    .headers
-                    .get(CREDITS_BALANCE_HEADER)
-                    .map(String::as_str),
-            },
-        )
+        mapping::decode(&envelope, pool, Utc::now())
     }
     /// Performs one read at the credential, HTTP, and decoding boundary.
     ///

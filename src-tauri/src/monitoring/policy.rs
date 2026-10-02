@@ -7,9 +7,20 @@
 //! constrain the next read the same way.
 
 use chrono::{DateTime, Duration, Utc};
+use quota_domain::account::ConnectionState;
 use quota_domain::polling::{PollingStrategy, ProviderPollingPolicy};
 
 use super::RefreshReason;
+
+impl RefreshReason {
+    pub(super) fn for_connection(self, state: ConnectionState) -> Self {
+        if state == ConnectionState::Connecting {
+            Self::Reconnect
+        } else {
+            self
+        }
+    }
+}
 
 /// What the supervisor knows when it decides.
 pub(crate) struct ReadSchedule<'a> {
@@ -244,6 +255,33 @@ mod tests {
                 current.valid_until = Some(base() + Duration::seconds(2));
                 assert_eq!(next_read_at(&current), base() + Duration::seconds(300));
                 assert!(next_read_at(&current) > current.now);
+            }
+        }
+    }
+
+    #[test]
+    fn every_source_queued_during_reconnect_keeps_immediate_verification() {
+        let policy = policy();
+        for reason in [
+            RefreshReason::UserRequested,
+            RefreshReason::Scheduled,
+            RefreshReason::BoundaryVerification,
+            RefreshReason::OverviewOpened,
+            RefreshReason::Resumed,
+            RefreshReason::Reconnect,
+        ] {
+            let mut current = schedule(&policy, 1);
+            current.reason = reason.for_connection(ConnectionState::Connecting);
+            assert_eq!(current.reason, RefreshReason::Reconnect);
+            assert_eq!(next_read_at(&current), current.now);
+            for state in [
+                ConnectionState::NeverConnected,
+                ConnectionState::Connected,
+                ConnectionState::ReauthenticationRequired,
+                ConnectionState::Unsupported,
+                ConnectionState::Disconnected,
+            ] {
+                assert_eq!(reason.for_connection(state), reason);
             }
         }
     }

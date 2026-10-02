@@ -13,7 +13,7 @@ use chrono::{DateTime, Duration, Utc};
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_domain::quota::window::QuotaCategory;
-use quota_providers::{decode_offline, decode_offline_with_headers};
+use quota_providers::decode_offline;
 
 fn received_at() -> DateTime<Utc> {
     DateTime::from_timestamp(1_789_000_000, 0).unwrap()
@@ -383,70 +383,6 @@ fn a_lone_monthly_allowance_does_not_invent_a_second_one() {
         reading.windows[0].duration,
         Some(Duration::seconds(2_592_000))
     );
-}
-
-/// A reported header wins over the body, and only when it is readable.
-#[test]
-fn a_response_header_overrides_the_body_and_ignores_nonsense() {
-    let payload = fixture("codex_success.json");
-    let mut headers = std::collections::BTreeMap::new();
-    headers.insert("x-codex-primary-used-percent".to_owned(), "77".to_owned());
-    let reading = decode_offline_with_headers(
-        ProviderId::Codex,
-        &payload,
-        "codex-local",
-        received_at(),
-        &headers,
-    )
-    .unwrap();
-    let session = &reading.category(QuotaCategory::Session)[0];
-    let remaining = session.measurement.remaining_percent().unwrap();
-    assert!((remaining.value() - 23.0).abs() < f64::EPSILON);
-
-    headers.insert(
-        "x-codex-primary-used-percent".to_owned(),
-        "not-a-number".to_owned(),
-    );
-    let kept = decode_offline_with_headers(
-        ProviderId::Codex,
-        &payload,
-        "codex-local",
-        received_at(),
-        &headers,
-    )
-    .unwrap();
-    let body = kept.category(QuotaCategory::Session)[0]
-        .measurement
-        .remaining_percent()
-        .unwrap();
-    assert!(
-        (body.value() - 72.0).abs() < f64::EPSILON,
-        "an unreadable header leaves the body's own value standing"
-    );
-}
-
-/// A header may also carry the remaining credit balance.
-#[test]
-fn a_response_header_carries_the_credit_balance() {
-    let mut headers = std::collections::BTreeMap::new();
-    headers.insert("x-codex-credits-balance".to_owned(), "7.5".to_owned());
-    let reading = decode_offline_with_headers(
-        ProviderId::Codex,
-        &fixture("codex_multibucket.json"),
-        "codex-local",
-        received_at(),
-        &headers,
-    )
-    .unwrap();
-    let credits = reading
-        .windows
-        .iter()
-        .find(|window| window.provider_bucket_id.as_deref() == Some("credits"))
-        .expect("the credit balance exists");
-    let Measurement::Quantity(balance) = &credits.measurement else {
-        panic!("expected a quantity balance");
-    };
-    assert_eq!(balance.remaining, Some(7.5));
 }
 
 #[test]

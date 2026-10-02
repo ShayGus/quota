@@ -4,10 +4,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ConnectionAttemptAccepted } from "../src/generated/bindings";
 import { AccountsPanel } from "../src/features/settings/panels/AccountsPanel";
-import type { SettingsActions } from "../src/features/settings/Settings";
+import { Settings, type SettingsActions } from "../src/features/settings/Settings";
 import { Overview } from "../src/features/overview/Overview";
 import { initialRendererState } from "../src/shared/state/types";
-import { account, snapshot } from "./fixtures";
+import { account, preferences, snapshot } from "./fixtures";
 
 function settingsActions(): SettingsActions {
   return {
@@ -107,6 +107,63 @@ describe("pending connection acceptance", () => {
       (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled,
     ).toBe(false);
     expect(screen.getByText(/Quota could not start that connection/)).toBeDefined();
+  });
+});
+
+describe("settings connection session", () => {
+  it("keeps pending acceptance and provider recovery across every tab", async () => {
+    const pending = Promise.withResolvers<ConnectionAttemptAccepted | null>();
+    const beginConnection = vi.fn(() => pending.promise);
+    const actions = { ...settingsActions(), beginConnection };
+    const state = { ...initialRendererState, preferences: preferences() };
+    const settings = render(<Settings state={state} actions={actions} />);
+    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
+    fireEvent.change(screen.getByLabelText("Add an account"), {
+      target: { value: "claude" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+    for (const tab of ["Window", "Appearance", "Privacy"]) {
+      fireEvent.click(screen.getByRole("button", { name: tab }));
+      expect(screen.queryByRole("button", { name: "Connecting..." })).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
+      expect(
+        (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+      ).toBe(true);
+    }
+    expect(beginConnection).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
+    await act(async () => {
+      pending.resolve({ attempt_id: "attempt", attempt_ref: { id: "attempt" } });
+      await pending.promise;
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
+    expect(
+      (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Privacy" }));
+    settings.rerender(
+      <Settings
+        state={{
+          ...state,
+          attempts: [
+            {
+              attemptId: "attempt",
+              revision: 2,
+              progress: {
+                kind: "failed",
+                context: { error: { kind: "reconnect_required" } },
+              },
+            },
+          ],
+        }}
+        actions={actions}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
+    expect(screen.getByText(/Claude Code is not signed in/)).toBeDefined();
+    expect(
+      (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled,
+    ).toBe(false);
   });
 });
 

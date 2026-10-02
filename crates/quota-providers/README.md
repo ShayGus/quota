@@ -70,17 +70,17 @@ Reads the quota the Codex CLI reports for its own login.
   `reset_after_seconds`. Duration: `limit_window_seconds` (seconds) or
   `windowDurationMins` (minutes). Plan: `plan_type`/`planType`. Optional
   `credits.balance`/`credits.unlimited`.
-- Response headers: only `x-codex-primary-used-percent`, `x-codex-secondary-used-percent`,
-  and `x-codex-credits-balance` survive the transport, and only when they parse as finite
-  numbers. An unreadable header leaves the body's own value standing.
 - A payload that carries only `credits` is a reading, not an unusable response: it
   connects and reports the balance, with no allowance invented for it.
 - Window mapping: exactly 18000 seconds maps to `QuotaCategory::Session`, exactly 604800
   seconds to `QuotaCategory::Weekly`, and any other duration keeps its own resource scope
   under `QuotaCategory::Custom`. The account's own first window is the one exception: when
   a plan reports that window alone and it covers twenty days or more, it is that month's
-  allowance and becomes `QuotaCategory::Monthly`. A lone first window never produces a
-  second, invented allowance.
+  allowance and becomes `QuotaCategory::Monthly`. A lone first window covering at least
+  one day has no fabricated second allowance; a lone secondary window takes the primary
+  slot. These rules follow the TaskbarQuota provider investigation report, section 12,
+  Codex P1 row "Support credits-only and lone monthly responses", with acceptance
+  evidence "Credits-only connects. No fabricated secondary allowance."
 - Roles: a window is `MetricRole::IncludedAllowance`. `credits` is
   `MetricRole::CreditBalance`, never included quota.
 - Cadence: an event-assisted policy with a five-minute verification interval; the minimum

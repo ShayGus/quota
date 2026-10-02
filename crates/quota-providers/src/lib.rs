@@ -44,7 +44,7 @@ pub(crate) mod platform_paths;
 #[cfg(feature = "test-fixtures")]
 pub mod fixture;
 
-pub use offline::{OfflineReading, decode_offline, decode_offline_with_headers};
+pub use offline::{OfflineReading, decode_offline};
 pub use registry::ProviderRegistry;
 
 #[cfg(feature = "test-fixtures")]

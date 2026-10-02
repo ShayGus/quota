@@ -180,13 +180,18 @@ impl MonitoringRuntime {
     ) -> Result<Vec<AccountId>, quota_contracts::CommandError> {
         let mut accepted = Vec::new();
         for account_id in account_ids {
-            let generation = self
+            let (generation, reason) = self
                 .state
                 .registry
                 .read()
                 .await
                 .get(&account_id)
-                .map(|entry| entry.binding.generation)
+                .map(|entry| {
+                    (
+                        entry.binding.generation,
+                        reason.for_connection(entry.stored.connection_state),
+                    )
+                })
                 .ok_or(CommandError::AccountNotFound)?;
             let key = (account_id.clone(), generation);
             let mut pending = self.state.pending.lock().await;

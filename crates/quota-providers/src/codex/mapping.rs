@@ -6,7 +6,10 @@
 //! addition is the account's own first window: a plan that reports a single
 //! allowance covering at least one whole period is that allowance, so it is
 //! labelled for the period it reports and no second allowance is invented for
-//! it. A credit balance is a balance, never included quota.
+//! it. This follows the TaskbarQuota provider investigation report, section 12,
+//! Codex P1 row "Support credits-only and lone monthly responses", with acceptance
+//! evidence "Credits-only connects. No fabricated secondary allowance."
+//! A credit balance is a balance, never included quota.
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
@@ -35,26 +38,11 @@ const MONTHLY_SECONDS: i64 = 20 * WHOLE_PERIOD_SECONDS;
 /// The field name reported when the used percentage is unusable.
 const USED_FIELD: &str = "used_percent";
 
-/// Response-header values that override what the body said.
-///
-/// A header only wins when it parses as a finite number: an unreadable header
-/// leaves the body's own value standing rather than replacing it with nothing.
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct HeaderOverrides<'a> {
-    /// Used percent of the account's first window.
-    pub(crate) primary: Option<&'a str>,
-    /// Used percent of the account's second window.
-    pub(crate) secondary: Option<&'a str>,
-    /// Remaining credit balance.
-    pub(crate) credits: Option<&'a str>,
-}
-
 /// Decodes one Codex payload into windows.
 pub(crate) fn decode(
     envelope: &CodexEnvelope,
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
-    overrides: &HeaderOverrides<'_>,
 ) -> Result<DecodedUsage, ProviderError> {
     let sets = envelope.limit_sets();
     let mut usage = DecodedUsage::new();
@@ -63,15 +51,10 @@ pub(crate) fn decode(
         .clone()
         .or_else(|| sets.iter().find_map(|set| set.plan_type.clone()));
     usage.principal_label = envelope.email.as_deref().map(masked_address);
-    account_windows(&sets, pool, received_at, overrides, &mut usage)?;
+    account_windows(&sets, pool, received_at, &mut usage)?;
     named_windows(&sets, pool, received_at, &mut usage)?;
     if let Some(credits) = envelope.credits.as_ref() {
-        usage.push(credit_window(
-            credits,
-            pool,
-            received_at,
-            overrides.credits,
-        )?);
+        usage.push(credit_window(credits, pool, received_at)?);
     }
     if !usage.windows.iter().any(|window| {
         window.metric_role != MetricRole::CreditBalance
@@ -93,7 +76,6 @@ fn account_windows(
     sets: &[&CodexLimitSet],
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
-    overrides: &HeaderOverrides<'_>,
     usage: &mut DecodedUsage,
 ) -> Result<(), ProviderError> {
     let reported = sets.iter().find_map(|set| {
@@ -105,31 +87,13 @@ fn account_windows(
     };
     match (primary, secondary) {
         (Some(first), Some(second)) => {
-            usage.push(account_window(
-                first,
-                "primary",
-                pool,
-                received_at,
-                overrides.primary,
-            )?);
-            usage.push(account_window(
-                second,
-                "secondary",
-                pool,
-                received_at,
-                overrides.secondary,
-            )?);
+            usage.push(account_window(first, "primary", pool, received_at)?);
+            usage.push(account_window(second, "secondary", pool, received_at)?);
         }
         // A lone first window is promoted rather than paired, so a plan with one
         // allowance is not reported as permanently missing a second one.
         (Some(only), None) => {
-            usage.push(account_window(
-                only,
-                "primary",
-                pool,
-                received_at,
-                overrides.primary,
-            )?);
+            usage.push(account_window(only, "primary", pool, received_at)?);
             if only.duration_seconds().is_none_or(is_shorter_than) {
                 usage.push(
                     account_draft(pool, "secondary", QuotaCategory::Custom, None, received_at)
@@ -140,13 +104,7 @@ fn account_windows(
         // A lone second window is the account's only allowance, so it takes the
         // first slot rather than being reported as a missing pair.
         (None, Some(only)) => {
-            usage.push(account_window(
-                only,
-                "primary",
-                pool,
-                received_at,
-                overrides.secondary,
-            )?);
+            usage.push(account_window(only, "primary", pool, received_at)?);
         }
         // Unreachable: the search only returns a pair that has a member.
         (None, None) => {}
@@ -201,7 +159,6 @@ fn account_window(
     bucket: &str,
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
-    override_percent: Option<&str>,
 ) -> Result<QuotaWindow, ProviderError> {
     let duration = wire.duration_seconds();
     let draft = account_draft(
@@ -211,7 +168,7 @@ fn account_window(
         duration,
         received_at,
     );
-    let (measurement, boundary, issues) = read_window(wire, received_at, override_percent);
+    let (measurement, boundary, issues) = read_window(wire, received_at);
     draft.build(measurement, boundary, issues)
 }
 
@@ -260,7 +217,7 @@ fn named_window(
         duration_seconds: duration,
         received_at,
     };
-    let (measurement, boundary, issues) = read_window(wire, received_at, None);
+    let (measurement, boundary, issues) = read_window(wire, received_at);
     draft.build(measurement, boundary, issues)
 }
 
@@ -269,7 +226,6 @@ fn credit_window(
     credits: &CodexCredits,
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
-    override_balance: Option<&str>,
 ) -> Result<QuotaWindow, ProviderError> {
     let draft = WindowDraft {
         provider: ProviderId::Codex,
@@ -286,13 +242,7 @@ fn credit_window(
     if credits.unlimited.unwrap_or(false) {
         return draft.build(Measurement::Unlimited, None, Vec::new());
     }
-    let reported = override_balance
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| Numberish::Text(value.to_owned()))
-        .filter(|value| value.field().is_some())
-        .or_else(|| credits.balance.clone());
-    match reported.as_ref() {
+    match credits.balance.as_ref() {
         Some(balance) => match balance.field() {
             Some(field) if field.value >= 0.0 => draft.build(
                 Measurement::Quantity(QuantityMeasurement {
@@ -344,7 +294,6 @@ fn is_monthly(duration_seconds: i64) -> bool {
 fn read_window(
     wire: &CodexWindow,
     received_at: DateTime<Utc>,
-    override_percent: Option<&str>,
 ) -> (Measurement, Option<DateTime<Utc>>, Vec<QuotaIssue>) {
     let boundary = wire
         .reset_at
@@ -355,13 +304,7 @@ fn read_window(
                 .as_ref()
                 .and_then(|value| decode::reset_after(value, received_at))
         });
-    let reported = override_percent
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .map(|value| Numberish::Text(value.to_owned()))
-        .filter(|value| value.field().is_some())
-        .or_else(|| wire.used_percent.clone());
-    let Some(reported) = reported.as_ref() else {
+    let Some(reported) = wire.used_percent.as_ref() else {
         return (
             Measurement::Unavailable(UnavailableReason::NotReported),
             boundary,
