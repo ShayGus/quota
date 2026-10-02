@@ -188,6 +188,18 @@ function Popover({
     setView({ name: "connect", serial: wizardRequests });
   };
 
+  // Hiding the popover, by its Hide button, the window's close, or a tray
+  // popover losing focus, leaves the wizard. The wizard's cleanup then discards
+  // a pending account, so reopening never offers it again; a confirmation
+  // already in flight still finishes. Every hidden report counts, not only a
+  // change, because the popover can be shown again without one.
+  const nativeWindow = state.nativeWindow;
+  useEffect(() => {
+    if (nativeWindow?.kind === "confirmed" && !nativeWindow.value.visible) {
+      setView((current) => (current.name === "connect" ? { name: "overview" } : current));
+    }
+  }, [nativeWindow]);
+
   useEffect(() => {
     // Fit returns the overview to its default state: all accounts, no detail.
     const fit = (): void => {

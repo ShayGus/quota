@@ -235,11 +235,22 @@ pub fn install_close_handlers(app: &AppHandle) {
 }
 
 /// Publishes confirmed native state to both renderer windows.
+///
+/// Visibility is read from the window itself rather than the controller: the
+/// overview is also shown by paths the controller does not see (a second
+/// launch, the renderer's own navigation), and the renderer leaves the
+/// add-account wizard whenever the overview is reported hidden.
 pub fn publish_state(
     app: &AppHandle,
     app_instance_id: &quota_domain::ids::AppInstanceId,
-    state: OverviewWindowState,
+    mut state: OverviewWindowState,
 ) {
+    if let Some(visible) = app
+        .get_webview_window("overview")
+        .and_then(|overview| overview.is_visible().ok())
+    {
+        state.visible = visible;
+    }
     let event = crate::ipc::events::OverviewWindowStateChanged(
         quota_contracts::OverviewWindowStateChangedPayload {
             app_instance_id: app_instance_id.clone(),

@@ -230,6 +230,26 @@ describe("Provider → Connect → Verify", () => {
     expect(actions.disconnectAccount).not.toHaveBeenCalled();
   });
 
+  it("lets a confirmation already in flight finish when the wizard goes away", async () => {
+    const confirmed = Promise.withResolvers<boolean>();
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => confirmed.promise),
+    };
+    const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    hold("attempt-1", "codex");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    view.unmount();
+    await act(async () => {
+      confirmed.resolve(true);
+      await confirmed.promise;
+    });
+    expect(actions.confirmConnection).toHaveBeenCalledTimes(1);
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
   it("cancels a running attempt when the wizard is dismissed mid-connection", async () => {
     const actions = settingsActions();
     const view = render(<Wizard actions={actions} onDone={vi.fn()} />);

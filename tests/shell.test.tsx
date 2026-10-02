@@ -66,6 +66,7 @@ import { App } from "../src/app/App";
 import { FeatureBoundary } from "../src/app/ErrorBoundary";
 import {
   acceptMonitoring,
+  acceptNativeWindow,
   acceptPreferences,
   acceptAttempt,
   acceptSnapshot,
@@ -801,4 +802,74 @@ describe("leaving the add-account wizard", () => {
       expect(commandsMatching("disconnect_account")).toHaveLength(0);
     },
   );
+
+  /** The host reporting the popover hidden, as its close or focus loss does. */
+  const reportHidden = (): void => {
+    act(() => {
+      acceptNativeWindow({
+        kind: "confirmed",
+        value: {
+          mode: "tray",
+          always_on_top: false,
+          visible: false,
+          geometry_revision: 3,
+        },
+      });
+    });
+  };
+
+  /** Opens the wizard and lets the host hold a verified candidate. */
+  const holdCandidate = async (attemptId: string): Promise<void> => {
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
+      acceptAttempt({
+        attemptId,
+        revision: 2,
+        progress: {
+          kind: "awaiting_confirmation",
+          context: { candidate: candidate("codex") },
+        },
+      });
+    });
+    expect(
+      screen.getByRole("heading", { name: "Is this the right account?" }),
+    ).toBeTruthy();
+  };
+
+  it("discards a held candidate when the popover is hidden, and reopens fresh", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    await holdCandidate("attempt-1");
+    reportHidden();
+    await waitFor(() => {
+      expect(commandsMatching("cancel_connection")).toHaveLength(1);
+    });
+    expect(commandsMatching("cancel_connection")[0]?.args).toEqual({
+      attemptRef: { id: "attempt-1" },
+    });
+    expect(
+      screen.queryByRole("heading", { name: "Is this the right account?" }),
+    ).toBeNull();
+    expect(commandsMatching("confirm_connection")).toHaveLength(0);
+  });
+
+  it("discards again when hidden a second time without being reported shown", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    await holdCandidate("attempt-1");
+    reportHidden();
+    await waitFor(() => {
+      expect(commandsMatching("cancel_connection")).toHaveLength(1);
+    });
+    // Shown again by a path that reports nothing, then hidden again.
+    await holdCandidate("attempt-1");
+    reportHidden();
+    await waitFor(() => {
+      expect(commandsMatching("cancel_connection")).toHaveLength(2);
+    });
+  });
 });
