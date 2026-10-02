@@ -49,7 +49,7 @@ pub(crate) struct ClaudeUsage {
     )]
     pub(crate) seven_day_routines: Option<ClaudeWindow>,
     /// A named-limits array, merged with the fixed windows above.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "crate::decode::null_as_default")]
     pub(crate) limits: Vec<ClaudeLimit>,
     /// The paid extra-usage summary, when the plan has one.
     #[serde(default, alias = "extraUsage")]

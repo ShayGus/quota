@@ -88,3 +88,76 @@ async fn fallback_can_still_return_a_reading() {
     assert!(usage.is_complete());
     assert_eq!(usage.windows.len(), 1);
 }
+
+/// The `wham/usage` body as the endpoint returned it in October 2026, with
+/// synthetic values: several fields arrive as an explicit `null`.
+const CURRENT_USAGE_BODY: &str = r#"{
+    "user_id": "user-synthetic",
+    "account_id": "account-synthetic",
+    "email": "someone@example.test",
+    "plan_type": "plus",
+    "rate_limit": {
+        "allowed": true,
+        "limit_reached": false,
+        "primary_window": {
+            "used_percent": 37,
+            "limit_window_seconds": 604800,
+            "reset_after_seconds": 3600,
+            "reset_at": 1790000000
+        },
+        "secondary_window": null
+    },
+    "code_review_rate_limit": null,
+    "additional_rate_limits": null,
+    "model_usage": {"model-x": {"available": true, "available_at": null, "credits_would_enable": false}},
+    "credits": {
+        "has_credits": false,
+        "unlimited": false,
+        "overage_limit_reached": false,
+        "balance": "0",
+        "approx_local_messages": [0, 0],
+        "approx_cloud_messages": [0, 0]
+    },
+    "spend_control": {"reached": false, "individual_limit": null},
+    "rate_limit_reached_type": null,
+    "promo": null,
+    "rate_limit_reset_credits": {"available_count": 0, "applicable_available_count": 0}
+}"#;
+
+#[tokio::test]
+async fn the_current_usage_body_is_read() {
+    // Only the first endpoint is asked: a readable body needs no fallback.
+    let usage = read_endpoints(&[("200 OK", CURRENT_USAGE_BODY)])
+        .await
+        .unwrap_or_else(|error| panic!("the read failed: {error:?}"));
+    assert!(usage.is_complete());
+    let weekly = usage
+        .windows
+        .iter()
+        .find(|window| window.category == quota_domain::quota::window::QuotaCategory::Weekly)
+        .expect("the weekly window is read");
+    assert_eq!(
+        weekly
+            .measurement
+            .remaining_percent()
+            .map(|p| p.value().round()),
+        Some(63.0)
+    );
+    assert_eq!(usage.plan_label.as_deref(), Some("plus"));
+}
+
+#[tokio::test]
+async fn a_blocked_fallback_does_not_hide_why_an_accepted_body_failed() {
+    // The first endpoint accepted the credential but sent an unreadable body;
+    // the fallback's 403 page must not turn that into an authorization failure.
+    let error = read_endpoints(&[
+        ("200 OK", r#"{"rate_limit": "not an object"}"#),
+        ("403 Forbidden", "<html>blocked</html>"),
+    ])
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(error, ProviderError::UnsupportedSchema { .. }),
+        "{error:?}"
+    );
+}

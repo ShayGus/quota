@@ -73,14 +73,19 @@ pub(crate) struct CodexLimitSet {
     #[serde(default, alias = "codeReviewRateLimit")]
     pub(crate) code_review_rate_limit: Option<Box<CodexLimitSet>>,
     /// Additional named buckets, such as a model-specific allowance.
-    #[serde(default, alias = "additionalRateLimits")]
+    #[serde(
+        default,
+        alias = "additionalRateLimits",
+        deserialize_with = "crate::decode::null_as_default"
+    )]
     pub(crate) additional_rate_limits: Vec<CodexAdditionalLimit>,
     /// The multi-bucket view, keyed by the provider's own limit identifier.
     #[serde(
         default,
         rename = "rateLimitsByLimitId",
         alias = "rateLimitsByLimitID",
-        alias = "rate_limits_by_limit_id"
+        alias = "rate_limits_by_limit_id",
+        deserialize_with = "crate::decode::null_as_default"
     )]
     pub(crate) rate_limits_by_limit_id: BTreeMap<String, CodexWindow>,
     /// The plan label, when the block carries one.
