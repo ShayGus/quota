@@ -10,7 +10,6 @@ import { useEffect, useRef, useState, type JSX } from "react";
 import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import type { OverviewFilter } from "../features/overview/OverviewToolbar";
-import { ConnectionWizard } from "../features/settings/ConnectionWizard";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
 import type { AccountId, QuotaWindowId } from "../generated/bindings";
 import {
@@ -18,7 +17,6 @@ import {
   describeTransportFailure,
   launch,
 } from "../shared/ipc/report";
-import { getRendererState } from "../shared/state/store";
 import type { RendererFailure, RendererState } from "../shared/state/types";
 import { useRendererState } from "../shared/state/useRendererState";
 import { Icon } from "../shared/ui/Icon";
@@ -44,12 +42,6 @@ type View =
       readonly name: "detail";
       readonly id: AccountId;
       readonly windowId: QuotaWindowId | null;
-    }
-  | {
-      readonly name: "connect";
-      readonly serial: number;
-      /** The hidden-report count when the wizard opened; see `surface`. */
-      readonly hiddenReports: number;
     };
 
 /** The settings actions, wired to the typed commands. */
@@ -92,9 +84,6 @@ const settingsActions: SettingsActions = {
     launch(actions.clearHistory(accountId));
   },
   exportDiagnostics: (label) => actions.exportDiagnostics(label),
-  showAddAccount: () => {
-    launch(showInPopover({ view: "connect" }));
-  },
   launchAtLogin: () => actions.launchAtLogin(),
   setLaunchAtLogin: (launch) => actions.setLaunchAtLogin(launch),
   showOverview: () => {
@@ -160,12 +149,6 @@ function QuotaWindow(): JSX.Element {
   return <Popover state={state} toast={toast} onToast={setToast} />;
 }
 
-/**
- * Counts Add account requests. Each request is a fresh wizard, keyed by this
- * count, so the previous wizard unmounts and discards whatever it was holding.
- */
-let wizardRequests = 0;
-
 /** The popover: header, the current surface, and footer. */
 function Popover({
   state,
@@ -187,23 +170,11 @@ function Popover({
       ? (state.snapshot.accounts.find((candidate) => candidate.account_id === view.id) ??
         null)
       : null;
-  // Hiding the popover, by its Hide button, the window's close, or a tray
-  // popover losing focus, ends the wizard: one opened before the latest hidden
-  // report is no longer shown, and its cleanup discards a pending account, so
-  // reopening never offers it again. A confirmation already in flight still
-  // finishes.
-  const wizardEnded =
-    view.name === "connect" && view.hiddenReports !== state.hiddenReports;
-  const surface =
-    (view.name === "detail" && account === null) || wizardEnded ? "overview" : view.name;
+  const surface = view.name === "detail" && account === null ? "overview" : view.name;
 
+  // Adding an account happens in the settings window, on its add-account page.
   const openConnect = (): void => {
-    wizardRequests += 1;
-    setView({
-      name: "connect",
-      serial: wizardRequests,
-      hiddenReports: state.hiddenReports,
-    });
+    launch(actions.openSettings("connect"));
   };
 
   useEffect(() => {
@@ -225,13 +196,6 @@ function Popover({
       listenForNavigation((target) => {
         if (target.view === "detail") {
           setView({ name: "detail", id: target.accountId, windowId: target.windowId });
-        } else if (target.view === "connect") {
-          wizardRequests += 1;
-          setView({
-            name: "connect",
-            serial: wizardRequests,
-            hiddenReports: getRendererState().hiddenReports,
-          });
         } else {
           setView({ name: "overview" });
         }
@@ -294,22 +258,7 @@ function Popover({
         }}
       />
       <main className="app-main">
-        {view.name === "connect" && surface === "connect" ? (
-          <FeatureBoundary surface="add account">
-            <ConnectionWizard
-              key={view.serial}
-              state={state}
-              actions={settingsActions}
-              onDone={(added) => {
-                if (added) {
-                  onToast({ text: "Account added. It now appears in your overview." });
-                }
-                setFilter("all");
-                setView({ name: "overview" });
-              }}
-            />
-          </FeatureBoundary>
-        ) : account !== null && view.name === "detail" ? (
+        {account !== null && view.name === "detail" ? (
           <FeatureBoundary surface="quota detail">
             <AccountDetail
               key={`${account.account_id}:${view.windowId ?? ""}`}

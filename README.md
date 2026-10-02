@@ -20,10 +20,10 @@ its click target while an update is applied.
 
 Use Attention to filter the overview. Click a ring for that window's quota detail, with a
 tab for each window. Pin turns the popover into a floating window that stays open and
-moves by its header; keeping it on top is a separate setting. Add account opens Provider →
-Connect → Verify inside the popover, and the verified identity is confirmed and named
-before the wizard finishes. Hide account labels replaces account and workspace identities
-while keeping public allowance labels visible.
+moves by its header; keeping it on top is a separate setting. Add account opens the
+settings window on its add-account page, Provider → Connect → Verify, and the verified
+account is named and added with one decision. Hide account labels replaces account and
+workspace identities while keeping public allowance labels visible.
 
 ## Status
 
@@ -72,27 +72,28 @@ runs the repository gates.
 
 ## Connect and refresh accounts
 
-Choose Add account in the popover or Settings → Accounts to open the Provider → Connect →
-Verify wizard in the popover. Choose a provider and press Connect. Quota reads an existing
-credential from the provider's client; it does not sign you in. The button stays busy
-until verification finishes, then shows the result. If a credential is missing or
-rejected, follow the provider-specific recovery guidance:
+Choose Add account in the popover or in Settings → Accounts to open the settings window on
+its add-account page: Provider → Connect → Verify. Choose a provider and press Connect.
+Quota reads an existing credential from the provider's client; it does not sign you in.
+The button stays busy until verification finishes, then shows the result. If a credential
+is missing or rejected, follow the provider-specific recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
 - OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
   environment.
 
-After signing in, press Connect again. On Verify, review the verified Account, Workspace,
-and Quota reading, set the account's nickname, confirm that it is the account you
-intended, and choose Add account. Nothing is saved and no monitoring starts before that
-choice; Back, Cancel, closing the popover, or restarting the app discards the verified
-result and leaves no account behind. Once saved, the account appears even if the
-confirmation reply or the next snapshot is lost on the way. With Hide account labels
-enabled, a pending identity is replaced exactly as a saved one is. Starting a new Add
-account request opens a fresh wizard. [Provider credential discovery](docs/providers.md)
-owns the supported locations and overrides, including Windows defaults that work without
-`HOME`.
+After signing in, press Connect again. Verify shows the account the provider verified, its
+workspace and plan, and each quota reading, with the nickname it will be saved under.
+Choose **Add <provider> account** to add it, or **Not this account** to discard it and
+read how to switch that provider to the account you meant. Nothing is saved and no
+monitoring starts before Add; Not this account, Cancel, closing the settings window, or
+restarting the app discards the verified result and leaves no account behind. Once saved,
+the account appears even if the confirmation reply or the next snapshot is lost on the
+way. With Hide account labels enabled, a pending identity is replaced exactly as a saved
+one is. Starting a new Add account request opens a fresh wizard.
+[Provider credential discovery](docs/providers.md) owns the supported locations and
+overrides, including Windows defaults that work without `HOME`.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any
 backoff deadline. Checks that do not send a request leave the due time unchanged. When you

@@ -114,12 +114,7 @@ export function acceptPersistence(persistence: PersistenceStatus): void {
 
 /** Replaces the confirmed native window state. */
 export function acceptNativeWindow(nativeWindow: OverviewWindowState): void {
-  const hidden = nativeWindow.kind === "confirmed" && !nativeWindow.value.visible;
-  commit({
-    ...state,
-    nativeWindow,
-    hiddenReports: hidden ? state.hiddenReports + 1 : state.hiddenReports,
-  });
+  commit({ ...state, nativeWindow });
 }
 
 /**

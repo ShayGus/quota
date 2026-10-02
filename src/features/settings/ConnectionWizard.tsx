@@ -40,6 +40,16 @@ const AUTHENTICATION_RECOVERY = {
     "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
 };
 
+/** How to put a different account into each provider's own sign-in. */
+const SWITCH_ACCOUNT = {
+  codex:
+    "To add a different Codex account, run codex login with it, then press Connect again.",
+  claude:
+    "To add a different Claude account, sign in to it in Claude Code (/login), then press Connect again.",
+  open_code_go:
+    "To add a different OpenCode Go account, sign in to it with OpenCode, then press Connect again.",
+};
+
 /**
  * A verified window's name on Verify: its period and the allowance it measures,
  * so two windows of one period stay distinct.
@@ -81,7 +91,8 @@ export function ConnectionWizard({
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  // Said on Connect after a verified account was turned down.
+  const [notice, setNotice] = useState<string | null>(null);
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
@@ -142,7 +153,7 @@ export function ConnectionWizard({
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
     setStarting(true);
-    setConfirmed(false);
+    setNotice(null);
     setRefusal(null);
     setAttempt(null);
     try {
@@ -169,12 +180,11 @@ export function ConnectionWizard({
   const discard = async (): Promise<void> => {
     pending.current = null;
     setAttempt(null);
-    setConfirmed(false);
     if (live !== null) await actions.cancelConnection(live);
   };
 
   const add = async (): Promise<void> => {
-    if (attempt === null || adding || !confirmed || nickname.trim().length === 0) return;
+    if (attempt === null || adding || nickname.trim().length === 0) return;
     setAdding(true);
     try {
       if (await actions.confirmConnection(attempt, nickname.trim())) finish();
@@ -225,83 +235,73 @@ export function ConnectionWizard({
     );
   } else if (candidate !== null) {
     const identity = candidate.identity;
+    const providerName = providerLabel(candidate.provider_id);
+    const meta = [
+      providerName,
+      alias ? "Workspace hidden" : identity.workspace_label,
+      identity.plan_label,
+    ]
+      .filter((part) => part !== null && part !== "")
+      .join(" · ");
     body = (
       <>
-        <div className="success-icon">
-          <Icon name="check" />
-        </div>
-        <h2>Is this the right account?</h2>
+        <h2>Add this account?</h2>
         <p className="intro">
-          Confirm the identity before adding this subscription to your overview.
+          {providerName} verified this sign-in. Nothing is saved until you add it.
         </p>
-        <dl className="detail-list">
-          <div>
-            <dt>Provider</dt>
-            <dd>{providerLabel(candidate.provider_id)}</dd>
+        <div className="connection-box verified-account">
+          <div className="identity">
+            <ProviderMark providerId={candidate.provider_id} />
+            <span className="provider-copy">
+              <span className="provider-name">{alias || identity.principal_label}</span>
+              <span className="provider-meta">{meta}</span>
+            </span>
           </div>
-          <div>
-            <dt>Account</dt>
-            <dd>{alias || identity.principal_label}</dd>
-          </div>
-          <div>
-            <dt>Workspace</dt>
-            <dd>
-              {alias ? "Workspace hidden" : (identity.workspace_label ?? "Not reported")}
-            </dd>
-          </div>
-          {candidate.windows.length === 0 ? (
-            <div>
-              <dt>Quota reading</dt>
-              <dd>Not reported</dd>
-            </div>
-          ) : (
-            candidate.windows.map((window) => (
-              <div key={window.id}>
-                <dt>{verifiedWindowName(window)}</dt>
-                <dd>{verifiedReading(window)}</dd>
+          <dl className="detail-list">
+            {candidate.windows.length === 0 ? (
+              <div>
+                <dt>Quota reading</dt>
+                <dd>Not reported</dd>
               </div>
-            ))
-          )}
-        </dl>
+            ) : (
+              candidate.windows.map((window) => (
+                <div key={window.id}>
+                  <dt>{verifiedWindowName(window)}</dt>
+                  <dd>{verifiedReading(window)}</dd>
+                </div>
+              ))
+            )}
+          </dl>
+        </div>
         <NicknameField
           id="account-nickname"
           value={nickname}
           hidden={alias !== ""}
-          hint="Shown below the provider name. Nothing is saved until you add the account."
+          hint="Shown on the account's card in your overview."
           onChange={setNickname}
         />
-        <label className="checkline">
-          <input
-            id="confirm-account"
-            type="checkbox"
-            checked={confirmed}
-            onChange={(event) => {
-              setConfirmed(event.currentTarget.checked);
-            }}
-          />
-          This is the account I intended to connect.
-        </label>
         <div className="wizard-action">
           <button
             type="button"
             className="button"
             disabled={adding}
             onClick={() => {
+              setNotice(SWITCH_ACCOUNT[provider]);
               launch(discard());
             }}
           >
-            Back
+            Not this account
           </button>
           <button
             type="button"
             className="button primary"
-            disabled={adding || !confirmed || nickname.trim().length === 0}
+            disabled={adding || nickname.trim().length === 0}
             onClick={() => {
               launch(add());
             }}
           >
             <Icon name={adding ? "clock" : "plus"} />
-            {adding ? "Adding…" : "Add account"}
+            {adding ? "Adding…" : `Add ${providerName} account`}
           </button>
         </div>
       </>
@@ -347,6 +347,11 @@ export function ConnectionWizard({
         {refusal === null ? null : (
           <div className="note" role="alert">
             {refusal}
+          </div>
+        )}
+        {notice === null ? null : (
+          <div className="note" role="status">
+            {notice}
           </div>
         )}
         <div className="note">

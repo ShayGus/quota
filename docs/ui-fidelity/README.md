@@ -51,12 +51,16 @@ does, in the same place and at the same length.
   down buttons. Quota ranks accounts by their least remaining allowance (spec 4.1), and
   the host has no reorder command, so the order buttons are shown disabled with that
   reason.
-- **Connection.** The wizard uses `begin_connection`, `confirm_connection`, and
-  `cancel_connection`. A verified attempt is held by the host as a pending candidate, so
-  nothing is saved and no monitoring starts until Add account. Verify shows the
-  candidate's account, workspace, and reading, asks for the nickname and the confirmation
-  check the wireframe draws, and saves it under that nickname. Back, Cancel, closing the
-  popover, or restarting the app discards the candidate.
+- **Connection.** By the owner's direction, adding an account happens in the settings
+  window, on its add-account page, rather than in the popover the wireframe draws: every
+  Add account opens it there. The wizard uses `begin_connection`, `confirm_connection`,
+  and `cancel_connection`; a verified attempt is held by the host as a pending candidate,
+  so nothing is saved and no monitoring starts until it is added. Verify replaces the
+  wireframe's confirmation checkbox, also by the owner's direction, with one decision: a
+  card with the verified account, its workspace and plan, and each reading, the nickname,
+  and **Add <provider> account** or **Not this account**, which discards it and says how
+  to switch the provider's own sign-in. Cancel, closing the settings window, or restarting
+  the app discards the candidate.
 - **The Codex mark.** The wireframe draws Codex as the text `>_`. By the owner's direction
   the tile shows Codex's own mark, the rounded blossom around a `>_` prompt that the Codex
   app uses, in the tile's text colour. The other providers keep their glyphs.

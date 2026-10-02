@@ -73,8 +73,6 @@ export interface SettingsActions {
   /** Writes a diagnostic export to the destination the host will validate. */
   /** Writes a sanitized report and answers where, or `null` when it failed. */
   readonly exportDiagnostics: (label: string) => Promise<string | null>;
-  /** Shows the add-account wizard in the popover. */
-  readonly showAddAccount: () => void;
   /** Whether Quota starts at login, as the system confirms it; `null` when unknown. */
   readonly launchAtLogin: () => Promise<boolean | null>;
   /** Registers or removes the login item and returns the confirmed state. */
@@ -101,7 +99,7 @@ export function Settings({
 }): JSX.Element {
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
-  const navigate = useCallback((next: SettingsTab): void => {
+  const navigate = useCallback((next: SettingsTab | "connect"): void => {
     requestedRoutes += 1;
     window.location.hash = `#/settings/${next}/${String(requestedRoutes)}`;
   }, []);
@@ -115,6 +113,8 @@ export function Settings({
     : tab === "connect"
       ? "connect"
       : "general";
+  // Adding an account is part of Accounts, so the rail shows Accounts there.
+  const current: SettingsTab = selected === "connect" ? "accounts" : selected;
   return (
     <div className="settings-layout">
       <nav className="settings-nav" aria-label="Settings sections">
@@ -122,8 +122,8 @@ export function Settings({
           <button
             key={id}
             type="button"
-            className={selected === id ? "selected" : ""}
-            aria-current={selected === id ? "page" : undefined}
+            className={current === id ? "selected" : ""}
+            aria-current={current === id ? "page" : undefined}
             onClick={() => {
               navigate(id);
             }}
@@ -140,8 +140,7 @@ export function Settings({
       </nav>
       <div className="settings-content">
         {selected === "connect" ? (
-          // The host can still open settings on the connection route. The wizard
-          // is the same one the popover shows.
+          // Every Add account, in the popover or here, opens this route.
           <ConnectionWizard
             key={route}
             state={state}
@@ -167,6 +166,9 @@ export function Settings({
             accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
             preferences={preferences}
             actions={actions}
+            onAddAccount={() => {
+              navigate("connect");
+            }}
           />
         ) : selected === "notifications" ? (
           <NotificationsPanel

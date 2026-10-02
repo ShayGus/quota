@@ -229,10 +229,13 @@ export function AccountsPanel({
   accounts,
   preferences,
   actions,
+  onAddAccount,
 }: {
   readonly accounts: readonly AccountSnapshot[];
   readonly preferences: Preferences | null;
   readonly actions: SettingsActions;
+  /** Opens the add-account page of this window. */
+  readonly onAddAccount: () => void;
 }): JSX.Element {
   const [pending, setPending] = useState<Pending | null>(null);
   const aliasOf = (id: AccountId): string => accountLabel(preferences, accounts, id);
@@ -242,11 +245,7 @@ export function AccountsPanel({
         title="Accounts"
         intro="Manage connected identities and their monitoring."
         action={
-          <button
-            type="button"
-            className="button primary"
-            onClick={actions.showAddAccount}
-          >
+          <button type="button" className="button primary" onClick={onAddAccount}>
             <Icon name="plus" />
             Add account
           </button>
@@ -256,7 +255,7 @@ export function AccountsPanel({
         <div className="empty compact">
           <h2>No connected accounts</h2>
           <p>Add an account to start monitoring its quota.</p>
-          <button type="button" className="button" onClick={actions.showAddAccount}>
+          <button type="button" className="button" onClick={onAddAccount}>
             Add account
           </button>
         </div>

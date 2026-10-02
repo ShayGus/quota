@@ -188,58 +188,11 @@ fn physical_rect(
     }
 }
 
-/// Keeps both configured windows alive when the user closes them.
-pub fn install_close_handlers(app: &AppHandle) {
-    for label in ["overview", "settings"] {
-        let Some(native) = app.get_webview_window(label) else {
-            continue;
-        };
-        let app = app.clone();
-        let native_for_event = native.clone();
-        native.on_window_event(move |event| match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                if let Err(error) = native_for_event.hide() {
-                    tracing::warn!(%error, %label, "the window could not be hidden on close");
-                }
-                if label == "overview"
-                    && let Some(state) = app.try_state::<crate::state::AppState>()
-                {
-                    let controller = state.window.clone();
-                    let app = app.clone();
-                    let app_instance_id = state.app_instance_id.clone();
-                    tauri::async_runtime::spawn(async move {
-                        let confirmed = controller.lock().await.set_visible(false);
-                        publish_state(&app, &app_instance_id, confirmed);
-                    });
-                }
-            }
-            tauri::WindowEvent::Focused(false) if label == "overview" => {
-                if let Some(state) = app.try_state::<crate::state::AppState>() {
-                    let controller = state.window.clone();
-                    let app = app.clone();
-                    let app_instance_id = state.app_instance_id.clone();
-                    tauri::async_runtime::spawn(async move {
-                        if controller.lock().await.state().mode == OverviewMode::Tray
-                            && set_visible(&app, "overview", false, false) == Ok(false)
-                        {
-                            let confirmed = controller.lock().await.set_visible(false);
-                            publish_state(&app, &app_instance_id, confirmed);
-                        }
-                    });
-                }
-            }
-            _ => {}
-        });
-    }
-}
-
 /// Publishes confirmed native state to both renderer windows.
 ///
 /// Visibility is read from the window itself rather than the controller: the
 /// overview is also shown by paths the controller does not see (a second
-/// launch, the renderer's own navigation), and the renderer leaves the
-/// add-account wizard whenever the overview is reported hidden.
+/// launch, the renderer's own navigation).
 pub fn publish_state(
     app: &AppHandle,
     app_instance_id: &quota_domain::ids::AppInstanceId,

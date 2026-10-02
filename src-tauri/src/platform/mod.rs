@@ -10,6 +10,7 @@ pub mod settings_window;
 pub mod tray;
 pub mod tray_anchor;
 pub mod window;
+pub mod window_events;
 mod window_transition;
 
 pub use window::{OverviewWindowController, OverviewWindowState};
