@@ -256,13 +256,17 @@ impl AccountRegistry {
     pub fn record_dispatch(
         &mut self,
         account_id: &AccountId,
+        binding: &ConnectionBinding,
         dispatched_at: DateTime<Utc>,
         next_attempt_at: Option<DateTime<Utc>>,
-    ) -> Result<(), CoreError> {
+    ) -> Result<&RegisteredAccount, CoreError> {
         let entry = self.entry_mut(account_id)?;
+        if !entry.binding.accepts(binding) {
+            return Err(CoreError::StaleResult);
+        }
         entry.stored.last_attempt_at = Some(dispatched_at);
         entry.stored.next_attempt_at = next_attempt_at;
-        Ok(())
+        Ok(entry)
     }
 
     /// Updates the binding generation for every account on one connection.

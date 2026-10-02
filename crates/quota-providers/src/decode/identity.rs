@@ -88,15 +88,6 @@ pub(crate) fn masked_address(text: &str) -> String {
     label(&format!("{first}***@{domain}"))
 }
 
-/// A stable, one-way fingerprint of a secret.
-///
-/// It exists only as an in-memory cache key, so one credential's verified
-/// answer is never handed to a different credential. The secret is never stored
-/// beside it, and the fingerprint is never logged.
-pub(crate) fn fingerprint(text: &str) -> u64 {
-    fnv1a(text)
-}
-
 /// Shortens text to a character budget, keeping it unique with a text hash.
 ///
 /// The hash is a plain FNV-1a of the full text, so the shortened form is stable

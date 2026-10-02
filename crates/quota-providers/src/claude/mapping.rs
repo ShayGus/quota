@@ -50,14 +50,12 @@ pub(crate) fn decode(
     }
     let mut decoded = DecodedUsage::new();
     let named = usable_limits_named(&usage.limits);
-    let mut reported: Vec<QuotaCategory> = Vec::new();
     let mut absent: Vec<(QuotaCategory, WindowDraft<'_>)> = Vec::new();
 
     for fixed in fixed_windows(usage) {
         let draft = fixed.draft(pool, received_at);
         match fixed.wire {
             Some(window) => {
-                reported.push(fixed.category);
                 decoded.push(measured_window(window, &draft)?);
             }
             None if fixed.expected => absent.push((fixed.category, draft)),
@@ -70,8 +68,7 @@ pub(crate) fn decode(
     // the account looking short of a window the payload did report.
     for (limit, bucket) in &named {
         let category = limit_category(limit);
-        if !is_model_scoped(limit) && !reported.contains(&category) {
-            reported.push(category);
+        if !is_model_scoped(limit) {
             absent.retain(|(absent_category, _)| *absent_category != category);
         }
         decoded.push(named_limit(limit, bucket, pool, received_at)?);

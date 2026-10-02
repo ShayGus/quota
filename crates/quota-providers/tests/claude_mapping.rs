@@ -525,3 +525,37 @@ fn extra_spend_without_a_cap_is_not_a_percentage() {
     assert_eq!(money.used_minor_units, Some(2500));
     assert_eq!(money.remaining_minor_units, None);
 }
+
+#[test]
+fn account_wide_named_limits_fill_missing_slots_beside_every_product_scope() {
+    for product in [
+        "seven_day_opus",
+        "seven_day_sonnet",
+        "seven_day_oauth_apps",
+        "seven_day_design",
+        "seven_day_routines",
+    ] {
+        for (group, other) in [("seven_day", "five_hour"), ("five_hour", "seven_day")] {
+            for scoped in [false, true] {
+                let mut payload = serde_json::json!({
+                    "limits": [{"group":group,"percent":20}]
+                });
+                payload[other] = serde_json::json!({"utilization":10});
+                payload[product] = serde_json::json!({"utilization":30});
+                if scoped {
+                    payload["limits"][0]["scope"] = serde_json::json!({"model":{"id":"model"}});
+                }
+                let reading = decode_offline(
+                    ProviderId::Claude,
+                    &payload.to_string(),
+                    "claude-local",
+                    received_at(),
+                )
+                .unwrap();
+                assert_eq!(reading.is_complete(), !scoped);
+                assert_eq!(reading.expected_but_missing.len(), usize::from(scoped));
+                assert_eq!(reading.windows.len(), 3 + usize::from(scoped));
+            }
+        }
+    }
+}

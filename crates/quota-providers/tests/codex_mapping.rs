@@ -448,3 +448,35 @@ fn a_response_header_carries_the_credit_balance() {
     };
     assert_eq!(balance.remaining, Some(7.5));
 }
+
+#[test]
+fn empty_containers_cannot_become_a_complete_reading() {
+    for payload in [
+        r#"{}"#,
+        r#"{"rate_limit":{}}"#,
+        r#"{"rateLimits":{}}"#,
+        r#"{"code_review_rate_limit":{}}"#,
+        r#"{"rate_limit":{"code_review_rate_limit":{}}}"#,
+        r#"{"additional_rate_limits":[{"id":"model"}]}"#,
+        r#"{"additional_rate_limits":[{"id":"model","rate_limit":{}}]}"#,
+        r#"{"rate_limit":{"additional_rate_limits":[{"id":"model","rate_limit":{}}]}}"#,
+        r#"{"credits":{}}"#,
+        r#"{"rate_limit":{},"credits":{"unlimited":false}}"#,
+    ] {
+        let error = decode_offline(ProviderId::Codex, payload, "codex-local", received_at())
+            .expect_err("an empty wrapper is not a reading");
+        assert_eq!(error.diagnostic_code(), "invalid_data");
+    }
+}
+
+#[test]
+fn empty_containers_do_not_hide_a_reported_credit_balance() {
+    for credits in [r#"{"balance":0}"#, r#"{"unlimited":true}"#] {
+        let payload =
+            format!(r#"{{"rate_limit":{{}},"code_review_rate_limit":{{}},"credits":{credits}}}"#);
+        let reading =
+            decode_offline(ProviderId::Codex, &payload, "codex-local", received_at()).unwrap();
+        assert_eq!(reading.windows.len(), 1);
+        assert!(reading.is_complete());
+    }
+}

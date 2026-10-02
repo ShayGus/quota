@@ -9,6 +9,8 @@
 use chrono::{DateTime, Duration, Utc};
 use quota_domain::polling::{PollingStrategy, ProviderPollingPolicy};
 
+use super::RefreshReason;
+
 /// What the supervisor knows when it decides.
 pub(crate) struct ReadSchedule<'a> {
     /// The policy the provider or the user saved.
@@ -21,6 +23,7 @@ pub(crate) struct ReadSchedule<'a> {
     pub valid_until: Option<DateTime<Utc>>,
     /// Now.
     pub now: DateTime<Utc>,
+    pub reason: RefreshReason,
 }
 
 /// The earliest instant this account may be read again.
@@ -41,7 +44,11 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
         last_success,
         valid_until,
         now,
+        reason,
     } = schedule;
+    if *reason == RefreshReason::Reconnect {
+        return *now;
+    }
     let now = *now;
     let valid_until = *valid_until;
 
@@ -76,9 +83,14 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
 
     // The provider's minimum is measured from the last accepted reading, so a
     // repeated manual refresh cannot outrun it.
-    let provider_floor = last_success.map_or(now, |last| {
-        last + chrono::Duration::from_std(policy.strategy.minimum_interval()).unwrap_or_default()
-    });
+    let provider_floor = last_attempt
+        .iter()
+        .chain(last_success)
+        .max()
+        .map_or(now, |last| {
+            *last
+                + chrono::Duration::from_std(policy.strategy.minimum_interval()).unwrap_or_default()
+        });
 
     let mut next = strategy_floor.max(provider_floor);
 
@@ -91,13 +103,15 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
         next = valid_until;
     }
 
-    next
+    next.max(provider_floor)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use quota_domain::polling::{EventAssistedPolicy, FixedIntervalPolicy};
+    use quota_domain::polling::{
+        AdaptivePolicy, BoundaryAwarePolicy, EventAssistedPolicy, FixedIntervalPolicy,
+    };
 
     /// The policy every production adapter uses: five minutes, no variation.
     fn policy() -> ProviderPollingPolicy {
@@ -128,6 +142,32 @@ mod tests {
         }
     }
 
+    fn all_policies() -> [ProviderPollingPolicy; 4] {
+        let PollingStrategy::FixedInterval(base) = fixed_policy().strategy else {
+            unreachable!();
+        };
+        [
+            policy(),
+            fixed_policy(),
+            ProviderPollingPolicy {
+                strategy: PollingStrategy::Adaptive(AdaptivePolicy {
+                    minimum_seconds: 300,
+                    maximum_seconds: 900,
+                    step_seconds: 30,
+                }),
+                ..policy()
+            },
+            ProviderPollingPolicy {
+                strategy: PollingStrategy::BoundaryAware(BoundaryAwarePolicy {
+                    base,
+                    boundary_grace_seconds: 60,
+                    max_boundary_attempts: 1,
+                }),
+                ..policy()
+            },
+        ]
+    }
+
     fn base() -> DateTime<Utc> {
         DateTime::from_timestamp(1_789_000_000, 0).expect("a fixed instant")
     }
@@ -141,6 +181,7 @@ mod tests {
             last_success: Some(base()),
             valid_until: None,
             now: base() + Duration::seconds(elapsed_seconds),
+            reason: RefreshReason::Scheduled,
         }
     }
 
@@ -172,6 +213,7 @@ mod tests {
             last_success: None,
             valid_until: None,
             now: base(),
+            reason: RefreshReason::Scheduled,
         };
         // An account that has never been read is due now, not in five minutes.
         assert_eq!(next_read_at(&current), base());
@@ -186,5 +228,47 @@ mod tests {
             next_read_at(&current) <= current.now,
             "one second past the interval the account is due again"
         );
+    }
+    #[test]
+    fn ordinary_refreshes_respect_the_minimum_even_before_expiry() {
+        for reason in [
+            RefreshReason::UserRequested,
+            RefreshReason::Scheduled,
+            RefreshReason::BoundaryVerification,
+            RefreshReason::OverviewOpened,
+            RefreshReason::Resumed,
+        ] {
+            for policy in all_policies() {
+                let mut current = schedule(&policy, 1);
+                current.reason = reason;
+                current.valid_until = Some(base() + Duration::seconds(2));
+                assert_eq!(next_read_at(&current), base() + Duration::seconds(300));
+                assert!(next_read_at(&current) > current.now);
+            }
+        }
+    }
+
+    #[test]
+    fn reconnect_is_due_inside_the_minimum_interval() {
+        for policy in all_policies() {
+            let mut current = schedule(&policy, 1);
+            current.reason = RefreshReason::Reconnect;
+            assert_eq!(next_read_at(&current), current.now);
+        }
+    }
+
+    #[test]
+    fn first_connection_verification_is_due_without_a_previous_read() {
+        for policy in all_policies() {
+            let current = ReadSchedule {
+                policy: &policy,
+                last_attempt: None,
+                last_success: None,
+                valid_until: None,
+                now: base(),
+                reason: RefreshReason::UserRequested,
+            };
+            assert_eq!(next_read_at(&current), current.now);
+        }
     }
 }

@@ -1,7 +1,6 @@
 //! Cancellable connection discovery, verification, and account persistence.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use quota_contracts::CommandError;
 use quota_contracts::commands::BeginConnectionRequest;
@@ -24,14 +23,14 @@ use super::{MonitoringRuntime, REMOTE_TIMEOUT, RuntimeState};
 /// value already used, which is what let a real failure be dropped as stale.
 #[derive(Debug)]
 pub(super) struct AttemptReporter {
-    revision: AtomicU32,
+    revision: tokio::sync::Mutex<Option<u32>>,
 }
 
 impl AttemptReporter {
     /// A reporter whose first revision is one, matching the first event.
     pub(super) fn new() -> Self {
         Self {
-            revision: AtomicU32::new(1),
+            revision: tokio::sync::Mutex::new(Some(1)),
         }
     }
 
@@ -42,15 +41,27 @@ impl AttemptReporter {
         attempt_id: &ConnectionAttemptId,
         progress: ConnectionProgress,
     ) {
+        let Some(revision) = self.next_revision(&progress).await else {
+            return;
+        };
         let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
         let event =
             crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
                 app_instance_id,
                 attempt_id: attempt_id.clone(),
-                attempt_revision: self.revision.fetch_add(1, Ordering::Relaxed),
+                attempt_revision: revision,
                 progress,
             });
         let _ = event.emit_to(&state.app, "settings");
+    }
+    async fn next_revision(&self, progress: &ConnectionProgress) -> Option<u32> {
+        let mut next_revision = self.revision.lock().await;
+        let revision = (*next_revision)?;
+        *next_revision = match progress {
+            ConnectionProgress::Started | ConnectionProgress::AwaitingUser => Some(revision + 1),
+            _ => None,
+        };
+        Some(revision)
     }
 }
 
@@ -98,6 +109,7 @@ pub(super) async fn run_connection_attempt(
         else {
             return Ok(());
         };
+        let _connection_gate = runtime.connection_gate.lock().await;
         commit_candidate(&runtime, candidate, &request, ids, read, &cancelled).await?;
         reporter
             .emit(
@@ -127,6 +139,9 @@ async fn discover_connection_candidates(
     cancelled: &mut watch::Receiver<bool>,
     reporter: &AttemptReporter,
 ) -> Result<Option<Vec<quota_core::ports::DiscoveredAccount>>, CommandError> {
+    if *cancelled.borrow() {
+        return Ok(None);
+    }
     reporter
         .emit(&runtime.state, attempt_id, ConnectionProgress::Started)
         .await;
@@ -271,12 +286,6 @@ async fn commit_candidate(
         monitoring_enabled: true,
     };
 
-    // Serialize duplicate check plus durable insert across connection attempts,
-    // but never hold the account-registry lock across a database await.
-    let _connection_gate = runtime.connection_gate.lock().await;
-    // Cancellation is decided under the same gate the insert takes, so a
-    // cancellation acknowledged while this waited cannot be followed by an
-    // account that appears anyway.
     if *cancelled.borrow() {
         return Err(CommandError::Cancelled);
     }
@@ -343,5 +352,61 @@ fn core_command_error(error: quota_core::CoreError) -> CommandError {
         quota_core::CoreError::Persistence { owner } => CommandError::PersistenceUnavailable {
             owner: owner.into(),
         },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn acknowledged_cancellation_prevents_all_later_progress() {
+        let reporter = AttemptReporter::new();
+        assert_eq!(
+            reporter.next_revision(&ConnectionProgress::Cancelled).await,
+            Some(1)
+        );
+        for progress in [
+            ConnectionProgress::Started,
+            ConnectionProgress::AwaitingUser,
+            ConnectionProgress::Verified {
+                state: ConnectionState::Connected,
+            },
+            ConnectionProgress::Failed {
+                error: CommandError::ReconnectRequired,
+            },
+            ConnectionProgress::Cancelled,
+        ] {
+            assert_eq!(reporter.next_revision(&progress).await, None);
+        }
+    }
+
+    #[tokio::test]
+    async fn normal_progress_advances_until_the_terminal_result() {
+        for terminal in [
+            ConnectionProgress::Verified {
+                state: ConnectionState::Connected,
+            },
+            ConnectionProgress::Failed {
+                error: CommandError::ReconnectRequired,
+            },
+        ] {
+            let reporter = AttemptReporter::new();
+            assert_eq!(
+                reporter.next_revision(&ConnectionProgress::Started).await,
+                Some(1)
+            );
+            assert_eq!(
+                reporter
+                    .next_revision(&ConnectionProgress::AwaitingUser)
+                    .await,
+                Some(2)
+            );
+            assert_eq!(reporter.next_revision(&terminal).await, Some(3));
+            assert_eq!(
+                reporter.next_revision(&ConnectionProgress::Started).await,
+                None
+            );
+        }
     }
 }

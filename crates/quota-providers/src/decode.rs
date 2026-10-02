@@ -24,7 +24,7 @@ use quota_domain::quota::window::{
     SourceKind, WindowSemantics,
 };
 
-pub(crate) use identity::{fingerprint, identifier, masked_address, pool_id, scope, window_id};
+pub(crate) use identity::{identifier, masked_address, pool_id, scope, window_id};
 pub(crate) use values::{Numberish, percentage, reset_after, reset_instant, scaled_seconds};
 
 /// The detail text used when a payload carries no usable identity.

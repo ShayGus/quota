@@ -8,6 +8,9 @@
 pub(crate) mod mapping;
 pub(crate) mod wire;
 
+#[cfg(test)]
+mod tests;
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -179,34 +182,39 @@ impl CodexAdapter {
             credential.account_id.as_deref(),
             Some(profile_label.as_str()),
         )?;
-        let mut first_error = None;
-        for url in [PRIMARY_URL, FALLBACK_URL] {
-            match self
-                .read_endpoint(url, &credential, &pool, context.clone())
-                .await
-            {
-                Ok(usage) => {
-                    let identity = verified_identity(
-                        usage
-                            .principal_label
-                            .clone()
-                            .unwrap_or_else(|| profile_label.clone()),
-                        usage.plan_label.clone(),
-                    );
-                    return Ok(usage.into_outcome(identity));
-                }
-                Err(error) => {
-                    let decisive = is_decisive(&error);
-                    first_error.get_or_insert(error);
-                    if decisive {
-                        break;
-                    }
-                }
-            }
+        let usage = self
+            .read_usage(&credential, &pool, context, [PRIMARY_URL, FALLBACK_URL])
+            .await?;
+        let identity = verified_identity(
+            usage.principal_label.clone().unwrap_or(profile_label),
+            usage.plan_label.clone(),
+        );
+        Ok(usage.into_outcome(identity))
+    }
+
+    async fn read_usage(
+        &self,
+        credential: &CodexCredential,
+        pool: &QuotaPoolId,
+        context: ReadContext,
+        endpoints: [&str; 2],
+    ) -> Result<DecodedUsage, ProviderError> {
+        let first_error = match self
+            .read_endpoint(endpoints[0], credential, pool, context.clone())
+            .await
+        {
+            Ok(usage) => return Ok(usage),
+            Err(error) if is_decisive(&error) => return Err(error),
+            Err(error) => error,
+        };
+        match self
+            .read_endpoint(endpoints[1], credential, pool, context)
+            .await
+        {
+            Ok(usage) => Ok(usage),
+            Err(error) if is_decisive(&error) => Err(error),
+            Err(_) => Err(first_error),
         }
-        Err(first_error.unwrap_or(ProviderError::Transient {
-            detail: "no Codex usage endpoint answered".to_owned(),
-        }))
     }
 }
 

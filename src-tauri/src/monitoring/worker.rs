@@ -74,7 +74,7 @@ fn spawn_supervised_read(workers: &mut JoinSet<()>, state: RuntimeState, request
                 tracing::warn!(target: "quota::scheduler", code = %error, "supervised read did not commit");
             }
         }
-        state.pending.lock().await.remove(&request.account_id);
+        state.pending.lock().await.remove(&(request.account_id, request.generation));
     });
 }
 

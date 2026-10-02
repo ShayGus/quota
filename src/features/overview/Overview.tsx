@@ -17,6 +17,7 @@ import { AccountColumns, AccountRow } from "./AccountRow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
 import { displayName } from "../../shared/format/alias";
 import { needsAttention } from "./status";
+import { RefreshNotice } from "../../shared/ui/RefreshNotice";
 
 /** How long the list must be idle before a staged order is applied. */
 export const REORDER_IDLE_MS = 1200;
@@ -175,6 +176,7 @@ export function Overview({
         Position is relative depletion of the lowest known included allowance. It is not a
         forecast of when an allowance empties.
       </p>
+      <RefreshNotice accounts={accounts} now={now} />
       {matches.length === 0 ? (
         <div className="list-note">
           <span>No account matches the current filter or search text.</span>

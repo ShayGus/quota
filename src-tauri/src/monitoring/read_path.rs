@@ -22,14 +22,13 @@ pub(super) async fn perform_read(
     let Some(target) = resolve_read_target(state, request).await? else {
         return Ok(());
     };
-    let read = fetch_reading(state, &target.entry, &target.adapter, &target.binding).await?;
+    let read = fetch_reading(state, &target.entry, &target.adapter).await?;
     commit_reading(state, request, &target, &read).await
 }
 
 /// The verified account, adapter, and backoff scope one supervised read needs.
 pub(super) struct ReadTarget {
     entry: quota_core::accounts::RegisteredAccount,
-    binding: quota_core::ports::ConnectionBinding,
     adapter: std::sync::Arc<dyn quota_core::ports::ProviderAdapter>,
     scope: LimitScope,
 }
@@ -46,6 +45,7 @@ pub(super) fn now(state: &RuntimeState) -> DateTime<Utc> {
 pub(super) async fn next_read_at(
     state: &RuntimeState,
     entry: &quota_core::accounts::RegisteredAccount,
+    reason: RefreshReason,
 ) -> Option<DateTime<Utc>> {
     let policy = state
         .policies
@@ -65,6 +65,7 @@ pub(super) async fn next_read_at(
             .filter_map(|window| window.valid_until)
             .min(),
         now: state.clock.now(),
+        reason,
     }))
 }
 
@@ -73,7 +74,9 @@ pub(super) async fn resolve_read_target(
     state: &RuntimeState,
     request: &RefreshRequest,
 ) -> Result<Option<ReadTarget>, String> {
-    if *state.monitoring.read().await == MonitoringState::Paused {
+    if request.reason != RefreshReason::Reconnect
+        && *state.monitoring.read().await == MonitoringState::Paused
+    {
         return Ok(None);
     }
     let entry = state
@@ -83,20 +86,21 @@ pub(super) async fn resolve_read_target(
         .get(&request.account_id)
         .cloned()
         .ok_or_else(|| "account_removed".to_owned())?;
-    if !entry.stored.monitoring_enabled {
+    if request.reason != RefreshReason::Reconnect && !entry.stored.monitoring_enabled {
         return Ok(None);
     }
+    if entry.binding.generation != request.generation {
+        return Err("stale_connection_generation".to_owned());
+    }
     let binding = entry.binding.clone();
-    // A scheduled or lifecycle-driven request waits for the account's due time.
-    // A refresh the person asked for is explicit, so it runs now; the policy
-    // still bounds how often the account reads itself.
-    if request.reason != RefreshReason::UserRequested {
-        let Some(next_read_at) = next_read_at(state, &entry).await else {
-            return Ok(None);
-        };
-        if next_read_at > now(state) {
-            return Ok(None);
+    let Some(next_read_at) = next_read_at(state, &entry, request.reason).await else {
+        return Ok(None);
+    };
+    if next_read_at > now(state) {
+        if request.reason == RefreshReason::UserRequested {
+            publish_snapshot(state).await?;
         }
+        return Ok(None);
     }
     let adapter = state
         .providers
@@ -105,22 +109,22 @@ pub(super) async fn resolve_read_target(
         .ok_or_else(|| "unsupported_provider".to_owned())?;
     let scope = LimitScope::Connection(binding.connection_id.clone());
     let now = state.clock.now();
-    if state
-        .backoff
-        .load_backoff(&scope)
-        .await
-        .map_err(|error| error.reason)?
-        .is_some_and(|backoff| backoff.is_waiting_at(now))
+    if request.reason != RefreshReason::Reconnect
+        && state
+            .backoff
+            .load_backoff(&scope)
+            .await
+            .map_err(|error| error.reason)?
+            .is_some_and(|backoff| backoff.is_waiting_at(now))
     {
         return Ok(None);
     }
     // Every eligibility check has passed, so this is a real read. The floor is
     // stamped now, after the decision, so a check that decided not to read
     // leaves the account's schedule untouched.
-    let entry = stamp_dispatch_floor(state, request).await?;
+    let entry = stamp_dispatch_floor(state, request, &binding).await?;
     Ok(Some(ReadTarget {
         entry,
-        binding,
         adapter,
         scope,
     }))
@@ -133,6 +137,7 @@ pub(super) async fn resolve_read_target(
 async fn stamp_dispatch_floor(
     state: &RuntimeState,
     request: &RefreshRequest,
+    binding: &quota_core::ports::ConnectionBinding,
 ) -> Result<quota_core::accounts::RegisteredAccount, String> {
     let now = state.clock.now();
     let _commit = state.commit.lock().await;
@@ -154,12 +159,9 @@ async fn stamp_dispatch_floor(
             )
     };
     registry
-        .record_dispatch(&request.account_id, now, Some(now + minimum))
-        .map_err(|error| error.to_string())?;
-    registry
-        .get(&request.account_id)
+        .record_dispatch(&request.account_id, binding, now, Some(now + minimum))
         .cloned()
-        .ok_or_else(|| "account_removed_before_dispatch".to_owned())
+        .map_err(|error| error.to_string())
 }
 
 /// Reads one binding with a timeout, recording a failure when none arrives.
@@ -167,7 +169,6 @@ pub(super) async fn fetch_reading(
     state: &RuntimeState,
     entry: &quota_core::accounts::RegisteredAccount,
     adapter: &std::sync::Arc<dyn quota_core::ports::ProviderAdapter>,
-    binding: &quota_core::ports::ConnectionBinding,
 ) -> Result<quota_core::ports::QuotaRead, String> {
     let now = state.clock.now();
     let context = quota_core::ports::ReadContext {
@@ -175,7 +176,9 @@ pub(super) async fn fetch_reading(
         deadline: Some(now + chrono::Duration::seconds(10)),
     };
     let response =
-        match tokio::time::timeout(REMOTE_TIMEOUT, adapter.read_quota(binding, context)).await {
+        match tokio::time::timeout(REMOTE_TIMEOUT, adapter.read_quota(&entry.binding, context))
+            .await
+        {
             Err(_) => {
                 record_failure(
                     state,
@@ -224,7 +227,7 @@ pub(super) async fn commit_reading(
         let live = registry
             .get(&request.account_id)
             .ok_or_else(|| "account_removed_before_commit".to_owned())?;
-        if !live.binding.accepts(&target.binding) {
+        if !live.binding.accepts(&target.entry.binding) {
             return Err("stale_connection_generation".to_owned());
         }
         registry
@@ -236,9 +239,19 @@ pub(super) async fn commit_reading(
         // A reconnect is only finished when a read is accepted, so a successful
         // read is what returns the connection to Connected.
         registry
-            .set_connection_state(&target.binding.connection_id, ConnectionState::Connected)
+            .set_connection_state(
+                &target.entry.binding.connection_id,
+                ConnectionState::Connected,
+            )
             .map_err(|error| error.to_string())?;
-        let next = next_read_at(state, &target.entry)
+        registry
+            .record_attempt(&request.account_id, FetchState::Idle, now, None)
+            .map_err(|error| error.to_string())?;
+        let current = registry
+            .get(&request.account_id)
+            .cloned()
+            .ok_or_else(|| "account_removed_before_commit".to_owned())?;
+        let next = next_read_at(state, &current, RefreshReason::Scheduled)
             .await
             .unwrap_or(now + chrono::Duration::seconds(300));
         registry
@@ -272,6 +285,7 @@ pub(super) async fn record_failure(
 ) -> Result<(), String> {
     let now = state.clock.now();
     let scope = LimitScope::Connection(entry.binding.connection_id.clone());
+    let _commit = state.commit.lock().await;
     // The connection may have been reconnected while this read was in flight. A
     // late failure must not write backoff, fetch state or an authentication
     // demand onto the generation that replaced it.
@@ -309,17 +323,8 @@ pub(super) async fn record_failure(
         .await
         .map_err(|e| e.reason)?;
 
-    let _commit = state.commit.lock().await;
     let updated = {
         let mut registry = state.registry.write().await;
-        // Re-checked under the boundary, because a reconnect can land between the
-        // guard above and this write.
-        let live = registry
-            .get(entry.account_id())
-            .ok_or_else(|| "account_removed_after_failure".to_owned())?;
-        if !live.binding.accepts(&entry.binding) {
-            return Ok(());
-        }
         let fetch_state = if matches!(&error, ProviderError::RateLimited { .. }) {
             FetchState::Backoff
         } else {

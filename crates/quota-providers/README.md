@@ -106,9 +106,7 @@ Reads Claude subscription usage for the Claude Code login.
 - Identity: `account.uuid` from the profile route. Without it the reading is refused with
   `ProviderError::InvalidData`, so an account with no reported identity reads as
   unverified rather than inventing one. The address is masked in any label this crate
-  produces. The proved profile is kept in memory against a one-way fingerprint of the
-  token that proved it, so connecting asks the route once instead of twice, and a
-  different token never reads a cached answer.
+  produces.
 - Decoded fields: `five_hour`, `seven_day`, and optional `seven_day_opus`,
   `seven_day_sonnet`, `seven_day_oauth_apps`, `seven_day_design`, and
   `seven_day_routines`, each with `utilization` (percent points used) and

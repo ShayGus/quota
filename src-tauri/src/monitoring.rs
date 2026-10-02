@@ -54,6 +54,8 @@ pub struct RefreshRequest {
     pub account_id: AccountId,
     /// The reason is logged as a closed vocabulary, never parsed from text.
     pub reason: RefreshReason,
+    #[expect(missing_docs)]
+    pub generation: u32,
 }
 
 /// Why the shared supervisor was asked to read an account.
@@ -61,6 +63,8 @@ pub struct RefreshRequest {
 pub enum RefreshReason {
     /// The user asked for a refresh.
     UserRequested,
+    #[expect(missing_docs)]
+    Reconnect,
     /// The shared provider-specific schedule became due.
     Scheduled,
     /// A reported quota boundary needs verification.
@@ -84,7 +88,7 @@ struct RuntimeState {
     providers: Arc<quota_providers::ProviderRegistry>,
     clock: Arc<SystemClock>,
     permits: Arc<Semaphore>,
-    pending: Arc<tokio::sync::Mutex<HashSet<AccountId>>>,
+    pending: Arc<tokio::sync::Mutex<HashSet<(AccountId, u32)>>>,
     /// Serialises every change that reads the registry, mutates it, writes it
     /// durably and publishes it. Without it a delayed write can resurrect an
     /// account a disconnect removed, or overwrite a concurrent rename.
@@ -176,24 +180,34 @@ impl MonitoringRuntime {
     ) -> Result<Vec<AccountId>, quota_contracts::CommandError> {
         let mut accepted = Vec::new();
         for account_id in account_ids {
+            let generation = self
+                .state
+                .registry
+                .read()
+                .await
+                .get(&account_id)
+                .map(|entry| entry.binding.generation)
+                .ok_or(CommandError::AccountNotFound)?;
+            let key = (account_id.clone(), generation);
             let mut pending = self.state.pending.lock().await;
-            if !pending.insert(account_id.clone()) {
+            if !pending.insert(key.clone()) {
                 continue;
             }
             match self.sender.try_send(RefreshRequest {
                 account_id: account_id.clone(),
                 reason,
+                generation,
             }) {
                 Ok(()) => accepted.push(account_id),
                 Err(mpsc::error::TrySendError::Full(_)) => {
-                    pending.remove(&account_id);
+                    pending.remove(&key);
                     return Err(quota_contracts::CommandError::ValidationFailed {
                         field: "refresh_queue".into(),
                         reason: "the shared refresh queue is full; try again shortly".into(),
                     });
                 }
                 Err(mpsc::error::TrySendError::Closed(_)) => {
-                    pending.remove(&account_id);
+                    pending.remove(&key);
                     return Err(quota_contracts::CommandError::Cancelled);
                 }
             }
@@ -334,6 +348,7 @@ impl MonitoringRuntime {
         &self,
         account_id: &AccountId,
     ) -> Result<u32, quota_contracts::CommandError> {
+        let commit = self.state.commit.lock().await;
         let connection_id = self
             .state
             .registry
@@ -374,7 +389,8 @@ impl MonitoringRuntime {
                     owner: error.owner.to_owned(),
                 },
             )?;
-        self.refresh([account_id.clone()], RefreshReason::UserRequested)
+        drop(commit);
+        self.refresh([account_id.clone()], RefreshReason::Reconnect)
             .await?;
         // The reconnect itself changed the connection state the renderer shows.
         self.publish().await?;

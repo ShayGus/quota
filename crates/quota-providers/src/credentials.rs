@@ -159,7 +159,7 @@ fn codex_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderErro
         Some(home) => (home.join("auth.json"), "codex-home-env".to_owned()),
         None => (
             profile_directory(lookup)?.join(".codex").join("auth.json"),
-            "codex-profile-default".to_owned(),
+            "codex-home-default".to_owned(),
         ),
     })
 }
@@ -175,7 +175,7 @@ fn claude_credentials_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), Prov
             profile_directory(lookup)?
                 .join(".claude")
                 .join(".credentials.json"),
-            "claude-profile-default".to_owned(),
+            "claude-config-default".to_owned(),
         ),
     })
 }
@@ -193,7 +193,7 @@ fn opencode_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderE
                 .join("share")
                 .join("opencode")
                 .join("auth.json"),
-            "opencode-profile-default".to_owned(),
+            "opencode-xdg-default".to_owned(),
         ),
     })
 }
@@ -288,14 +288,15 @@ mod tests {
             codex,
             PathBuf::from(profile).join(".codex").join("auth.json")
         );
-        assert_eq!(codex_label, "codex-profile-default");
-        let (claude, _) = claude_credentials_file(&lookup).unwrap();
+        assert_eq!(codex_label, "codex-home-default");
+        let (claude, claude_label) = claude_credentials_file(&lookup).unwrap();
         assert_eq!(
             claude,
             PathBuf::from(profile)
                 .join(".claude")
                 .join(".credentials.json")
         );
+        assert_eq!(claude_label, "claude-config-default");
         let (go, go_label) = opencode_auth_file(&lookup).unwrap();
         assert_eq!(
             go,
@@ -305,7 +306,7 @@ mod tests {
                 .join("opencode")
                 .join("auth.json")
         );
-        assert_eq!(go_label, "opencode-profile-default");
+        assert_eq!(go_label, "opencode-xdg-default");
     }
 
     /// A Windows-only regression: `USERPROFILE` alone, with `HOME` absent.

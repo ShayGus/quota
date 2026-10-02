@@ -22,6 +22,7 @@ import { formatAge, instantOf } from "../../../shared/format/duration";
 import { describeCommandError, launch } from "../../../shared/ipc/report";
 import type { AttemptProgress } from "../../../shared/state/types";
 import { Icon } from "../../../shared/ui/Icon";
+import { RefreshNotice } from "../../../shared/ui/RefreshNotice";
 import type { SettingsActions } from "../Settings";
 import { statusOf } from "../../overview/status";
 
@@ -198,13 +199,18 @@ function ConnectAccount({
   const [provider, setProvider] = useState<ProviderChoice>("codex");
   const [nickname, setNickname] = useState("");
   const [live, setLive] = useState<LiveAttempt | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const progress =
     live === null
       ? undefined
       : attempts.find((entry) => entry.attemptId === live.attemptId);
   const running =
-    live !== null && (progress === undefined || progress.progress.kind === "started");
+    submitting ||
+    (live !== null &&
+      (progress === undefined ||
+        progress.progress.kind === "started" ||
+        progress.progress.kind === "awaiting_user"));
   const connected = progress !== undefined && progress.progress.kind === "verified";
   const cancelled = progress !== undefined && progress.progress.kind === "cancelled";
   const failure =
@@ -213,6 +219,9 @@ function ConnectAccount({
       : null;
 
   const connect = async (): Promise<void> => {
+    if (running) {
+      return;
+    }
     // Starting again replaces the previous result; a still-running attempt is
     // kept, because it has not finished yet.
     if (live !== null) {
@@ -220,19 +229,24 @@ function ConnectAccount({
     }
     setRefusal(null);
     setLive(null);
-    const accepted = await actions.beginConnection({
-      provider_id: provider,
-      nickname: nickname.trim() === "" ? provider : nickname.trim(),
-      profile_label: null,
-    });
-    if (accepted === null) {
-      setRefusal(
-        "Quota could not start that connection. The credential profile may already be connected.",
-      );
-      return;
+    setSubmitting(true);
+    try {
+      const accepted = await actions.beginConnection({
+        provider_id: provider,
+        nickname: nickname.trim() === "" ? provider : nickname.trim(),
+        profile_label: null,
+      });
+      if (accepted === null) {
+        setRefusal(
+          "Quota could not start that connection. The credential profile may already be connected.",
+        );
+        return;
+      }
+      setNickname("");
+      setLive({ attemptId: accepted.attempt_id, provider });
+    } finally {
+      setSubmitting(false);
     }
-    setNickname("");
-    setLive({ attemptId: accepted.attempt_id, provider });
   };
 
   const dismiss = (): void => {
@@ -347,6 +361,7 @@ export function AccountsPanel({
         Disconnecting one account does not affect its siblings.
       </p>
       <ConnectAccount attempts={attempts} actions={actions} />
+      <RefreshNotice accounts={accounts} now={now} />
       {accounts.map((account) => (
         <ManagedAccount
           key={account.account_id}

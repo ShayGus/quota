@@ -57,14 +57,6 @@ pub(crate) fn decode(
     overrides: &HeaderOverrides<'_>,
 ) -> Result<DecodedUsage, ProviderError> {
     let sets = envelope.limit_sets();
-    // A prepaid plan reports credits and no allowance at all. That is a reading,
-    // not an unusable payload, so it is never refused for having no window.
-    if sets.is_empty() && envelope.credits.is_none() {
-        return Err(ProviderError::InvalidData {
-            detail: "the payload carried neither a rate-limit window nor a credit balance"
-                .to_owned(),
-        });
-    }
     let mut usage = DecodedUsage::new();
     usage.plan_label = envelope
         .plan_type
@@ -80,6 +72,18 @@ pub(crate) fn decode(
             received_at,
             overrides.credits,
         )?);
+    }
+    if !usage.windows.iter().any(|window| {
+        window.metric_role != MetricRole::CreditBalance
+            || matches!(
+                &window.measurement,
+                Measurement::Quantity(_) | Measurement::Unlimited
+            )
+    }) {
+        return Err(ProviderError::InvalidData {
+            detail: "the payload carried neither a rate-limit window nor a credit balance"
+                .to_owned(),
+        });
     }
     Ok(usage)
 }
