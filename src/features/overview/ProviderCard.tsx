@@ -22,6 +22,7 @@ import { Icon } from "../../shared/ui/Icon";
 import { Bar, Ring } from "../../shared/ui/Meter";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import {
+  ACCOUNT_RESOURCE,
   boundarySentence,
   cardWindows,
   extraLabel,
@@ -152,18 +153,15 @@ function cardNote(
 }
 
 /**
- * The label of the button that lists a card's other limits. A second included
- * allowance in a period the rings already show is a model-specific limit, as
- * the wireframe calls it; anything else is named generically.
+ * The label of the button that lists a card's other limits. An included
+ * allowance the provider scoped to something narrower than the account is a
+ * model limit, as the wireframe calls it; anything else is named generically.
  */
-function extraSummary(
-  extra: readonly QuotaWindow[],
-  main: readonly QuotaWindow[],
-): string {
+function extraSummary(extra: readonly QuotaWindow[]): string {
   const models = extra.every(
     (window) =>
       window.metric_role === "included_allowance" &&
-      main.some((ring) => ring.category === window.category),
+      window.scope.resource !== ACCOUNT_RESOURCE,
   );
   const noun = models ? "model limit" : "other limit";
   return `${String(extra.length)} ${noun}${extra.length === 1 ? "" : "s"}`;
@@ -406,7 +404,7 @@ export function ProviderCard({
               onExpand(account.account_id);
             }}
           >
-            {extraSummary(extra, main)}
+            {extraSummary(extra)}
             <Icon name={expanded ? "chevron-up" : "chevron-down"} />
           </button>
         ) : (

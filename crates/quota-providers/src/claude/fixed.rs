@@ -75,7 +75,7 @@ fn account<'a>(
 ) -> FixedWindow<'a> {
     FixedWindow {
         bucket,
-        resource: "account",
+        resource: quota_domain::quota::scope::ACCOUNT_RESOURCE,
         label: "Claude account",
         category,
         expected,

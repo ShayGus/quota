@@ -199,7 +199,7 @@ fn account_draft<'a>(
         provider: ProviderId::Codex,
         pool_id: pool,
         category,
-        resource: "account",
+        resource: quota_domain::quota::scope::ACCOUNT_RESOURCE,
         resource_label: "Codex account",
         bucket_id: Some(bucket),
         metric_role: MetricRole::IncludedAllowance,

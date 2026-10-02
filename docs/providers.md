@@ -113,7 +113,11 @@ display text, and it does not invent a value. Specifically:
   never fabricated zeros;
 - provider-specific merge and duplicate precedence rules live in the
   [decoder reference](../crates/quota-providers/README.md), rather than one universal
-  multi-bucket rule.
+  multi-bucket rule;
+- an allowance that covers the whole account has the scope resource `account`
+  (`quota_domain::quota::scope::ACCOUNT_RESOURCE`). The overview draws only these as a
+  card's period rings and lists every other scope, such as one model family's weekly
+  limit, under its own name, so a narrower window is never shown as the account's.
 
 ## Not implemented: multi-profile discovery
 

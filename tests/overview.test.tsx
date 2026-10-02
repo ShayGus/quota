@@ -168,8 +168,8 @@ describe("the account card", () => {
               label: "Model-specific weekly",
               resource: "one-model",
             }),
-            quotaWindow("session", "session", percent(18), { resource: "all-models" }),
-            quotaWindow("weekly", "weekly", percent(64), { resource: "all-models" }),
+            quotaWindow("session", "session", percent(18), { resource: "account" }),
+            quotaWindow("weekly", "weekly", percent(64), { resource: "account" }),
           ],
           { rank: 18 },
         ),
@@ -190,6 +190,7 @@ describe("the account card", () => {
           quotaWindow("weekly-window", "weekly", percent(64)),
           quotaWindow("model-window", "weekly", percent(43), {
             label: "Model-specific weekly",
+            resource: "model-family",
           }),
         ]),
       ]),
@@ -203,6 +204,36 @@ describe("the account card", () => {
     fireEvent.click(toggle);
     expect(screen.getByText("Model-specific weekly")).toBeTruthy();
     expect(screen.getByText("43% remaining")).toBeTruthy();
+  });
+
+  it("draws only account-wide allowances as rings, whatever their number", () => {
+    // Two model-specific weekly allowances outnumber the account-wide one, and
+    // the account has no account-wide 5-hour window at all.
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a1", "claude", 1, [
+          quotaWindow("opus-session", "session", percent(30), {
+            label: "Opus",
+            resource: "opus",
+          }),
+          quotaWindow("opus-weekly", "weekly", percent(20), {
+            label: "Opus",
+            resource: "opus",
+          }),
+          quotaWindow("sonnet-weekly", "weekly", percent(50), {
+            label: "Sonnet",
+            resource: "sonnet",
+          }),
+          quotaWindow("account-weekly", "weekly", percent(64), {
+            label: "Claude account",
+          }),
+        ]),
+      ]),
+    );
+    render(<Harness />);
+    // One ring: the account-wide weekly. No model window takes a period ring.
+    expect(ringsOf("a1")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: /3 model limits/ })).toBeTruthy();
   });
 
   it("offers Enable for a monitoring-off account and Reconnect for an expired one", () => {

@@ -61,11 +61,18 @@ export function extraLabel(window: QuotaWindow): string {
 }
 
 /**
+ * The resource every provider gives an account-wide allowance:
+ * `quota_domain::quota::scope::ACCOUNT_RESOURCE` on the host.
+ */
+export const ACCOUNT_RESOURCE = "account";
+
+/**
  * The windows a card draws as rings, and the ones it lists below them.
  *
- * The rings are the first included allowance of each standard period. Every
- * other window, such as a model-specific weekly allowance or an extra-spend
- * cap, is an independent limit that the card lists on request.
+ * The rings are the account-wide included allowance of each standard period,
+ * read from the scope the provider reported, never guessed. Every other
+ * window, such as a model-specific weekly allowance or an extra-spend cap, is
+ * an independent limit that the card lists under its own scope name.
  */
 export function cardWindows(account: AccountSnapshot): {
   readonly main: readonly QuotaWindow[];
@@ -74,21 +81,11 @@ export function cardWindows(account: AccountSnapshot): {
   const included = account.windows.filter(
     (window) => window.metric_role === "included_allowance",
   );
-  // The account-wide scope is the one most included allowances share; a
-  // narrower scope, such as one model family's weekly limit, is listed instead
-  // of drawn as the period's ring.
-  const shared = new Map<string, number>();
-  for (const window of included) {
-    shared.set(window.scope.resource, (shared.get(window.scope.resource) ?? 0) + 1);
-  }
-  const breadth = (window: QuotaWindow): number => shared.get(window.scope.resource) ?? 0;
   const main: QuotaWindow[] = [];
   for (const category of MAIN_CATEGORIES) {
-    const candidates = included.filter((window) => window.category === category);
-    const window = candidates.reduce<QuotaWindow | undefined>(
-      (best, candidate) =>
-        best === undefined || breadth(candidate) > breadth(best) ? candidate : best,
-      undefined,
+    const window = included.find(
+      (candidate) =>
+        candidate.category === category && candidate.scope.resource === ACCOUNT_RESOURCE,
     );
     if (window !== undefined) {
       main.push(window);

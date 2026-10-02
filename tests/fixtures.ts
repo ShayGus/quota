@@ -40,7 +40,7 @@ export function window(
     provider_bucket_id: null,
     pool_id: "pool-1",
     scope: {
-      resource: options.resource ?? "resource",
+      resource: options.resource ?? "account",
       label: options.label ?? "Subscription",
     },
     category,
