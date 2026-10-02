@@ -15,7 +15,7 @@
 mod support;
 
 use quota_domain::preferences::{
-    Density, IndicatorStyle, LaunchBehavior, OverviewMode, PREFERENCES_SCHEMA_VERSION,
+    IndicatorStyle, LaunchBehavior, OverviewMode, PREFERENCES_SCHEMA_VERSION,
     PresentationPreferences, PrivacyAliasMode, Theme,
 };
 use quota_persistence::{PersistenceError, PresentationPreferencesCodec};
@@ -36,7 +36,6 @@ fn the_store_round_trips_a_preferences_document() {
 
     let mut updated = defaults.clone();
     updated.theme = Theme::Dark;
-    updated.density = Density::Comfortable;
     updated.indicator_style = IndicatorStyle::Bar;
     updated.overview_mode = OverviewMode::Tray;
     updated.always_on_top = true;
@@ -113,6 +112,35 @@ fn a_corrupt_document_is_preserved_and_never_opted_in() {
 }
 
 #[test]
+fn a_document_saved_with_the_retired_density_field_still_loads() {
+    let store = MemoryStore::default();
+    let codec = PresentationPreferencesCodec::new(store.clone());
+
+    store.write_external(
+        LIVE_KEY,
+        serde_json::json!({
+            "schema_version": PREFERENCES_SCHEMA_VERSION,
+            "revision": 4,
+            "theme": "dark",
+            "density": "comfortable",
+            "indicator_style": "bar",
+            "overview_mode": "floating",
+            "always_on_top": true,
+            "launch_behavior": "restore_last_mode",
+            "privacy_alias_mode": "off",
+            "reduce_motion": false
+        }),
+    );
+
+    let loaded = codec.load().unwrap();
+    assert_eq!(loaded.theme, Theme::Dark);
+    assert_eq!(loaded.indicator_style, IndicatorStyle::Bar);
+    assert_eq!(loaded.overview_mode, OverviewMode::Floating);
+    assert!(loaded.always_on_top);
+    assert_eq!(loaded.launch_behavior, LaunchBehavior::RestoreLastMode);
+}
+
+#[test]
 fn a_document_with_a_misshaped_field_never_produces_a_topmost_preference() {
     let store = MemoryStore::default();
     let codec = PresentationPreferencesCodec::new(store.clone());
@@ -123,7 +151,6 @@ fn a_document_with_a_misshaped_field_never_produces_a_topmost_preference() {
             "schema_version": PREFERENCES_SCHEMA_VERSION,
             "revision": 4,
             "theme": "dark",
-            "density": "compact",
             "indicator_style": "ring",
             "overview_mode": "floating",
             "always_on_top": true,

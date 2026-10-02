@@ -141,20 +141,12 @@ export const actions = {
   async setAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
     await reportAsync(commands.setOverviewAlwaysOnTop(alwaysOnTop));
   },
-  /** Widens the overview to fit every account within the work area. */
-  async fitToAccounts(): Promise<void> {
-    await reportAsync(commands.fitOverviewToAccounts());
-  },
   /**
    * Asks the host to fit the popover's height to its content. The host decides
    * the height and position inside the work area; a refusal is reported.
    */
   async fitOverviewHeight(contentHeight: number): Promise<void> {
     await reportAsync(commands.fitOverviewHeight(Math.max(0, Math.round(contentHeight))));
-  },
-  /** Returns the overview to a visible work area. */
-  async resetPosition(): Promise<void> {
-    await reportAsync(commands.resetOverviewPosition());
   },
   async savePollingPreferences(policy: ProviderPollingPolicy): Promise<void> {
     await reportAsync(commands.setPollingPreferences(policy.provider_id, policy));

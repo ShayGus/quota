@@ -31,6 +31,22 @@ The wireframe is a prototype. Where its words describe the prototype ("sample da
 "Simulate connection", "Clear demo accounts"), the app states what the product actually
 does, in the same place and at the same length.
 
+- **Features of the earlier specification.** Specification v0.5 and the 810 px v0.3
+  wireframe call for account search, a visible/total account count, the side-by-side
+  comparison table, Fit all accounts, Reset window position, and a row density setting.
+  The approved wireframe has none of them beyond its filter counts and the rings/bars
+  layout switch. The owner confirmed on 2026-10-02 that they stay removed, so the window
+  commands and the density preference that served them are removed as well; a saved
+  preferences file that still carries a density loads normally.
+- **Floating and always on top.** The wireframe's "Pin as a floating window" and "Keep
+  pinned window on top" read as one feature. By the owner's direction the header button
+  floats or docks the window ("Float as a separate window", "Dock to the tray", with a
+  "Floating" label), and the setting is "Always on top", which applies in both modes. The
+  two remain independent: changing one never changes the other.
+- **Window placement.** The overview keeps its position and size between restarts, by the
+  owner's decision, so a saved width is not reset to 440 px. Settings is owned by the
+  overview and opens centred over it, on its screen; with the overview hidden it opens
+  beside the tray.
 - **Order.** The wireframe lists accounts in the order they were added and offers up and
   down buttons. Quota ranks accounts by their least remaining allowance (spec 4.1), and
   the host has no reorder command, so the order buttons are shown disabled with that
@@ -78,15 +94,15 @@ the ten cases; what each case ignores is data (which accounts exist and their va
 window width the native border takes) and the text listed above. Leaving the wizard was
 driven live as well: after a real verification reached Verify, Escape sent
 `cancel_connection` and never `confirm_connection`, and the account list was unchanged.
-Native behaviour was driven with real input: the pinned header drags the window, unpinning
-anchors the popover above the taskbar, Escape steps back and then hides, settings Details
-and Add account open the popover, and the tray's icon, tooltip, and menu were read from
-Windows. Each tray menu item was chosen: Settings opens settings, Show App restores the
-popover, and Exit ends the process. A left click on the icon opens the app and a second
-click keeps it open. The popover's ×, Alt+F4, and the settings window's × hide to the tray
-while the process keeps running. A second launch keeps one process and brings the app
-forward, and a `--autostart` launch stays hidden. Launch at login wrote the `Quota` entry
-in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and removed it again. The
+Native behaviour was driven with real input: a floating window drags by its header,
+docking anchors the popover above the taskbar, Escape steps back and then hides, settings
+Details and Add account open the popover, and the tray's icon, tooltip, and menu were read
+from Windows. Each tray menu item was chosen: Settings opens settings, Show App restores
+the popover, and Exit ends the process. A left click on the icon opens the app and a
+second click keeps it open. The popover's ×, Alt+F4, and the settings window's × hide to
+the tray while the process keeps running. A second launch keeps one process and brings the
+app forward, and a `--autostart` launch stays hidden. Launch at login wrote the `Quota`
+entry in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and removed it again. The
 popover's height follows its content between 320 and 760 pixels, as the wireframe's does:
 the renderer reports its content height and the host resizes the window inside the work
 area, keeping a tray popover against the screen edge the tray is on.

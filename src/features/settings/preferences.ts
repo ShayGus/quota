@@ -7,7 +7,6 @@
  * (spec 13.2).
  */
 import type {
-  Density,
   IndicatorStyle,
   Preferences,
   PrivacyAliasMode,
@@ -17,11 +16,6 @@ import type {
 /** The next preferences with a different colour scheme. */
 export function withTheme(preferences: Preferences, theme: Theme): Preferences {
   return { ...preferences, theme };
-}
-
-/** The next preferences with a different row density. */
-export function withDensity(preferences: Preferences, density: Density): Preferences {
-  return { ...preferences, density };
 }
 
 /** The next preferences with a different allowance indicator. */

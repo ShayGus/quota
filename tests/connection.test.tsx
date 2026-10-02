@@ -40,8 +40,6 @@ function settingsActions(): SettingsActions {
     savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setOverviewMode: vi.fn(),
-    fitToAccounts: vi.fn(),
-    resetPosition: vi.fn(),
     setAccountEnabled: vi.fn(),
     renameAccount: vi.fn(),
     disconnectAccount: vi.fn(),

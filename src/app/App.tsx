@@ -63,12 +63,6 @@ const settingsActions: SettingsActions = {
   setOverviewMode: (mode) => {
     launch(actions.setOverviewMode(mode));
   },
-  fitToAccounts: () => {
-    launch(actions.fitToAccounts());
-  },
-  resetPosition: () => {
-    launch(actions.resetPosition());
-  },
   setAccountEnabled: (accountId, enabled) => {
     launch(actions.setAccountEnabled(accountId, enabled));
   },

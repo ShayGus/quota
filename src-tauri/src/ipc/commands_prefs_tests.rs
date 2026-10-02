@@ -6,8 +6,8 @@ use std::sync::{Arc, Mutex, PoisonError};
 
 use quota_core::ports::RepositoryError;
 use quota_domain::preferences::{
-    Density, IndicatorStyle, LaunchBehavior, OperationalPreferences, OverviewMode,
-    PresentationPreferences, PrivacyAliasMode, Theme,
+    IndicatorStyle, LaunchBehavior, OperationalPreferences, OverviewMode, PresentationPreferences,
+    PrivacyAliasMode, Theme,
 };
 use quota_persistence::ports::PresentationPreferencesPort;
 use quota_persistence::store::document::PreferenceDocumentStore;
@@ -184,7 +184,6 @@ async fn every_presentation_setting_preserves_operational_values_and_revisions()
     operational.fail_save = true;
     let mut requested = confirmed.clone();
     requested.theme = Theme::Dark;
-    requested.density = Density::Comfortable;
     requested.indicator_style = IndicatorStyle::Bar;
     requested.always_on_top = true;
     requested.launch_behavior = LaunchBehavior::RestoreLastMode;

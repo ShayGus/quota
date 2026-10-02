@@ -9,7 +9,7 @@ use specta::Type;
 
 use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::{
-    Density, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
+    IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
 };
 pub use quota_domain::preferences::{
     NotificationAlerts, NotificationPolicy, NotificationThresholds, QuietHours,
@@ -47,8 +47,6 @@ pub struct Preferences {
     pub revision: u32,
     /// The colour scheme.
     pub theme: Theme,
-    /// Row density.
-    pub density: Density,
     /// The allowance indicator.
     pub indicator_style: IndicatorStyle,
     /// Where the overview lives.

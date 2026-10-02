@@ -59,12 +59,6 @@ description = "Change only the native topmost flag."
 [allow-fit-overview-height]
 description = "Fit the overview's height to its content inside the work area."
 
-[allow-fit-overview-to-accounts]
-description = "Size the overview to the popover layout and its accounts."
-
-[allow-reset-overview-position]
-description = "Restore a known-visible floating position."
-
 [allow-open-provider-usage-page]
 description = "Open an allowlisted provider usage page in the external browser."
 

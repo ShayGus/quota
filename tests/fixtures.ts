@@ -168,7 +168,6 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
     schema_version: 1,
     revision: 7,
     theme: "dark",
-    density: "compact",
     indicator_style: "ring",
     overview_mode: "floating",
     always_on_top: false,

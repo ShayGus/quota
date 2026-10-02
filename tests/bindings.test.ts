@@ -50,14 +50,19 @@ describe("the generated bindings module", () => {
       "setMonitoringState",
       "setOverviewMode",
       "setOverviewAlwaysOnTop",
-      "fitOverviewToAccounts",
-      "resetOverviewPosition",
+      "fitOverviewHeight",
       "openProviderUsagePage",
       "openSettingsWindow",
       "exportSanitizedDiagnostics",
       "listProviderCapabilities",
     ]) {
       expect(typeof (commands as Record<string, unknown>)[command]).toBe("function");
+    }
+  });
+
+  it("no longer exposes the retired window-fit and position-reset commands", () => {
+    for (const command of ["fitOverviewToAccounts", "resetOverviewPosition"]) {
+      expect((commands as Record<string, unknown>)[command]).toBeUndefined();
     }
   });
 

@@ -82,13 +82,6 @@ export const commands = {
 	 */
 	setOverviewAlwaysOnTop: (alwaysOnTop: boolean) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("set_overview_always_on_top", { alwaysOnTop })),
 	/**
-	 *  Sizes the overview to the popover layout and its accounts.
-	 * 
-	 *  This is an explicit user action. No reading, label change, or added account
-	 *  may resize or relocate the window on its own.
-	 */
-	fitOverviewToAccounts: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_to_accounts")),
-	/**
 	 *  Fits the popover's height to its content, as the wireframe's popover does.
 	 * 
 	 *  The renderer reports how tall its content is; the host decides the height
@@ -96,8 +89,6 @@ export const commands = {
 	 *  so the window is never moved outside the controller.
 	 */
 	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
-	/**  Restores a position known to be inside a surviving monitor's work area. */
-	resetOverviewPosition: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("reset_overview_position")),
 	/**
 	 *  Opens one allowlisted provider usage page in the external browser.
 	 * 
@@ -106,7 +97,8 @@ export const commands = {
 	 */
 	openProviderUsagePage: (providerId: ProviderId) => typedError<null, CommandError>(__TAURI_INVOKE("open_provider_usage_page", { providerId })),
 	/**
-	 *  Shows and focuses the settings window.
+	 *  Shows and focuses the settings window, placed over the overview or, when
+	 *  the overview is hidden, beside the tray.
 	 * 
 	 *  The window is created hidden at launch and stays hidden until this command
 	 *  or the tray menu runs, so the settings surface never opens beside the
@@ -474,13 +466,6 @@ export type DecimalPrecision = number;
 /**  A version of a window or account definition, as reported by the provider. */
 export type DefinitionVersion = number;
 
-/**  How much room a row takes. */
-export type Density = 
-/**  More rows, smaller text blocks. */
-"compact" | 
-/**  Larger touch targets and more spacing. */
-"comfortable";
-
 /**  How strongly the provider enforces this limit. */
 export type Enforcement = 
 /**  New work is refused. */
@@ -772,8 +757,6 @@ export type Preferences = {
 	revision: number,
 	/**  The colour scheme. */
 	theme: Theme,
-	/**  Row density. */
-	density: Density,
 	/**  The allowance indicator. */
 	indicator_style: IndicatorStyle,
 	/**  Where the overview lives. */
