@@ -1,8 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ConnectionAttemptAccepted } from "../src/generated/bindings";
+import type { AttemptRef } from "../src/generated/bindings";
+import { ConnectionWizard } from "../src/features/settings/ConnectionWizard";
 import { AccountsPanel } from "../src/features/settings/panels/AccountsPanel";
 import { Settings, type SettingsActions } from "../src/features/settings/Settings";
 import { Overview } from "../src/features/overview/Overview";
@@ -13,6 +14,8 @@ import { account, preferences, snapshot } from "./fixtures";
 function settingsActions(): SettingsActions {
   return {
     savePreferences: vi.fn(),
+    setMonitoring: vi.fn(),
+    savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setOverviewMode: vi.fn(),
     fitToAccounts: vi.fn(),
@@ -22,7 +25,7 @@ function settingsActions(): SettingsActions {
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve(null)),
-    clearConnectionAttempt: vi.fn(),
+    cancelConnection: vi.fn(() => Promise.resolve()),
     reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
     exportDiagnostics: vi.fn(),
@@ -31,92 +34,104 @@ function settingsActions(): SettingsActions {
 
 describe("pending connection acceptance", () => {
   it("blocks duplicate submissions and stays busy until terminal progress", async () => {
-    const pending = Promise.withResolvers<ConnectionAttemptAccepted | null>();
+    const pending = Promise.withResolvers<AttemptRef | null>();
     const beginConnection = vi.fn(() => pending.promise);
     const actions = { ...settingsActions(), beginConnection };
     const panel = render(
-      <AccountsPanel
-        accounts={[]}
-        preferences={preferences()}
-        attempts={[]}
-        now={0}
+      <ConnectionWizard
+        state={{ ...initialRendererState, preferences: preferences() }}
         actions={actions}
+        onDone={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
     expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
-    expect(screen.getByLabelText<HTMLSelectElement>("Add an account").disabled).toBe(
+    expect(screen.getByRole<HTMLButtonElement>("button", { name: "Back" }).disabled).toBe(
       true,
     );
     expect(
-      screen.getByLabelText<HTMLInputElement>("Label for the new account").disabled,
+      screen.getByLabelText<HTMLInputElement>("Account nickname").disabled,
     ).toBe(true);
-    const form = screen.getByRole("button", { name: "Connecting..." }).closest("form");
-    if (form === null) {
-      throw new Error("the connect form is missing");
-    }
-    fireEvent.submit(form);
+    fireEvent.click(screen.getByRole("button", { name: "Verifying…" }));
     expect(beginConnection).toHaveBeenCalledTimes(1);
+    expect(beginConnection).toHaveBeenCalledWith({
+      provider_id: "codex",
+      nickname: "Personal",
+      profile_label: null,
+    });
 
     await act(async () => {
-      pending.resolve({ attempt_id: "attempt", attempt_ref: { id: "attempt" } });
+      pending.resolve({ id: "attempt" });
       await pending.promise;
     });
+    expect(screen.getByRole("button", { name: "Verifying…" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     panel.rerender(
-      <AccountsPanel
-        accounts={[]}
-        preferences={preferences()}
-        attempts={[
-          {
-            attemptId: "attempt",
-            revision: 1,
-            progress: { kind: "awaiting_user" },
-          },
-        ]}
-        now={0}
+      <ConnectionWizard
+        state={{
+          ...initialRendererState,
+          preferences: preferences(),
+          attempts: [
+            {
+              attemptId: "attempt",
+              revision: 1,
+              progress: { kind: "awaiting_user" },
+            },
+          ],
+        }}
         actions={actions}
+        onDone={vi.fn()}
       />,
     );
     expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
     panel.rerender(
-      <AccountsPanel
-        accounts={[]}
-        preferences={preferences()}
-        attempts={[
-          {
-            attemptId: "attempt",
-            revision: 2,
-            progress: { kind: "verified", context: { state: "connected" } },
-          },
-        ]}
-        now={0}
+      <ConnectionWizard
+        state={{
+          ...initialRendererState,
+          preferences: preferences(),
+          attempts: [
+            {
+              attemptId: "attempt",
+              revision: 2,
+              progress: { kind: "verified", context: { state: "connected" } },
+            },
+          ],
+        }}
         actions={actions}
+        onDone={vi.fn()}
       />,
     );
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
-    ).toBe(false);
-    expect(
-      screen.getByText("Connected. Quota is reading this account now."),
-    ).toBeDefined();
+    expect(screen.queryByRole("button", { name: "Verifying…" })).toBeNull();
+    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    fireEvent.click(screen.getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
+      "disabled",
+      false,
+    );
   });
 
   it("releases the controls after acceptance is refused", async () => {
     const actions = settingsActions();
     render(
-      <AccountsPanel
-        accounts={[]}
-        preferences={preferences()}
-        attempts={[]}
-        now={0}
+      <ConnectionWizard
+        state={{ ...initialRendererState, preferences: preferences() }}
         actions={actions}
+        onDone={vi.fn()}
       />,
     );
+    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
     await act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
       return Promise.resolve();
@@ -124,41 +139,39 @@ describe("pending connection acceptance", () => {
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
-    expect(screen.getByText(/Quota could not start that connection/)).toBeDefined();
+    expect(screen.getByLabelText("Account nickname")).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Back" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("alert").textContent).toContain("connection was refused");
   });
 });
 
 describe("settings connection session", () => {
-  it("keeps pending acceptance and provider recovery across every tab", async () => {
-    const pending = Promise.withResolvers<ConnectionAttemptAccepted | null>();
+  it("opens the wizard from Accounts and keeps acceptance and provider recovery on its route", async () => {
+    window.history.replaceState(null, "", "#/settings/accounts");
+    const pending = Promise.withResolvers<AttemptRef | null>();
     const beginConnection = vi.fn(() => pending.promise);
     const actions = { ...settingsActions(), beginConnection };
     const state = { ...initialRendererState, preferences: preferences() };
     const settings = render(<Settings state={state} actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
-    fireEvent.change(screen.getByLabelText("Add an account"), {
-      target: { value: "claude" },
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeDefined();
     });
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
-    for (const tab of ["Window", "Appearance", "Privacy"]) {
-      fireEvent.click(screen.getByRole("button", { name: tab }));
-      expect(screen.queryByRole("button", { name: "Connecting..." })).toBeNull();
-      fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
-      expect(
-        screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
-      ).toBe(true);
-    }
+    settings.rerender(<Settings state={{ ...state, link: "live" }} actions={actions} />);
+    expect(screen.getByRole("button", { name: "Verifying…" })).toHaveProperty(
+      "disabled",
+      true,
+    );
     expect(beginConnection).toHaveBeenCalledTimes(1);
-    fireEvent.click(screen.getByRole("button", { name: "Appearance" }));
     await act(async () => {
-      pending.resolve({ attempt_id: "attempt", attempt_ref: { id: "attempt" } });
+      pending.resolve({ id: "attempt" });
       await pending.promise;
     });
-    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
     expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
-    fireEvent.click(screen.getByRole("button", { name: "Privacy" }));
     settings.rerender(
       <Settings
         state={{
@@ -177,11 +190,15 @@ describe("settings connection session", () => {
         actions={actions}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
-    expect(screen.getByText(/Claude Code is not signed in/)).toBeDefined();
+    expect(screen.getByRole("alert").textContent).toContain("Run claude in a terminal");
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Add account" })).toBeDefined();
+    });
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
   });
 });
 
@@ -197,9 +214,9 @@ describe("snapshot refresh timing", () => {
       <AccountsPanel
         accounts={[waiting]}
         preferences={preferences()}
-        attempts={[]}
         now={now}
         actions={settingsActions()}
+        onAddAccount={vi.fn()}
       />,
     );
     expect(screen.getByText(/Manual refreshes.*are deferred/).textContent).toContain(
@@ -209,9 +226,9 @@ describe("snapshot refresh timing", () => {
       <AccountsPanel
         accounts={[waiting]}
         preferences={preferences()}
-        attempts={[]}
         now={now + 300_000}
         actions={settingsActions()}
+        onAddAccount={vi.fn()}
       />,
     );
     expect(screen.queryByText(/Manual refreshes.*are deferred/)).toBeNull();
@@ -227,6 +244,16 @@ describe("snapshot refresh timing", () => {
             ...initialRendererState,
             snapshot: snapshot("instance-1", 1, [waiting]),
           }}
+          filter="all"
+          onFilter={vi.fn()}
+          search=""
+          onSearch={vi.fn()}
+          searchOpen={false}
+          onSearchOpen={vi.fn()}
+          onFit={vi.fn()}
+          onAddAccount={vi.fn()}
+          onIndicatorStyle={vi.fn()}
+          onResume={vi.fn()}
           onOpenAccount={() => undefined}
           onReconnect={() => undefined}
         />,
@@ -261,6 +288,16 @@ describe("refresh notice privacy", () => {
       const overview = render(
         <Overview
           state={state}
+          filter="all"
+          onFilter={vi.fn()}
+          search=""
+          onSearch={vi.fn()}
+          searchOpen={false}
+          onSearchOpen={vi.fn()}
+          onFit={vi.fn()}
+          onAddAccount={vi.fn()}
+          onIndicatorStyle={vi.fn()}
+          onResume={vi.fn()}
           onOpenAccount={() => undefined}
           onReconnect={() => undefined}
         />,
@@ -273,8 +310,8 @@ describe("refresh notice privacy", () => {
         expect(overview.container.textContent).not.toContain(waiting.nickname);
       }
       overview.unmount();
+      window.history.replaceState(null, "", "#/settings/accounts");
       render(<Settings state={state} actions={settingsActions()} />);
-      fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
       const notice = screen.getByText(/Manual refreshes.*are deferred/);
       expect(notice.textContent).toContain(`Manual refreshes for ${label} are deferred.`);
       if (mode === "stable_aliases") {
