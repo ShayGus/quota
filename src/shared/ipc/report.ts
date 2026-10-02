@@ -63,7 +63,16 @@ export function describeCommandError(error: CommandError): string {
     case "cancelled":
       return "That was cancelled.";
     case "internal":
-      return "Quota hit an internal problem.";
+      // A provider answer this build cannot read is the provider's change, not
+      // a fault in Quota, and says so; anything else stays generic.
+      switch (error.context.code) {
+        case "unsupported_schema":
+          return "The provider answered in a format this version of Quota cannot read yet.";
+        case "invalid_data":
+          return "The provider's answer was incomplete or inconsistent, so no reading was taken.";
+        default:
+          return "Quota hit an internal problem.";
+      }
   }
 }
 

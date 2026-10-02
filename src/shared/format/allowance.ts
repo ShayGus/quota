@@ -109,8 +109,14 @@ export function formatRemaining(measurement: Measurement): string {
   if (percent < 1) {
     return withAmount("<1%");
   }
-  const clamped = Math.min(100, percent);
-  return withAmount(`${clamped < 99 ? clamped.toFixed(0) : clamped.toFixed(1)}%`);
+  if (percent >= 100) {
+    return withAmount("100%");
+  }
+  // From 99 up one decimal shows, rounded down, so a near-full allowance never
+  // reads as a false 100%: 99.97 is "99.9%".
+  return withAmount(
+    `${percent < 99 ? percent.toFixed(0) : (Math.floor(percent * 10) / 10).toFixed(1)}%`,
+  );
 }
 
 /**

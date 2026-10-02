@@ -244,3 +244,17 @@ pub(crate) fn ensure_binding(
     }
     Ok(())
 }
+
+/// Deserializes a field that a provider sends as `null` when it has nothing to
+/// report, as its empty value.
+///
+/// `#[serde(default)]` covers a missing field only; an explicit `null` for a
+/// list or a map is otherwise a type error that rejects the whole payload. The
+/// usage endpoints are undocumented and do send `null` for empty collections.
+pub(crate) fn null_as_default<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Default + serde::Deserialize<'de>,
+{
+    Ok(<Option<T> as serde::Deserialize>::deserialize(deserializer)?.unwrap_or_default())
+}

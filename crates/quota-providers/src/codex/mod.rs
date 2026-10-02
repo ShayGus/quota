@@ -56,6 +56,24 @@ fn is_decisive(error: &ProviderError) -> bool {
     )
 }
 
+/// Why one endpoint gave no usable reading.
+#[derive(Debug)]
+struct EndpointFailure {
+    error: ProviderError,
+    /// The endpoint answered with success, so it accepted the credential and
+    /// only its body could not be used.
+    accepted: bool,
+}
+
+impl From<ProviderError> for EndpointFailure {
+    fn from(error: ProviderError) -> Self {
+        Self {
+            error,
+            accepted: false,
+        }
+    }
+}
+
 /// The adapter for the Codex CLI's own usage report.
 #[derive(Debug)]
 pub(crate) struct CodexAdapter {
@@ -80,7 +98,7 @@ impl CodexAdapter {
         credential: &CodexCredential,
         pool: &QuotaPoolId,
         context: ReadContext,
-    ) -> Result<DecodedUsage, ProviderError> {
+    ) -> Result<DecodedUsage, EndpointFailure> {
         let authorization = format!("Bearer {}", credential.token.expose());
         // The account header travels only when the credential named an account:
         // an empty header is not the same as an absent one to the endpoint.
@@ -107,23 +125,28 @@ impl CodexAdapter {
             })
             .await?;
         if let Some(failure) = classify_status(reply.status, reply.retry_after) {
-            return Err(failure);
+            return Err(failure.into());
         }
-        let envelope: wire::CodexEnvelope =
-            serde_json::from_value(reply.body).map_err(|_| ProviderError::UnsupportedSchema {
+        let accepted = |error: ProviderError| EndpointFailure {
+            error,
+            accepted: true,
+        };
+        let envelope: wire::CodexEnvelope = serde_json::from_value(reply.body).map_err(|_| {
+            accepted(ProviderError::UnsupportedSchema {
                 detail: "the payload did not match the supported Codex shape".to_owned(),
-            })?;
+            })
+        })?;
         // The payload may repeat the account it belongs to. A payload for
         // another account is refused rather than attributed to this one.
         if let Some(reported) = envelope.account_id.as_deref()
             && let Some(expected) = credential.account_id.as_deref()
             && reported != expected
         {
-            return Err(ProviderError::InvalidData {
+            return Err(accepted(ProviderError::InvalidData {
                 detail: "the payload belongs to another account".to_owned(),
-            });
+            }));
         }
-        mapping::decode(&envelope, pool, Utc::now())
+        mapping::decode(&envelope, pool, Utc::now()).map_err(accepted)
     }
     /// Performs one read at the credential, HTTP, and decoding boundary.
     ///
@@ -170,21 +193,24 @@ impl CodexAdapter {
         context: ReadContext,
         endpoints: [&str; 2],
     ) -> Result<DecodedUsage, ProviderError> {
-        let first_error = match self
+        let first = match self
             .read_endpoint(endpoints[0], credential, pool, context.clone())
             .await
         {
             Ok(usage) => return Ok(usage),
-            Err(error) if is_decisive(&error) => return Err(error),
-            Err(error) => error,
+            Err(failure) if is_decisive(&failure.error) => return Err(failure.error),
+            Err(failure) => failure,
         };
         match self
             .read_endpoint(endpoints[1], credential, pool, context)
             .await
         {
             Ok(usage) => Ok(usage),
-            Err(error) if is_decisive(&error) => Err(error),
-            Err(_) => Err(first_error),
+            // The first endpoint already accepted the credential, so a refusal
+            // from the second, such as a web firewall's 403 page, says nothing
+            // about the account and must not replace the real reason.
+            Err(failure) if is_decisive(&failure.error) && !first.accepted => Err(failure.error),
+            Err(_) => Err(first.error),
         }
     }
 }

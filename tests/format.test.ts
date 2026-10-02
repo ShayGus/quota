@@ -34,7 +34,10 @@ describe("the remaining-allowance label", () => {
 
   it("keeps a decimal at the top of the range, so a near-full value never reads 100%", () => {
     expect(formatRemaining(percent(99.6))).toBe("99.6%");
-    expect(formatRemaining(percent(100))).toBe("100.0%");
+    expect(formatRemaining(percent(100))).toBe("100%");
+    // Near full keeps a decimal, rounded down, and never reads as a false 100%.
+    expect(formatRemaining(percent(99.97))).toBe("99.9%");
+    expect(formatRemaining(percent(99.4))).toBe("99.4%");
   });
 
   it("says a genuine zero is zero, as the specification's examples do", () => {
