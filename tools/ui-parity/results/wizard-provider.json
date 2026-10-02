@@ -1,9 +1,14 @@
 {
   "case": "wizard-provider",
-  "head": "283f260",
-  "ignored": ["text", "w"],
+  "head": "3da3f3b",
+  "ignored": [
+    "text",
+    "w"
+  ],
   "ignoredAt": {
-    ".provider-pick > .icon": ["margin"]
+    ".provider-pick > .icon": [
+      "margin"
+    ]
   },
   "differences": [],
   "wireframe": {

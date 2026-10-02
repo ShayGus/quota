@@ -1,7 +1,13 @@
 {
   "case": "detail",
-  "head": "283f260",
-  "ignored": ["text", "w", "color", "background-color", "border-top-color"],
+  "head": "3da3f3b",
+  "ignored": [
+    "text",
+    "w",
+    "color",
+    "background-color",
+    "border-top-color"
+  ],
   "ignoredAt": {},
   "differences": [],
   "wireframe": {
@@ -825,7 +831,7 @@
       "box-shadow": "none"
     },
     ".detail-summary .ring-value": {
-      "w": 49,
+      "w": 48.4,
       "h": 35.2,
       "font-size": "32px",
       "font-weight": "620",

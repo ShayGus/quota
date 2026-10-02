@@ -1,9 +1,14 @@
 {
   "case": "overview",
-  "head": "283f260",
-  "ignored": ["text", "w"],
+  "head": "3da3f3b",
+  "ignored": [
+    "text",
+    "w"
+  ],
   "ignoredAt": {
-    ".cards": ["h"]
+    ".cards": [
+      "h"
+    ]
   },
   "differences": [],
   "wireframe": {
@@ -1283,7 +1288,7 @@
       "box-shadow": "none"
     },
     ".ring-value": {
-      "w": 34.8,
+      "w": 34.4,
       "h": 25.3,
       "font-size": "23px",
       "font-weight": "620",
@@ -1359,7 +1364,7 @@
       "box-shadow": "none"
     },
     ".reset-label strong": {
-      "w": 25.7,
+      "w": 30.7,
       "h": 12,
       "font-size": "9px",
       "font-weight": "600",

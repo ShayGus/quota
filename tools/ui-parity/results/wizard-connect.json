@@ -1,7 +1,11 @@
 {
   "case": "wizard-connect",
-  "head": "283f260",
-  "ignored": ["text", "w", "h"],
+  "head": "3da3f3b",
+  "ignored": [
+    "text",
+    "w",
+    "h"
+  ],
   "ignoredAt": {},
   "differences": [],
   "wireframe": {

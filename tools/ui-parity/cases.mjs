@@ -202,7 +202,8 @@ export const START = [
     tool: "manage_window",
     args: { action: "set_size", window_label: "overview", width: 440, height: 600 },
   },
-  { wait: 1000 },
+  // A freshly launched app is still settling its first layout.
+  { wait: 3000 },
 ];
 
 /** Every case. The app is expected to start on the overview, dark theme. */

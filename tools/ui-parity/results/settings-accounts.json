@@ -1,7 +1,12 @@
 {
   "case": "settings-accounts",
-  "head": "283f260",
-  "ignored": ["text", "w", "h", "margin"],
+  "head": "3da3f3b",
+  "ignored": [
+    "text",
+    "w",
+    "h",
+    "margin"
+  ],
   "ignoredAt": {},
   "differences": [],
   "wireframe": {
