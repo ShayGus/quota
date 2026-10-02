@@ -107,7 +107,7 @@ pub(super) async fn run_connection_attempt(
         return Ok(());
     };
     let ids = confirm::candidate_binding(&adapter, &candidate);
-    let Some((read, dispatched_at, completed_at)) = read_candidate_quota(
+    let Some((read, times)) = read_candidate_quota(
         &runtime,
         &adapter,
         &ids.binding,
@@ -123,8 +123,7 @@ pub(super) async fn run_connection_attempt(
         request,
         ids,
         read,
-        dispatched_at,
-        completed_at,
+        times,
         Arc::clone(&reporter),
     );
     let verified = confirm::hold_candidate(&runtime, &attempt_id, pending, &cancelled).await?;
@@ -188,14 +187,7 @@ async fn read_candidate_quota(
     binding: &quota_core::ports::ConnectionBinding,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
-) -> Result<
-    Option<(
-        quota_core::ports::QuotaRead,
-        chrono::DateTime<chrono::Utc>,
-        chrono::DateTime<chrono::Utc>,
-    )>,
-    CommandError,
-> {
+) -> Result<Option<(quota_core::ports::QuotaRead, confirm::ReadTimes)>, CommandError> {
     let permit = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
         permit = runtime.state.permits.clone().acquire_owned() => {
@@ -231,7 +223,13 @@ async fn read_candidate_quota(
         .ok_or_else(|| CommandError::Internal {
             code: "connection_read_unavailable".into(),
         })?;
-    Ok(Some((read, dispatched_at, completed_at)))
+    Ok(Some((
+        read,
+        confirm::ReadTimes {
+            dispatched_at,
+            completed_at,
+        },
+    )))
 }
 
 pub(super) fn provider_command_error(error: ProviderError) -> CommandError {

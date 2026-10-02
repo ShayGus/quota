@@ -14,6 +14,7 @@ mod support;
 use quota_core::AccountRegistry;
 use quota_core::ports::{
     AccountRepository as AccountPort, HistoryRepository as HistoryPort, MonitoringRepository,
+    StoredAccount,
 };
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::ids::{AccountId, ConnectionId};
@@ -263,26 +264,28 @@ async fn metadata_during_dispatch_does_not_persist_a_successful_read() {
 }
 
 #[tokio::test]
-async fn read_timestamps_survive_reopening_the_database() -> Result<(), Box<dyn std::error::Error>>
-{
+async fn read_timestamps_survive_reopening_the_database() {
     let directory = TempDir::new("read-timestamps");
     let mut pool = migrated(&directory).await;
     let repositories = SqliteRepositories::new(pool.clone());
     repositories
         .accounts()
         .upsert_connection(&connection("conn-a"))
-        .await?;
+        .await
+        .unwrap();
     repositories
         .accounts()
         .upsert_account(&account("acct-a", "conn-a", 1, "Personal"))
-        .await?;
+        .await
+        .unwrap();
     let mut port = SqliteAccountPortAdapter::new(repositories);
     let mut stored = port
         .load_accounts()
-        .await?
+        .await
+        .unwrap()
         .into_iter()
         .next()
-        .ok_or("account missing")?;
+        .unwrap();
     let dispatched = at(1);
     let completed = dispatched + chrono::Duration::seconds(3);
     let next = completed + chrono::Duration::seconds(300);
@@ -320,28 +323,35 @@ async fn read_timestamps_survive_reopening_the_database() -> Result<(), Box<dyn 
         stored.last_attempt_at = attempted_at;
         stored.last_success_at = succeeded_at;
         stored.next_attempt_at = next_at;
-        port.upsert_account(stored.clone()).await?;
+        port.upsert_account(stored.clone()).await.unwrap();
         pool.close().await;
         pool = migrated(&directory).await;
         port = SqliteAccountPortAdapter::new(SqliteRepositories::new(pool.clone()));
-        let restored = port
-            .load_accounts()
-            .await?
-            .into_iter()
-            .next()
-            .ok_or("account missing")?;
-        assert_eq!(restored.fetch_state, state);
-        assert_eq!(restored.last_attempt_at, attempted_at);
-        assert_eq!(restored.last_success_at, succeeded_at);
-        assert_eq!(restored.next_attempt_at, next_at);
-        let snapshot = port
-            .snapshot_of(&stored.account_id)
-            .await?
-            .ok_or("snapshot missing")?;
-        assert_eq!(snapshot.last_attempt_at, attempted_at);
-        assert_eq!(snapshot.last_success_at, succeeded_at);
-        assert_eq!(snapshot.next_attempt_at, next_at);
+        assert_read_times(&port, &stored).await;
     }
     pool.close().await;
-    Ok(())
+}
+
+/// Checks that the port reads back `expected`'s fetch state and read times, in
+/// both the stored account and its snapshot.
+async fn assert_read_times(port: &SqliteAccountPortAdapter, expected: &StoredAccount) {
+    let restored = port
+        .load_accounts()
+        .await
+        .unwrap()
+        .into_iter()
+        .next()
+        .unwrap();
+    assert_eq!(restored.fetch_state, expected.fetch_state);
+    assert_eq!(restored.last_attempt_at, expected.last_attempt_at);
+    assert_eq!(restored.last_success_at, expected.last_success_at);
+    assert_eq!(restored.next_attempt_at, expected.next_attempt_at);
+    let snapshot = port
+        .snapshot_of(&expected.account_id)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(snapshot.last_attempt_at, expected.last_attempt_at);
+    assert_eq!(snapshot.last_success_at, expected.last_success_at);
+    assert_eq!(snapshot.next_attempt_at, expected.next_attempt_at);
 }
