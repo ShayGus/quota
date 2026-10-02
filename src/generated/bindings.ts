@@ -74,7 +74,7 @@ export const commands = {
 	 */
 	setOverviewAlwaysOnTop: (alwaysOnTop: boolean) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("set_overview_always_on_top", { alwaysOnTop })),
 	/**
-	 *  Widens the overview to the account comparison layout.
+	 *  Sizes the overview to the popover layout and its accounts.
 	 * 
 	 *  This is an explicit user action. No reading, label change, or added account
 	 *  may resize or relocate the window on its own.
