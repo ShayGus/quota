@@ -36,6 +36,13 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 
 - Tray placement and the popover's height fit, as above.
 - Closing a window hides it to the tray; Exit is in the tray menu.
+- The settings window is owned by the overview (`"parent": "overview"` in
+  `tauri.conf.json`), which keeps it above the overview on Windows, macOS (a child window)
+  and Linux (a transient window).
+  [`settings_window`](../src-tauri/src/platform/settings_window.rs) opens it centred over
+  the overview on the overview's screen, or beside the tray when the overview is hidden,
+  and places it again after a move to a screen with another scale. On macOS a child window
+  also moves with its parent; confirm that this is wanted.
 - Single instance (`tauri-plugin-single-instance`) and launch at login
   (`tauri-plugin-autostart`, a launch agent on macOS) support macOS as they are.
 - Saved window geometry (`tauri-plugin-window-state`).

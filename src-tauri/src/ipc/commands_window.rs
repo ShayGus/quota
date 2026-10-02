@@ -294,11 +294,5 @@ pub async fn open_settings_window(
     native
         .eval(&script)
         .map_err(|_| window::failed("navigate_settings"))?;
-    native
-        .show()
-        .map_err(|_| window::failed("show_settings_window"))?;
-    native
-        .set_focus()
-        .map_err(|_| window::failed("focus_settings_window"))?;
-    Ok(())
+    crate::platform::settings_window::show(&state.app)
 }

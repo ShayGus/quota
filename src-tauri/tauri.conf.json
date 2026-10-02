@@ -30,6 +30,7 @@
       {
         "label": "settings",
         "title": "Quota settings",
+        "parent": "overview",
         "url": "index.html#/settings",
         "width": 780,
         "height": 600,
