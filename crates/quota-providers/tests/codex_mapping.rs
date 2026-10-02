@@ -388,7 +388,7 @@ fn a_lone_monthly_allowance_does_not_invent_a_second_one() {
 #[test]
 fn empty_containers_cannot_become_a_complete_reading() {
     for payload in [
-        r#"{}"#,
+        r"{}",
         r#"{"rate_limit":{}}"#,
         r#"{"rateLimits":{}}"#,
         r#"{"rate_limit":{"primary_window":{}}}"#,
@@ -426,25 +426,25 @@ fn named_buckets_keep_container_then_list_precedence_without_duplicate_identitie
     let payload = serde_json::json!({
         "rate_limit": {
             "primary_window": {"used_percent": 5, "limit_window_seconds": 18000},
-            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604800},
+            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800},
             "code_review_rate_limit": {
                 "primary_window": {"used_percent": 80, "limit_window_seconds": 18000},
-                "secondary_window": {"used_percent": 70, "limit_window_seconds": 604800}
+                "secondary_window": {"used_percent": 70, "limit_window_seconds": 604_800}
             },
             "additional_rate_limits": [{"id": "spark", "rate_limit": {
                 "primary_window": {"used_percent": 60, "limit_window_seconds": 18000},
-                "secondary_window": {"used_percent": 50, "limit_window_seconds": 604800}
+                "secondary_window": {"used_percent": 50, "limit_window_seconds": 604_800}
             }}],
             "rateLimitsByLimitId": {"spark": {"used_percent": 20, "limit_window_seconds": 18000}}
         },
         "code_review_rate_limit": {
             "primary_window": {"used_percent": 20, "limit_window_seconds": 18000},
-            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604800}
+            "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
         },
         "additional_rate_limits": [
             {"id": "spark", "rate_limit": {
                 "primary_window": {"used_percent": 20, "limit_window_seconds": 18000},
-                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604800}
+                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
             }},
             {"id": "other", "rate_limit": {"used_percent": 100, "limit_window_seconds": 18000}}
         ],
@@ -475,9 +475,9 @@ fn named_buckets_keep_container_then_list_precedence_without_duplicate_identitie
             .filter(|window| window.provider_bucket_id.as_deref() == Some(bucket))
             .collect();
         assert_eq!(windows.len(), 1);
-        assert_eq!(
-            windows[0].measurement.remaining_percent().unwrap().value(),
-            remaining
+        assert!(
+            (windows[0].measurement.remaining_percent().unwrap().value() - remaining).abs()
+                < f64::EPSILON
         );
     }
 }
@@ -507,9 +507,9 @@ fn root_named_slots_fill_missing_container_slots() {
             .iter()
             .find(|window| window.provider_bucket_id.as_deref() == Some(bucket))
             .unwrap();
-        assert_eq!(
-            window.measurement.remaining_percent().unwrap().value(),
-            remaining
+        assert!(
+            (window.measurement.remaining_percent().unwrap().value() - remaining).abs()
+                < f64::EPSILON
         );
     }
 }
@@ -521,12 +521,12 @@ fn legacy_additional_windows_survive_at_root_and_in_the_container() {
             serde_json::json!({}),
             serde_json::json!({
                 "primary_window": {"used_percent": 80, "limit_window_seconds": 18000},
-                "secondary_window": {"used_percent": 40, "limit_window_seconds": 604800}
+                "secondary_window": {"used_percent": 40, "limit_window_seconds": 604_800}
             }),
         ] {
             let mut payload = serde_json::json!({"rate_limit": {
                 "primary_window": {"used_percent": 5, "limit_window_seconds": 18000},
-                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604800}
+                "secondary_window": {"used_percent": 10, "limit_window_seconds": 604_800}
             }});
             let target = if container {
                 &mut payload["rate_limit"]
@@ -551,9 +551,11 @@ fn legacy_additional_windows_survive_at_root_and_in_the_container() {
                 .find(|window| window.provider_bucket_id.as_deref() == Some("spark"))
                 .unwrap();
             let paired = !pair.as_object().unwrap().is_empty();
-            assert_eq!(
-                spark.measurement.remaining_percent().unwrap().value(),
-                if paired { 20.0 } else { 0.0 }
+            assert!(
+                (spark.measurement.remaining_percent().unwrap().value()
+                    - if paired { 20.0 } else { 0.0 })
+                .abs()
+                    < f64::EPSILON
             );
             assert_eq!(reading.windows.len(), if paired { 4 } else { 3 });
         }

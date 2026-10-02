@@ -591,9 +591,9 @@ fn fixed_windows_win_over_named_counterparts_in_every_scope() {
             .collect();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].provider_bucket_id.as_deref(), Some(bucket));
-        assert_eq!(
-            matches[0].measurement.remaining_percent().unwrap().value(),
-            20.0
+        assert!(
+            (matches[0].measurement.remaining_percent().unwrap().value() - 20.0).abs()
+                < f64::EPSILON
         );
         assert!(
             reading
@@ -607,13 +607,15 @@ fn fixed_windows_win_over_named_counterparts_in_every_scope() {
     }
 }
 
-fn fixed_counterparts() -> [(
+type FixedCounterpart = (
     &'static str,
     &'static str,
     Option<&'static str>,
     &'static str,
     QuotaCategory,
-); 7] {
+);
+
+fn fixed_counterparts() -> [FixedCounterpart; 7] {
     [
         (
             "five_hour",

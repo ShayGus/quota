@@ -28,8 +28,7 @@ export function RefreshNotice({
       {waiting.map(({ account, next }) => (
         <p key={account.account_id} className="note" role="status">
           Manual refreshes for {displayName(preferences, accounts, account)} are deferred.
-          Next eligible read in{" "}
-          {formatCountdown(next, now)}.
+          Next eligible read in {formatCountdown(next, now)}.
         </p>
       ))}
     </>

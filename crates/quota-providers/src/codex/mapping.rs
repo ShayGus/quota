@@ -6,7 +6,7 @@
 //! exception is an account-wide duration of at least twenty days, interpreted
 //! as monthly even in a pair. A lone first allowance lasting at least one day
 //! has no missing secondary slot; a lone secondary allowance takes the primary
-//! slot. This follows the TaskbarQuota provider investigation report, section 12,
+//! slot. This follows the `TaskbarQuota` provider investigation report, section 12,
 //! Codex P1 row "Support credits-only and lone monthly responses", with acceptance
 //! evidence "Credits-only connects. No fabricated secondary allowance."
 //! A credit balance is a balance, never included quota.

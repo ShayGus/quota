@@ -37,13 +37,12 @@ ways:
 - unknown fields are ignored, so an added provider field can neither fail the parse nor
   change what a number means.
 
-A body that is not a JSON object or is invalid JSON becomes
-`ProviderError::InvalidData`; a shape that cannot deserialize into the supported wire
-types becomes `ProviderError::UnsupportedSchema`. A recognised shape with no reported
-usage is rejected according to the provider's mapping rules below. A value that is
-present but unusable becomes
-`Measurement::Unavailable(UnavailableReason::InvalidResponse)` with a `QuotaIssue`. No
-path turns a malformed payload into a zero.
+A body that is not a JSON object or is invalid JSON becomes `ProviderError::InvalidData`;
+a shape that cannot deserialize into the supported wire types becomes
+`ProviderError::UnsupportedSchema`. A recognised shape with no reported usage is rejected
+according to the provider's mapping rules below. A value that is present but unusable
+becomes `Measurement::Unavailable(UnavailableReason::InvalidResponse)` with a
+`QuotaIssue`. No path turns a malformed payload into a zero.
 
 ## Codex
 
@@ -67,11 +66,11 @@ Reads the quota the Codex CLI reports for its own login.
   `primary_window`/`primary` and `secondary_window`/`secondary`, either as a pair or as a
   window carried directly on the block; `code_review_rate_limit` as a pair or a window;
   `additional_rate_limits[]` with `limit_name`/`id`/`name` and a `rate_limit` pair or
-  window, or the legacy `window` field; `rateLimitsByLimitId`. Used percent: `used_percent`/`usedPercent`, as a number
-  or a numeric string. Reset: `reset_at`/`resetsAt` (epoch seconds or a date string) or
-  `reset_after_seconds`. Duration: `limit_window_seconds` (seconds) or
-  `windowDurationMins` (minutes). Plan: `plan_type`/`planType`. Optional
-  `credits.balance`/`credits.unlimited`.
+  window, or the legacy `window` field; `rateLimitsByLimitId`. Used percent:
+  `used_percent`/`usedPercent`, as a number or a numeric string. Reset:
+  `reset_at`/`resetsAt` (epoch seconds or a date string) or `reset_after_seconds`.
+  Duration: `limit_window_seconds` (seconds) or `windowDurationMins` (minutes). Plan:
+  `plan_type`/`planType`. Optional `credits.balance`/`credits.unlimited`.
 - A payload that carries only a non-negative numeric `credits.balance` or
   `credits.unlimited: true` is a reading: it connects with no allowance invented for it.
   Empty account, review, and additional-limit containers do not count as windows. Without
@@ -81,13 +80,13 @@ Reads the quota the Codex CLI reports for its own login.
 - Window mapping: exactly 18000 seconds maps to `QuotaCategory::Session`, exactly 604800
   seconds to `QuotaCategory::Weekly`, and any other duration keeps its own resource scope
   under `QuotaCategory::Custom`. Account-wide windows are the exception: any such window
-  covering twenty days or more becomes `QuotaCategory::Monthly`, including in a pair.
-  A lone first window covering at least one day has no fabricated second allowance; a
+  covering twenty days or more becomes `QuotaCategory::Monthly`, including in a pair. A
+  lone first window covering at least one day has no fabricated second allowance; a
   shorter or unknown duration retains an unavailable secondary slot. A lone secondary
   window takes the primary slot. These rules follow the TaskbarQuota provider
-  investigation report, section 12,
-  Codex P1 row "Support credits-only and lone monthly responses", with acceptance
-  evidence "Credits-only connects. No fabricated secondary allowance."
+  investigation report, section 12, Codex P1 row "Support credits-only and lone monthly
+  responses", with acceptance evidence "Credits-only connects. No fabricated secondary
+  allowance."
 - Roles: a window is `MetricRole::IncludedAllowance`. `credits` is
   `MetricRole::CreditBalance`, never included quota.
 - Cadence: an event-assisted policy with a five-minute verification interval; the minimum
@@ -119,12 +118,12 @@ Reads Claude subscription usage for the Claude Code login.
   `monthly_limit`, `used_credits`, `decimal_places`.
 - Window mapping: the fixed fields and the `limits[]` array are merged, never substituted
   for one another. A fixed field wins over a named counterpart for the same period and
-  resource; other entries keep their own group and model scope. Only the two
-  account-wide windows are expected: one the payload does not report becomes
-  `Unavailable(NotReported)` and is recorded in `expected_but_missing`, unless a named
-  limit with a reported percentage already describes that same account-wide period.
-  Entries without a percentage are skipped. A model-specific or product allowance the
-  payload does not mention is simply absent rather than missing.
+  resource; other entries keep their own group and model scope. Only the two account-wide
+  windows are expected: one the payload does not report becomes `Unavailable(NotReported)`
+  and is recorded in `expected_but_missing`, unless a named limit with a reported
+  percentage already describes that same account-wide period. Entries without a percentage
+  are skipped. A model-specific or product allowance the payload does not mention is
+  simply absent rather than missing.
 - Extra usage: `MetricRole::ExtraSpendCap`, never included quota, and never ranked. It is
   a `MoneyMeasurement`. The reported amounts are read as minor units with `decimal_places`
   as their scale, so `monthly_limit: 5000` with `decimal_places: 2` is 50.00; the scale

@@ -21,9 +21,9 @@ function settingsActions(): SettingsActions {
     renameAccount: vi.fn(),
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
-    beginConnection: vi.fn(async () => null),
+    beginConnection: vi.fn(() => Promise.resolve(null)),
     clearConnectionAttempt: vi.fn(),
-    reconnectAccount: vi.fn(async () => undefined),
+    reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
     exportDiagnostics: vi.fn(),
   };
@@ -46,13 +46,13 @@ describe("pending connection acceptance", () => {
     fireEvent.click(screen.getByRole("button", { name: "Connect" }));
 
     expect(
-      (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
     ).toBe(true);
-    expect((screen.getByLabelText("Add an account") as HTMLSelectElement).disabled).toBe(
+    expect(screen.getByLabelText<HTMLSelectElement>("Add an account").disabled).toBe(
       true,
     );
     expect(
-      (screen.getByLabelText("Label for the new account") as HTMLInputElement).disabled,
+      screen.getByLabelText<HTMLInputElement>("Label for the new account").disabled,
     ).toBe(true);
     const form = screen.getByRole("button", { name: "Connecting..." }).closest("form");
     if (form === null) {
@@ -81,7 +81,7 @@ describe("pending connection acceptance", () => {
       />,
     );
     expect(
-      (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
     ).toBe(true);
     panel.rerender(
       <AccountsPanel
@@ -99,7 +99,7 @@ describe("pending connection acceptance", () => {
       />,
     );
     expect(
-      (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
     expect(
       screen.getByText("Connected. Quota is reading this account now."),
@@ -117,11 +117,12 @@ describe("pending connection acceptance", () => {
         actions={actions}
       />,
     );
-    await act(async () => {
+    await act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Connect" }));
+      return Promise.resolve();
     });
     expect(
-      (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
     expect(screen.getByText(/Quota could not start that connection/)).toBeDefined();
   });
@@ -144,7 +145,7 @@ describe("settings connection session", () => {
       expect(screen.queryByRole("button", { name: "Connecting..." })).toBeNull();
       fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
       expect(
-        (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+        screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
       ).toBe(true);
     }
     expect(beginConnection).toHaveBeenCalledTimes(1);
@@ -155,7 +156,7 @@ describe("settings connection session", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
     expect(
-      (screen.getByRole("button", { name: "Connecting..." }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connecting..." }).disabled,
     ).toBe(true);
     fireEvent.click(screen.getByRole("button", { name: "Privacy" }));
     settings.rerender(
@@ -179,7 +180,7 @@ describe("settings connection session", () => {
     fireEvent.click(screen.getByRole("button", { name: "Accounts" }));
     expect(screen.getByText(/Claude Code is not signed in/)).toBeDefined();
     expect(
-      (screen.getByRole("button", { name: "Connect" }) as HTMLButtonElement).disabled,
+      screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
   });
 });
