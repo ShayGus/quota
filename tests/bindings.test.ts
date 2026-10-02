@@ -41,6 +41,7 @@ describe("the generated bindings module", () => {
       "setPollingPreferences",
       "beginConnection",
       "cancelConnection",
+      "confirmConnection",
       "reconnectAccount",
       "setAccountEnabled",
       "renameAccount",
