@@ -1,45 +1,16 @@
 //! The tray controller.
 //!
-//! The tray exists in Rust so it survives renderer closure. A left click
-//! activates the overview; it never hides a window that is merely covered.
+//! The tray exists in Rust so it survives renderer closure. Closing a window
+//! hides it to the tray; a left click on the icon always opens the app, and the
+//! menu offers Settings, Show App, and Exit. Only Exit ends the process.
 
-use quota_domain::preferences::OverviewMode;
+use quota_domain::account::ConnectionState;
+use quota_domain::provider::ProviderId;
+use quota_domain::quota::QuotaCategory;
+use quota_domain::ranking::{AccountOrder, UnrankedReason};
+use quota_domain::snapshot::{AccountSnapshot, AppSnapshot, MonitoringState};
 
-/// What a tray activation should do.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum TrayActivation {
-    /// Show the overview.
-    Show,
-    /// Raise and focus the overview because it is already open but covered.
-    Raise,
-    /// Dismiss the tray-anchored view.
-    Dismiss,
-    /// Hide the overview to the tray.
-    Hide,
-    /// Stop scheduling and exit.
-    Quit,
-}
-
-/// Decides what a tray click means, given the window's confirmed state.
-#[must_use]
-pub fn activation_for(
-    mode: OverviewMode,
-    visible: bool,
-    click_is_repeated: bool,
-) -> TrayActivation {
-    if !visible {
-        return TrayActivation::Show;
-    }
-    match mode {
-        OverviewMode::Tray if click_is_repeated => TrayActivation::Dismiss,
-        OverviewMode::Floating | OverviewMode::Tray => TrayActivation::Raise,
-    }
-}
-
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
-
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{IconMenuItem, Menu, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
@@ -47,23 +18,25 @@ use crate::platform::window;
 
 /// Installs the native tray icon and its actions.
 pub fn install(app: &AppHandle) -> tauri::Result<()> {
-    let open = MenuItem::with_id(app, "open", "Open Quota", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
-    let refresh = MenuItem::with_id(app, "refresh", "Refresh now", true, None::<&str>)?;
-    let pause = MenuItem::with_id(app, "pause", "Pause monitoring", true, None::<&str>)?;
-    let resume = MenuItem::with_id(app, "resume", "Resume monitoring", true, None::<&str>)?;
-    let quit = MenuItem::with_id(app, "quit", "Quit Quota", true, None::<&str>)?;
+    let dark = system_is_dark(app);
+    let item = |id: &str, text: &str, icon: MenuIcon| {
+        IconMenuItem::with_id(
+            app,
+            id,
+            text,
+            true,
+            Some(menu_icon(icon, dark)),
+            None::<&str>,
+        )
+    };
+    let settings = item("settings", "Settings", MenuIcon::Settings)?;
+    let show = item("show", "Show App", MenuIcon::Donut)?;
+    let exit = item("exit", "Exit", MenuIcon::Power)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(
-        app,
-        &[
-            &open, &settings, &separator, &refresh, &pause, &resume, &quit,
-        ],
-    )?;
-    let last_click = Arc::new(Mutex::new(None::<Instant>));
-    let click_clock = last_click.clone();
+    let menu = Menu::with_items(app, &[&settings, &show, &separator, &exit])?;
     TrayIconBuilder::with_id("quota")
-        .icon(tray_image())
+        .icon(tray_image(false, system_is_dark(app)))
+        .tooltip("Quota")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_tray_icon_event(move |tray, event| {
@@ -92,18 +65,7 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
                 ..
             } = event
             {
-                let now = Instant::now();
-                let repeated = {
-                    let mut last = click_clock
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner);
-                    let repeated = last.is_some_and(|previous| {
-                        now.duration_since(previous) <= Duration::from_millis(450)
-                    });
-                    *last = Some(now);
-                    repeated
-                };
-                activate_from_tray(app, repeated);
+                activate_from_tray(app);
             }
         })
         .on_menu_event(handle_menu_event)
@@ -111,30 +73,207 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-fn tray_image() -> tauri::image::Image<'static> {
+/// The wireframe's menu icons, drawn from its line-icon paths.
+#[derive(Clone, Copy)]
+enum MenuIcon {
+    Donut,
+    Settings,
+    Power,
+}
+
+/// One menu icon in the ink of the system theme.
+fn menu_icon(icon: MenuIcon, dark: bool) -> tauri::image::Image<'static> {
+    let bytes: &'static [u8] = match (icon, dark) {
+        (MenuIcon::Donut, false) => include_bytes!("../../icons/menu/donut-light.png"),
+        (MenuIcon::Donut, true) => include_bytes!("../../icons/menu/donut-dark.png"),
+        (MenuIcon::Settings, false) => include_bytes!("../../icons/menu/settings-light.png"),
+        (MenuIcon::Settings, true) => include_bytes!("../../icons/menu/settings-dark.png"),
+        (MenuIcon::Power, false) => include_bytes!("../../icons/menu/power-light.png"),
+        (MenuIcon::Power, true) => include_bytes!("../../icons/menu/power-dark.png"),
+    };
+    // The bytes are PNGs committed beside the other icons; a decode failure
+    // would be a packaging fault, and an empty image keeps the menu usable.
+    tauri::image::Image::from_bytes(bytes)
+        .unwrap_or_else(|_| tauri::image::Image::new_owned(vec![0; 4], 1, 1))
+}
+
+/// The accent the wireframe draws the tray mark in on a light taskbar.
+const MARK_LIGHT: [u8; 3] = [0x18, 0x77, 0x5f];
+/// The wireframe's dark-theme accent, for a dark taskbar.
+const MARK_DARK: [u8; 3] = [0x72, 0xd9, 0xb5];
+/// The attention dot's colour.
+const DOT: [u8; 3] = [0xbd, 0x70, 0x13];
+
+/// Distance from a point to the segment `a..b`.
+fn segment_distance(p: (f64, f64), a: (f64, f64), b: (f64, f64)) -> f64 {
+    let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+    let t = (((p.0 - a.0) * dx + (p.1 - a.1) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
+    (p.0 - (a.0 + t * dx)).hypot(p.1 - (a.1 + t * dy))
+}
+
+/// The coverage of one pixel by the Quota mark, `0..=1`, and whether the
+/// covering stroke is the faint full ring rather than the arc or the tail.
+///
+/// The geometry is the wireframe logo's 32-unit drawing at 24 pixels: a faint
+/// full ring, an arc from twelve o'clock clockwise to about ten o'clock, and a
+/// tail at the lower right.
+fn mark_coverage(x: f64, y: f64) -> (f64, bool) {
+    const SCALE: f64 = 24.0 / 32.0;
+    let (cx, cy, r, half) = (15.0 * SCALE, 15.0 * SCALE, 10.0 * SCALE, 1.8 * SCALE);
+    let ring = (half + 0.5 - ((x - cx).hypot(y - cy) - r).abs()).clamp(0.0, 1.0);
+    // Clockwise angle from twelve o'clock, in degrees.
+    let angle = (x - cx).atan2(cy - y).to_degrees().rem_euclid(360.0);
+    let on_arc = angle <= 288.0;
+    let tail = (half + 0.5
+        - segment_distance(
+            (x, y),
+            (21.0 * SCALE, 22.0 * SCALE),
+            (26.0 * SCALE, 27.0 * SCALE),
+        ))
+    .clamp(0.0, 1.0);
+    let strong = if on_arc { ring.max(tail) } else { tail };
+    if strong > 0.0 {
+        (strong, false)
+    } else {
+        (ring, true)
+    }
+}
+
+/// Whether the system draws dark chrome, so the mark uses the dark accent.
+fn system_is_dark(app: &AppHandle) -> bool {
+    app.get_webview_window("overview")
+        .and_then(|window| window.theme().ok())
+        .is_some_and(|theme| theme == tauri::Theme::Dark)
+}
+
+/// The tray mark, with the wireframe's attention dot when something needs it.
+fn tray_image(attention: bool, dark: bool) -> tauri::image::Image<'static> {
     const SIZE: usize = 24;
     let side = u32::try_from(SIZE).unwrap_or(0);
     let mut rgba = vec![0; SIZE * SIZE * 4];
     for (y, row) in rgba.chunks_exact_mut(SIZE * 4).enumerate() {
         for (x, pixel) in row.chunks_exact_mut(4).enumerate() {
-            let dx = i32::try_from(x).unwrap_or(0) - 12;
-            let dy = i32::try_from(y).unwrap_or(0) - 12;
-            if dx * dx + dy * dy <= 121 {
-                let bar = (5..=7).contains(&x) && (10..=17).contains(&y)
-                    || (10..=12).contains(&x) && (7..=17).contains(&y)
-                    || (15..=17).contains(&x) && (4..=17).contains(&y);
-                pixel.copy_from_slice(if bar {
-                    &[255, 255, 255, 255]
-                } else {
-                    &[35, 112, 230, 255]
-                });
+            let (px, py) = (
+                f64::from(u32::try_from(x).unwrap_or(0)) + 0.5,
+                f64::from(u32::try_from(y).unwrap_or(0)) + 0.5,
+            );
+            let (coverage, faint) = mark_coverage(px, py);
+            let mut alpha = coverage * if faint { 0.2 } else { 1.0 };
+            let mut colour = if dark { MARK_DARK } else { MARK_LIGHT };
+            if attention {
+                let dot = (2.6 - (px - 19.5).hypot(py - 4.5)).clamp(0.0, 1.0);
+                if dot > 0.0 {
+                    colour = DOT;
+                    alpha = alpha.max(dot);
+                }
             }
+            #[expect(
+                clippy::cast_possible_truncation,
+                clippy::cast_sign_loss,
+                reason = "the value is rounded and clamped to 0..=255 first"
+            )]
+            let a = (alpha * 255.0).round().clamp(0.0, 255.0) as u8;
+            pixel.copy_from_slice(&[colour[0], colour[1], colour[2], a]);
         }
     }
     tauri::image::Image::new_owned(rgba, side, side)
 }
 
-fn activate_from_tray(app: &AppHandle, repeated: bool) {
+/// What the tray says about the accounts: whether to show the attention dot,
+/// and the tooltip, in the wireframe's words.
+#[must_use]
+pub fn tray_summary(snapshot: &AppSnapshot) -> (bool, String) {
+    if matches!(snapshot.monitoring_state, MonitoringState::Paused) {
+        return (false, "Quota · monitoring paused".to_owned());
+    }
+    let attention = snapshot
+        .accounts
+        .iter()
+        .filter(|account| account.monitoring_enabled)
+        .find_map(|account| account_attention(account).map(|text| (account, text)));
+    match attention {
+        Some((account, text)) => (
+            true,
+            format!("Quota · {} · {text}", provider_name(account.provider_id)),
+        ),
+        None if snapshot.accounts.is_empty() => (false, "Quota · no accounts yet".to_owned()),
+        None => (false, "Quota · all accounts current".to_owned()),
+    }
+}
+
+fn provider_name(provider: ProviderId) -> &'static str {
+    match provider {
+        ProviderId::Codex => "Codex",
+        ProviderId::Claude => "Claude",
+        ProviderId::OpenCodeGo => "OpenCode Go",
+        ProviderId::Fixture => "Fixture",
+    }
+}
+
+/// The badge words for an account that needs attention, or `None`.
+fn account_attention(account: &AccountSnapshot) -> Option<String> {
+    if account.connection_state == ConnectionState::ReauthenticationRequired {
+        return Some("Reconnect".to_owned());
+    }
+    match &account.order {
+        AccountOrder::Unranked(order) => match order.reason {
+            UnrankedReason::Stale => Some("Stale".to_owned()),
+            UnrankedReason::ResetPending => Some("Verifying reset".to_owned()),
+            UnrankedReason::Incomplete => Some("Partially reported".to_owned()),
+            UnrankedReason::ReconnectRequired => Some("Reconnect".to_owned()),
+            UnrankedReason::NativeUnitsOnly
+            | UnrankedReason::UnlimitedOnly
+            | UnrankedReason::NoIncludedAllowance
+            | UnrankedReason::Disabled
+            | UnrankedReason::MonitoringPaused => None,
+        },
+        AccountOrder::Ranked(order) => {
+            let remaining = order.remaining_percent.value();
+            if remaining > 20.0 {
+                return None;
+            }
+            let name = account
+                .windows
+                .iter()
+                .find(|window| window.id == order.controlling_window_id)
+                .map_or("Allowance", |window| match window.category {
+                    QuotaCategory::Session => "5h",
+                    QuotaCategory::Daily => "Daily",
+                    QuotaCategory::Weekly => "Weekly",
+                    QuotaCategory::Monthly => "Monthly",
+                    QuotaCategory::Custom => "Allowance",
+                });
+            Some(if remaining <= 0.0 {
+                format!("{name} exhausted")
+            } else {
+                format!("{name} low")
+            })
+        }
+    }
+}
+
+/// Shows the current attention state on the tray icon and in its tooltip.
+pub fn reflect_snapshot(app: &AppHandle, snapshot: &AppSnapshot) {
+    let (attention, tooltip) = tray_summary(snapshot);
+    let Some(tray) = app.tray_by_id("quota") else {
+        return;
+    };
+    warn_on_failure(
+        tray.set_icon(Some(tray_image(attention, system_is_dark(app)))),
+        "icon",
+    );
+    warn_on_failure(tray.set_tooltip(Some(tooltip)), "tooltip");
+}
+
+/// Logs a tray update the platform refused; the previous state stays on screen.
+fn warn_on_failure(result: tauri::Result<()>, part: &'static str) {
+    if let Err(error) = result {
+        tracing::warn!(%error, part, "tray could not be updated");
+    }
+}
+
+/// Opens the app: shows the overview, or brings it forward when it is already open.
+fn activate_from_tray(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let Some(state) = app.try_state::<crate::state::AppState>() else {
@@ -147,21 +286,8 @@ fn activate_from_tray(app: &AppHandle, repeated: bool) {
             return;
         };
         let state = state.inner().clone();
-        let native_visible = window::get(&app, "overview")
-            .and_then(|native| {
-                native
-                    .is_visible()
-                    .map_err(|_| window::failed("read_window_visibility"))
-            })
-            .unwrap_or(false);
         let mut controller = state.window.lock().await;
-        let action = activation_for(controller.state().mode, native_visible, repeated);
-        let visible = matches!(action, TrayActivation::Show | TrayActivation::Raise);
-        if matches!(action, TrayActivation::Quit) {
-            app.exit(0);
-            return;
-        }
-        if let Ok(confirmed) = window::set_visible(&app, "overview", visible, visible) {
+        if let Ok(confirmed) = window::set_visible(&app, "overview", true, true) {
             let confirmed = controller.set_visible(confirmed);
             window::publish_state(&app, &state.app_instance_id, confirmed);
         }
@@ -171,18 +297,6 @@ fn activate_from_tray(app: &AppHandle, repeated: bool) {
 fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let id = event.id;
     match id.as_ref() {
-        "open" => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Ok(visible) = window::set_visible(&app, "overview", true, true)
-                    && let Some(state) = app.try_state::<crate::state::AppState>()
-                {
-                    let state = state.inner().clone();
-                    let confirmed = state.window.lock().await.set_visible(visible);
-                    window::publish_state(&app, &state.app_instance_id, confirmed);
-                }
-            });
-        }
         "settings" => {
             if let Err(error) = window::set_visible(app, "settings", true, true) {
                 tracing::warn!(
@@ -191,34 +305,8 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
                 );
             }
         }
-        "refresh" => {
-            let app = app.clone();
-            tauri::async_runtime::spawn(async move {
-                if let Some(state) = app.try_state::<crate::state::AppState>()
-                    && let Err(error) = state
-                        .monitor
-                        .request_all(crate::monitoring::RefreshReason::UserRequested)
-                        .await
-                {
-                    tracing::warn!(code = error.diagnostic_code(), "tray refresh was refused");
-                }
-            });
-        }
-        "pause" | "resume" => {
-            let app = app.clone();
-            let paused = id.as_ref() == "pause";
-            tauri::async_runtime::spawn(async move {
-                if let Err(error) =
-                    crate::ipc::commands::set_monitoring_state(app.state(), paused).await
-                {
-                    tracing::warn!(
-                        code = error.diagnostic_code(),
-                        "tray monitoring update failed"
-                    );
-                }
-            });
-        }
-        "quit" => app.exit(0),
+        "show" => activate_from_tray(app),
+        "exit" => app.exit(0),
         _ => {}
     }
 }
@@ -226,32 +314,92 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use quota_domain::Percent;
+    use quota_domain::account::FetchState;
+    use quota_domain::ids::{AccountId, AppInstanceId, ConnectionId, QuotaWindowId};
+    use quota_domain::ranking::{RankedOrder, UnrankedOrder};
+    use quota_domain::snapshot::{PersistenceStatus, SNAPSHOT_SCHEMA_VERSION};
+
+    fn account(id: &str, order: AccountOrder) -> AccountSnapshot {
+        AccountSnapshot {
+            account_id: AccountId::new(id).unwrap(),
+            connection_id: ConnectionId::new("c").unwrap(),
+            connection_generation: 1,
+            provider_id: ProviderId::Claude,
+            nickname: "Personal".into(),
+            identity: None,
+            connection_ordinal: 1,
+            monitoring_enabled: true,
+            connection_state: ConnectionState::Connected,
+            fetch_state: FetchState::Idle,
+            last_attempt_at: None,
+            last_success_at: None,
+            next_attempt_at: None,
+            windows: Vec::new(),
+            expected_but_missing_window_ids: Vec::new(),
+            order,
+        }
+    }
+
+    fn ranked(remaining: f64) -> AccountOrder {
+        AccountOrder::Ranked(RankedOrder {
+            remaining_percent: Percent::new(remaining).unwrap(),
+            controlling_window_id: QuotaWindowId::new("w").unwrap(),
+            scope_label: "Subscription".into(),
+            rule_version: 1,
+        })
+    }
+
+    fn snapshot(accounts: Vec<AccountSnapshot>, monitoring: MonitoringState) -> AppSnapshot {
+        AppSnapshot {
+            schema_version: SNAPSHOT_SCHEMA_VERSION,
+            app_instance_id: AppInstanceId::new("i").unwrap(),
+            revision: 1,
+            generated_at: chrono::DateTime::UNIX_EPOCH,
+            monitoring_state: monitoring,
+            persistence_status: PersistenceStatus::Available,
+            connections: Vec::new(),
+            accounts,
+            order: Vec::new(),
+        }
+    }
 
     #[test]
-    fn a_click_raises_a_covered_floating_window_instead_of_hiding_it() {
+    fn a_low_allowance_raises_the_attention_dot_and_names_it() {
+        let summary = tray_summary(&snapshot(
+            vec![account("a", ranked(64.0)), account("b", ranked(18.0))],
+            MonitoringState::Running,
+        ));
+        assert_eq!(summary, (true, "Quota · Claude · Allowance low".to_owned()));
+    }
+
+    #[test]
+    fn current_accounts_and_a_paused_view_raise_no_dot() {
+        let current = snapshot(vec![account("a", ranked(64.0))], MonitoringState::Running);
+        assert!(!tray_summary(&current).0);
+        let paused = snapshot(vec![account("a", ranked(5.0))], MonitoringState::Paused);
         assert_eq!(
-            activation_for(OverviewMode::Floating, true, false),
-            TrayActivation::Raise
+            tray_summary(&paused),
+            (false, "Quota · monitoring paused".to_owned())
         );
     }
 
     #[test]
-    fn a_click_shows_a_hidden_window() {
-        assert_eq!(
-            activation_for(OverviewMode::Floating, false, false),
-            TrayActivation::Show
+    fn a_disabled_account_never_asks_for_attention() {
+        let mut disabled = account(
+            "a",
+            AccountOrder::Unranked(UnrankedOrder {
+                reason: UnrankedReason::Stale,
+                rule_version: 1,
+            }),
         );
+        disabled.monitoring_enabled = false;
+        assert!(!tray_summary(&snapshot(vec![disabled], MonitoringState::Running)).0);
     }
 
     #[test]
-    fn a_repeated_click_toggles_the_tray_view() {
-        assert_eq!(
-            activation_for(OverviewMode::Tray, true, true),
-            TrayActivation::Dismiss
-        );
-        assert_eq!(
-            activation_for(OverviewMode::Tray, true, false),
-            TrayActivation::Raise
-        );
+    fn the_mark_covers_its_arc_but_not_its_centre() {
+        assert!(mark_coverage(11.25, 4.1).0 > 0.9);
+        assert!(mark_coverage(11.25, 11.25).0 < f64::EPSILON);
     }
 }

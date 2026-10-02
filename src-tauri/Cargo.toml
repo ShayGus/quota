@@ -52,6 +52,7 @@ specta = { workspace = true, features = ["derive"] }
 specta-typescript = { workspace = true }
 tauri = { workspace = true, features = ["tray-icon", "image-png"] }
 tauri-plugin-mcp = { workspace = true, optional = true }
+tauri-plugin-autostart = { workspace = true }
 tauri-plugin-notification = { workspace = true }
 tauri-plugin-opener = { workspace = true }
 tauri-plugin-positioner = { workspace = true, features = ["tray-icon"] }

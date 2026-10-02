@@ -57,7 +57,9 @@ export function describeCommandError(error: CommandError): string {
     case "native_operation_unsupported":
       return "This system does not support that window operation.";
     case "native_operation_failed":
-      return "The system refused that window operation.";
+      return error.context.operation.endsWith("launch_at_login")
+        ? "Windows did not change the login item. Launch at login is unchanged."
+        : "The system refused that window operation.";
     case "cancelled":
       return "That was cancelled.";
     case "internal":

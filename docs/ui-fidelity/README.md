@@ -1,79 +1,78 @@
 # UI fidelity pairs
 
-These recorded captures compare real Quota screens with the approved wireframe
-(`quota-owner-test-1/wireframe.html`, Quota wireframe v0.3) in the same state.
+These recorded captures compare real Quota screens with the approved wireframe,
+`quota-wireframe.html` ("Quota — Interactive HTML wireframe"), in the same state. The
+wireframe is maintained outside this repository. It draws Quota as a 440 px tray popover
+with one card per account, a 780 px settings window, and an Add account wizard inside the
+popover. It replaces the earlier 810 px table wireframe (v0.3) that previous captures
+compared against.
 
-| Wireframe                      | App                                    | State                                 |
-| ------------------------------ | -------------------------------------- | ------------------------------------- |
-| `wireframe-overview-dark.png`  | `app-overview-dark.png`                | All accounts, dark, 810 px window     |
-| `wireframe-overview-light.png` | `app-overview-light.png`               | All accounts, light, 810 px window    |
-| —                              | `app-details-light.png`                | Account details                       |
-| —                              | `app-settings-general-light.png`       | Settings, General section             |
-| —                              | `app-settings-accounts-light.png`      | Settings, Accounts section            |
-| —                              | `app-settings-notifications-light.png` | Settings, Notifications section       |
-| —                              | `app-settings-notifications-dark.png`  | The same section in dark              |
-| —                              | `app-settings-privacy-light.png`       | Settings, Privacy section             |
-| —                              | `app-wizard-connect-light.png`         | Provider → Connect → Verify, step one |
+| Wireframe                 | App                         | State                             |
+| ------------------------- | --------------------------- | --------------------------------- |
+| `wireframe-overview.png`  | `app-overview.png`          | All accounts, donut layout, light |
+| `wireframe-dark.png`      | `app-dark.png`              | The same, dark                    |
+| `wireframe-compact.png`   | `app-compact.png`           | Compact layout                    |
+| `wireframe-detail.png`    | `app-detail.png`            | Claude 5-hour quota detail        |
+| `wireframe-reconnect.png` | `app-reconnect.png`         | Claude connection expired         |
+| `wireframe-wizard.png`    | `app-wizard.png`            | Add account, Connect step         |
+| `wireframe-empty.png`     | `app-empty.png`             | First launch                      |
+| `wireframe-settings.png`  | `app-settings-general.png`  | Settings, General                 |
+| `wireframe-accounts.png`  | `app-settings-accounts.png` | Settings, Accounts                |
 
-The wireframe images are the wireframe's own 810 px popover rendered at the desktop window
-width, with the prototype's guide above it. The app images are the real renderer at the
-same width, driven by one deterministic snapshot with the ten sample accounts the
-wireframe draws. The settings images are the settings window at its own 780 px width. The
-Accounts capture predates the verified-identity row restoration and remains historical
-evidence rather than a capture of the submitted head.
+The wireframe images are the wireframe page itself, with its desktop preview around the
+popover. The app images are the real renderer at the popover's 440 px width, or the
+settings window's 780 px width, driven by one deterministic snapshot with the wireframe's
+sample accounts. The wireframe's ClinePass example is drawn with OpenCode Go, the provider
+this build supports with a monthly window.
 
-The approved controls remain visible: mode and topmost remain separate, hide uses the
-authorized native close handler that keeps the overview alive, and every Add account entry
-opens Provider → Connect → Verify in the settings window. Details retain Settings,
-Provider usage page, and Manage accounts. The overview explains ordering, clears hidden
-searches, and counts fully visible rows over the filtered rows.
+## Deliberate differences
 
-The connection wizard uses `begin_connection`, `cancel_connection`, and the existing
-attempt events; it never simulates verification. Each explicit Add account request opens a
-fresh connection route, including when settings was hidden on a completed attempt.
-Verification displays Account, Workspace, and Quota reading from the provider's saved
-account snapshots as they arrive, respecting account aliases. The attempt result does not
-name an account, so these records are labelled as saved provider accounts rather than
-attributed to this attempt. Provider sign-in and connection adapter implementation belong
-to the connection task.
+The wireframe is a prototype. Where its words describe the prototype ("sample data",
+"Simulate connection", "Clear demo accounts"), the app states what the product actually
+does, in the same place and at the same length.
 
-## Known gaps
+- **Order.** The wireframe lists accounts in the order they were added and offers up and
+  down buttons. Quota ranks accounts by their least remaining allowance (spec 4.1), and
+  the host has no reorder command, so the order buttons are shown disabled with that
+  reason.
+- **Connection.** The host saves an account as soon as the provider verifies it. The
+  Verify step identifies the new account in the snapshot, asks the person to confirm it
+  and name it, and removes it again if they go back or cancel, which gives the wireframe's
+  confirm-before-adding behaviour.
+- **Launch at login** registers a login item through the autostart plugin. A launch at
+  sign-in starts quietly in the tray, and the switch shows what the system reports.
+- **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus
+  Keep indefinitely. This build has no retention sweep, so 7 and 30 days are shown but
+  refused (the owner's R18 decision).
+- **Clear accounts** becomes Clear history: Quota clears stored quota history for every
+  account, and disconnecting stays an explicit per-account action.
+- **Diagnostics** lists each account's sanitized connection and fetch state in place of
+  the prototype's interaction log, and keeps the Include identities export switch.
+- **Notification preview** stays inside the settings window; no host preview command
+  exists.
+- **Tray.** By the owner's direction the tray menu has three items, Settings, Show App,
+  and Exit, with the wireframe's icons; a left click always opens the app, and closing a
+  window hides it to the tray. Refresh, pin, and pause stay in the popover and settings.
+  The tray icon is the Quota mark in the wireframe's light or dark accent, with the
+  attention dot and tooltip ("Quota · Claude · 5h low") driven by the snapshot. Quota runs
+  as a single instance.
+- **Notification preview** is built from the account closest to exhaustion, with its real
+  reading, rather than the wireframe's sample.
+- **Refresh feedback.** As in the wireframe, a refresh answers with a toast. A deferred
+  read is stated there ("Manual refreshes for … are deferred. Next eligible read in 4m.")
+  rather than as a banner, and a command the host refuses is stated the same way.
 
-Confirmation currently happens **after the host saves the account**, rather than before
-adding it to the overview. The owner explicitly deferred confirm-before-adding to a
-follow-up task after [Quota PR 4](https://github.com/ShayGus/quota/pull/4), which is
-rewriting the connection code, merges. This PR does not extend the host protocol. Attempt
-events provide connection state but no account ID, verified workspace, or quota reading;
-those details are available through saved account snapshots.
+## Live verification
 
-Notifications now carry three independent alert switches, so 20%, 10%, and 0% are separate
-choices and deselecting one never writes a null percentage. Quiet hours are UTC.
-Notification preview stays inside the renderer because no host preview command exists.
-
-Local history retention is the approved selector. This build has no retention sweep, so
-only **Disabled** and **Keep indefinitely** are real choices; the mockup's 7 days and 30
-days periods are shown but refused, and the current state is named honestly with an option
-the mockup does not list. This follows the owner's R18 decision to preserve default
-retention behavior and disable unsupported durations when a small host extension is
-insufficient. Adding a sweep is persistence work, not a visual change.
-
-General includes Window width, Move with keys, Launch at login, Pause monitoring, and
-Background refresh. Use wide view runs the existing Fit command. Try narrow view and Move
-with keys are disabled: the host has no narrow-width or keyboard movement commands. Launch
-at login is disabled: the host has no login registration command or confirmed enabled
-flag. These controls state the exact missing capabilities and have no substitute effects
-on position or startup behavior. The separate Reset position control remains available.
-
-Pause monitoring and the overview Resume action share `set_monitoring_state`. Background
-refresh saves each provider's existing polling strategy via `set_polling_preferences`,
-preserving floors, adaptive bounds, boundary verification, backoff, and read budgets.
-Fixed and boundary-aware schedules update the active and background intervals together
-because the current supervisor uses the active interval for all ordinary reads; there is
-no distinct hidden-window schedule yet.
-
-Fit from overview or settings uses one native transition: floating chrome and confirmed
-mode, fitted geometry, and an overview reset that clears filter/search and returns from
-details. Mode selection, Fit, Reset, and topmost publication hold the shared window
-controller lock through their complete transitions, including persistence. Viewport counts
-also observe the overview content so opening or closing ordering help updates the fully
-visible row count.
+The real application was checked with `bun run inspect`, which exposes the overview
+webview to an agent. The same measurement script ran in the live webview and in the
+wireframe (headless Chrome at the same 125% scale) and compared the computed font, colour,
+spacing, border, radius, and size of every shared element: popover header, toolbar, cards,
+rings, footer, compact rows, expanded limits, quota detail, the wizard's first two steps,
+every settings panel, the dialogs, and the notification preview. The remaining differences
+are data (which accounts exist and their values) and the text listed above. Native
+behaviour was driven with real input: the pinned header drags the window, unpinning
+anchors the popover above the taskbar, Escape steps back and then hides, settings Details
+and Add account open the popover, and the tray's icon, tooltip, and menu were read from
+Windows. The popover's height follows its content up to 760 pixels, as the wireframe's
+does.

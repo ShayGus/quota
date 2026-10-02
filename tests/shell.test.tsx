@@ -1,5 +1,5 @@
 /**
- * Theme, always-on-top, and boundary behaviour.
+ * Theme, pin, always-on-top, navigation, and boundary behaviour.
  *
  * These exercise the whole window, with the IPC boundary replaced by a test
  * double, so the renderer's own behaviour is what is measured (spec 17.1).
@@ -24,11 +24,33 @@ vi.mock("@tauri-apps/api/window", () => ({
       invoked.push({ command: "native-close", args: null });
       return Promise.resolve();
     },
+    show: () => Promise.resolve(),
+    setFocus: () => Promise.resolve(),
   }),
+}));
+
+/** The login item as the operating system double reports it. */
+const loginItem = vi.hoisted(() => ({ enabled: false, refuse: false }));
+
+vi.mock("@tauri-apps/plugin-autostart", () => ({
+  isEnabled: () => Promise.resolve(loginItem.enabled),
+  enable: () => {
+    if (loginItem.refuse) return Promise.reject(new Error("refused"));
+    loginItem.enabled = true;
+    return Promise.resolve();
+  },
+  disable: () => {
+    loginItem.enabled = false;
+    return Promise.resolve();
+  },
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: () => Promise.resolve(() => undefined),
+  emitTo: (target: string, event: string, payload: unknown) => {
+    invoked.push({ command: "emit-to", args: { target, event, payload } });
+    return Promise.resolve();
+  },
 }));
 
 // `vi.mock` is hoisted above these imports by the test runner, so the transport
@@ -39,7 +61,7 @@ import {
   acceptMonitoring,
   acceptPreferences,
   acceptSnapshot,
-  applyPendingOrder,
+  setFailure,
 } from "../src/shared/state/store";
 import type { PollingStrategy, ProviderPollingPolicy } from "../src/generated/bindings";
 import {
@@ -95,40 +117,50 @@ describe("the colour scheme", () => {
   });
 });
 
-describe("the always-on-top control", () => {
-  it("sends only the always-on-top preference and nothing else", async () => {
+describe("the pin and always-on-top controls", () => {
+  it("pins the popover as a floating window and sends nothing else", async () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-    acceptPreferences(preferences({ always_on_top: false }));
+    acceptPreferences(preferences({ overview_mode: "tray", always_on_top: false }));
     render(<App />);
 
-    const pin = screen.getByRole("button", { name: /keep the window on top/i });
+    const pin = screen.getByRole("button", { name: "Pin as a floating window" });
+    expect(pin.getAttribute("aria-pressed")).toBe("false");
     await act(async () => {
       pin.click();
-      // The command is issued from the handler and settles on a microtask.
       await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(commandsMatching("set_overview_always_on_top")).toHaveLength(1);
+      expect(commandsMatching("set_overview_mode")).toHaveLength(1);
     });
-    // Tauri names command arguments after the Rust parameter, so the request
-    // struct travels under the `request` key.
+    expect(commandsMatching("set_overview_mode")[0]?.args).toEqual({ mode: "floating" });
+    // Pinning never changes topmost: that is a separate setting.
+    expect(mutatingCommands()).toEqual(["set_overview_mode"]);
+  });
+
+  it("states the pinned state in words as well as in colour", () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences({ overview_mode: "floating" }));
+    render(<App />);
+
+    expect(screen.getByText("Pinned")).toBeTruthy();
+    const pin = screen.getByRole("button", { name: "Unpin window" });
+    expect(pin.getAttribute("aria-pressed")).toBe("true");
+  });
+
+  it("keeps the pinned window on top from settings, sending only that preference", async () => {
+    window.location.hash = "#/settings/general";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences({ always_on_top: false }));
+    render(<App />);
+
+    const topmost = screen.getByRole("switch", { name: "Keep pinned window on top" });
+    await act(() => fireEvent.click(topmost));
+    // Tauri names command arguments after the Rust parameter.
     expect(commandsMatching("set_overview_always_on_top")[0]?.args).toEqual({
       alwaysOnTop: true,
     });
-    // The pin sends nothing else. The only other call is the one-time snapshot
-    // reconciliation every window performs at mount.
     expect(mutatingCommands()).toEqual(["set_overview_always_on_top"]);
-  });
-
-  it("shows the selected state in words as well as in colour", () => {
-    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-    acceptPreferences(preferences({ always_on_top: true }));
-    render(<App />);
-
-    expect(screen.getByText("Always on top")).toBeTruthy();
-    const pin = screen.getByRole("button", { name: /turn off always on top/i });
-    expect(pin.getAttribute("aria-pressed")).toBe("true");
   });
 });
 
@@ -137,7 +169,7 @@ describe("a render failure", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences());
     render(<App />);
-    expect(screen.getAllByText("72%").length).toBeGreaterThan(0);
+    expect(document.querySelector(".ring-value")?.textContent).toBe("72%");
 
     // A surface failure inside the boundary leaves the store untouched.
     function Boom(): React.ReactElement {
@@ -153,7 +185,7 @@ describe("a render failure", () => {
 
     expect(container.textContent).toContain("The overview view stopped rendering");
     // Accounts are still present in the store, and no polling was restarted.
-    expect(screen.getAllByText("72%").length).toBeGreaterThan(0);
+    expect(document.querySelector(".ring-value")?.textContent).toBe("72%");
     expect(commandsMatching("refresh_accounts")).toHaveLength(0);
   });
 });
@@ -164,7 +196,8 @@ describe("the settings window route", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences());
     render(<App />);
-    expect(screen.getByLabelText("Quota settings")).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "Quota settings" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "General" })).toBeTruthy();
   });
 });
 
@@ -174,8 +207,8 @@ describe("approved control actions", () => {
     acceptPreferences(preferences());
     render(<App />);
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Bar indicators" }));
-      fireEvent.click(screen.getByRole("button", { name: "Ring indicators" }));
+      fireEvent.click(screen.getByRole("button", { name: "Compact layout" }));
+      fireEvent.click(screen.getByRole("button", { name: "Donut layout" }));
     });
     expect(commandsMatching("set_indicator_style").map((call) => call.args)).toEqual([
       { style: "bar" },
@@ -184,34 +217,48 @@ describe("approved control actions", () => {
     expect(commandsMatching("update_preferences")).toHaveLength(0);
   });
 
-  it("keeps search visible and active after returning from details", () => {
-    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+  it("keeps the filter after returning from details", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        ...oneAccount(),
+        account("a2", "claude", 2, [quotaWindow("low", "session", percent(5))], {
+          rank: 5,
+        }),
+      ]),
+    );
     acceptPreferences(preferences());
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a1" } });
-    fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
-    fireEvent.click(screen.getByRole("button", { name: "All accounts" }));
-    expect(screen.getByRole("searchbox")).toHaveProperty("value", "a1");
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    expect(screen.queryByRole("searchbox")).toBeNull();
-    expect(screen.getByRole("article")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /^Attention/ }));
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Details for Claude a2" }));
+    fireEvent.click(screen.getByRole("button", { name: "All subscriptions" }));
+    expect(
+      screen.getByRole("button", { name: /^Attention/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    expect(screen.getAllByRole("article")).toHaveLength(1);
   });
 
-  it("wires mode, hide, Add account, and detail actions", () => {
+  it("wires pin, hide, Add account, details, and settings actions", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences());
     render(<App />);
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Switch to tray popover" }));
-      fireEvent.click(screen.getByRole("button", { name: "Hide Quota to tray" }));
+      fireEvent.click(screen.getByRole("button", { name: "Unpin window" }));
+      fireEvent.click(screen.getByRole("button", { name: "Hide popover" }));
       fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-      fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
+    });
+    // The wizard opens in the popover itself, not in the settings window.
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    });
+    act(() => {
+      fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
     });
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Provider usage page" }));
-      fireEvent.click(screen.getByRole("button", { name: "Manage accounts" }));
-      fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage account" }));
+      fireEvent.click(screen.getByRole("button", { name: "Settings" }));
     });
     expect(commandsMatching("set_overview_mode")[0]?.args).toEqual({ mode: "tray" });
     expect(commandsMatching("native-close")).toHaveLength(1);
@@ -219,7 +266,6 @@ describe("approved control actions", () => {
       providerId: "codex",
     });
     expect(commandsMatching("open_settings_window").map((call) => call.args)).toEqual([
-      { destination: "connect" },
       { destination: "accounts" },
       { destination: "general" },
     ]);
@@ -231,9 +277,25 @@ describe("approved control actions", () => {
     await act(() =>
       fireEvent.click(screen.getByRole("button", { name: "Add your first account" })),
     );
-    expect(commandsMatching("open_settings_window")[0]?.args).toEqual({
-      destination: "connect",
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(commandsMatching("open_settings_window")).toHaveLength(0);
+  });
+
+  it("returns to the overview on Escape and hides the popover from the overview", () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
+    expect(screen.getByRole("button", { name: "All subscriptions" })).toBeTruthy();
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
     });
+    expect(screen.queryByRole("button", { name: "All subscriptions" })).toBeNull();
+    expect(commandsMatching("native-close")).toHaveLength(0);
+    act(() => {
+      fireEvent.keyDown(window, { key: "Escape" });
+    });
+    expect(commandsMatching("native-close")).toHaveLength(1);
   });
 
   it("renders the dedicated settings header and six sections without refresh", () => {
@@ -251,11 +313,10 @@ describe("approved control actions", () => {
       "Diagnostics",
     ])
       expect(screen.getByRole("button", { name })).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "Refresh the readings now" })).toBeNull();
-    expect(screen.queryByTestId("visible-count")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Refresh readings" })).toBeNull();
   });
 
-  it("uses standard titles and scope labels for extra windows", () => {
+  it("shows the account's windows as detail tabs with scope labels for extra windows", () => {
     const owner = account("a1", "codex", 1, [
       quotaWindow("s", "session", percent(72)),
       quotaWindow("d", "daily", percent(30), { label: "Daily scope" }),
@@ -263,89 +324,82 @@ describe("approved control actions", () => {
     ]);
     acceptSnapshot(snapshot("instance-1", 1, [owner]));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
-    for (const name of ["5-hour", "Daily scope", "Model X"])
-      expect(screen.getByRole("heading", { name })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
+    expect(screen.getAllByRole("tab").map((tab) => tab.textContent)).toEqual([
+      "5-hour",
+      "Daily",
+      "Model X",
+    ]);
+    expect(
+      screen.getByRole("tab", { name: "5-hour" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "5-hour" }), { key: "ArrowRight" });
+    expect(screen.getByRole("tab", { name: "Daily" }).getAttribute("aria-selected")).toBe(
+      "true",
+    );
+    expect(screen.getByRole("group", { name: "Daily: 30% remaining" })).toBeTruthy();
   });
 
-  it("counts fully visible filtered rows on scroll and resize", () => {
-    let bottom = 200;
-    let offset = 0;
-    const rect = (top: number, end: number): DOMRect => ({
-      top,
-      bottom: end,
-      left: 0,
-      right: 810,
-      width: 810,
-      height: end - top,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      if (this.classList.contains("shell__main")) return rect(0, bottom);
-      if (this.classList.contains("table__columns")) return rect(0, 26);
-      const id = this.dataset["accountId"];
-      if (id !== undefined) {
-        const top = Number(id.slice(1)) * 60 - offset;
-        return rect(top, top + 54);
-      }
-      return rect(0, 0);
-    });
-    acceptSnapshot(
-      snapshot(
-        "instance-1",
-        1,
-        [1, 2, 3, 4].map((ordinal) =>
-          account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
-        ),
-      ),
-    );
+  it("opens the chosen window's tab from its ring", () => {
+    const owner = account("a1", "codex", 1, [
+      quotaWindow("s", "session", percent(72)),
+      quotaWindow("w", "weekly", percent(41)),
+    ]);
+    acceptSnapshot(snapshot("instance-1", 1, [owner]));
     render(<App />);
-    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
-    offset = 60;
-    const list = document.querySelector(".shell__main");
-    if (list === null) {
-      throw new Error("the account list must be on screen");
-    }
-    fireEvent.scroll(list);
-    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
-    bottom = 280;
-    fireEvent(window, new Event("resize"));
-    expect(screen.getByTestId("visible-count").textContent).toBe("3 / 4 visible");
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a3" } });
-    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 1 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Codex Weekly: 41% remaining" }));
+    expect(
+      screen.getByRole("tab", { name: "Weekly" }).getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(screen.getByText("59% used / 41% left")).toBeTruthy();
   });
 });
 
 describe("General settings controls", () => {
-  it("disables unavailable operations and preserves the real geometry and monitoring actions", async () => {
+  it("registers launch at login with the system and shows only the confirmed state", async () => {
+    loginItem.enabled = false;
+    loginItem.refuse = false;
+    window.location.hash = "#/settings";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    const view = render(<App />);
+    const launchAtLogin = (): HTMLElement =>
+      screen.getByRole("switch", { name: "Launch at login" });
+    await waitFor(() => {
+      expect(launchAtLogin()).toHaveProperty("disabled", false);
+    });
+    expect(launchAtLogin().getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(launchAtLogin());
+    await waitFor(() => {
+      expect(launchAtLogin().getAttribute("aria-checked")).toBe("true");
+    });
+    expect(loginItem.enabled).toBe(true);
+    fireEvent.click(launchAtLogin());
+    await waitFor(() => {
+      expect(launchAtLogin().getAttribute("aria-checked")).toBe("false");
+    });
+    // A refusal leaves the switch as the system reports it and says why.
+    loginItem.refuse = true;
+    fireEvent.click(launchAtLogin());
+    await waitFor(() => {
+      expect(view.container.querySelector(".toast.show")?.textContent).toBe(
+        "Windows did not change the login item. Launch at login is unchanged.",
+      );
+    });
+    expect(launchAtLogin().getAttribute("aria-checked")).toBe("false");
+    expect(commandsMatching("update_preferences")).toHaveLength(0);
+  });
+
+  it("keeps the real monitoring action", async () => {
     window.location.hash = "#/settings";
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences({ launch_behavior: "restore_last_mode" }));
     render(<App />);
-    for (const [role, name] of [
-      ["button", "Try narrow view"],
-      ["button", "Move with keys"],
-      ["switch", "Launch at login"],
-    ] as const) {
-      const control = screen.getByRole(role, { name });
-      expect(control).toHaveProperty("disabled", true);
-      fireEvent.click(control);
-    }
-    expect(commandsMatching("reset_overview_position")).toHaveLength(0);
-    expect(commandsMatching("update_preferences")).toHaveLength(0);
+    for (const name of ["Use wide view", "Fit all accounts", "Reset position"])
+      expect(screen.queryByRole("button", { name })).toBeNull();
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Use wide view" }));
-      fireEvent.click(screen.getByRole("button", { name: "Fit all accounts" }));
-      fireEvent.click(screen.getByRole("button", { name: "Reset position" }));
       fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" }));
     });
-    expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(2);
-    expect(commandsMatching("reset_overview_position")).toHaveLength(1);
     expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: true });
     expect(
       screen
@@ -364,6 +418,7 @@ describe("General settings controls", () => {
   it("offers Resume until monitoring is confirmed running", async () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount(), { kind: "paused" }));
     render(<App />);
+    expect(screen.getByText(/Monitoring is paused/)).toBeTruthy();
     await act(() => fireEvent.click(screen.getByRole("button", { name: "Resume" })));
     expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: false });
     expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
@@ -512,8 +567,8 @@ describe("General settings controls", () => {
   });
 });
 
-describe("Fit presentation and layout changes", () => {
-  it("restores all accounts and closes search when the host completes Fit", async () => {
+describe("the Fit transition", () => {
+  it("returns to all accounts and the overview when the host completes Fit", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         ...oneAccount(),
@@ -524,221 +579,162 @@ describe("Fit presentation and layout changes", () => {
     );
     acceptPreferences(preferences({ overview_mode: "tray" }));
     render(<App />);
-    fireEvent.click(screen.getByRole("button", { name: /Attention/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a2" } });
-    expect(screen.getAllByRole("article")).toHaveLength(1);
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Fit 2" })));
-    expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: /^Attention/ }));
     expect(screen.getAllByRole("article")).toHaveLength(1);
     act(() => {
       window.dispatchEvent(new Event("quota-fit-overview"));
     });
     expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.queryByRole("searchbox")).toBeNull();
     expect(
       screen.getByRole("button", { name: /^All accounts/ }).getAttribute("aria-pressed"),
     ).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    expect(screen.getByRole("searchbox")).toHaveProperty("value", "");
-    fireEvent.click(screen.getByRole("button", { name: "Details for a2" }));
+    fireEvent.click(screen.getByRole("button", { name: "Details for Claude a2" }));
+    expect(screen.queryAllByRole("article")).toHaveLength(0);
     act(() => {
       window.dispatchEvent(new Event("quota-fit-overview"));
     });
     expect(screen.getAllByRole("article")).toHaveLength(2);
-    expect(screen.queryByRole("button", { name: "All accounts" })).toBeNull();
-  });
-
-  it("recounts help opening and both closing paths while viewport and row sizes stay fixed", () => {
-    const observers: { targets: Set<Element>; notify: () => void }[] = [];
-    vi.stubGlobal(
-      "ResizeObserver",
-      class implements ResizeObserver {
-        readonly targets = new Set<Element>();
-        constructor(callback: ResizeObserverCallback) {
-          observers.push({
-            targets: this.targets,
-            notify: () => {
-              callback([], this);
-            },
-          });
-        }
-        observe(target: Element): void {
-          this.targets.add(target);
-        }
-        unobserve(target: Element): void {
-          this.targets.delete(target);
-        }
-        disconnect(): void {
-          this.targets.clear();
-        }
-      },
-    );
-    const rect = (top: number, bottom: number): DOMRect => ({
-      top,
-      bottom,
-      left: 0,
-      right: 810,
-      width: 810,
-      height: bottom - top,
-      x: 0,
-      y: top,
-      toJSON: () => ({}),
-    });
-    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
-      this: HTMLElement,
-    ) {
-      const shift =
-        screen.queryByRole("button", { name: "Close ordering help" }) === null ? 0 : 80;
-      if (this.classList.contains("shell__main")) return rect(0, 200);
-      if (this.classList.contains("table__columns")) return rect(0, 26);
-      if (this.classList.contains("overview")) return rect(0, 400 + shift);
-      const id = this.dataset["accountId"];
-      if (id !== undefined) {
-        const top = Number(id.slice(1)) * 60 + shift;
-        return rect(top, top + 54);
-      }
-      return rect(0, 0);
-    });
-    acceptSnapshot(
-      snapshot(
-        "instance-1",
-        1,
-        [1, 2, 3, 4].map((ordinal) =>
-          account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
-        ),
-      ),
-    );
-    applyPendingOrder();
-    render(<App />);
-    const content = document.querySelector(".overview");
-    if (content === null) {
-      throw new Error("the overview must be on screen");
-    }
-    const resized = (): void => {
-      for (const observer of observers)
-        if (observer.targets.has(content)) observer.notify();
-    };
-    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
-    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
-    act(resized);
-    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 4 visible");
-    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
-    act(resized);
-    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
-    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
-    act(resized);
-    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 4 visible");
-    fireEvent.click(screen.getByRole("button", { name: "Close ordering help" }));
-    act(resized);
-    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
   });
 });
 
 describe("account details privacy", () => {
-  it.each(["overview", "settings"])(
-    "aliases every identity from the %s entry point and responds to confirmed changes",
-    (entry) => {
-      const owner = account(
-        "a2",
-        "claude",
-        2,
-        [
-          quotaWindow("weekly-opus", "weekly", percent(72), { label: "Claude Opus" }),
-          quotaWindow("weekly-sonnet", "weekly", percent(30), { label: "Claude Sonnet" }),
-          quotaWindow("custom", "custom", percent(40), { label: "Extra usage" }),
-          quotaWindow("daily", "daily", percent(50), { label: "Daily credits" }),
-        ],
-        { nickname: "Private nickname", rank: 72 },
-      );
-      owner.identity = {
-        principal_label: "private@example.test",
-        workspace_label: "Private workspace",
-        plan_label: "Max",
-        source: "documented_api",
-      };
-      const base = preferences();
-      const hidden = preferences({
-        privacy: { ...base.privacy, alias_mode: "stable_aliases" },
-      });
-      window.location.hash = entry === "settings" ? "#/settings/accounts" : "";
-      acceptSnapshot(snapshot("instance-1", 1, [owner, account("a1", "claude", 1, [])]));
-      acceptPreferences(hidden);
-      render(<App />);
-      if (entry === "settings") {
-        const card = screen.getByRole("article", { name: "Manage Account 2" });
-        expect(card.textContent).not.toContain("Private nickname");
-        expect(card.textContent).not.toContain("Private workspace");
-        expect(card.textContent).not.toContain("private@example.test");
-        expect(within(card).getByRole("button", { name: "Rename" })).toHaveProperty(
-          "disabled",
-          true,
-        );
-        fireEvent.click(within(card).getByRole("button", { name: "Details" }));
-      } else {
-        fireEvent.click(screen.getByRole("button", { name: "Details for Account 2" }));
-      }
-      const details = screen.getByRole("region", {
-        name: "Account details for Account 2",
-      });
-      for (const privateLabel of [
-        "Private nickname",
-        "private@example.test",
-        "Private workspace",
-      ])
-        expect(details.outerHTML).not.toContain(privateLabel);
-      expect(within(details).getByRole("heading", { name: "Account 2" })).toBeTruthy();
-      expect(details.textContent).toContain("Workspace hidden");
-      expect(details.textContent).toContain("72%");
-      expect(details.textContent).toContain("Documented API");
-      expect(
-        within(details).getByRole("button", { name: /Claude Opus: 72%/ }),
-      ).toBeTruthy();
-      expect(within(details).getByText("Claude Opus")).toBeTruthy();
-      expect(within(details).getByText("Claude Sonnet")).toBeTruthy();
-      expect(details.textContent).toContain("Documented API · Claude Opus");
-      expect(details.textContent).toContain("Ranked by Claude Opus: 72%");
-      expect(within(details).getByRole("heading", { name: "Extra usage" })).toBeTruthy();
-      expect(
-        within(details).getByRole("heading", { name: "Daily credits" }),
-      ).toBeTruthy();
-      expect(
-        within(details).getByRole("button", { name: /Extra usage: 40%/ }),
-      ).toBeTruthy();
-      expect(
-        within(details).getByRole("button", { name: /Daily credits: 50%/ }),
-      ).toBeTruthy();
-      fireEvent.click(
-        within(details).getByRole("button", { name: /Claude Sonnet: 30%/ }),
-      );
-      expect(details.textContent).toContain("Claude Sonnet boundary");
-      expect(details.textContent).toContain("Documented API · Claude Sonnet");
+  /** An account whose every label is private. */
+  function privateOwner(): ReturnType<typeof account> {
+    const owner = account(
+      "a2",
+      "claude",
+      2,
+      [
+        quotaWindow("weekly-opus", "weekly", percent(72), { label: "Claude Opus" }),
+        quotaWindow("weekly-sonnet", "weekly", percent(30), { label: "Claude Sonnet" }),
+        quotaWindow("custom", "custom", percent(40), { label: "Extra usage" }),
+        quotaWindow("daily", "daily", percent(50), { label: "Daily credits" }),
+      ],
+      { nickname: "Private nickname", rank: 72 },
+    );
+    owner.identity = {
+      principal_label: "private@example.test",
+      workspace_label: "Private workspace",
+      plan_label: "Max",
+      source: "documented_api",
+    };
+    return owner;
+  }
+  const hidden = preferences({
+    privacy: { ...preferences().privacy, alias_mode: "stable_aliases" },
+  });
 
-      act(() => {
-        acceptPreferences(preferences({ revision: hidden.revision + 1 }));
-      });
-      expect(
-        within(details).getByRole("heading", { name: "Private nickname" }),
-      ).toBeTruthy();
-      expect(details.textContent).toContain("private@example.test");
-      expect(details.textContent).toContain("Private workspace");
-      expect(details.getAttribute("aria-label")).toBe(
-        "Account details for Private nickname",
+  it("asks the popover to show details from the settings entry point", async () => {
+    window.location.hash = "#/settings/accounts";
+    acceptSnapshot(
+      snapshot("instance-1", 1, [privateOwner(), account("a1", "claude", 1, [])]),
+    );
+    acceptPreferences(hidden);
+    render(<App />);
+    const card = screen.getByRole("article", { name: "Manage Claude Account 2" });
+    for (const privateLabel of [
+      "Private nickname",
+      "Private workspace",
+      "private@example.test",
+    ])
+      expect(card.textContent).not.toContain(privateLabel);
+    expect(within(card).getByRole("button", { name: "Rename" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    await act(() =>
+      fireEvent.click(within(card).getByRole("button", { name: "Details" })),
+    );
+    await waitFor(() => {
+      expect(commandsMatching("native-close")).toHaveLength(1);
+    });
+    expect(commandsMatching("emit-to")[0]?.args).toEqual({
+      target: "overview",
+      event: "quota-popover-navigate",
+      payload: { view: "detail", accountId: "a2", windowId: null },
+    });
+  });
+
+  it("aliases every identity in the popover detail and responds to confirmed changes", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [privateOwner(), account("a1", "claude", 1, [])]),
+    );
+    acceptPreferences(hidden);
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Details for Claude Account 2" }));
+    const details = screen.getByRole("region", { name: "Quota detail for Account 2" });
+    for (const privateLabel of [
+      "Private nickname",
+      "private@example.test",
+      "Private workspace",
+    ])
+      expect(details.outerHTML).not.toContain(privateLabel);
+    expect(within(details).getByText("Account 2")).toBeTruthy();
+    expect(
+      within(details)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent),
+    ).toEqual(["Daily", "Weekly", "Claude Sonnet", "Extra usage"]);
+    fireEvent.click(within(details).getByRole("tab", { name: "Weekly" }));
+    expect(details.textContent).toContain("Claude Opus");
+    expect(details.textContent).toContain("28% used / 72% left");
+    expect(details.textContent).toContain("Documented API");
+    fireEvent.click(
+      within(details).getByRole("button", { name: /Claude Sonnet.*30% remaining/ }),
+    );
+    expect(
+      within(details)
+        .getByRole("tab", { name: "Claude Sonnet" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+    expect(details.textContent).toContain("70% used / 30% left");
+
+    act(() => {
+      acceptPreferences(preferences({ revision: hidden.revision + 1 }));
+    });
+    const shown = screen.getByRole("region", {
+      name: "Quota detail for Private nickname",
+    });
+    expect(within(shown).getByText("Private nickname")).toBeTruthy();
+    act(() => {
+      acceptPreferences({ ...hidden, revision: hidden.revision + 2 });
+    });
+    const again = screen.getByRole("region", { name: "Quota detail for Account 2" });
+    expect(again.outerHTML).not.toContain("Private nickname");
+    // The chosen tab survives a label change.
+    expect(
+      within(again)
+        .getByRole("tab", { name: "Claude Sonnet" })
+        .getAttribute("aria-selected"),
+    ).toBe("true");
+  });
+});
+
+describe("toasts", () => {
+  it("states a refused command where the person acted", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    const view = render(<App />);
+    act(() => {
+      setFailure({ kind: "domain", error: { kind: "initialization_pending" } });
+    });
+    await waitFor(() => {
+      expect(view.container.querySelector(".toast.show")?.textContent).toBe(
+        "Quota is still starting up.",
       );
-      act(() => {
-        acceptPreferences({ ...hidden, revision: hidden.revision + 2 });
-      });
-      for (const privateLabel of [
-        "Private nickname",
-        "private@example.test",
-        "Private workspace",
-      ])
-        expect(details.outerHTML).not.toContain(privateLabel);
-      expect(
-        within(details)
-          .getByRole("button", { name: /Claude Sonnet: 30%/ })
-          .getAttribute("aria-pressed"),
-      ).toBe("true");
-    },
-  );
+    });
+  });
+
+  it("answers the refresh button with a toast", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    const view = render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh readings" }));
+    await waitFor(() => {
+      expect(view.container.querySelector(".toast.show")?.textContent).toBe(
+        "Refreshing readings.",
+      );
+    });
+    expect(commandsMatching("refresh_accounts")).toHaveLength(1);
+  });
 });

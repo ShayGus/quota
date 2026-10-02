@@ -37,6 +37,9 @@ pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse
         &PersistenceStatus::Available,
         state.clock.now(),
     );
+    // The tray states the same attention as the renderer from the first read,
+    // rather than waiting for the next scheduled publication.
+    crate::platform::tray::reflect_snapshot(&state.app, &snapshot);
     let native_window = state.window.lock().await.state();
     crate::platform::window::publish_state(&state.app, &state.app_instance_id, native_window);
     let preferences = state.preferences_state.read().await.clone();

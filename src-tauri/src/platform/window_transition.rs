@@ -32,7 +32,10 @@ pub(crate) fn apply_mode_chrome(
     mode: OverviewMode,
     controller: &mut OverviewWindowController,
 ) -> Result<(), CommandError> {
-    native.set_decorations(mode == OverviewMode::Floating)?;
+    // Both modes draw the wireframe's own header in place of native chrome: the
+    // popover is undecorated, and a pinned window moves by that header. The
+    // call stays so every transition reasserts the chrome it expects.
+    native.set_decorations(false)?;
     controller.set_mode(mode);
     native.set_skip_taskbar(mode == OverviewMode::Tray)
 }
@@ -83,7 +86,7 @@ mod tests {
     impl Native {
         fn new(mode: OverviewMode, failures: Vec<usize>) -> Self {
             Self(RefCell::new(NativeState {
-                decorations: mode == OverviewMode::Floating,
+                decorations: false,
                 skip_taskbar: mode == OverviewMode::Tray,
                 visible: false,
                 calls: Vec::new(),
@@ -147,7 +150,7 @@ mod tests {
                             .await;
                     assert!(result.is_err(), "failure at {failure}");
                     let actual = native.0.borrow();
-                    assert_eq!(actual.decorations, previous == OverviewMode::Floating);
+                    assert!(!actual.decorations);
                     assert_eq!(actual.skip_taskbar, previous == OverviewMode::Tray);
                     assert_eq!(controller.state().mode, previous);
                     assert_eq!(controller.state().visible, actual.visible);
@@ -179,10 +182,7 @@ mod tests {
                     }))
                 );
                 let actual = native.0.borrow();
-                assert_eq!(
-                    controller.state().mode == OverviewMode::Floating,
-                    actual.decorations
-                );
+                assert!(!actual.decorations);
                 assert_eq!(controller.state().visible, actual.visible);
             }
         }
@@ -206,7 +206,7 @@ mod tests {
             assert_eq!(confirmed.mode, mode);
             assert!(confirmed.visible);
             let actual = native.0.borrow();
-            assert_eq!(actual.decorations, mode == OverviewMode::Floating);
+            assert!(!actual.decorations);
             assert_eq!(actual.skip_taskbar, mode == OverviewMode::Tray);
             assert_eq!(actual.calls.last(), Some(&"persist"));
         }

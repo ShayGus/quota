@@ -68,7 +68,7 @@ export class FeatureBoundary extends Component<BoundaryProps, BoundaryState> {
         </p>
         <button
           type="button"
-          className="button button--primary"
+          className="button primary"
           onClick={() => {
             this.setState({ failure: null });
           }}
@@ -110,7 +110,7 @@ export class AppBoundary extends Component<
         </p>
         <button
           type="button"
-          className="button button--primary"
+          className="button primary"
           onClick={() => {
             this.setState({ failure: null });
           }}

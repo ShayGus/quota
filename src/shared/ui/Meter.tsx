@@ -14,6 +14,23 @@ import type { Severity } from "../format/allowance";
 const RADIUS = 42;
 const STROKE = 7;
 
+/** A percentage label split into its number and its sign, as the wireframe sets it. */
+const PERCENT = /^(<?\d+(?:\.\d+)?)%$/;
+
+/** The value at a ring's centre: a large number with a small sign, or words. */
+function RingValue({ label }: { readonly label: string }): JSX.Element {
+  const percent = PERCENT.exec(label);
+  if (percent !== null) {
+    return (
+      <span className="ring-value">
+        {percent[1]}
+        <span>%</span>
+      </span>
+    );
+  }
+  return <span className={`ring-value${label === "—" ? "" : " text"}`}>{label}</span>;
+}
+
 /** One ring, with its centre label supplied by the caller. */
 export function Ring({
   fraction,
@@ -24,49 +41,43 @@ export function Ring({
   /** The remaining fraction in `0..1`, or `null` when there is no reading. */
   readonly fraction: number | null;
   readonly severity: Severity;
-  /** The value text, already formatted. */
+  /** The value text, already formatted. `—` when there is no reading. */
   readonly label: string;
   /** The small word under the value. */
   readonly caption: string;
 }): JSX.Element {
   const known = fraction !== null;
   return (
-    <span className={`ring ring--${severity}`} aria-hidden="true">
+    <div className={`ring ${severity}`} aria-hidden="true">
       <svg viewBox="0 0 100 100" fill="none">
-        <circle className="ring__track" cx="50" cy="50" r={RADIUS} strokeWidth={STROKE} />
+        <circle className="ring-track" cx="50" cy="50" r={RADIUS} strokeWidth={STROKE} />
         <circle
-          className="ring__arc"
+          className="ring-arc"
           cx="50"
           cy="50"
           r={RADIUS}
           strokeWidth={STROKE}
           pathLength={100}
-          strokeDasharray={known ? `${Math.round(fraction * 100)} 100` : "0 100"}
+          strokeDasharray={known ? `${String(Math.round(fraction * 100))} 100` : "0 100"}
           strokeLinecap="butt"
           transform="rotate(-90 50 50)"
         />
       </svg>
-      <span className="ring__center">
-        <span className="ring__value">{label}</span>
-        <span className="ring__caption">{caption}</span>
-      </span>
-    </span>
+      <div className="ring-center">
+        <RingValue label={label} />
+        <span className="ring-caption">{caption}</span>
+      </div>
+    </div>
   );
 }
 
-/** One horizontal bar, for the compact indicator style. */
-export function Bar({
-  fraction,
-  severity,
-}: {
-  readonly fraction: number | null;
-  readonly severity: Severity;
-}): JSX.Element {
+/** One horizontal bar, for the compact layout. */
+export function Bar({ fraction }: { readonly fraction: number | null }): JSX.Element {
   return (
-    <span className={`bar bar--${severity}`} aria-hidden="true">
+    <span className="bar-track">
       <span
-        className="bar__fill"
-        style={{ width: fraction === null ? "0%" : `${fraction * 100}%` }}
+        className="bar-fill"
+        style={{ width: fraction === null ? "0%" : `${String(fraction * 100)}%` }}
       />
     </span>
   );

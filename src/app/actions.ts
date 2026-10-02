@@ -20,8 +20,26 @@ import {
   type SettingsDestination,
 } from "../generated/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { reportAsync } from "../shared/ipc/report";
-import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
+import {
+  acceptAttempt,
+  clearAttempt,
+  getRendererState,
+  setFailure,
+} from "../shared/state/store";
+
+/** Records a login-item failure, so the window can say so. */
+function reportLaunchAtLogin(operation: string): null {
+  setFailure({
+    kind: "domain",
+    error: {
+      kind: "native_operation_failed",
+      context: { operation, reason: "the operating system refused the login item" },
+    },
+  });
+  return null;
+}
 
 /** The renderer's command surface. Every function awaits its own failure path. */
 export const actions = {
@@ -125,6 +143,35 @@ export const actions = {
   },
   async closeWindow(): Promise<void> {
     await getCurrentWindow().close();
+  },
+  /**
+   * Whether Quota is registered to start at login, as the system reports it,
+   * or `null` when the system could not be asked.
+   */
+  async launchAtLogin(): Promise<boolean | null> {
+    try {
+      return await isEnabled();
+    } catch {
+      return null;
+    }
+  },
+  /**
+   * Registers or removes the login item, then reports the state the system
+   * confirms, so the switch never shows a registration that did not happen.
+   */
+  async setLaunchAtLogin(launch: boolean): Promise<boolean | null> {
+    try {
+      if (launch) {
+        await enable();
+      } else {
+        await disable();
+      }
+      return await isEnabled();
+    } catch {
+      return reportLaunchAtLogin(
+        launch ? "enable_launch_at_login" : "disable_launch_at_login",
+      );
+    }
   },
   /** Opens one provider's usage page in the external browser. */
   async openUsagePage(accountId: AccountId): Promise<void> {

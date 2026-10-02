@@ -10,10 +10,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 // Stylesheets are split by surface, so one rule set stays readable on its own.
 import "./shared/ui/tokens.css";
-import "./shared/ui/shell.css";
 import "./shared/ui/components.css";
-import "./shared/ui/cells.css";
-import "./shared/ui/meters.css";
 import "./shared/ui/overview.css";
 import "./shared/ui/surfaces.css";
 import "./shared/ui/settings.css";

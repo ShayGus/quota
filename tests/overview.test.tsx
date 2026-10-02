@@ -1,17 +1,17 @@
 /**
  * Overview behaviour.
  *
- * These tests exercise what a person sees and does: the cells in a row, the
- * section an account lands in, the order of the rows, and what happens to a row
- * while a newer order is waiting (spec 4.1-4.3, spec 17).
+ * These tests exercise what a person sees and does: the readings on a card, the
+ * order of the cards, and what happens to a card while a newer order is waiting
+ * (spec 4.1-4.3, spec 17).
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { act, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import { QuotaCell } from "../src/features/overview/QuotaCell";
 import { Overview, REORDER_IDLE_MS } from "../src/features/overview/Overview";
 import type { OverviewFilter } from "../src/features/overview/OverviewToolbar";
+import type { IndicatorStyle } from "../src/generated/bindings";
 import type { RendererState } from "../src/shared/state/types";
 import {
   applyPendingOrder,
@@ -30,50 +30,55 @@ import {
   window as quotaWindow,
 } from "./fixtures";
 
+/** The callbacks the harness records. */
+const calls = {
+  open: vi.fn(),
+  openWindow: vi.fn(),
+  reconnect: vi.fn(),
+  enable: vi.fn(),
+};
+
 /** Renders the overview against the live store, as the application does. */
 function Harness(): React.ReactElement {
   const state: RendererState = useRendererState();
   const [filter, setFilter] = useState<OverviewFilter>("all");
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
   return (
     <Overview
       state={state}
       filter={filter}
       onFilter={setFilter}
-      searchOpen={searchOpen}
-      onSearchOpen={(open) => {
-        setSearchOpen(open);
-        if (!open) setSearch("");
-      }}
-      search={search}
-      onSearch={setSearch}
-      onFit={() => undefined}
       onAddAccount={() => undefined}
       onIndicatorStyle={() => undefined}
-      onOpenAccount={() => undefined}
+      onOpenAccount={calls.open}
+      onOpenWindow={calls.openWindow}
       onResume={() => undefined}
-      onReconnect={() => undefined}
+      onReconnect={calls.reconnect}
+      onEnable={calls.enable}
     />
   );
 }
 
-/** The account identity of every row, in the order the DOM shows them. */
-function rowOrder(): readonly (string | null)[] {
-  const rows = screen.queryAllByRole("article");
-  return rows.map((row) => row.getAttribute("data-account-id"));
+/** The account identity of every card, in the order the DOM shows them. */
+function cardOrder(): readonly (string | null)[] {
+  const cards = screen.queryAllByRole("article");
+  return cards.map((card) => card.getAttribute("data-account-id"));
 }
 
-/** The rendered session, weekly, and monthly cells of one row. */
-function cellsOf(accountId: string): readonly HTMLElement[] {
-  const row = document.querySelector(`[data-account-id="${accountId}"]`);
-  if (row === null) {
+/** The rendered rings of one card. */
+function ringsOf(accountId: string): readonly HTMLElement[] {
+  const card = document.querySelector(`[data-account-id="${accountId}"]`);
+  if (card === null) {
     return [];
   }
-  return [...row.querySelectorAll(".quota-cell")].map((cell) => cell as HTMLElement);
+  return [...card.querySelectorAll(".quota-button")].map((cell) => cell as HTMLElement);
 }
 
-describe("the account row", () => {
+/** The text at the centre of every ring on screen. */
+function ringValues(): readonly (string | null)[] {
+  return [...document.querySelectorAll(".ring-value")].map((value) => value.textContent);
+}
+
+describe("the account card", () => {
   it("shows the session, weekly, and monthly allowance at the same time", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
@@ -86,16 +91,15 @@ describe("the account row", () => {
     );
     render(<Harness />);
 
-    const cells = cellsOf("a1");
-    expect(cells).toHaveLength(3);
-    expect(cells[0]?.textContent).toContain("72%");
-    expect(cells[1]?.textContent).toContain("41%");
-    expect(cells[2]?.textContent).toContain("0%");
-    // All three are in one row, so the values are compared together.
-    expect(cells).toHaveLength(3);
+    const rings = ringsOf("a1");
+    expect(rings).toHaveLength(3);
+    expect(rings[0]?.textContent).toContain("5-hour");
+    expect(rings[0]?.textContent).toContain("72%");
+    expect(rings[1]?.textContent).toContain("41%");
+    expect(rings[2]?.textContent).toContain("0%");
   });
 
-  it("says an offered column is absent rather than drawing a ring for it", () => {
+  it("draws a ring only for the windows the account offers", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("a1", "codex", 1, [
@@ -105,9 +109,76 @@ describe("the account row", () => {
     );
     render(<Harness />);
 
-    const cells = cellsOf("a1");
-    expect(cells[1]?.textContent).toContain("Not offered");
-    expect(cells[1]?.querySelector(".ring")).toBeNull();
+    const rings = ringsOf("a1");
+    expect(rings).toHaveLength(1);
+    expect(screen.queryByText("Weekly")).toBeNull();
+  });
+
+  it("opens the chosen window's detail from its ring", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a1", "codex", 1, [
+          quotaWindow("session-window", "session", percent(72)),
+          quotaWindow("weekly-window", "weekly", percent(41)),
+        ]),
+      ]),
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Codex Weekly: 41% remaining" }));
+    expect(calls.openWindow).toHaveBeenCalledWith("a1", "weekly-window");
+    fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
+    expect(calls.open).toHaveBeenCalledWith("a1");
+  });
+
+  it("lists other independent limits on request", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a1", "claude", 1, [
+          quotaWindow("session-window", "session", percent(72)),
+          quotaWindow("weekly-window", "weekly", percent(64)),
+          quotaWindow("model-window", "weekly", percent(43), {
+            label: "Model-specific weekly",
+          }),
+        ]),
+      ]),
+    );
+    render(<Harness />);
+    expect(ringsOf("a1")).toHaveLength(2);
+    expect(screen.queryByText("Model-specific weekly")).toBeNull();
+
+    const toggle = screen.getByRole("button", { name: /1 model limit/ });
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByText("Model-specific weekly")).toBeTruthy();
+    expect(screen.getByText("43% remaining")).toBeTruthy();
+  });
+
+  it("offers Enable for a monitoring-off account and Reconnect for an expired one", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("off", "codex", 1, [], {
+          rank: null,
+          unrankedReason: "disabled",
+          monitoringEnabled: false,
+        }),
+        account("expired", "claude", 2, [quotaWindow("w", "session", percent(40))], {
+          rank: null,
+          unrankedReason: "reconnect_required",
+          connectionState: "reauthentication_required",
+        }),
+      ]),
+    );
+    applyPendingOrder();
+    render(<Harness />);
+
+    expect(screen.getByText("Monitoring off")).toBeTruthy();
+    expect(screen.getByText("Checks disabled")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Enable" }));
+    expect(calls.enable).toHaveBeenCalledWith("off");
+
+    expect(screen.getByText("Connection expired")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Reconnect expired" }));
+    expect(calls.reconnect).toHaveBeenCalledWith("expired");
   });
 });
 
@@ -129,7 +200,7 @@ describe("the presentation order", () => {
     applyPendingOrder();
     render(<Harness />);
 
-    expect(rowOrder()).toEqual(["low", "middle", "high"]);
+    expect(cardOrder()).toEqual(["low", "middle", "high"]);
   });
 
   it("breaks a tie by connection ordinal and then by account identity", () => {
@@ -150,7 +221,7 @@ describe("the presentation order", () => {
     render(<Harness />);
 
     // Ordinal 2 comes first; inside ordinal 2 the identity decides.
-    expect(rowOrder()).toEqual(["alpha", "beta", "zebra"]);
+    expect(cardOrder()).toEqual(["alpha", "beta", "zebra"]);
   });
 
   it("keeps a renamed account in place, because identity controls the tie", () => {
@@ -168,7 +239,7 @@ describe("the presentation order", () => {
     );
     applyPendingOrder();
     render(<Harness />);
-    const before = rowOrder();
+    const before = cardOrder();
 
     act(() => {
       acceptSnapshot(
@@ -186,12 +257,10 @@ describe("the presentation order", () => {
       applyPendingOrder();
     });
 
-    expect(rowOrder()).toEqual(before);
+    expect(cardOrder()).toEqual(before);
   });
-});
 
-describe("the needs-checking section", () => {
-  it("places a stale account above the numeric order and outside it", () => {
+  it("places a stale account above the numeric order", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("fresh", "codex", 1, [quotaWindow("w", "session", percent(80))], {
@@ -206,15 +275,10 @@ describe("the needs-checking section", () => {
     applyPendingOrder();
     render(<Harness />);
 
-    expect(rowOrder()).toEqual(["stale", "fresh"]);
-    const headings = document.querySelectorAll(".section-separator strong");
-    expect([...headings].map((heading) => heading.textContent)).toEqual([
-      "Needs checking · 1",
-      "Ranked accounts",
-    ]);
+    expect(cardOrder()).toEqual(["stale", "fresh"]);
   });
 
-  it("places an account with no comparable rank in needs checking, not at the bottom", () => {
+  it("places an account with no comparable rank above the ranked ones", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("ranked", "codex", 1, [quotaWindow("w", "session", percent(90))], {
@@ -229,27 +293,26 @@ describe("the needs-checking section", () => {
     applyPendingOrder();
     render(<Harness />);
 
-    expect(rowOrder()).toEqual(["incomplete", "ranked"]);
+    expect(cardOrder()).toEqual(["incomplete", "ranked"]);
   });
 
-  it("separates a monitoring-off account from the numeric order", () => {
+  it("places a monitoring-off account after the numeric order", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
-        account("ranked", "codex", 1, [quotaWindow("w", "session", percent(90))], {
-          rank: 90,
-        }),
-        account("off", "claude", 2, [], {
+        account("off", "claude", 1, [], {
           rank: null,
           unrankedReason: "disabled",
           monitoringEnabled: false,
+        }),
+        account("ranked", "codex", 2, [quotaWindow("w", "session", percent(90))], {
+          rank: 90,
         }),
       ]),
     );
     applyPendingOrder();
     render(<Harness />);
 
-    expect(rowOrder()).toEqual(["ranked", "off"]);
-    expect(screen.getAllByText("Monitoring off").length).toBeGreaterThan(0);
+    expect(cardOrder()).toEqual(["ranked", "off"]);
   });
 });
 
@@ -264,8 +327,7 @@ describe("the remaining-allowance label", () => {
     );
     render(<Harness />);
 
-    expect(screen.getAllByText("<1%").length).toBeGreaterThan(0);
-    expect(screen.queryByText("0%")).toBeNull();
+    expect(ringValues()).toEqual(["<1%"]);
   });
 
   it("never draws a zero arc or a full arc for a reading that has no number", () => {
@@ -280,9 +342,9 @@ describe("the remaining-allowance label", () => {
     render(<Harness />);
 
     expect(screen.getAllByText("Not reported").length).toBeGreaterThan(0);
-    expect(screen.queryByText("0%")).toBeNull();
-    expect(screen.queryByText("100%")).toBeNull();
-    const arcs = document.querySelectorAll(".ring__arc");
+    expect(screen.getByText("no reading")).toBeTruthy();
+    expect(ringValues()).toEqual(["—"]);
+    const arcs = document.querySelectorAll(".ring-arc");
     expect(arcs.length).toBeGreaterThan(0);
     for (const arc of arcs) {
       expect(arc.getAttribute("stroke-dasharray")).toBe("0 100");
@@ -299,13 +361,37 @@ describe("the remaining-allowance label", () => {
     );
     render(<Harness />);
 
-    const arc = document.querySelector(".ring__arc");
+    const arc = document.querySelector(".ring-arc");
     expect(arc?.getAttribute("stroke-dasharray")).toBe("72 100");
+  });
+
+  it.each([
+    [72, "", "Current"],
+    [18, "warn", "5h low"],
+    [8, "danger", "5h low"],
+    [0, "danger", "5h exhausted"],
+  ] as const)("colours %i%% %s and names it %s", (remaining, tone, badge) => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a", "codex", 1, [quotaWindow("w", "session", percent(remaining))], {
+          rank: remaining,
+        }),
+      ]),
+    );
+    render(<Harness />);
+    const ring = document.querySelector(".ring");
+    if (tone === "") {
+      expect(ring?.classList.contains("warn")).toBe(false);
+      expect(ring?.classList.contains("danger")).toBe(false);
+    } else {
+      expect(ring?.classList.contains(tone)).toBe(true);
+    }
+    expect(document.querySelector(".badge")?.textContent).toBe(badge);
   });
 });
 
 describe("a value update while the list is busy", () => {
-  it("updates the value but keeps row identity, order, and focus stable", () => {
+  it("updates the value but keeps card identity, order, and focus stable", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account("first", "codex", 1, [quotaWindow("w", "session", percent(80))], {
@@ -318,10 +404,10 @@ describe("a value update while the list is busy", () => {
     );
     applyPendingOrder();
     render(<Harness />);
-    expect(rowOrder()).toEqual(["second", "first"]);
+    expect(cardOrder()).toEqual(["second", "first"]);
 
-    const focusedRow = document.querySelector('[data-account-id="second"]');
-    const focusedButton = focusedRow?.querySelector("button");
+    const focusedCard = document.querySelector('[data-account-id="second"]');
+    const focusedButton = focusedCard?.querySelector("button");
     focusedButton?.focus();
     expect(document.activeElement).toBe(focusedButton);
 
@@ -340,10 +426,10 @@ describe("a value update while the list is busy", () => {
     });
 
     // Values are current immediately.
-    expect(cellsOf("first")[0]?.textContent).toContain("2%");
-    expect(cellsOf("second")[0]?.textContent).toContain("95%");
-    // The displayed order has not moved yet, and focus stayed on its row.
-    expect(rowOrder()).toEqual(["second", "first"]);
+    expect(ringsOf("first")[0]?.textContent).toContain("2%");
+    expect(ringsOf("second")[0]?.textContent).toContain("95%");
+    // The displayed order has not moved yet, and focus stayed on its card.
+    expect(cardOrder()).toEqual(["second", "first"]);
     expect(document.activeElement).toBe(focusedButton);
     expect(getRendererState().pendingOrder).not.toBeNull();
   });
@@ -361,7 +447,7 @@ describe("a value update while the list is busy", () => {
     );
     applyPendingOrder();
     render(<Harness />);
-    expect(rowOrder()).toEqual(["second", "first"]);
+    expect(cardOrder()).toEqual(["second", "first"]);
 
     act(() => {
       acceptSnapshot(
@@ -375,40 +461,17 @@ describe("a value update while the list is busy", () => {
         ]),
       );
     });
-    expect(rowOrder()).toEqual(["second", "first"]);
+    expect(cardOrder()).toEqual(["second", "first"]);
 
     act(() => {
       applyPendingOrder();
     });
-    expect(rowOrder()).toEqual(["first", "second"]);
-  });
-
-  it("offers the update-order control while an order is staged", () => {
-    acceptSnapshot(
-      snapshot("instance-1", 1, [
-        account("only", "codex", 1, [quotaWindow("w", "session", percent(50))], {
-          rank: 50,
-        }),
-      ]),
-    );
-    applyPendingOrder();
-    render(<Harness />);
-    expect(screen.queryByRole("button", { name: /update order/i })).toBeNull();
-
-    act(() => {
-      acceptSnapshot(
-        snapshot("instance-1", 2, [
-          account("only", "codex", 1, [quotaWindow("w", "session", percent(40))], {
-            rank: 40,
-          }),
-        ]),
-      );
-    });
-    expect(screen.getByRole("button", { name: /update order/i })).toBeTruthy();
+    expect(cardOrder()).toEqual(["first", "second"]);
   });
 
   it("holds the staged order while the list has focus, then applies it", () => {
     vi.useFakeTimers();
+    vi.setSystemTime(NOW);
     try {
       acceptSnapshot(
         snapshot("instance-1", 1, [
@@ -422,7 +485,7 @@ describe("a value update while the list is busy", () => {
       );
       applyPendingOrder();
       render(<Harness />);
-      expect(rowOrder()).toEqual(["second", "first"]);
+      expect(cardOrder()).toEqual(["second", "first"]);
 
       // Someone is working inside the list, so focus is inside it.
       const focusedButton = document
@@ -450,7 +513,7 @@ describe("a value update while the list is busy", () => {
         vi.advanceTimersByTime(REORDER_IDLE_MS * 5);
       });
       expect(getRendererState().pendingOrder).not.toBeNull();
-      expect(rowOrder()).toEqual(["second", "first"]);
+      expect(cardOrder()).toEqual(["second", "first"]);
 
       // They let go. The order lands on its own, without being asked for.
       act(() => {
@@ -459,7 +522,7 @@ describe("a value update while the list is busy", () => {
       act(() => {
         vi.advanceTimersByTime(REORDER_IDLE_MS * 5);
       });
-      expect(rowOrder()).toEqual(["first", "second"]);
+      expect(cardOrder()).toEqual(["first", "second"]);
       expect(getRendererState().pendingOrder).toBeNull();
     } finally {
       vi.useRealTimers();
@@ -481,14 +544,46 @@ describe("the overview filters", () => {
     );
     applyPendingOrder();
     render(<Harness />);
-    expect(rowOrder()).toEqual(["low", "calm"]);
+    expect(cardOrder()).toEqual(["low", "calm"]);
 
     const attention = screen.getByRole("button", { name: /^attention/i });
     expect(attention.textContent).toContain("1");
     act(() => {
       fireEvent.click(attention);
     });
-    expect(rowOrder()).toEqual(["low"]);
+    expect(cardOrder()).toEqual(["low"]);
+  });
+
+  it("does not count a monitoring-off account as needing attention", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("off", "claude", 1, [], {
+          rank: null,
+          unrankedReason: "disabled",
+          monitoringEnabled: false,
+        }),
+      ]),
+    );
+    render(<Harness />);
+    expect(screen.getByRole("button", { name: /^attention/i }).textContent).toBe(
+      "Attention0",
+    );
+  });
+
+  it("restores every account from the empty attention filter", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("calm", "codex", 1, [quotaWindow("w", "session", percent(90))], {
+          rank: 90,
+        }),
+      ]),
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /^Attention/ }));
+    expect(cardOrder()).toHaveLength(0);
+    expect(screen.getByText("No accounts need attention")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show all accounts" }));
+    expect(cardOrder()).toEqual(["calm"]);
   });
 });
 
@@ -506,11 +601,12 @@ describe("freshness", () => {
     render(<Harness />);
 
     const ring = document.querySelector(".ring");
-    expect(ring?.className).toContain("ring--stale");
+    expect(ring?.classList.contains("stale")).toBe(true);
     expect(screen.getAllByText("last known").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Stale reading").length).toBeGreaterThan(0);
+    expect(document.querySelector(".badge")?.textContent).toMatch(/^Stale/);
+    expect(screen.getByText(/Showing last-known values/)).toBeTruthy();
     // The number stays visible; it is not hidden or turned into zero.
-    expect(screen.getAllByText("93%").length).toBeGreaterThan(0);
+    expect(ringValues()).toEqual(["93%"]);
   });
 
   it("draws a reset-pending reading as not current rather than refilled", () => {
@@ -525,9 +621,33 @@ describe("freshness", () => {
     applyPendingOrder();
     render(<Harness />);
 
-    expect(document.querySelector(".ring")?.className).toContain("ring--stale");
-    expect(screen.getAllByText("18%").length).toBeGreaterThan(0);
-    expect(screen.queryByText("100%")).toBeNull();
+    expect(document.querySelector(".ring")?.classList.contains("stale")).toBe(true);
+    expect(ringValues()).toEqual(["18%"]);
+    expect(screen.getByText("Verifying reset")).toBeTruthy();
+    expect(screen.getByText(/No automatic refill/)).toBeTruthy();
+  });
+
+  it("shows a window whose boundary has passed as verifying, not refilled", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account(
+          "due",
+          "codex",
+          1,
+          [
+            quotaWindow("w", "session", percent(18), {
+              boundaryAt: "2026-10-01T11:00:00.000Z",
+            }),
+          ],
+          { rank: null, unrankedReason: "reset_pending" },
+        ),
+      ]),
+    );
+    render(<Harness />);
+
+    expect(ringValues()).toEqual(["—"]);
+    expect(screen.getByText("verifying")).toBeTruthy();
+    expect(screen.getByText("Reset due · verifying")).toBeTruthy();
   });
 
   it("keeps a known zero visible when another window is missing (AC-53)", () => {
@@ -551,10 +671,12 @@ describe("freshness", () => {
 
     // Three states at once: a current reading, a missing one, and a known zero
     // that names the scope it belongs to.
-    expect(screen.getAllByText("68%").length).toBeGreaterThan(0);
+    expect(ringValues()).toEqual(["68%", "—"]);
     expect(screen.getAllByText("Not reported").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Model X weekly: 0%").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Partial reading").length).toBeGreaterThan(0);
+    expect(screen.getByText("Partially reported")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: /1 other limit/ }));
+    expect(screen.getByText("Model X weekly")).toBeTruthy();
+    expect(screen.getByText("0% remaining")).toBeTruthy();
   });
 });
 
@@ -598,125 +720,51 @@ describe("the privacy alias setting", () => {
   });
 });
 
-describe("review regressions", () => {
-  it("searches displayed provider names and clears a dismissed query", () => {
-    acceptSnapshot(
-      snapshot("instance-1", 1, [
-        account("go", "open_code_go", 1, []),
-        account("other", "codex", 2, []),
-      ]),
-    );
-    render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "OpenCode Go" } });
-    expect(rowOrder()).toEqual(["go"]);
-    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
-    expect(screen.queryByRole("searchbox")).toBeNull();
-    expect(rowOrder()).toHaveLength(2);
-  });
+describe("boundary meanings", () => {
+  const kinds = [
+    "full_reset",
+    "next_replenishment",
+    "billing_boundary",
+    "unknown",
+  ] as const;
+  const words = [
+    "Resets in",
+    "Next replenishment in",
+    "Billing boundary in",
+    "Boundary in",
+  ];
 
-  it("restores every account from the empty attention filter", () => {
+  it.each(kinds.map((kind, index) => [kind, words[index]] as const))(
+    "names a %s boundary under its ring",
+    (kind, word) => {
+      const window = {
+        ...quotaWindow("w", "session", percent(72)),
+        boundary: { kind, at: "2026-10-01T14:00:00Z" },
+      };
+      acceptSnapshot(
+        snapshot("instance-1", 1, [account("a", "claude", 1, [window], { rank: 72 })]),
+      );
+      render(<Harness />);
+      expect(document.querySelector(".reset-label")?.textContent).toBe(
+        `${String(word)} 2h 0m`,
+      );
+    },
+  );
+
+  it("shows the countdown in the compact layout", () => {
+    const style: IndicatorStyle = "bar";
+    acceptPreferences(preferences({ indicator_style: style }));
     acceptSnapshot(
       snapshot("instance-1", 1, [
-        account("calm", "codex", 1, [quotaWindow("w", "session", percent(90))], {
-          rank: 90,
+        account("a", "claude", 1, [quotaWindow("w", "session", percent(72))], {
+          rank: 72,
         }),
       ]),
     );
     render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: /Attention/ }));
-    expect(rowOrder()).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Show all accounts" }));
-    expect(rowOrder()).toEqual(["calm"]);
+    expect(document.querySelector(".ring")).toBeNull();
+    expect(document.querySelector(".bar-value")?.textContent).toBe("72%");
+    expect(document.querySelector(".bar-time")?.textContent).toBe("2h 0m");
+    expect(screen.getByText("RESET IN")).toBeTruthy();
   });
-
-  it("opens ordering help when no update is pending", () => {
-    acceptSnapshot(snapshot("instance-1", 1, [account("a", "codex", 1, [])]));
-    applyPendingOrder();
-    render(<Harness />);
-    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
-    expect(screen.getByRole("status").textContent).toContain(
-      "lowest current remaining allowance",
-    );
-  });
-
-  it.each([
-    ["needs_checking", "ranked", "needs_checking"],
-    ["ranked", "needs_checking", "ranked"],
-    ["monitoring_off", "ranked", "monitoring_off"],
-  ] as const)("labels held runs %s / %s / %s without moving rows", (...sections) => {
-    const initial = [1, 2, 3].map((ordinal) =>
-      account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
-    );
-    acceptSnapshot(snapshot("instance-1", 1, initial));
-    applyPendingOrder();
-    render(<Harness />);
-    act(() => {
-      acceptSnapshot(
-        snapshot(
-          "instance-1",
-          2,
-          initial.map((entry, index) => {
-            const section = sections[index];
-            return account(entry.account_id, "codex", index + 1, [], {
-              rank: section === "ranked" ? index + 1 : null,
-              unrankedReason: section === "monitoring_off" ? "disabled" : "stale",
-              monitoringEnabled: section !== "monitoring_off",
-            });
-          }),
-        ),
-      );
-    });
-    expect(rowOrder()).toEqual(["a1", "a2", "a3"]);
-    const headings = [...document.querySelectorAll(".section-separator strong")].map(
-      (element) => element.textContent,
-    );
-    expect(headings).toEqual(
-      sections.flatMap((section, index) =>
-        section === "ranked"
-          ? index === 0
-            ? []
-            : ["Ranked accounts"]
-          : [section === "needs_checking" ? "Needs checking · 1" : "Monitoring off · 1"],
-      ),
-    );
-  });
-
-  it.each(["ring", "bar"] as const)(
-    "preserves all boundary meanings in %s indicators",
-    (style) => {
-      const kinds = [
-        "full_reset",
-        "next_replenishment",
-        "billing_boundary",
-        "unknown",
-      ] as const;
-      const words = [
-        "Resets in",
-        "Next replenishment in",
-        "Billing boundary in",
-        "Boundary in",
-      ];
-      const { rerender, container } = render(<></>);
-      for (const [index, kind] of kinds.entries()) {
-        const window = {
-          ...quotaWindow("w", "session", percent(72)),
-          boundary: { kind, at: "2026-10-01T14:00:00Z" },
-        };
-        const owner = account("a", "claude", 1, [window], { rank: 72 });
-        rerender(
-          <QuotaCell
-            account={owner}
-            window={window}
-            column="session"
-            style={style}
-            now={NOW}
-            onOpen={() => undefined}
-          />,
-        );
-        expect(container.textContent).toContain(words[index]);
-        expect(container.textContent).toContain("2h 0m");
-      }
-    },
-  );
 });

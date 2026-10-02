@@ -3,7 +3,7 @@
  *
  * The approved wireframe carries no provider artwork: it draws each provider as
  * a short glyph inside the account's square tile, so the same tile works in the
- * overview row and on the details surface without bundling anything.
+ * popover card, on the detail surface, and in settings without bundling anything.
  */
 import type { JSX } from "react";
 
@@ -24,7 +24,7 @@ export function ProviderMark({
   readonly providerId: ProviderId;
 }): JSX.Element {
   return (
-    <span className={`provider-mark provider-mark--${providerId}`} aria-hidden="true">
+    <span className={`provider-icon ${providerId}`} aria-hidden="true">
       {MARKS[providerId]}
     </span>
   );

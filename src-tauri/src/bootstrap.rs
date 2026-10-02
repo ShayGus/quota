@@ -393,6 +393,14 @@ async fn install_managed_state(
     Ok(())
 }
 
+/// The argument the login item passes, so a launch at sign-in stays in the tray.
+const LAUNCHED_AT_LOGIN: &str = "--autostart";
+
+/// Whether this process was started by the login item rather than a person.
+fn launched_at_login(mut args: impl Iterator<Item = String>) -> bool {
+    args.any(|arg| arg == LAUNCHED_AT_LOGIN)
+}
+
 /// Starts the desktop host.
 ///
 /// # Errors
@@ -423,14 +431,22 @@ pub fn start() -> Result<(), String> {
         .build();
     with_agent_inspection(
         tauri::Builder::default()
-            .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-                // A second launch only brings the running overview forward. It
-                // never opens the settings window, which stays as the person left
-                // it.
-                if let Err(error) = crate::platform::window::activate_overview(app) {
+            .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+                // Quota runs once. A second launch by a person brings the running
+                // overview forward; it never opens the settings window, which
+                // stays as the person left it. A login-item launch that finds Quota
+                // already running changes nothing.
+                if !launched_at_login(argv.into_iter())
+                    && let Err(error) = crate::platform::window::activate_overview(app)
+                {
                     tracing::warn!(%error, "second launch could not focus the overview");
                 }
             }))
+            .plugin(
+                tauri_plugin_autostart::Builder::new()
+                    .args([LAUNCHED_AT_LOGIN])
+                    .build(),
+            )
             .plugin(tauri_plugin_store::Builder::new().build())
             .plugin(tauri_plugin_sql::Builder::default().build())
             .plugin(window_state)
@@ -445,8 +461,11 @@ pub fn start() -> Result<(), String> {
         crate::platform::tray::install(&handle)?;
         crate::platform::window::install_close_handlers(&handle);
         // The overview is the only window a launch opens. The settings
-        // window was created hidden and waits for a person to ask for it.
-        crate::platform::window::activate_overview(&handle)?;
+        // window was created hidden and waits for a person to ask for it. A
+        // launch at login starts quietly in the tray instead.
+        if !launched_at_login(std::env::args()) {
+            crate::platform::window::activate_overview(&handle)?;
+        }
         tauri::async_runtime::spawn(async move {
             if let Err(error) = initialize_backend(handle).await {
                 tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
@@ -480,4 +499,18 @@ fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
 #[cfg(not(all(debug_assertions, feature = "agent-inspection")))]
 fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
     builder
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_the_login_item_starts_quietly() {
+        let args = |list: &[&str]| list.iter().map(|arg| (*arg).to_owned()).collect::<Vec<_>>();
+        assert!(launched_at_login(
+            args(&["quota.exe", "--autostart"]).into_iter()
+        ));
+        assert!(!launched_at_login(args(&["quota.exe"]).into_iter()));
+    }
 }

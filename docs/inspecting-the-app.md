@@ -149,17 +149,17 @@ Run on 2026-10-02 under WSL2 with WSLg, `bun run inspect`, first with the Vite p
 to 1433 because a sibling checkout held 1420, then on port 1420 with `GDK_BACKEND=x11` for
 the screenshot:
 
-| Check                                                                              | Result                                                                           |
-| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                              |
-| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                              |
-| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                              |
-| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                              |
-| `tools/list`                                                                       | 19 tools                                                                         |
-| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                  |
-| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                          |
-| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window |
-| `take_screenshot`                                                                  | a 810x720 JPEG of the overview window, in `docs/inspection-proof/`               |
+| Check                                                                              | Result                                                                                           |
+| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                                              |
+| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                                              |
+| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                                              |
+| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                                              |
+| `tools/list`                                                                       | 19 tools                                                                                         |
+| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                                  |
+| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                                          |
+| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window                 |
+| `take_screenshot`                                                                  | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
 
 This capture predates the overview-only inspection scope; current sessions forward webview
 console logs only from overview. The console output proves the original capability grant

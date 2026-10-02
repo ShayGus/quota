@@ -93,8 +93,40 @@ pub fn set_visible(
 pub fn anchor_to_tray(app: &AppHandle) -> Result<(), CommandError> {
     use tauri_plugin_positioner::{Position, WindowExt};
     let native = get(app, "overview")?;
-    native
+    if native
         .move_window_constrained(Position::TrayBottomCenter)
+        .is_ok()
+    {
+        return Ok(());
+    }
+    // The tray's position is known only after its first event. Until then the
+    // popover sits where the wireframe draws it: the work area's bottom-right
+    // corner, just above the taskbar.
+    anchor_to_work_area_corner(&native)
+}
+
+/// Places the window at the bottom-right of its monitor's work area.
+fn anchor_to_work_area_corner(native: &tauri::WebviewWindow) -> Result<(), CommandError> {
+    /// The gap the wireframe leaves between the popover and the screen edge.
+    const MARGIN: f64 = 12.0;
+    let monitor = native
+        .current_monitor()
+        .map_err(|_| failed("read_current_monitor"))?
+        .or(native
+            .primary_monitor()
+            .map_err(|_| failed("read_primary_monitor"))?)
+        .ok_or_else(|| failed("find_display"))?;
+    let area = monitor.work_area();
+    let size = native
+        .outer_size()
+        .map_err(|_| failed("read_window_size"))?;
+    let margin = MARGIN * monitor.scale_factor();
+    let x =
+        f64::from(area.position.x) + f64::from(area.size.width) - f64::from(size.width) - margin;
+    let y =
+        f64::from(area.position.y) + f64::from(area.size.height) - f64::from(size.height) - margin;
+    native
+        .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|_| failed("anchor_tray_window"))
 }
 

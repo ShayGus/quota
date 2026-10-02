@@ -13,224 +13,285 @@ import type {
   AccountSnapshot,
   Preferences,
 } from "../../../generated/bindings";
-import { accountLabel } from "../../../shared/format/alias";
-import { formatAge, instantOf } from "../../../shared/format/duration";
+import { accountLabel, displayName } from "../../../shared/format/alias";
 import { providerLabel } from "../../../shared/format/provider";
-import { ProviderMark } from "../../../shared/ui/ProviderMark";
 import { launch } from "../../../shared/ipc/report";
+import { Dialog } from "../../../shared/ui/Dialog";
 import { Icon } from "../../../shared/ui/Icon";
-import { RefreshNotice } from "../../../shared/ui/RefreshNotice";
+import { Identity } from "../../overview/ProviderCard";
+import { SettingsTitle } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import { AccountDetail } from "../../accounts/AccountDetail";
-import { statusOf } from "../../overview/status";
+
+/** The confirmation an account action is waiting on, if any. */
+type Pending =
+  | { readonly kind: "rename"; readonly account: AccountSnapshot }
+  | { readonly kind: "reconnect"; readonly account: AccountSnapshot }
+  | { readonly kind: "disconnect"; readonly account: AccountSnapshot };
+
+/**
+ * Why the order buttons cannot move an account. The host ranks accounts by
+ * their least remaining allowance and has no command to reorder them.
+ */
+const ORDER_FIXED = "Order follows the least remaining allowance first";
 
 /** One managed account. */
 function ManagedAccount({
   account,
-  now,
+  label,
+  alias,
   actions,
-  onDetails,
-  accounts,
-  preferences,
+  onPending,
 }: {
-  readonly accounts: readonly AccountSnapshot[];
-  readonly preferences: Preferences | null;
-  readonly onDetails: () => void;
   readonly account: AccountSnapshot;
-  readonly now: number;
+  readonly label: string;
+  readonly alias: string;
   readonly actions: SettingsActions;
+  readonly onPending: (pending: Pending) => void;
 }): JSX.Element {
-  const alias = accountLabel(preferences, accounts, account.account_id);
-  const label = alias || account.nickname;
-  const [renaming, setRenaming] = useState(false);
-  const [nickname, setNickname] = useState(account.nickname);
-  const status = statusOf(account);
-  const lastSuccess = instantOf(account.last_success_at);
-  const dirty = nickname.trim().length > 0 && nickname.trim() !== account.nickname;
+  const provider = providerLabel(account.provider_id);
+  const windows = account.windows.length;
   return (
-    <article className="account-manage-card" aria-label={`Manage ${label}`}>
-      <div className="account-manage-card__head">
+    <article className="account-manage-card" aria-label={`Manage ${provider} ${label}`}>
+      <div className="account-manage-head">
         <div className="identity">
-          <ProviderMark providerId={account.provider_id} />
-          <div>
-            <span className="account-manage-card__name">{label}</span>
-            <span className="account-manage-card__meta">
-              {providerLabel(account.provider_id)}
-              {!alias && account.identity?.workspace_label != null
-                ? ` · ${account.identity.workspace_label}`
-                : ""}
-              {` · ${String(account.windows.length)} limits`}
-            </span>
-          </div>
+          <Identity account={account} label={label} />
         </div>
         <button
           type="button"
           role="switch"
           className="switch"
           aria-checked={account.monitoring_enabled}
-          aria-label={`Monitor ${label}`}
+          aria-label={`Monitor ${provider} ${label}`}
           onClick={() => {
             actions.setAccountEnabled(account.account_id, !account.monitoring_enabled);
           }}
         />
       </div>
-      <p className="account-manage-card__meta">
-        {alias || account.identity?.principal_label || account.nickname}
-      </p>
-      <p className="account-manage-card__meta">
-        {status.text} · {lastSuccess === null ? "None yet" : formatAge(lastSuccess, now)}{" "}
-        · {account.account_id}
-      </p>
-      <div className="account-manage-card__actions">
-        <button type="button" className="text-button" onClick={onDetails}>
+      <div className="provider-meta" style={{ marginTop: "8px", maxWidth: "none" }}>
+        {alias
+          ? "Identity hidden"
+          : (account.identity?.principal_label ?? "Identity not verified")}{" "}
+        · {windows} {windows === 1 ? "window" : "windows"}
+      </div>
+      <div className="account-manage-actions">
+        <button
+          type="button"
+          className="text-btn"
+          onClick={() => {
+            actions.showAccountDetail(account.account_id);
+          }}
+        >
           Details
         </button>
         <button
           type="button"
-          className="text-button"
+          className="text-btn"
           disabled={alias !== ""}
+          title={alias === "" ? undefined : "Show account labels to rename"}
           onClick={() => {
-            setNickname(account.nickname);
-            setRenaming(!renaming);
+            onPending({ kind: "rename", account });
           }}
         >
           Rename
         </button>
-        {renaming && !alias ? (
-          <>
-            <label className="account-manage-card__rename">
-              <span>Nickname</span>
-              <input
-                type="text"
-                value={nickname}
-                maxLength={64}
-                onChange={(event) => {
-                  setNickname(event.currentTarget.value);
-                }}
-              />
-            </label>
-            <button
-              type="button"
-              className="text-button"
-              disabled={!dirty}
-              onClick={() => {
-                actions.renameAccount(account.account_id, nickname.trim());
-                setRenaming(false);
-              }}
-            >
-              Save name
-            </button>
-          </>
-        ) : null}
         <button
           type="button"
-          className="text-button"
+          className="text-btn"
           onClick={() => {
-            actions.openUsagePage(account.account_id);
-          }}
-        >
-          <Icon name="external" size={13} />
-          Usage page
-        </button>
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => {
-            actions.clearHistory(account.account_id);
-          }}
-        >
-          Clear history
-        </button>
-        <button
-          type="button"
-          className="text-button"
-          onClick={() => {
-            launch(actions.reconnectAccount(account.account_id));
+            onPending({ kind: "reconnect", account });
           }}
         >
           Reconnect
         </button>
         <button
           type="button"
-          className="text-button text-button--danger"
+          className="text-btn danger"
           onClick={() => {
-            actions.disconnectAccount(account.account_id);
+            onPending({ kind: "disconnect", account });
           }}
         >
           Disconnect
         </button>
+        <span className="spacer">
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Move ${provider} ${label} up`}
+            title={ORDER_FIXED}
+            disabled
+          >
+            <Icon name="chevron-up" />
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label={`Move ${provider} ${label} down`}
+            title={ORDER_FIXED}
+            disabled
+          >
+            <Icon name="chevron-down" />
+          </button>
+        </span>
       </div>
     </article>
   );
+}
+
+/** The dialog for the account action awaiting confirmation. */
+function PendingDialog({
+  pending,
+  label,
+  alias,
+  actions,
+  onClose,
+}: {
+  readonly pending: Pending;
+  readonly label: string;
+  readonly alias: string;
+  readonly actions: SettingsActions;
+  readonly onClose: () => void;
+}): JSX.Element {
+  const { account } = pending;
+  const provider = providerLabel(account.provider_id);
+  const [nickname, setNickname] = useState(account.nickname);
+  switch (pending.kind) {
+    case "rename":
+      return (
+        <Dialog
+          title="Rename account"
+          confirmLabel="Save nickname"
+          confirmDisabled={nickname.trim().length === 0}
+          onConfirm={() => {
+            const next = nickname.trim();
+            if (next !== account.nickname) {
+              actions.renameAccount(account.account_id, next);
+            }
+          }}
+          onClose={onClose}
+        >
+          <p>Use a short label to distinguish this subscription.</p>
+          <label className="field-label" htmlFor="rename-input">
+            Account nickname
+          </label>
+          <input
+            type="text"
+            id="rename-input"
+            maxLength={32}
+            autoComplete="off"
+            value={nickname}
+            onChange={(event) => {
+              setNickname(event.currentTarget.value);
+            }}
+          />
+        </Dialog>
+      );
+    case "reconnect":
+      return (
+        <Dialog
+          title={`Reconnect ${provider}`}
+          confirmLabel="Reconnect"
+          onConfirm={() => {
+            launch(actions.reconnectAccount(account.account_id));
+          }}
+          onClose={onClose}
+        >
+          <p>
+            Quota checks this account again through the provider's existing local sign-in.
+            No sign-in opens here and no credentials enter this window.
+          </p>
+          <p>
+            <strong>
+              {alias ? "Identity hidden" : (account.identity?.principal_label ?? label)}
+            </strong>
+            <br />
+            Workspace:{" "}
+            {alias ? "hidden" : (account.identity?.workspace_label ?? "not reported")}
+          </p>
+        </Dialog>
+      );
+    case "disconnect":
+      return (
+        <Dialog
+          title={`Disconnect ${provider}?`}
+          confirmLabel="Disconnect"
+          onConfirm={() => {
+            actions.disconnectAccount(account.account_id);
+          }}
+          onClose={onClose}
+        >
+          <p>
+            Remove {label} from Quota. This will not sign you out of {provider} or its
+            command-line tool, and other {provider} accounts stay connected.
+          </p>
+        </Dialog>
+      );
+  }
 }
 
 /** The account management panel. */
 export function AccountsPanel({
   accounts,
   preferences,
-  now,
   actions,
-  onAddAccount,
 }: {
-  readonly onAddAccount: () => void;
   readonly accounts: readonly AccountSnapshot[];
   readonly preferences: Preferences | null;
-  readonly now: number;
   readonly actions: SettingsActions;
 }): JSX.Element {
-  const [selectedId, setSelectedId] = useState<AccountId | null>(null);
-  const selected = accounts.find((account) => account.account_id === selectedId);
-  if (selected !== undefined) {
-    return (
-      <AccountDetail
-        account={selected}
-        preferences={preferences}
-        accounts={accounts}
-        now={now}
-        onBack={() => {
-          setSelectedId(null);
-        }}
-        onUsagePage={() => {
-          actions.openUsagePage(selected.account_id);
-        }}
-        onManageAccounts={() => {
-          setSelectedId(null);
-        }}
-      />
-    );
-  }
+  const [pending, setPending] = useState<Pending | null>(null);
+  const aliasOf = (id: AccountId): string => accountLabel(preferences, accounts, id);
   return (
     <>
-      <div className="settings-title-row">
-        <h3 className="settings__title">Accounts</h3>
-        <button type="button" className="button button--primary" onClick={onAddAccount}>
-          <Icon name="plus" size={13} />
-          Add account
-        </button>
-      </div>
-      <p className="settings__intro">
-        Separate identities, including several subscriptions with the same provider.
-        Disconnecting one account does not affect its siblings.
-      </p>
+      <SettingsTitle
+        title="Accounts"
+        intro="Manage connected identities and their monitoring."
+        action={
+          <button
+            type="button"
+            className="button primary"
+            onClick={actions.showAddAccount}
+          >
+            <Icon name="plus" />
+            Add account
+          </button>
+        }
+      />
       {accounts.length === 0 ? (
-        <p className="note">
-          No connected accounts. Add your first account to start monitoring.
-        </p>
-      ) : null}
-      <RefreshNotice accounts={accounts} preferences={preferences} now={now} />
-      {accounts.map((account) => (
-        <ManagedAccount
-          key={account.account_id}
-          account={account}
-          accounts={accounts}
-          preferences={preferences}
-          now={now}
+        <div className="empty compact">
+          <h2>No connected accounts</h2>
+          <p>Add an account to start monitoring its quota.</p>
+          <button type="button" className="button" onClick={actions.showAddAccount}>
+            Add account
+          </button>
+        </div>
+      ) : (
+        accounts.map((account) => (
+          <ManagedAccount
+            key={account.account_id}
+            account={account}
+            label={displayName(preferences, accounts, account)}
+            alias={aliasOf(account.account_id)}
+            actions={actions}
+            onPending={setPending}
+          />
+        ))
+      )}
+      <div className="note">
+        Disconnecting an account removes it from Quota only. It never signs you out of the
+        provider or its command-line tool.
+      </div>
+      {pending === null ? null : (
+        <PendingDialog
+          key={`${pending.kind}:${pending.account.account_id}`}
+          pending={pending}
+          label={displayName(preferences, accounts, pending.account)}
+          alias={aliasOf(pending.account.account_id)}
           actions={actions}
-          onDetails={() => {
-            setSelectedId(account.account_id);
+          onClose={() => {
+            setPending(null);
           }}
         />
-      ))}
+      )}
     </>
   );
 }

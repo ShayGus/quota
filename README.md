@@ -11,16 +11,19 @@ access, polling, account identity, quota normalisation, ranking, credentials, du
 storage, notifications, and native lifecycle. React owns presentation and transient
 interaction state. There is no server component.
 
-Accounts are ordered closest to exhaustion first. The order uses the remaining allowance,
-not the reset countdown, and a row keeps its position and its click target while an update
-is applied.
+Quota opens as a 440-pixel tray popover. Each account is a card that shows every standard
+allowance window at once, as a draining ring or a compact bar, with its reset time and how
+recently it was checked; other independent limits, such as a model-specific weekly
+allowance, open beneath the card. Cards are ordered closest to exhaustion first. The order
+uses the remaining allowance, not the reset countdown, and a card keeps its position and
+its click target while an update is applied.
 
-Use Attention to filter the overview and the search button to find an account; closing
-search clears its text. The footer counts fully visible rows out of the filtered rows. Fit
-switches to a floating window, sizes it within the monitor's work area, and returns to all
-accounts with search cleared. Account Details shows the verified identity, local account
-ID, and selected allowance's reading source. Hide account labels replaces account and
-workspace identities while keeping public allowance labels visible.
+Use Attention to filter the overview. Click a ring for that window's quota detail, with a
+tab for each window. Pin turns the popover into a floating window that stays open and
+moves by its header; keeping it on top is a separate setting. Add account opens Provider →
+Connect → Verify inside the popover, and the verified identity is confirmed and named
+before the wizard finishes. Hide account labels replaces account and workspace identities
+while keeping public allowance labels visible.
 
 ## Status
 
@@ -45,9 +48,12 @@ bun tauri dev
 `bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust host,
 and opens only the overview. Open Settings with the overview's settings button or the tray
 menu's Settings action; it stays hidden at launch even if it was open when you last quit.
-Launching Quota again brings the running overview forward. Closing a window hides it while
-monitoring continues. Use Quit from the tray menu, or press Ctrl-C in the terminal, to
-stop the application.
+Quota runs as a single instance: launching it again brings the running overview forward.
+Closing a window, with its close button or Alt+F4, hides it to the tray while monitoring
+continues. Left-click the tray icon to open the app; right-click it for Settings, Show
+App, and Exit. Exit, or Ctrl-C in the terminal, stops the application. Settings → General
+→ Launch at login registers Quota with the system so it starts quietly in the tray when
+you sign in; turning it off removes the login item.
 
 The native host logs warnings for failed close-time hiding, tray anchoring, second-launch
 focusing, and refused initial or periodic refresh requests.
@@ -66,30 +72,30 @@ runs the repository gates.
 
 ## Connect and refresh accounts
 
-Choose Add account in the overview or Settings → Accounts to open the Provider → Connect →
-Verify wizard. Choose a provider, enter or keep a nonempty account nickname, and press
-Connect. Quota reads an existing credential from the provider's client; it does not sign
-you in. The button stays busy until verification finishes, then shows the result. If a
-credential is missing or rejected, follow the provider-specific recovery guidance:
+Choose Add account in the popover or Settings → Accounts to open the Provider → Connect →
+Verify wizard in the popover. Choose a provider and press Connect. Quota reads an existing
+credential from the provider's client; it does not sign you in. The button stays busy
+until verification finishes, then shows the result. If a credential is missing or
+rejected, follow the provider-specific recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
 - OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
   environment.
 
-After signing in, press Connect again. On Verify, review the saved provider accounts,
-check the review acknowledgement, and choose Manage accounts. See the
-[confirmation limitation](docs/ui-fidelity/README.md#known-gaps) before connecting. Cancel
-leaves the wizard; starting a new Add account request opens a fresh wizard.
+After signing in, press Connect again. On Verify, check the account and workspace the
+provider verified, confirm that it is the account you intended, set its nickname, and
+choose Add account. Going back or cancelling at Verify removes a newly saved account
+again; starting a new Add account request opens a fresh wizard.
 [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any
-backoff deadline. Checks that do not send a request leave the due time unchanged. The
-overview and Accounts panel show a formatted countdown to the next eligible read when a
-manual refresh is deferred; a short provider retry delay cannot shorten the policy's
-minimum interval. With Hide account labels enabled, these notices use the same replacement
-labels as the overview rows.
+backoff deadline. Checks that do not send a request leave the due time unchanged. When you
+press refresh and a read is deferred, the popover's toast names the account and the
+formatted countdown to its next eligible read; a short provider retry delay cannot shorten
+the policy's minimum interval. With Hide account labels enabled, the toast uses the same
+replacement labels as the overview cards.
 
 Reconnect immediately verifies the account once, even while monitoring is paused. If
 verification fails, subsequent ordinary retries respect the interval, backoff, and

@@ -20,7 +20,8 @@ import { Icon, type IconName } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { AccountsPanel } from "./panels/AccountsPanel";
 import { AppearancePanel } from "./panels/AppearancePanel";
-import { PrivacyPanel, DiagnosticExportRow } from "./panels/PrivacyPanel";
+import { DiagnosticsPanel } from "./panels/DiagnosticsPanel";
+import { PrivacyPanel } from "./panels/PrivacyPanel";
 import { ConnectionWizard } from "./ConnectionWizard";
 import { NotificationsPanel } from "./panels/NotificationsPanel";
 import { WindowPanel } from "./panels/WindowPanel";
@@ -28,6 +29,9 @@ import { WindowPanel } from "./panels/WindowPanel";
 /** The settings sections. */
 type SettingsTab =
   "general" | "accounts" | "appearance" | "notifications" | "privacy" | "diagnostics";
+
+/** The application version the navigation rail states. */
+const APP_VERSION = "0.1.0";
 
 /** One navigation entry. */
 const TABS: readonly (readonly [SettingsTab, string, IconName])[] = [
@@ -68,9 +72,19 @@ export interface SettingsActions {
   readonly clearHistory: (accountId: AccountId) => void;
   /** Writes a diagnostic export to the destination the host will validate. */
   readonly exportDiagnostics: (destination: string) => void;
+  /** Shows the add-account wizard in the popover. */
+  readonly showAddAccount: () => void;
+  /** Whether Quota starts at login, as the system confirms it; `null` when unknown. */
+  readonly launchAtLogin: () => Promise<boolean | null>;
+  /** Registers or removes the login item and returns the confirmed state. */
+  readonly setLaunchAtLogin: (launch: boolean) => Promise<boolean | null>;
+  /** Shows the overview in the popover. */
+  readonly showOverview: () => void;
+  /** Shows one account's quota detail in the popover. */
+  readonly showAccountDetail: (accountId: AccountId) => void;
 }
 
-/** The settings surface. */
+/** The settings surface: the section rail and the selected panel. */
 export function Settings({
   state,
   actions,
@@ -80,97 +94,88 @@ export function Settings({
 }): JSX.Element {
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
-  const navigate = useCallback((next: SettingsTab | "connect"): void => {
+  const navigate = useCallback((next: SettingsTab): void => {
     window.location.hash = `#/settings/${next}`;
   }, []);
   const now = useNow();
   const preferences = state.preferences;
-  if (tab === "connect") {
-    return (
-      <div className="settings__content settings__connection">
-        <ConnectionWizard
-          key={route}
-          state={state}
-          actions={actions}
-          onDone={() => {
-            navigate("accounts");
-          }}
-        />
-      </div>
-    );
-  }
+  const selected: SettingsTab | "connect" = TABS.some(([id]) => id === tab)
+    ? (tab as SettingsTab)
+    : tab === "connect"
+      ? "connect"
+      : "general";
   return (
-    <section className="settings" aria-label="Quota settings">
-      <nav className="settings__nav" aria-label="Settings sections">
+    <div className="settings-layout">
+      <nav className="settings-nav" aria-label="Settings sections">
         {TABS.map(([id, label, icon]) => (
           <button
             key={id}
             type="button"
-            aria-current={tab === id ? "page" : undefined}
+            className={selected === id ? "selected" : ""}
+            aria-current={selected === id ? "page" : undefined}
             onClick={() => {
               navigate(id);
             }}
           >
-            <Icon name={icon} size={15} />
+            <Icon name={icon} />
             {label}
           </button>
         ))}
+        <div className="nav-foot">
+          Quota / {APP_VERSION}
+          <br />
+          Local quota monitor
+        </div>
       </nav>
-      <div className="settings__content">
-        {preferences === null ? (
+      <div className="settings-content">
+        {selected === "connect" ? (
+          // The host can still open settings on the connection route. The wizard
+          // is the same one the popover shows.
+          <ConnectionWizard
+            key={route}
+            state={state}
+            actions={actions}
+            onDone={() => {
+              navigate("accounts");
+            }}
+          />
+        ) : preferences === null ? (
           <p className="note">
             Quota has not received the confirmed preferences yet. Settings appear as soon
             as the backend publishes them.
           </p>
-        ) : tab === "general" ? (
+        ) : selected === "general" ? (
           <WindowPanel
             preferences={preferences}
-            nativeWindow={state.nativeWindow}
             monitoring={state.monitoring}
             actions={actions}
           />
-        ) : tab === "appearance" ? (
+        ) : selected === "appearance" ? (
           <AppearancePanel preferences={preferences} actions={actions} />
-        ) : tab === "accounts" ? (
+        ) : selected === "accounts" ? (
           <AccountsPanel
             accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
             preferences={preferences}
+            actions={actions}
+          />
+        ) : selected === "notifications" ? (
+          <NotificationsPanel
+            preferences={preferences}
+            accounts={state.snapshot?.accounts ?? []}
             now={now}
             actions={actions}
-            onAddAccount={() => {
-              navigate("connect");
-            }}
           />
-        ) : tab === "notifications" ? (
-          <NotificationsPanel preferences={preferences} actions={actions} />
-        ) : tab === "diagnostics" ? (
-          <>
-            <h3 className="settings__title">Diagnostics</h3>
-            <p className="settings__intro">
-              Sanitized status and local diagnostic exports.
-            </p>
-            <dl className="detail__list">
-              <div>
-                <dt>Connection</dt>
-                <dd>{state.link}</dd>
-              </div>
-              <div>
-                <dt>Enabled accounts</dt>
-                <dd>
-                  {state.snapshot?.accounts.filter(
-                    (account) => account.monitoring_enabled,
-                  ).length ?? 0}{" "}
-                  / {state.snapshot?.accounts.length ?? 0}
-                </dd>
-              </div>
-            </dl>
-            <DiagnosticExportRow actions={actions} />
-          </>
-        ) : tab === "privacy" ? (
-          <PrivacyPanel preferences={preferences} actions={actions} />
-        ) : null}
+        ) : selected === "diagnostics" ? (
+          <DiagnosticsPanel state={state} now={now} actions={actions} />
+        ) : (
+          <PrivacyPanel
+            preferences={preferences}
+            accounts={state.snapshot?.accounts ?? []}
+            actions={actions}
+          />
+        )}
       </div>
-    </section>
+    </div>
   );
 }
 

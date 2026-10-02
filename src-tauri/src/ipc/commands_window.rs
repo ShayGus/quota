@@ -76,7 +76,7 @@ pub async fn set_overview_always_on_top(
     Ok(window_state_response(confirmed))
 }
 
-/// Widens the overview to the account comparison layout.
+/// Sizes the overview to the popover layout and its accounts.
 ///
 /// This is an explicit user action. No reading, label change, or added account
 /// may resize or relocate the window on its own.
@@ -106,8 +106,12 @@ pub async fn fit_overview_to_accounts(
     let scale = monitor.scale_factor();
     let max_width = (f64::from(area.size.width) / scale).floor();
     let max_height = (f64::from(area.size.height) / scale).floor();
-    let width = 810.0_f64.min(max_width).max(1.0);
-    let height = (280.0 + f64::from(account_count) * 68.0)
+    // The popover is 440 logical pixels wide. Its height holds the header,
+    // toolbar, and footer plus one provider card per account, up to the
+    // wireframe's 760-pixel ceiling.
+    let width = 440.0_f64.min(max_width).max(1.0);
+    let height = (170.0 + f64::from(account_count) * 198.0)
+        .min(760.0)
         .min(max_height)
         .max(1.0);
     let result = window::transition_mode(&native, &mut controller, OverviewMode::Floating, async {
