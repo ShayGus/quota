@@ -105,6 +105,7 @@ export function Settings({
             <div hidden={tab !== "accounts"}>
               <AccountsPanel
                 accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+                preferences={preferences}
                 attempts={state.attempts}
                 now={now}
                 actions={actions}

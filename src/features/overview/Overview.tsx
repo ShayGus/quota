@@ -176,7 +176,7 @@ export function Overview({
         Position is relative depletion of the lowest known included allowance. It is not a
         forecast of when an allowance empties.
       </p>
-      <RefreshNotice accounts={accounts} now={now} />
+      <RefreshNotice accounts={accounts} preferences={state.preferences} now={now} />
       {matches.length === 0 ? (
         <div className="list-note">
           <span>No account matches the current filter or search text.</span>

@@ -17,6 +17,7 @@ import type {
   AccountSnapshot,
   CommandError,
   ConnectionAttemptId,
+  Preferences,
 } from "../../../generated/bindings";
 import { formatAge, instantOf } from "../../../shared/format/duration";
 import { describeCommandError, launch } from "../../../shared/ipc/report";
@@ -335,11 +336,13 @@ function ConnectAccount({
 /** The account management panel. */
 export function AccountsPanel({
   accounts,
+  preferences,
   attempts,
   now,
   actions,
 }: {
   readonly accounts: readonly AccountSnapshot[];
+  readonly preferences: Preferences | null;
   readonly attempts: readonly AttemptProgress[];
   readonly now: number;
   readonly actions: SettingsActions;
@@ -361,7 +364,7 @@ export function AccountsPanel({
         Disconnecting one account does not affect its siblings.
       </p>
       <ConnectAccount attempts={attempts} actions={actions} />
-      <RefreshNotice accounts={accounts} now={now} />
+      <RefreshNotice accounts={accounts} preferences={preferences} now={now} />
       {accounts.map((account) => (
         <ManagedAccount
           key={account.account_id}
