@@ -82,7 +82,8 @@ An event is transient delivery, not a durable log and not a mutation authority. 
 listener accepts a renderer-originated event as a command.
 
 Development-only agent inspection has guest event handlers; their window authorization
-boundary is documented in [the inspection guide](inspecting-the-app.md#what-an-agent-gets).
+boundary is documented in
+[the inspection guide](inspecting-the-app.md#what-an-agent-gets).
 
 ## Decision records
 

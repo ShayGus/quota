@@ -20,7 +20,7 @@ const host = process.env.TAURI_DEV_HOST;
 function inspectionModule(id: string): boolean {
   let directory = dirname(id.split("?")[0] ?? id);
   if (!isAbsolute(directory)) return false;
-  while (true) {
+  for (;;) {
     const manifest = join(directory, "package.json");
     if (existsSync(manifest)) {
       const metadata: unknown = JSON.parse(readFileSync(manifest, "utf8"));

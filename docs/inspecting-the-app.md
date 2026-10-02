@@ -215,8 +215,8 @@ size.
 
 ## Native libraries a Linux debug build needs
 
-The plugin's screenshot stack needs three native development dependencies that are not
-in the base WSLg image and that `cargo` cannot find on its own:
+The plugin's screenshot stack needs three native development dependencies that are not in
+the base WSLg image and that `cargo` cannot find on its own:
 
 | Library                               | Needed by                                        | Symptom when missing                                                                                     |
 | ------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
@@ -275,19 +275,19 @@ the dependency and its native libraries; the debug guard prevents registration, 
 dependency compilation. Shipping builds must keep the feature unselected.
 
 `cargo xtask check-release` runs entirely in Rust. It checks the manifest rules above,
-requires the desktop dependency to inherit the root workspace's full-commit git pin,
-and rejects inspection source overrides through `[patch]` or `[replace]`, including
-renamed entries. It also rejects inspection capability grants outside overview and
-guest imports outside an `import.meta.env.DEV` guard. These checks have regressions in
+requires the desktop dependency to inherit the root workspace's full-commit git pin, and
+rejects inspection source overrides through `[patch]` or `[replace]`, including renamed
+entries. It also rejects inspection capability grants outside overview and guest imports
+outside an `import.meta.env.DEV` guard. These checks have regressions in
 [`xtask/tests/check_release.rs`](../xtask/tests/check_release.rs); the host's debug
 registration guard lives in [`src-tauri/src/bootstrap.rs`](../src-tauri/src/bootstrap.rs).
 
-The frontend CI job runs `bun run check:release:renderer`, which runs `bun run build`.
-The Vite build check rejects inspection modules or imports remaining in emitted chunks,
+The frontend CI job runs `bun run check:release:renderer`, which runs `bun run build`. The
+Vite build check rejects inspection modules or imports remaining in emitted chunks,
 including renamed packages. The guest import in `src/main.tsx` is removed by the
 development guard. Bundle-check regressions live in
 [`tests/release-renderer.test.ts`](../tests/release-renderer.test.ts), and listener
 authorization regressions in [`tests/inspection.test.ts`](../tests/inspection.test.ts).
 
-The licence, and why `deny.toml` keeps an empty
-`allow-git`, are recorded in [the dependency record](dependencies.md).
+The licence, and why `deny.toml` keeps an empty `allow-git`, are recorded in
+[the dependency record](dependencies.md).

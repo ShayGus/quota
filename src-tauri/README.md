@@ -23,13 +23,14 @@ its own; every rule lives in `quota-domain` or `quota-core`.
 ## Security model
 
 Application commands are permissive by default unless the permission manifest in
-`build.rs` assigns them. The manifest names every command, and the two shipping
-capability files grant only what each window needs. The settings window cannot change
-native geometry; the overview window cannot change preferences.
+`build.rs` assigns them. The manifest names every command, and the two shipping capability
+files grant only what each window needs. The settings window cannot change native
+geometry; the overview window cannot change preferences.
 
-No capability grants `store:*`, `sql:*`, `http:*`, `fs:*`, or `shell:*`. The raw IPC
-call boundary is owned by [the architecture document](../docs/architecture.md#trust-boundaries).
-For development-only inspection permissions, see
+No capability grants `store:*`, `sql:*`, `http:*`, `fs:*`, or `shell:*`. The raw IPC call
+boundary is owned by
+[the architecture document](../docs/architecture.md#trust-boundaries). For
+development-only inspection permissions, see
 [the inspection guide](../docs/inspecting-the-app.md#what-an-agent-gets).
 
 ## Build status

@@ -42,7 +42,8 @@ Launching Quota again brings the running overview forward. Closing a window hide
 monitoring continues. Use Quit from the tray menu, or press Ctrl-C in the terminal, to
 stop the application.
 
-For development-only AI agent inspection, see [Inspecting the app](docs/inspecting-the-app.md).
+For development-only AI agent inspection, see
+[Inspecting the app](docs/inspecting-the-app.md).
 
 To produce a release build:
 

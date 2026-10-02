@@ -46,12 +46,14 @@ test("ordinary development without the inspection grant registers no guest handl
 });
 
 test("authorized overview registers guest handlers after the host permission check", async () => {
-  const permission = Promise.withResolvers<void>();
+  const permission = Promise.withResolvers<undefined>();
   transport.invoke.mockReturnValue(permission.promise);
   await import("../src/main");
-  await vi.waitFor(() => expect(transport.invoke).toHaveBeenCalledOnce());
+  await vi.waitFor(() => {
+    expect(transport.invoke).toHaveBeenCalledOnce();
+  });
   expect(transport.setup).not.toHaveBeenCalled();
-  permission.resolve();
+  permission.resolve(undefined);
   await vi.dynamicImportSettled();
   expect(transport.setup).toHaveBeenCalledOnce();
 });

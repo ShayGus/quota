@@ -555,9 +555,7 @@ fn check_inspection_capabilities(root: &Path, outcome: &mut Outcome) {
                     (extension == "json"
                         && name.starts_with("tauri.")
                         && name.ends_with("conf.json"))
-                        || (extension == "toml"
-                            && (name == "Tauri.toml"
-                                || (name.starts_with("Tauri.") && name.ends_with(".toml"))))
+                        || (extension == "toml" && name.starts_with("Tauri."))
                 });
             if !capability && !config {
                 continue;
