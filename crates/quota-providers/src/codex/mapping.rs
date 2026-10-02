@@ -11,6 +11,8 @@
 //! evidence "Credits-only connects. No fabricated secondary allowance."
 //! A credit balance is a balance, never included quota.
 
+use std::collections::HashSet;
+
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
 use quota_domain::ids::QuotaPoolId;
@@ -49,6 +51,12 @@ pub(crate) fn decode(
     usage.plan_label = envelope
         .plan_type
         .clone()
+        .or_else(|| {
+            envelope
+                .rate_limit
+                .as_ref()
+                .and_then(|set| set.plan_type.clone())
+        })
         .or_else(|| sets.iter().find_map(|set| set.plan_type.clone()));
     usage.principal_label = envelope.email.as_deref().map(masked_address);
     account_windows(&sets, pool, received_at, &mut usage)?;
@@ -127,11 +135,15 @@ fn named_windows(
     received_at: DateTime<Utc>,
     usage: &mut DecodedUsage,
 ) -> Result<(), ProviderError> {
+    let mut reported = HashSet::new();
     for set in sets {
         if let Some(review) = set.code_review_rate_limit.as_ref() {
             for (suffix, window) in [("", review.pair().0), ("-secondary", review.pair().1)] {
                 if let Some(window) = window {
                     let bucket = format!("code-review{suffix}");
+                    if !reported.insert(bucket.clone()) {
+                        continue;
+                    }
                     usage.push(named_window(
                         window,
                         pool,
@@ -146,6 +158,9 @@ fn named_windows(
             for (suffix, window) in [("", pair.0), ("-secondary", pair.1)] {
                 let Some(window) = window else { continue };
                 let bucket = format!("{identifier}{suffix}");
+                if !reported.insert(bucket.clone()) {
+                    continue;
+                }
                 usage.push(named_window(window, pool, &bucket, &label, received_at)?);
             }
         }

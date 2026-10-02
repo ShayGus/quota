@@ -51,11 +51,13 @@ pub(crate) fn decode(
     let mut decoded = DecodedUsage::new();
     let named = usable_limits_named(&usage.limits);
     let mut absent: Vec<(QuotaCategory, WindowDraft<'_>)> = Vec::new();
+    let mut reported = Vec::new();
 
     for fixed in fixed_windows(usage) {
         let draft = fixed.draft(pool, received_at);
         match fixed.wire {
             Some(window) => {
+                reported.push((fixed.category, fixed.resource));
                 decoded.push(measured_window(window, &draft)?);
             }
             None if fixed.expected => absent.push((fixed.category, draft)),
@@ -68,7 +70,14 @@ pub(crate) fn decode(
     // the account looking short of a window the payload did report.
     for (limit, bucket) in &named {
         let category = limit_category(limit);
-        if !is_model_scoped(limit) {
+        let resource = model_id(limit).unwrap_or("account");
+        let normalized_resource = decode::identifier(resource);
+        if reported.iter().any(|(fixed_category, fixed_resource)| {
+            *fixed_category == category && *fixed_resource == normalized_resource
+        }) {
+            continue;
+        }
+        if normalized_resource == "account" {
             absent.retain(|(absent_category, _)| *absent_category != category);
         }
         decoded.push(named_limit(limit, bucket, pool, received_at)?);
@@ -114,14 +123,13 @@ fn usable_limits_named(limits: &[ClaudeLimit]) -> Vec<(&ClaudeLimit, String)> {
         .collect()
 }
 
-/// Whether a named limit applies to one model rather than the whole account.
-fn is_model_scoped(limit: &ClaudeLimit) -> bool {
+fn model_id(limit: &ClaudeLimit) -> Option<&str> {
     limit
         .scope
         .as_ref()
         .and_then(|scope| scope.model.as_ref())
         .and_then(|model| model.id.as_deref())
-        .is_some_and(|id| !id.trim().is_empty())
+        .filter(|id| !id.trim().is_empty())
 }
 
 /// The period a named limit's own group text names.
@@ -131,8 +139,7 @@ fn limit_category(limit: &ClaudeLimit) -> QuotaCategory {
 
 /// The stable identity of one named limit: its group, qualified by its model.
 fn semantic_bucket(limit: &ClaudeLimit) -> String {
-    let model = limit.scope.as_ref().and_then(|scope| scope.model.as_ref());
-    let model_id = model.and_then(|model| model.id.as_deref());
+    let model_id = model_id(limit);
     let group = limit.group.as_deref().or(limit.kind.as_deref());
     let base = decode::identifier(group.unwrap_or(model_id.unwrap_or("account")));
     match model_id {
@@ -172,7 +179,7 @@ fn named_limit(
     received_at: DateTime<Utc>,
 ) -> Result<QuotaWindow, ProviderError> {
     let model = limit.scope.as_ref().and_then(|scope| scope.model.as_ref());
-    let model_id = model.and_then(|model| model.id.as_deref());
+    let model_id = model_id(limit);
     let model_label = model.and_then(|model| model.display_name.as_deref());
     let group = limit.group.as_deref().or(limit.kind.as_deref());
     let resource = model_id.unwrap_or("account");

@@ -39,6 +39,7 @@ struct AttemptHandle {
 
 mod connection;
 mod policy;
+mod queue;
 mod read_path;
 mod worker;
 
@@ -180,41 +181,26 @@ impl MonitoringRuntime {
     ) -> Result<Vec<AccountId>, quota_contracts::CommandError> {
         let mut accepted = Vec::new();
         for account_id in account_ids {
-            let (generation, reason) = self
+            let generation = self
                 .state
                 .registry
                 .read()
                 .await
                 .get(&account_id)
-                .map(|entry| {
-                    (
-                        entry.binding.generation,
-                        reason.for_connection(entry.stored.connection_state),
-                    )
-                })
+                .map(|entry| entry.binding.generation)
                 .ok_or(CommandError::AccountNotFound)?;
-            let key = (account_id.clone(), generation);
-            let mut pending = self.state.pending.lock().await;
-            if !pending.insert(key.clone()) {
-                continue;
-            }
-            match self.sender.try_send(RefreshRequest {
-                account_id: account_id.clone(),
-                reason,
-                generation,
-            }) {
-                Ok(()) => accepted.push(account_id),
-                Err(mpsc::error::TrySendError::Full(_)) => {
-                    pending.remove(&key);
-                    return Err(quota_contracts::CommandError::ValidationFailed {
-                        field: "refresh_queue".into(),
-                        reason: "the shared refresh queue is full; try again shortly".into(),
-                    });
-                }
-                Err(mpsc::error::TrySendError::Closed(_)) => {
-                    pending.remove(&key);
-                    return Err(quota_contracts::CommandError::Cancelled);
-                }
+            if queue::enqueue(
+                &self.sender,
+                &self.state.pending,
+                RefreshRequest {
+                    account_id: account_id.clone(),
+                    reason,
+                    generation,
+                },
+            )
+            .await?
+            {
+                accepted.push(account_id);
             }
         }
         Ok(accepted)
@@ -372,19 +358,17 @@ impl MonitoringRuntime {
                     owner: error.owner.to_owned(),
                 },
             )?;
-        let stored = {
-            let mut registry = self.state.registry.write().await;
-            registry
-                .set_generation(&connection_id, generation)
-                .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
-            registry
-                .set_connection_state(&connection_id, ConnectionState::Connecting)
-                .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
-            registry
-                .get(account_id)
-                .map(|entry| entry.stored.clone())
-                .ok_or(quota_contracts::CommandError::AccountNotFound)?
-        };
+        let mut registry = self.state.registry.write().await;
+        registry
+            .set_generation(&connection_id, generation)
+            .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
+        registry
+            .set_connection_state(&connection_id, ConnectionState::Connecting)
+            .map_err(|_| quota_contracts::CommandError::AccountNotFound)?;
+        let stored = registry
+            .get(account_id)
+            .map(|entry| entry.stored.clone())
+            .ok_or(quota_contracts::CommandError::AccountNotFound)?;
         self.state
             .accounts
             .upsert_account(stored)
@@ -394,9 +378,19 @@ impl MonitoringRuntime {
                     owner: error.owner.to_owned(),
                 },
             )?;
+        let queued = queue::enqueue(
+            &self.sender,
+            &self.state.pending,
+            RefreshRequest {
+                account_id: account_id.clone(),
+                generation,
+                reason: RefreshReason::Reconnect,
+            },
+        )
+        .await;
+        drop(registry);
         drop(commit);
-        self.refresh([account_id.clone()], RefreshReason::Reconnect)
-            .await?;
+        queued?;
         // The reconnect itself changed the connection state the renderer shows.
         self.publish().await?;
         Ok(generation)

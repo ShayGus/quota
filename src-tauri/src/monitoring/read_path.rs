@@ -9,7 +9,6 @@ use quota_core::ports::ProviderError;
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::ids::ConnectionAttemptId;
 use quota_domain::polling::LimitScope;
-use quota_domain::snapshot::MonitoringState;
 
 use super::policy;
 use super::worker::publish_snapshot;
@@ -46,6 +45,7 @@ pub(super) async fn next_read_at(
     state: &RuntimeState,
     entry: &quota_core::accounts::RegisteredAccount,
     reason: RefreshReason,
+    backoff_until: Option<DateTime<Utc>>,
 ) -> Option<DateTime<Utc>> {
     let policy = state
         .policies
@@ -66,6 +66,7 @@ pub(super) async fn next_read_at(
             .min(),
         now: state.clock.now(),
         reason,
+        backoff_until,
     }))
 }
 
@@ -74,11 +75,6 @@ pub(super) async fn resolve_read_target(
     state: &RuntimeState,
     request: &RefreshRequest,
 ) -> Result<Option<ReadTarget>, String> {
-    if request.reason != RefreshReason::Reconnect
-        && *state.monitoring.read().await == MonitoringState::Paused
-    {
-        return Ok(None);
-    }
     let entry = state
         .registry
         .read()
@@ -86,17 +82,32 @@ pub(super) async fn resolve_read_target(
         .get(&request.account_id)
         .cloned()
         .ok_or_else(|| "account_removed".to_owned())?;
-    if request.reason != RefreshReason::Reconnect && !entry.stored.monitoring_enabled {
-        return Ok(None);
-    }
     if entry.binding.generation != request.generation {
         return Err("stale_connection_generation".to_owned());
     }
     let binding = entry.binding.clone();
-    let Some(next_read_at) = next_read_at(state, &entry, request.reason).await else {
+    let scope = LimitScope::Connection(binding.connection_id.clone());
+    let backoff_until = if request.reason == RefreshReason::Reconnect {
+        None
+    } else {
+        state
+            .backoff
+            .load_backoff(&scope)
+            .await
+            .map_err(|error| error.reason)?
+            .map(|backoff| backoff.next_eligible_at)
+    };
+    let Some(next_read_at) = next_read_at(state, &entry, request.reason, backoff_until).await
+    else {
         return Ok(None);
     };
-    if next_read_at > now(state) {
+    if !policy::read_is_due(
+        request.reason,
+        &*state.monitoring.read().await,
+        entry.stored.monitoring_enabled,
+        next_read_at,
+        now(state),
+    ) {
         if request.reason == RefreshReason::UserRequested {
             publish_snapshot(state).await?;
         }
@@ -107,18 +118,6 @@ pub(super) async fn resolve_read_target(
         .provider(binding.provider_id)
         .cloned()
         .ok_or_else(|| "unsupported_provider".to_owned())?;
-    let scope = LimitScope::Connection(binding.connection_id.clone());
-    let now = state.clock.now();
-    if request.reason != RefreshReason::Reconnect
-        && state
-            .backoff
-            .load_backoff(&scope)
-            .await
-            .map_err(|error| error.reason)?
-            .is_some_and(|backoff| backoff.is_waiting_at(now))
-    {
-        return Ok(None);
-    }
     // Every eligibility check has passed, so this is a real read. The floor is
     // stamped now, after the decision, so a check that decided not to read
     // leaves the account's schedule untouched.
@@ -251,7 +250,7 @@ pub(super) async fn commit_reading(
             .get(&request.account_id)
             .cloned()
             .ok_or_else(|| "account_removed_before_commit".to_owned())?;
-        let next = next_read_at(state, &current, RefreshReason::Scheduled)
+        let next = next_read_at(state, &current, RefreshReason::Scheduled, None)
             .await
             .unwrap_or(now + chrono::Duration::seconds(300));
         registry
@@ -309,7 +308,20 @@ pub(super) async fn record_failure(
         ProviderError::RateLimited { retry_after } => *retry_after,
         _ => None,
     };
-    let next_eligible_at = provider_retry_after.unwrap_or(now + delay);
+    let mut failed = entry.clone();
+    failed.stored.last_attempt_at = Some(now);
+    let next_eligible_at = next_read_at(
+        state,
+        &failed,
+        RefreshReason::Scheduled,
+        Some(provider_retry_after.unwrap_or(now + delay)),
+    )
+    .await
+    .unwrap_or_else(|| {
+        provider_retry_after
+            .unwrap_or(now + delay)
+            .max(now + chrono::Duration::seconds(300))
+    });
     state
         .backoff
         .persist_backoff(

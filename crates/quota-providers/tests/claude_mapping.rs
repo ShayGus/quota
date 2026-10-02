@@ -559,3 +559,110 @@ fn account_wide_named_limits_fill_missing_slots_beside_every_product_scope() {
         }
     }
 }
+
+#[test]
+fn fixed_windows_win_over_named_counterparts_in_every_scope() {
+    for (field, group, model, bucket, category) in fixed_counterparts() {
+        let mut named = serde_json::json!({"group": group, "percent":20});
+        if let Some(model) = model {
+            named["scope"] =
+                serde_json::json!({"model":{"id":model.to_uppercase().replace('-', "_")}});
+        }
+        let mut payload = serde_json::json!({
+            "five_hour":{"utilization":1}, "seven_day":{"utilization":1},
+            "limits":[named, {"group":group,"percent":100,"scope":{"model":{"id":"distinct"}}}]
+        });
+        payload[field] = serde_json::json!({"utilization":80});
+        let reading = decode_offline(
+            ProviderId::Claude,
+            &payload.to_string(),
+            "claude-local",
+            received_at(),
+        )
+        .unwrap();
+        assert!(reading.is_complete());
+        let matches: Vec<_> = reading
+            .windows
+            .iter()
+            .filter(|window| {
+                window.category == category
+                    && window.scope.resource().as_str() == model.unwrap_or("account")
+            })
+            .collect();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].provider_bucket_id.as_deref(), Some(bucket));
+        assert_eq!(
+            matches[0].measurement.remaining_percent().unwrap().value(),
+            20.0
+        );
+        assert!(
+            reading
+                .windows
+                .iter()
+                .any(|window| window.scope.resource().as_str() == "distinct")
+        );
+        let identities: std::collections::HashSet<_> =
+            reading.windows.iter().map(|window| &window.id).collect();
+        assert_eq!(identities.len(), reading.windows.len());
+    }
+}
+
+fn fixed_counterparts() -> [(
+    &'static str,
+    &'static str,
+    Option<&'static str>,
+    &'static str,
+    QuotaCategory,
+); 7] {
+    [
+        (
+            "five_hour",
+            "five_hour",
+            None,
+            "five-hour",
+            QuotaCategory::Session,
+        ),
+        (
+            "seven_day",
+            "seven_day",
+            None,
+            "weekly",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_opus",
+            "seven_day",
+            Some("opus"),
+            "weekly-opus",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_sonnet",
+            "seven_day",
+            Some("sonnet"),
+            "weekly-sonnet",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_oauth_apps",
+            "seven_day",
+            Some("oauth-apps"),
+            "weekly-oauth-apps",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_design",
+            "seven_day",
+            Some("design"),
+            "weekly-design",
+            QuotaCategory::Weekly,
+        ),
+        (
+            "seven_day_routines",
+            "seven_day",
+            Some("routines"),
+            "weekly-routines",
+            QuotaCategory::Weekly,
+        ),
+    ]
+}

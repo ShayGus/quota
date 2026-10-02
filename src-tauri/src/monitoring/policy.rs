@@ -7,20 +7,11 @@
 //! constrain the next read the same way.
 
 use chrono::{DateTime, Duration, Utc};
-use quota_domain::account::ConnectionState;
 use quota_domain::polling::{PollingStrategy, ProviderPollingPolicy};
 
-use super::RefreshReason;
+use quota_domain::snapshot::MonitoringState;
 
-impl RefreshReason {
-    pub(super) fn for_connection(self, state: ConnectionState) -> Self {
-        if state == ConnectionState::Connecting {
-            Self::Reconnect
-        } else {
-            self
-        }
-    }
-}
+use super::RefreshReason;
 
 /// What the supervisor knows when it decides.
 pub(crate) struct ReadSchedule<'a> {
@@ -35,6 +26,7 @@ pub(crate) struct ReadSchedule<'a> {
     /// Now.
     pub now: DateTime<Utc>,
     pub reason: RefreshReason,
+    pub backoff_until: Option<DateTime<Utc>>,
 }
 
 /// The earliest instant this account may be read again.
@@ -56,6 +48,7 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
         valid_until,
         now,
         reason,
+        backoff_until,
     } = schedule;
     if *reason == RefreshReason::Reconnect {
         return *now;
@@ -114,7 +107,19 @@ pub(crate) fn next_read_at(schedule: &ReadSchedule<'_>) -> DateTime<Utc> {
         next = valid_until;
     }
 
-    next.max(provider_floor)
+    let next = next.max(provider_floor);
+    backoff_until.map_or(next, |deadline| next.max(deadline))
+}
+
+pub(super) fn read_is_due(
+    reason: RefreshReason,
+    monitoring: &MonitoringState,
+    enabled: bool,
+    next: DateTime<Utc>,
+    now: DateTime<Utc>,
+) -> bool {
+    (reason == RefreshReason::Reconnect || (*monitoring != MonitoringState::Paused && enabled))
+        && next <= now
 }
 
 #[cfg(test)]
@@ -193,6 +198,7 @@ mod tests {
             valid_until: None,
             now: base() + Duration::seconds(elapsed_seconds),
             reason: RefreshReason::Scheduled,
+            backoff_until: None,
         }
     }
 
@@ -225,6 +231,7 @@ mod tests {
             valid_until: None,
             now: base(),
             reason: RefreshReason::Scheduled,
+            backoff_until: None,
         };
         // An account that has never been read is due now, not in five minutes.
         assert_eq!(next_read_at(&current), base());
@@ -260,33 +267,6 @@ mod tests {
     }
 
     #[test]
-    fn every_source_queued_during_reconnect_keeps_immediate_verification() {
-        let policy = policy();
-        for reason in [
-            RefreshReason::UserRequested,
-            RefreshReason::Scheduled,
-            RefreshReason::BoundaryVerification,
-            RefreshReason::OverviewOpened,
-            RefreshReason::Resumed,
-            RefreshReason::Reconnect,
-        ] {
-            let mut current = schedule(&policy, 1);
-            current.reason = reason.for_connection(ConnectionState::Connecting);
-            assert_eq!(current.reason, RefreshReason::Reconnect);
-            assert_eq!(next_read_at(&current), current.now);
-            for state in [
-                ConnectionState::NeverConnected,
-                ConnectionState::Connected,
-                ConnectionState::ReauthenticationRequired,
-                ConnectionState::Unsupported,
-                ConnectionState::Disconnected,
-            ] {
-                assert_eq!(reason.for_connection(state), reason);
-            }
-        }
-    }
-
-    #[test]
     fn reconnect_is_due_inside_the_minimum_interval() {
         for policy in all_policies() {
             let mut current = schedule(&policy, 1);
@@ -305,8 +285,87 @@ mod tests {
                 valid_until: None,
                 now: base(),
                 reason: RefreshReason::UserRequested,
+                backoff_until: None,
             };
             assert_eq!(next_read_at(&current), current.now);
+        }
+    }
+    #[test]
+    fn failed_reconnect_retries_obey_the_saved_deadline_and_pause() {
+        let policy = policy();
+        let mut current = schedule(&policy, 1);
+        current.reason = RefreshReason::Reconnect;
+        assert!(read_is_due(
+            current.reason,
+            &MonitoringState::Paused,
+            false,
+            next_read_at(&current),
+            current.now
+        ));
+        current.last_attempt = Some(current.now);
+        current.backoff_until = Some(current.now + Duration::hours(1));
+        for reason in [
+            RefreshReason::Scheduled,
+            RefreshReason::UserRequested,
+            RefreshReason::BoundaryVerification,
+            RefreshReason::OverviewOpened,
+            RefreshReason::Resumed,
+        ] {
+            current.reason = reason;
+            for elapsed in [300, 3599, 3600] {
+                current.now = base() + Duration::seconds(1 + elapsed);
+                let deadline = next_read_at(&current);
+                assert_eq!(deadline, base() + Duration::seconds(3601));
+                assert_eq!(
+                    read_is_due(
+                        reason,
+                        &MonitoringState::Running,
+                        true,
+                        deadline,
+                        current.now
+                    ),
+                    elapsed == 3600
+                );
+                assert!(!read_is_due(
+                    reason,
+                    &MonitoringState::Paused,
+                    true,
+                    deadline,
+                    current.now
+                ));
+                assert!(!read_is_due(
+                    reason,
+                    &MonitoringState::Running,
+                    false,
+                    deadline,
+                    current.now
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn a_short_retry_deadline_never_understates_policy_spacing() {
+        for policy in all_policies() {
+            let mut current = schedule(&policy, 0);
+            current.backoff_until = Some(base() + Duration::seconds(60));
+            assert_eq!(next_read_at(&current), base() + Duration::seconds(300));
+            current.now = base() + Duration::seconds(60);
+            assert!(!read_is_due(
+                current.reason,
+                &MonitoringState::Running,
+                true,
+                next_read_at(&current),
+                current.now
+            ));
+            current.now = base() + Duration::seconds(300);
+            assert!(read_is_due(
+                current.reason,
+                &MonitoringState::Running,
+                true,
+                next_read_at(&current),
+                current.now
+            ));
         }
     }
 }

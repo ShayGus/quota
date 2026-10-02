@@ -61,11 +61,12 @@ Reads the quota the Codex CLI reports for its own login.
 - Request: the bearer token, `Accept: application/json`, and `ChatGPT-Account-Id` only
   when the credential named an account. An empty header is not the same as an absent one.
 - Decoded fields: `rate_limit`/`rateLimits`/`rate_limits` and the root object, both read,
-  so a body that reports its review allowance at the root keeps it;
+  so a body that reports its review allowance at the root keeps it. The named container
+  wins for a repeated bucket; within a container, the additional list wins over its map;
   `primary_window`/`primary` and `secondary_window`/`secondary`, either as a pair or as a
   window carried directly on the block; `code_review_rate_limit` as a pair or a window;
   `additional_rate_limits[]` with `limit_name`/`id`/`name` and a `rate_limit` pair or
-  window; `rateLimitsByLimitId`. Used percent: `used_percent`/`usedPercent`, as a number
+  window, or the legacy `window` field; `rateLimitsByLimitId`. Used percent: `used_percent`/`usedPercent`, as a number
   or a numeric string. Reset: `reset_at`/`resetsAt` (epoch seconds or a date string) or
   `reset_after_seconds`. Duration: `limit_window_seconds` (seconds) or
   `windowDurationMins` (minutes). Plan: `plan_type`/`planType`. Optional
@@ -114,7 +115,8 @@ Reads Claude subscription usage for the Claude Code login.
   and optional `scope.model.id`/`display_name`; optional `extra_usage` with `is_enabled`,
   `monthly_limit`, `used_credits`, `decimal_places`.
 - Window mapping: the fixed fields and the `limits[]` array are merged, never substituted
-  for one another, and every entry keeps its own group and model scope. Only the two
+  for one another. A fixed field wins over a named counterpart for the same period and
+  resource; other entries keep their own group and model scope. Only the two
   account-wide windows are expected: one the payload does not report becomes
   `Unavailable(NotReported)` and is recorded in `expected_but_missing`, unless a named
   limit already describes that same period. A model-specific or product allowance the

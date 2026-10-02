@@ -48,14 +48,10 @@ impl CodexEnvelope {
     /// The named container wins when both describe the same pair, but a window
     /// reported only at the root is never dropped.
     pub(crate) fn limit_sets(&self) -> Vec<&CodexLimitSet> {
-        let root = if self.root.is_empty() {
-            None
-        } else {
-            Some(&self.root)
-        };
-        [self.rate_limit.as_ref(), root]
+        [self.rate_limit.as_ref(), Some(&self.root)]
             .into_iter()
             .flatten()
+            .filter(|set| !set.is_empty())
             .collect()
     }
 }
@@ -98,11 +94,14 @@ pub(crate) struct CodexLimitSet {
 impl CodexLimitSet {
     /// Whether the block names no window and no bucket at all.
     pub(crate) fn is_empty(&self) -> bool {
-        self.pair().0.is_none()
-            && self.secondary_window.is_none()
-            && self.code_review_rate_limit.is_none()
-            && self.additional_rate_limits.is_empty()
-            && self.rate_limits_by_limit_id.is_empty()
+        let pair = self.pair();
+        pair.0.is_none()
+            && pair.1.is_none()
+            && self
+                .code_review_rate_limit
+                .as_ref()
+                .is_none_or(|set| set.is_empty())
+            && self.buckets().is_empty()
     }
 
     /// The pair this block reports, however the source spelled it.
@@ -113,8 +112,14 @@ impl CodexLimitSet {
         let first = self
             .primary_window
             .as_ref()
+            .filter(|window| !window.is_empty())
             .or_else(|| (!self.inline.is_empty()).then_some(&self.inline));
-        (first, self.secondary_window.as_ref())
+        (
+            first,
+            self.secondary_window
+                .as_ref()
+                .filter(|window| !window.is_empty()),
+        )
     }
 
     /// Every additional bucket, as `(identifier, display name, window pair)`.
@@ -124,11 +129,17 @@ impl CodexLimitSet {
     pub(crate) fn buckets(&self) -> Vec<(String, String, WindowPair<'_>)> {
         let mut buckets = Vec::new();
         for limit in &self.additional_rate_limits {
-            let pair = limit.rate_limit.as_ref().map(CodexLimitSet::pair);
-            if pair.is_none_or(|(first, second)| first.is_none() && second.is_none()) {
+            let mut pair = limit
+                .rate_limit
+                .as_ref()
+                .map(CodexLimitSet::pair)
+                .unwrap_or_default();
+            if pair.0.is_none() && pair.1.is_none() {
+                pair.0 = limit.window.as_ref().filter(|window| !window.is_empty());
+            }
+            if pair.0.is_none() && pair.1.is_none() {
                 continue;
             }
-            let pair = pair.unwrap_or_default();
             buckets.push((
                 crate::decode::identifier(limit.identifier()),
                 limit.label().to_owned(),
@@ -136,6 +147,9 @@ impl CodexLimitSet {
             ));
         }
         for (key, window) in &self.rate_limits_by_limit_id {
+            if window.is_empty() {
+                continue;
+            }
             buckets.push((
                 crate::decode::identifier(key),
                 key.clone(),
@@ -161,6 +175,8 @@ pub(crate) struct CodexAdditionalLimit {
     /// The windows nested under `rate_limit`, however they are shaped.
     #[serde(default, alias = "limit")]
     pub(crate) rate_limit: Option<CodexLimitSet>,
+    #[serde(default)]
+    pub(crate) window: Option<CodexWindow>,
 }
 
 impl CodexAdditionalLimit {

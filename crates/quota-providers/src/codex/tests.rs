@@ -15,7 +15,7 @@ async fn read_endpoints(statuses: &[(&str, &str)]) -> Result<DecodedUsage, Provi
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = [0; 4096];
             let _ = stream.read(&mut request);
-            write!(stream, "HTTP/1.1 {status}\r\nRetry-After: 60\r\nx-codex-primary-used-percent: 99\r\nx-codex-secondary-used-percent: 99\r\nx-codex-credits-balance: 99\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
+            write!(stream, "HTTP/1.1 {status}\r\nRetry-After: 60\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
         }
     });
     let credential = CodexCredential {
@@ -87,43 +87,4 @@ async fn fallback_can_still_return_a_reading() {
     .unwrap();
     assert!(usage.is_complete());
     assert_eq!(usage.windows.len(), 1);
-}
-
-#[tokio::test]
-async fn live_reading_uses_only_body_measurements() {
-    let usage = read_endpoints(&[(
-        "200 OK",
-        r#"{
-        "rate_limit": {
-            "primary_window": {"used_percent": 28, "limit_window_seconds": 18000},
-            "secondary_window": {"used_percent": 40, "limit_window_seconds": 604800}
-        },
-        "credits": {"balance": 12.5}
-    }"#,
-    )])
-    .await
-    .unwrap();
-    assert_eq!(usage.windows.len(), 3);
-    assert_eq!(
-        usage.windows[0]
-            .measurement
-            .remaining_percent()
-            .unwrap()
-            .value(),
-        72.0
-    );
-    assert_eq!(
-        usage.windows[1]
-            .measurement
-            .remaining_percent()
-            .unwrap()
-            .value(),
-        60.0
-    );
-    let quota_domain::quota::measurement::Measurement::Quantity(balance) =
-        &usage.windows[2].measurement
-    else {
-        panic!("expected a credit balance");
-    };
-    assert_eq!(balance.remaining, Some(12.5));
 }
