@@ -714,7 +714,9 @@ describe("account details privacy", () => {
       expect(details.textContent).toContain("Claude Sonnet boundary");
       expect(details.textContent).toContain("Documented API · Claude Sonnet");
 
-      act(() => acceptPreferences(preferences({ revision: hidden.revision + 1 })));
+      act(() => {
+        acceptPreferences(preferences({ revision: hidden.revision + 1 }));
+      });
       expect(
         within(details).getByRole("heading", { name: "Private nickname" }),
       ).toBeTruthy();
@@ -723,7 +725,9 @@ describe("account details privacy", () => {
       expect(details.getAttribute("aria-label")).toBe(
         "Account details for Private nickname",
       );
-      act(() => acceptPreferences({ ...hidden, revision: hidden.revision + 2 }));
+      act(() => {
+        acceptPreferences({ ...hidden, revision: hidden.revision + 2 });
+      });
       for (const privateLabel of [
         "Private nickname",
         "private@example.test",

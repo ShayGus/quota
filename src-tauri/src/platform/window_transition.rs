@@ -102,7 +102,7 @@ mod tests {
             }
         }
 
-        async fn fit(&self) -> Result<bool, CommandError> {
+        fn fit(&self) -> Result<bool, CommandError> {
             self.step("size")?;
             self.step("position")?;
             self.step("content")?;
@@ -143,7 +143,8 @@ mod tests {
                     let mut controller = OverviewWindowController::new();
                     controller.set_mode(previous);
                     let result =
-                        transition_mode(&native, &mut controller, mode, native.fit()).await;
+                        transition_mode(&native, &mut controller, mode, async { native.fit() })
+                            .await;
                     assert!(result.is_err(), "failure at {failure}");
                     let actual = native.0.borrow();
                     assert_eq!(actual.decorations, previous == OverviewMode::Floating);
@@ -167,7 +168,8 @@ mod tests {
                 let native = Native::new(previous, vec![2, rollback_failure]);
                 let mut controller = OverviewWindowController::new();
                 controller.set_mode(previous);
-                let result = transition_mode(&native, &mut controller, mode, native.fit()).await;
+                let result =
+                    transition_mode(&native, &mut controller, mode, async { native.fit() }).await;
                 assert_eq!(
                     result,
                     Err(failed(if rollback_failure == 3 {
@@ -197,7 +199,7 @@ mod tests {
             let native = Native::new(previous, Vec::new());
             let mut controller = OverviewWindowController::new();
             controller.set_mode(previous);
-            let confirmed = transition_mode(&native, &mut controller, mode, native.fit())
+            let confirmed = transition_mode(&native, &mut controller, mode, async { native.fit() })
                 .await
                 .unwrap();
             assert_eq!(confirmed, controller.state());

@@ -18,9 +18,9 @@ These recorded captures compare real Quota screens with the approved wireframe
 The wireframe images are the wireframe's own 810 px popover rendered at the desktop window
 width, with the prototype's guide above it. The app images are the real renderer at the
 same width, driven by one deterministic snapshot with the ten sample accounts the
-wireframe draws. The settings images are the settings window at its own 780 px width.
-The Accounts capture predates the verified-identity row restoration and remains
-historical evidence rather than a capture of the submitted head.
+wireframe draws. The settings images are the settings window at its own 780 px width. The
+Accounts capture predates the verified-identity row restoration and remains historical
+evidence rather than a capture of the submitted head.
 
 The approved controls remain visible: mode and topmost remain separate, hide uses the
 authorized native close handler that keeps the overview alive, and every Add account entry

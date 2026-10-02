@@ -53,9 +53,9 @@ describe("pending connection acceptance", () => {
     expect(screen.getByRole<HTMLButtonElement>("button", { name: "Back" }).disabled).toBe(
       true,
     );
-    expect(
-      screen.getByLabelText<HTMLInputElement>("Account nickname").disabled,
-    ).toBe(true);
+    expect(screen.getByLabelText<HTMLInputElement>("Account nickname").disabled).toBe(
+      true,
+    );
     fireEvent.click(screen.getByRole("button", { name: "Verifying…" }));
     expect(beginConnection).toHaveBeenCalledTimes(1);
     expect(beginConnection).toHaveBeenCalledWith({
@@ -140,7 +140,10 @@ describe("pending connection acceptance", () => {
       screen.getByRole<HTMLButtonElement>("button", { name: "Connect" }).disabled,
     ).toBe(false);
     expect(screen.getByLabelText("Account nickname")).toHaveProperty("disabled", false);
-    expect(screen.getByRole("button", { name: "Back" })).toHaveProperty("disabled", false);
+    expect(screen.getByRole("button", { name: "Back" })).toHaveProperty(
+      "disabled",
+      false,
+    );
     expect(screen.getByRole("alert").textContent).toContain("connection was refused");
   });
 });

@@ -16,11 +16,11 @@ not the reset countdown, and a row keeps its position and its click target while
 is applied.
 
 Use Attention to filter the overview and the search button to find an account; closing
-search clears its text. The footer counts fully visible rows out of the filtered rows.
-Fit switches to a floating window, sizes it within the monitor's work area, and returns
-to all accounts with search cleared. Account Details shows the verified identity, local
-account ID, and selected allowance's reading source. Hide account labels replaces account
-and workspace identities while keeping public allowance labels visible.
+search clears its text. The footer counts fully visible rows out of the filtered rows. Fit
+switches to a floating window, sizes it within the monitor's work area, and returns to all
+accounts with search cleared. Account Details shows the verified identity, local account
+ID, and selected allowance's reading source. Hide account labels replaces account and
+workspace identities while keeping public allowance labels visible.
 
 ## Status
 
@@ -63,12 +63,11 @@ runs the repository gates.
 
 ## Connect and refresh accounts
 
-Choose Add account in the overview or Settings → Accounts to open the
-Provider → Connect → Verify wizard. Choose a provider, enter or keep a nonempty account
-nickname, and press Connect.
-Quota reads an existing credential from the provider's client; it does not sign you in.
-The button stays busy until verification finishes, then shows the result. If a credential
-is missing or rejected, follow the provider-specific recovery guidance:
+Choose Add account in the overview or Settings → Accounts to open the Provider → Connect →
+Verify wizard. Choose a provider, enter or keep a nonempty account nickname, and press
+Connect. Quota reads an existing credential from the provider's client; it does not sign
+you in. The button stays busy until verification finishes, then shows the result. If a
+credential is missing or rejected, follow the provider-specific recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
@@ -77,8 +76,8 @@ is missing or rejected, follow the provider-specific recovery guidance:
 
 After signing in, press Connect again. On Verify, review the saved provider accounts,
 check the review acknowledgement, and choose Manage accounts. See the
-[confirmation limitation](docs/ui-fidelity/README.md#known-gaps) before connecting.
-Cancel leaves the wizard; starting a new Add account request opens a fresh wizard.
+[confirmation limitation](docs/ui-fidelity/README.md#known-gaps) before connecting. Cancel
+leaves the wizard; starting a new Add account request opens a fresh wizard.
 [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 
