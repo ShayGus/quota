@@ -57,7 +57,6 @@ export function ConnectionWizard({
   )?.progress;
   const candidate =
     progress?.kind === "awaiting_confirmation" ? progress.context.candidate : null;
-  const verified = progress?.kind === "verified";
   const accounts = state.snapshot?.accounts ?? [];
   // A candidate is not in the account list yet, so it falls outside the set the
   // alias index is built from and takes that helper's label for one it has not
@@ -69,7 +68,7 @@ export function ConnectionWizard({
       (progress === undefined ||
         progress.kind === "started" ||
         progress.kind === "awaiting_user"));
-  const step = provider === null ? 1 : candidate !== null || verified ? 3 : 2;
+  const step = provider === null ? 1 : candidate !== null ? 3 : 2;
 
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
@@ -220,25 +219,7 @@ export function ConnectionWizard({
             </button>
           </div>
         </>
-      ) : verified ? (
-        <>
-          <div className="success-icon">
-            <Icon
-              name={progress.context.state === "connected" ? "check" : "warning"}
-              size={24}
-            />
-          </div>
-          <h2>Account added</h2>
-          <p className="settings__intro">
-            {nickname.trim()} is now monitored and appears in your overview.
-          </p>
-          <div className="wizard-action">
-            <button type="button" className="button button--primary" onClick={onDone}>
-              Manage accounts
-            </button>
-          </div>
-        </>
-      ) : (
+      ) : progress?.kind !== "verified" ? (
         <>
           <h2>Connect {providerLabel(provider)}</h2>
           <p className="settings__intro">
@@ -316,7 +297,7 @@ export function ConnectionWizard({
             </button>
           </div>
         </>
-      )}
+      ) : null}
     </section>
   );
 }

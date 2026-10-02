@@ -181,34 +181,70 @@ describe("Provider → Connect → Verify", () => {
     });
   });
 
-  it("hides an unsaved identity while the alias setting is on", async () => {
-    const actions = settingsActions();
-    render(<Harness actions={actions} />);
-    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    act(() => {
-      acceptAttempt({
-        attemptId: "attempt-1",
-        revision: 2,
-        progress: awaitingConfirmation(),
+  it.each([true, false])(
+    "hides identity and nickname when confirmation returns %s with aliases on",
+    async (saved) => {
+      const confirmation = Promise.withResolvers<boolean>();
+      const actions = {
+        ...settingsActions(),
+        confirmConnection: vi.fn(() => confirmation.promise),
+      };
+      const { container } = render(<Harness actions={actions} />);
+      fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+      fireEvent.change(screen.getByLabelText("Account nickname"), {
+        target: { value: "Captain's private nickname" },
       });
-    });
-    act(() => {
-      acceptPreferences(
-        preferences({
-          privacy: {
-            alias_mode: "stable_aliases",
-            retain_history: false,
-            export_identities: false,
-          },
-        }),
-      );
-    });
-    expect(screen.queryByText("b@example.test")).toBeNull();
-    expect(screen.queryByText("Home")).toBeNull();
-    expect(screen.getByText("Account 0")).toBeTruthy();
-    expect(screen.getByText("Workspace hidden")).toBeTruthy();
-  });
+      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 2,
+          progress: awaitingConfirmation({ nickname: "Captain's private nickname" }),
+        });
+      });
+      act(() => {
+        acceptPreferences(
+          preferences({
+            privacy: {
+              alias_mode: "stable_aliases",
+              retain_history: false,
+              export_identities: false,
+            },
+          }),
+        );
+      });
+      expect(screen.queryByText("b@example.test")).toBeNull();
+      expect(screen.queryByText("Home")).toBeNull();
+      expect(screen.getByText("Account 0")).toBeTruthy();
+      expect(screen.getByText("Workspace hidden")).toBeTruthy();
+      expect(container.textContent).not.toContain("Captain's private nickname");
+      expect(screen.queryByLabelText("Account nickname")).toBeNull();
+      fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 3,
+          progress: { kind: "verified", context: { state: "connected" } },
+        });
+      });
+      expect(screen.queryByRole("heading", { name: "Account added" })).toBeNull();
+      expect(screen.queryByLabelText("Account nickname")).toBeNull();
+      expect(container.textContent).not.toContain("Captain's private nickname");
+      await act(async () => {
+        confirmation.resolve(saved);
+        await confirmation.promise;
+      });
+      if (saved) {
+        await waitFor(() => {
+          expect(screen.getByRole("article", { name: "Manage Account 1" })).toBeTruthy();
+        });
+      } else {
+        expect(screen.queryByRole("heading", { name: "Account added" })).toBeNull();
+        expect(screen.queryByLabelText("Account nickname")).toBeNull();
+        expect(container.textContent).not.toContain("Captain's private nickname");
+      }
+    },
+  );
 
   it("starts a fresh wizard when Add reopens settings on the same connection section", async () => {
     window.location.hash = "#/settings/connect/request-1";
@@ -467,6 +503,26 @@ describe("Provider → Connect → Verify", () => {
 });
 
 describe("manage accounts navigation", () => {
+  it.each([
+    ["General", "general"],
+    ["Appearance", "appearance"],
+    ["Notifications", "notifications"],
+    ["Privacy", "privacy"],
+    ["Diagnostics", "diagnostics"],
+  ])("keeps the plain hash when requesting %s", async (label, tab) => {
+    window.history.replaceState(null, "", "#/settings/accounts");
+    render(<Harness actions={settingsActions()} />);
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    await waitFor(() => {
+      expect(window.location.hash).toBe(`#/settings/${tab}`);
+      expect(
+        screen.getByRole("button", { name: label }).getAttribute("aria-current"),
+      ).toBe("page");
+    });
+    fireEvent.click(screen.getByRole("button", { name: label }));
+    expect(window.location.hash).toBe(`#/settings/${tab}`);
+  });
+
   it("shows the management list again when Accounts is requested after a detail view", () => {
     const actions = settingsActions();
     render(<Harness actions={actions} />);

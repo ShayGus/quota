@@ -111,10 +111,9 @@ describe("pending connection acceptance", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "Verifying…" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Account added" })).toBeDefined();
-    expect(
-      screen.getByRole<HTMLButtonElement>("button", { name: "Manage accounts" }).disabled,
-    ).toBe(false);
+    expect(screen.queryByRole("heading", { name: "Account added" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Manage accounts" })).toBeNull();
+    expect(screen.queryByLabelText("Account nickname")).toBeNull();
   });
 
   it("releases the controls after acceptance is refused", async () => {
@@ -196,7 +195,7 @@ describe("settings connection session", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Add account" })).toBeDefined();
     });
-    expect(actions.cancelConnection).not.toHaveBeenCalled();
+    expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({ id: "attempt" });
   });
 });
 

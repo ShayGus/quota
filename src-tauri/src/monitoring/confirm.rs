@@ -147,6 +147,7 @@ pub(super) async fn commit_pending(
     let Some(pending) = runtime.pending.take(attempt_id).await else {
         return Err(CommandError::AccountNotFound);
     };
+    let _commit = runtime.state.commit.lock().await;
     let PendingConnection {
         candidate,
         request,

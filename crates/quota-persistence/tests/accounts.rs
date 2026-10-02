@@ -195,7 +195,8 @@ async fn an_account_records_its_verified_identity_and_fetch_state() {
         .record_attempt(
             &AccountId::new("acct-1").unwrap(),
             FetchState::Idle,
-            support::at(3),
+            Some(support::at(3)),
+            Some(support::at(3)),
             Some(support::at(4)),
         )
         .await

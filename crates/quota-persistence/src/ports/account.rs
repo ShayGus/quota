@@ -152,18 +152,17 @@ impl SqliteAccountPortAdapter {
                 .await
                 .map_err(|e| map_error(&e))?;
         }
-        if let Some(attempted_at) = account.last_attempt_at.or(account.last_success_at) {
-            self.repositories
-                .accounts()
-                .record_attempt(
-                    &account.account_id,
-                    account.fetch_state,
-                    attempted_at,
-                    account.next_attempt_at,
-                )
-                .await
-                .map_err(|e| map_error(&e))?;
-        }
+        self.repositories
+            .accounts()
+            .record_attempt(
+                &account.account_id,
+                account.fetch_state,
+                account.last_attempt_at,
+                account.last_success_at,
+                account.next_attempt_at,
+            )
+            .await
+            .map_err(|e| map_error(&e))?;
         Ok(())
     }
 

@@ -92,8 +92,12 @@ export function Settings({
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
   const navigate = useCallback((next: SettingsTab | "connect"): void => {
-    requestedRoutes += 1;
-    window.location.hash = `#/settings/${next}/${requestedRoutes}`;
+    if (next === "accounts" || next === "connect") {
+      requestedRoutes += 1;
+      window.location.hash = `#/settings/${next}/${requestedRoutes}`;
+    } else {
+      window.location.hash = `#/settings/${next}`;
+    }
   }, []);
   const now = useNow();
   const preferences = state.preferences;
