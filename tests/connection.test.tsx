@@ -195,6 +195,54 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.queryByText("Home")).toBeNull();
   });
 
+  it.each([
+    ["Codex", "codex login"],
+    ["Claude", "Run claude in a terminal"],
+    ["OpenCode Go", "Sign in with OpenCode"],
+  ])(
+    "guides a first %s connection through its own sign-in tool",
+    async (provider, tool) => {
+      acceptSnapshot(snapshot("instance-1", 2, []));
+      const actions = settingsActions();
+      render(<Harness actions={actions} />);
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${provider}`) }));
+      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 2,
+          progress: {
+            kind: "failed",
+            context: { error: { kind: "reconnect_required" } },
+          },
+        });
+      });
+      const recovery = screen.getByRole("alert").textContent;
+      expect(recovery).toContain(tool);
+      expect(recovery).toContain("press Connect again");
+      expect(recovery).not.toContain("Reconnect that account");
+      expect(screen.getByRole("button", { name: "Connect" })).toHaveProperty(
+        "disabled",
+        false,
+      );
+      expect(getRendererState().snapshot?.accounts).toHaveLength(0);
+      vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
+      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(actions.beginConnection).toHaveBeenCalledTimes(2);
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-2",
+          revision: 2,
+          progress: { kind: "verified", context: { state: "connected" } },
+        });
+      });
+      expect(
+        screen.getByRole("heading", { name: "Verify your connection" }),
+      ).toBeTruthy();
+    },
+  );
+
   it("shows connection failures and cancels a running attempt by its identity", async () => {
     const actions = settingsActions();
     render(<Harness actions={actions} />);
@@ -229,9 +277,12 @@ describe("Provider → Connect → Verify", () => {
         attempt_id: "attempt-1",
       });
     });
-    const actions = {
+    const actions: SettingsActions = {
       ...settingsActions(),
-      beginConnection: hostActions.beginConnection.bind(hostActions),
+      beginConnection: async (request) => {
+        const accepted = await hostActions.beginConnection(request);
+        return accepted === null ? null : { id: accepted.attempt_id };
+      },
     };
     render(<Harness actions={actions} />);
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));

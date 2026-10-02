@@ -1,6 +1,6 @@
 import { useState, type JSX } from "react";
 
-import type { AttemptRef, ProviderId } from "../../generated/bindings";
+import type { AttemptRef } from "../../generated/bindings";
 import { accountLabel, displayName } from "../../shared/format/alias";
 import { formatRemaining, hasReading } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
@@ -12,6 +12,15 @@ import type { SettingsActions } from "./Settings";
 
 const PROVIDERS = ["codex", "claude", "open_code_go"] as const;
 
+const AUTHENTICATION_RECOVERY = {
+  codex:
+    "Codex sign-in is required. Open a terminal, run codex login, then press Connect again.",
+  claude:
+    "Claude Code sign-in is required. Run claude in a terminal, sign in, then press Connect again.",
+  open_code_go:
+    "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
+};
+
 export function ConnectionWizard({
   state,
   actions,
@@ -21,7 +30,7 @@ export function ConnectionWizard({
   readonly actions: SettingsActions;
   readonly onDone: () => void;
 }): JSX.Element {
-  const [provider, setProvider] = useState<ProviderId | null>(null);
+  const [provider, setProvider] = useState<(typeof PROVIDERS)[number] | null>(null);
   const [nickname, setNickname] = useState("Personal");
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
@@ -264,7 +273,9 @@ export function ConnectionWizard({
           ) : null}
           {progress?.kind === "failed" ? (
             <p className="note" role="alert">
-              {describeCommandError(progress.context.error)}
+              {progress.context.error.kind === "reconnect_required"
+                ? AUTHENTICATION_RECOVERY[provider]
+                : describeCommandError(progress.context.error)}
             </p>
           ) : null}
           {progress?.kind === "cancelled" ? (

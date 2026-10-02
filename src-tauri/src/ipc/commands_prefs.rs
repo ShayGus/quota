@@ -6,6 +6,7 @@
 use quota_contracts::CommandError;
 use quota_contracts::preferences::Preferences;
 use quota_contracts::refs::AccountRef;
+use quota_core::ports::{OperationalPreferencesRepository, PreferenceRepository};
 use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::IndicatorStyle;
 use quota_domain::provider::ProviderId;
@@ -76,39 +77,13 @@ async fn persist_preferences_locked(
             actual: confirmed.revision,
         });
     }
-    let current =
-        state
-            .preferences
-            .load()
-            .await
-            .map_err(|error| CommandError::PersistenceUnavailable {
-                owner: error.owner.into(),
-            })?;
-    let current_operational = state
-        .operational_preferences
-        .load()
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    let mut presentation = crate::bootstrap_helpers::to_presentation(&preferences);
-    presentation.revision = current.revision.max(current_operational.revision);
-    let presentation = state
-        .preferences
-        .save(&presentation)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    let operational = crate::bootstrap_helpers::to_operational(&preferences, presentation.revision);
-    let operational = state
-        .operational_preferences
-        .save(&operational)
-        .await
-        .map_err(|error| CommandError::PersistenceUnavailable {
-            owner: error.owner.into(),
-        })?;
-    let confirmed = crate::bootstrap_helpers::from_persisted(&presentation, &operational);
+    let confirmed = persist_preference_owners(
+        state.preferences.as_ref(),
+        state.operational_preferences.as_ref(),
+        &preferences,
+        &confirmed,
+    )
+    .await?;
     *state.preferences_state.write().await = confirmed.clone();
     *state.policies.write().await = confirmed
         .polling
@@ -118,6 +93,55 @@ async fn persist_preferences_locked(
         .collect();
     crate::ipc::events::publish_preferences(&state.app, &state.app_instance_id, &confirmed);
     Ok(confirmed)
+}
+
+async fn persist_preference_owners(
+    presentation_repository: &dyn PreferenceRepository,
+    operational_repository: &dyn OperationalPreferencesRepository,
+    preferences: &Preferences,
+    confirmed: &Preferences,
+) -> Result<Preferences, CommandError> {
+    let current = presentation_repository.load().await.map_err(|error| {
+        CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        }
+    })?;
+    let operational = crate::bootstrap_helpers::to_operational(preferences, confirmed.revision);
+    let presentation_only =
+        operational == crate::bootstrap_helpers::to_operational(confirmed, confirmed.revision);
+    let current_operational = if presentation_only {
+        operational
+    } else {
+        operational_repository.load().await.map_err(|error| {
+            CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            }
+        })?
+    };
+    let mut presentation = crate::bootstrap_helpers::to_presentation(preferences);
+    presentation.revision = current.revision.max(current_operational.revision);
+    let presentation = presentation_repository
+        .save(&presentation)
+        .await
+        .map_err(|error| CommandError::PersistenceUnavailable {
+            owner: error.owner.into(),
+        })?;
+    let operational = if presentation_only {
+        current_operational
+    } else {
+        let operational =
+            crate::bootstrap_helpers::to_operational(preferences, presentation.revision);
+        operational_repository
+            .save(&operational)
+            .await
+            .map_err(|error| CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            })?
+    };
+    Ok(crate::bootstrap_helpers::from_persisted(
+        &presentation,
+        &operational,
+    ))
 }
 
 /// Saves one polling policy for a compiled provider.
@@ -203,3 +227,7 @@ pub async fn export_sanitized_diagnostics(
     let label = crate::bootstrap_helpers::safe_export_label(&destination);
     crate::bootstrap_helpers::write_diagnostics(&app, &state, &label).await
 }
+
+#[cfg(test)]
+#[path = "commands_prefs_tests.rs"]
+mod tests;
