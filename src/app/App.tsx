@@ -18,6 +18,7 @@ import {
   describeTransportFailure,
   launch,
 } from "../shared/ipc/report";
+import { getRendererState } from "../shared/state/store";
 import type { RendererFailure, RendererState } from "../shared/state/types";
 import { useRendererState } from "../shared/state/useRendererState";
 import { Icon } from "../shared/ui/Icon";
@@ -44,7 +45,12 @@ type View =
       readonly id: AccountId;
       readonly windowId: QuotaWindowId | null;
     }
-  | { readonly name: "connect"; readonly serial: number };
+  | {
+      readonly name: "connect";
+      readonly serial: number;
+      /** The hidden-report count when the wizard opened; see `surface`. */
+      readonly hiddenReports: number;
+    };
 
 /** The settings actions, wired to the typed commands. */
 const settingsActions: SettingsActions = {
@@ -181,24 +187,24 @@ function Popover({
       ? (state.snapshot.accounts.find((candidate) => candidate.account_id === view.id) ??
         null)
       : null;
-  const surface = view.name === "detail" && account === null ? "overview" : view.name;
+  // Hiding the popover, by its Hide button, the window's close, or a tray
+  // popover losing focus, ends the wizard: one opened before the latest hidden
+  // report is no longer shown, and its cleanup discards a pending account, so
+  // reopening never offers it again. A confirmation already in flight still
+  // finishes.
+  const wizardEnded =
+    view.name === "connect" && view.hiddenReports !== state.hiddenReports;
+  const surface =
+    (view.name === "detail" && account === null) || wizardEnded ? "overview" : view.name;
 
   const openConnect = (): void => {
     wizardRequests += 1;
-    setView({ name: "connect", serial: wizardRequests });
+    setView({
+      name: "connect",
+      serial: wizardRequests,
+      hiddenReports: state.hiddenReports,
+    });
   };
-
-  // Hiding the popover, by its Hide button, the window's close, or a tray
-  // popover losing focus, leaves the wizard. The wizard's cleanup then discards
-  // a pending account, so reopening never offers it again; a confirmation
-  // already in flight still finishes. Every hidden report counts, not only a
-  // change, because the popover can be shown again without one.
-  const nativeWindow = state.nativeWindow;
-  useEffect(() => {
-    if (nativeWindow?.kind === "confirmed" && !nativeWindow.value.visible) {
-      setView((current) => (current.name === "connect" ? { name: "overview" } : current));
-    }
-  }, [nativeWindow]);
 
   useEffect(() => {
     // Fit returns the overview to its default state: all accounts, no detail.
@@ -221,7 +227,11 @@ function Popover({
           setView({ name: "detail", id: target.accountId, windowId: target.windowId });
         } else if (target.view === "connect") {
           wizardRequests += 1;
-          setView({ name: "connect", serial: wizardRequests });
+          setView({
+            name: "connect",
+            serial: wizardRequests,
+            hiddenReports: getRendererState().hiddenReports,
+          });
         } else {
           setView({ name: "overview" });
         }
@@ -284,7 +294,7 @@ function Popover({
         }}
       />
       <main className="app-main">
-        {view.name === "connect" ? (
+        {view.name === "connect" && surface === "connect" ? (
           <FeatureBoundary surface="add account">
             <ConnectionWizard
               key={view.serial}

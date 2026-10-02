@@ -44,6 +44,12 @@ export interface RendererState {
   readonly persistence: PersistenceStatus | null;
   readonly preferences: Preferences | null;
   readonly nativeWindow: OverviewWindowState | null;
+  /**
+   * How many times the host has reported the overview hidden. Every report
+   * counts, even a repeat, because the overview can be shown again by paths
+   * that report nothing; a surface opened before the latest report is gone.
+   */
+  readonly hiddenReports: number;
   readonly attempts: readonly AttemptProgress[];
   /** The account order currently displayed. Presentation only. */
   readonly appliedOrder: readonly AccountId[];
@@ -60,6 +66,7 @@ export const initialRendererState: RendererState = {
   persistence: null,
   preferences: null,
   nativeWindow: null,
+  hiddenReports: 0,
   attempts: [],
   appliedOrder: [],
   pendingOrder: null,
