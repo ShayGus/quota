@@ -178,9 +178,15 @@ docs/publish-x11-client-list.py 0x600010
 `libX11.so.6`, no Python packages. The X server keeps them after the process exits, so it
 is a one-off per launch, because the window ids change every launch.
 
-Pass one window id, the one to capture. `xcap` captures the first window whose title
-matches, and both of Quota's windows carry the same app name, so publishing both captures
-the settings window.
+Pass the window ids to capture; both can be published together. The inspection plugin
+disables application-name matching and resolves the requested window label to its distinct
+title: `Quota` for `overview`, and `Quota settings` for `settings`. Show the requested
+window before capturing it.
+
+To check window selection, show settings and publish both window ids. Request one
+`take_screenshot` with `window_label: "overview"` and another with
+`window_label: "settings"`; each must show the corresponding interface. Publish the
+same ids in reverse order and repeat; neither requested interface should change.
 
 `take_screenshot` scales the result to `max_width`, which defaults to 512. Pass
 `max_width` above the window width — 1400 for both windows — to get the image at its real

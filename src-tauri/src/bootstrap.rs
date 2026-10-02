@@ -469,7 +469,7 @@ fn with_agent_inspection(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<
     // The defaults start the socket server on a random authentication token,
     // which is written beside the socket as `/tmp/tauri-mcp.sock.token`.
     builder.plugin(tauri_plugin_mcp::init_with_config(
-        tauri_plugin_mcp::PluginConfig::new("Quota".to_string()),
+        tauri_plugin_mcp::PluginConfig::new(String::new()),
     ))
 }
 
