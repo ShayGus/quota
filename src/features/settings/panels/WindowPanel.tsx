@@ -1,9 +1,10 @@
 /**
  * General settings: when Quota runs and how the popover behaves.
  *
- * Pinning lives on the popover header. Keeping the pinned window on top is an
- * independent preference: changing it changes nothing else, not geometry, not
- * the chosen mode, not monitoring, not account order (spec 4.4, AC-57).
+ * Floating or docking lives on the popover header. Always on top is an
+ * independent preference that applies in both modes: changing it changes
+ * nothing else, not geometry, not the chosen mode, not monitoring, not account
+ * order (spec 4.4, AC-57).
  */
 import { useEffect, useState, type JSX } from "react";
 
@@ -110,12 +111,12 @@ export function WindowPanel({
         }
       />
       <SettingRow
-        label="Keep pinned window on top"
-        description="Separate from pinning. Pin the window from its header."
+        label="Always on top"
+        description="Keeps Quota above other windows, docked to the tray or floating."
         control={
           <Switch
             checked={preferences.always_on_top}
-            label="Keep pinned window on top"
+            label="Always on top"
             onChange={(next) => {
               actions.setAlwaysOnTop(next);
             }}

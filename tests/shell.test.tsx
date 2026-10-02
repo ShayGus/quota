@@ -127,12 +127,12 @@ describe("the colour scheme", () => {
 });
 
 describe("the pin and always-on-top controls", () => {
-  it("pins the popover as a floating window and sends nothing else", async () => {
+  it("floats the popover as a separate window and sends nothing else", async () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences({ overview_mode: "tray", always_on_top: false }));
     render(<App />);
 
-    const pin = screen.getByRole("button", { name: "Pin as a floating window" });
+    const pin = screen.getByRole("button", { name: "Float as a separate window" });
     expect(pin.getAttribute("aria-pressed")).toBe("false");
     await act(async () => {
       pin.click();
@@ -143,27 +143,27 @@ describe("the pin and always-on-top controls", () => {
       expect(commandsMatching("set_overview_mode")).toHaveLength(1);
     });
     expect(commandsMatching("set_overview_mode")[0]?.args).toEqual({ mode: "floating" });
-    // Pinning never changes topmost: that is a separate setting.
+    // Floating never changes topmost: that is a separate setting.
     expect(mutatingCommands()).toEqual(["set_overview_mode"]);
   });
 
-  it("states the pinned state in words as well as in colour", () => {
+  it("states the floating state in words as well as in colour", () => {
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences({ overview_mode: "floating" }));
     render(<App />);
 
-    expect(screen.getByText("Pinned")).toBeTruthy();
-    const pin = screen.getByRole("button", { name: "Unpin window" });
+    expect(screen.getByText("Floating")).toBeTruthy();
+    const pin = screen.getByRole("button", { name: "Dock to the tray" });
     expect(pin.getAttribute("aria-pressed")).toBe("true");
   });
 
-  it("keeps the pinned window on top from settings, sending only that preference", async () => {
+  it("keeps the window on top from settings in either mode, sending only that preference", async () => {
     window.location.hash = "#/settings/general";
     acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
     acceptPreferences(preferences({ always_on_top: false }));
     render(<App />);
 
-    const topmost = screen.getByRole("switch", { name: "Keep pinned window on top" });
+    const topmost = screen.getByRole("switch", { name: "Always on top" });
     await act(() => fireEvent.click(topmost));
     // Tauri names command arguments after the Rust parameter.
     expect(commandsMatching("set_overview_always_on_top")[0]?.args).toEqual({
@@ -252,7 +252,7 @@ describe("approved control actions", () => {
     acceptPreferences(preferences());
     render(<App />);
     act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Unpin window" }));
+      fireEvent.click(screen.getByRole("button", { name: "Dock to the tray" }));
       fireEvent.click(screen.getByRole("button", { name: "Hide popover" }));
       fireEvent.click(screen.getByRole("button", { name: "Add account" }));
     });

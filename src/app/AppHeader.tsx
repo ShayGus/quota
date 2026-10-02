@@ -72,7 +72,7 @@ export function AppHeader({
         </div>
       </div>
       <div className="app-actions">
-        {pinned ? <span className="pin-label">Pinned</span> : null}
+        {pinned ? <span className="pin-label">Floating</span> : null}
         <button
           type="button"
           className="icon-btn"
@@ -87,8 +87,8 @@ export function AppHeader({
           type="button"
           className={`icon-btn${pinned ? " active" : ""}`}
           aria-pressed={pinned}
-          aria-label={pinned ? "Unpin window" : "Pin as a floating window"}
-          title={pinned ? "Unpin" : "Pin as a floating window"}
+          aria-label={pinned ? "Dock to the tray" : "Float as a separate window"}
+          title={pinned ? "Dock to the tray" : "Float as a separate window"}
           onClick={() => {
             launch(actions.setOverviewMode(pinned ? "tray" : "floating"));
           }}
