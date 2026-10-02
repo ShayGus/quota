@@ -8,3 +8,8 @@ allow-expect-in-tests = true
 # `unwrap_used = "deny"`, so no shipped path can panic this way.
 allow-unwrap-in-tests = true
 allow-panic-in-tests = true
+# The stricter `indexing_slicing` and the already-denied `dbg_macro` reach test
+# fixtures for the same reason `unwrap` does: a fixture reads as prose with a
+# literal index. Production code keeps both lints on.
+allow-indexing-slicing-in-tests = true
+allow-dbg-in-tests = true

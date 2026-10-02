@@ -1,7 +1,5 @@
 //! Findings and the exit status a gate produces.
 
-use std::fmt::Write as _;
-
 /// One violation, with the file and line that produced it.
 #[derive(Debug)]
 pub(crate) struct Finding {
@@ -44,18 +42,17 @@ impl Outcome {
     /// Prints every note, then every finding, then the summary.
     #[must_use]
     pub(crate) fn report(&self, gate: &str) -> String {
-        let mut text = String::new();
+        let mut lines: Vec<String> = Vec::new();
         for note in &self.notes {
-            let _ = writeln!(text, "checked: {note}");
+            lines.push(format!("checked: {note}"));
         }
         for finding in &self.findings {
-            let _ = writeln!(
-                text,
+            lines.push(format!(
                 "{}:{}: {}",
                 finding.file, finding.line, finding.message
-            );
+            ));
         }
-        let _ = writeln!(text, "{gate}: {} finding(s)", self.findings.len());
-        text
+        lines.push(format!("{gate}: {} finding(s)", self.findings.len()));
+        format!("{}\n", lines.join("\n"))
     }
 }

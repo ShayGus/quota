@@ -147,23 +147,26 @@ mod tests {
         }
     }
 
+    /// The five-minute fixed-interval shape, shared by every fixture that needs it.
+    fn fixed_interval() -> FixedIntervalPolicy {
+        FixedIntervalPolicy {
+            visible_seconds: 300,
+            background_seconds: 300,
+            battery_saver_seconds: 900,
+            minimum_seconds: 300,
+        }
+    }
+
     /// A fixed-interval policy, for the same five-minute spacing.
     fn fixed_policy() -> ProviderPollingPolicy {
         ProviderPollingPolicy {
-            strategy: PollingStrategy::FixedInterval(FixedIntervalPolicy {
-                visible_seconds: 300,
-                background_seconds: 300,
-                battery_saver_seconds: 900,
-                minimum_seconds: 300,
-            }),
+            strategy: PollingStrategy::FixedInterval(fixed_interval()),
             ..policy()
         }
     }
 
     fn all_policies() -> [ProviderPollingPolicy; 4] {
-        let PollingStrategy::FixedInterval(base) = fixed_policy().strategy else {
-            unreachable!();
-        };
+        let base = fixed_interval();
         [
             policy(),
             fixed_policy(),

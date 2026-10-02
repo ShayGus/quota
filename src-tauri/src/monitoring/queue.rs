@@ -87,7 +87,7 @@ mod tests {
             receiver.recv().await.unwrap().reason,
             RefreshReason::Scheduled
         );
-        assert!(receiver.try_recv().is_err());
+        receiver.try_recv().unwrap_err();
     }
 
     #[tokio::test]

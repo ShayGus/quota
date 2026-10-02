@@ -366,9 +366,9 @@ mod tests {
         let adapter = FixtureAdapter::new();
         let mut binding = fixture_binding(FixtureProfile::Healthy);
         binding.profile_label = None;
-        assert!(adapter.profile_for(&binding).is_err());
+        adapter.profile_for(&binding).unwrap_err();
         binding.profile_label = Some("not-a-profile".to_owned());
-        assert!(adapter.profile_for(&binding).is_err());
+        adapter.profile_for(&binding).unwrap_err();
     }
 
     #[test]

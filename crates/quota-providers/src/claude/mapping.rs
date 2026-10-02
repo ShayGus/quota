@@ -141,7 +141,7 @@ fn limit_category(limit: &ClaudeLimit) -> QuotaCategory {
 fn semantic_bucket(limit: &ClaudeLimit) -> String {
     let model_id = model_id(limit);
     let group = limit.group.as_deref().or(limit.kind.as_deref());
-    let base = decode::identifier(group.unwrap_or(model_id.unwrap_or("account")));
+    let base = decode::identifier(group.unwrap_or_else(|| model_id.unwrap_or("account")));
     match model_id {
         Some(model) if group.is_some() => format!("{base}-{}", decode::identifier(model)),
         _ => base,

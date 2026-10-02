@@ -24,7 +24,7 @@ pub(super) async fn run_coordinator(
     let mut timer = interval_at(start, PERIODIC_REFRESH);
     timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut workers = JoinSet::new();
-    let _ = runtime.request_all(RefreshReason::Scheduled).await;
+    on_scheduled_tick(&runtime).await;
 
     loop {
         tokio::select! {
@@ -55,9 +55,14 @@ fn shutdown_requested(shutdown: &watch::Receiver<bool>, changed_failed: bool) ->
     changed_failed || *shutdown.borrow()
 }
 
-/// Queues every enabled account after a periodic tick fires.
+/// Queues every enabled account, reporting a refusal instead of hiding it.
 async fn on_scheduled_tick(runtime: &MonitoringRuntime) {
-    let _ = runtime.request_all(RefreshReason::Scheduled).await;
+    if let Err(error) = runtime.request_all(RefreshReason::Scheduled).await {
+        tracing::warn!(
+            code = error.diagnostic_code(),
+            "the scheduled refresh was not queued"
+        );
+    }
 }
 
 /// Spawns one supervised read under the global two-read budget.

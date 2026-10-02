@@ -166,6 +166,13 @@ bun tauri build        # release bundles
   event text such as a pull-request title or a branch name.
 - Production code denies `unwrap`, `expect`, `panic!`, `todo!`, and `unimplemented!`.
   Tests may use them; see `docs/exceptions.md`.
+- Production code also warns on the shapes that panic or fail silently around those
+  macros: `indexing_slicing`, `string_slice`, `unreachable`, `get_unwrap`,
+  `unwrap_in_result`, `panic_in_result_fn`, `let_underscore_must_use`, `unused_result_ok`,
+  `map_err_ignore`, and `assertions_on_result_states`. CI runs clippy with `-D warnings`,
+  so a warn-level lint fails the build. Rewrite the site first; an
+  `#[expect(..., reason = "...")]` is for the case where the rewrite is genuinely worse,
+  and that reason belongs in `docs/exceptions.md`.
 - An `#[expect(...)]` that stops firing is a warning, because
   `unfulfilled_lint_expectations = "warn"`. Do not add a blanket `#[allow(...)]`.
 

@@ -52,7 +52,9 @@ impl AttemptReporter {
                 attempt_revision: revision,
                 progress,
             });
-        let _ = event.emit_to(&state.app, "settings");
+        if event.emit_to(&state.app, "settings").is_err() {
+            tracing::warn!("connection progress was not delivered to the settings window");
+        }
     }
     async fn next_revision(&self, progress: &ConnectionProgress) -> Option<u32> {
         let mut next_revision = self.revision.lock().await;
@@ -315,7 +317,9 @@ async fn commit_candidate(
         // The account is only durable if this succeeded, so the registration it
         // made is withdrawn rather than left in memory alone.
         let mut registry = runtime.state.registry.write().await;
-        let _ = registry.remove(&ids.account_id);
+        if let Err(error) = registry.remove(&ids.account_id) {
+            tracing::warn!(code = %error, "the rolled-back account was still registered in memory");
+        }
         return Err(CommandError::PersistenceUnavailable {
             owner: error.owner.to_owned(),
         });

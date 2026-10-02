@@ -166,11 +166,8 @@ fn check_union_declarations(root: &Path, directory: &Path, tree: &str, outcome: 
 
 /// Returns the union name when a line declares an IPC command or event type.
 fn ipc_union_name(line: &str) -> Option<String> {
-    let trimmed = line.trim();
-    if !trimmed.starts_with("pub enum ") {
-        return None;
-    }
-    let name = trimmed["pub enum ".len()..]
+    let name = line.trim().strip_prefix("pub enum ")?;
+    let name = name
         .split(|character: char| !character.is_alphanumeric())
         .next()?;
     UNION_MARKERS

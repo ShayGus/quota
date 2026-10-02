@@ -4,6 +4,10 @@
 //! the workspace's test-mode allowance does not reach it.
 
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test fixtures assert the setup they build, so a broken fixture must fail loudly"
 )]

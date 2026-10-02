@@ -19,6 +19,14 @@
 //! either owner.
 
 #![forbid(unsafe_code)]
+// `SQLx` and JSON failures are mapped onto this crate's closed
+// `PersistenceError`, whose variant is the contract the desktop host renders.
+// Driver text never reaches that surface, so each mapping discards it on
+// purpose.
+#![expect(
+    clippy::map_err_ignore,
+    reason = "PersistenceError's variant is the rendered contract; SQLx text is not"
+)]
 
 pub mod error;
 pub mod ports;

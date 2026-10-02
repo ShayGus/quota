@@ -138,10 +138,10 @@ mod tests {
 
     #[test]
     fn rejects_non_finite_values() {
-        assert!(Percent::new(f64::NAN).is_err());
-        assert!(Percent::new(f64::INFINITY).is_err());
-        assert!(Percent::from_counts(1.0, 0.0).is_err());
-        assert!(Percent::from_counts(1.0, f64::NEG_INFINITY).is_err());
+        Percent::new(f64::NAN).unwrap_err();
+        Percent::new(f64::INFINITY).unwrap_err();
+        Percent::from_counts(1.0, 0.0).unwrap_err();
+        Percent::from_counts(1.0, f64::NEG_INFINITY).unwrap_err();
     }
 
     #[test]
@@ -175,8 +175,8 @@ mod tests {
 
     #[test]
     fn deserialization_rejects_non_numeric_text() {
-        assert!(serde_json::from_str::<Percent>("12.5").is_ok());
-        assert!(serde_json::from_str::<Percent>("\"NaN\"").is_err());
-        assert!(serde_json::from_str::<Percent>("null").is_err());
+        serde_json::from_str::<Percent>("12.5").unwrap();
+        serde_json::from_str::<Percent>("\"NaN\"").unwrap_err();
+        serde_json::from_str::<Percent>("null").unwrap_err();
     }
 }

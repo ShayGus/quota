@@ -41,7 +41,7 @@ impl ProviderId {
         Self::ALL
             .into_iter()
             .find(|id| id.as_str() == name)
-            .ok_or(UnsupportedProvider(name.into()))
+            .ok_or_else(|| UnsupportedProvider(name.into()))
     }
 
     /// The stable wire name of this provider.

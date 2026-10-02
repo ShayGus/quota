@@ -4,6 +4,10 @@
 //! plugin and a shipping artifact, so each way it could leak is a test. The
 //! gate is driven through its own `--root` option and its exit status, which is
 //! what CI and every developer see.
+#![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
 
 use std::fs;
 use std::path::{Path, PathBuf};

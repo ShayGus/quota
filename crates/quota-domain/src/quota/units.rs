@@ -145,28 +145,28 @@ mod tests {
 
     #[test]
     fn currency_requires_three_uppercase_letters() {
-        assert!(CurrencyCode::new("USD").is_ok());
-        assert!(CurrencyCode::new("usd").is_err());
-        assert!(CurrencyCode::new("US").is_err());
-        assert!(CurrencyCode::new("USDD").is_err());
+        CurrencyCode::new("USD").unwrap();
+        CurrencyCode::new("usd").unwrap_err();
+        CurrencyCode::new("US").unwrap_err();
+        CurrencyCode::new("USDD").unwrap_err();
     }
 
     #[test]
     fn currency_deserialization_enforces_validation() {
-        assert!(serde_json::from_str::<CurrencyCode>("\"EUR\"").is_ok());
-        assert!(serde_json::from_str::<CurrencyCode>("\"eur\"").is_err());
+        serde_json::from_str::<CurrencyCode>("\"EUR\"").unwrap();
+        serde_json::from_str::<CurrencyCode>("\"eur\"").unwrap_err();
     }
 
     #[test]
     fn custom_unit_is_validated() {
-        assert!(UnitSymbol::new("agent-seconds").is_ok());
-        assert!(UnitSymbol::new(" ").is_err());
+        UnitSymbol::new("agent-seconds").unwrap();
+        UnitSymbol::new(" ").unwrap_err();
     }
 
     #[test]
     fn precision_is_bounded() {
-        assert!(DecimalPrecision::new(9).is_ok());
-        assert!(DecimalPrecision::new(10).is_err());
+        DecimalPrecision::new(9).unwrap();
+        DecimalPrecision::new(10).unwrap_err();
     }
 
     #[test]

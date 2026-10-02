@@ -14,7 +14,7 @@ async fn read_endpoints(statuses: &[(&str, &str)]) -> Result<DecodedUsage, Provi
         for (status, body) in replies {
             let (mut stream, _) = listener.accept().unwrap();
             let mut request = [0; 4096];
-            let _ = stream.read(&mut request);
+            let _read = stream.read(&mut request);
             write!(stream, "HTTP/1.1 {status}\r\nRetry-After: 60\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
         }
     });

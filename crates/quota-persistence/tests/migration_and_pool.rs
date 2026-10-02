@@ -4,6 +4,10 @@
 //! the workspace's test-mode allowance does not reach it.
 
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test fixtures assert the setup they build, so a broken fixture must fail loudly"
 )]
@@ -322,5 +326,5 @@ async fn pool_settings_reject_values_outside_their_bounds() {
         .unwrap_err(),
         PersistenceError::PoolUnavailable
     );
-    assert!(SqlitePoolSettings::new(2, StdDuration::from_secs(2)).is_ok());
+    SqlitePoolSettings::new(2, StdDuration::from_secs(2)).unwrap();
 }
