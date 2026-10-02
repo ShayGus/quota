@@ -134,6 +134,13 @@ export const actions = {
   async fitToAccounts(): Promise<void> {
     await reportAsync(commands.fitOverviewToAccounts());
   },
+  /**
+   * Asks the host to fit the popover's height to its content. The host decides
+   * the height and position inside the work area; a refusal is reported.
+   */
+  async fitOverviewHeight(contentHeight: number): Promise<void> {
+    await reportAsync(commands.fitOverviewHeight(Math.max(0, Math.round(contentHeight))));
+  },
   /** Returns the overview to a visible work area. */
   async resetPosition(): Promise<void> {
     await reportAsync(commands.resetOverviewPosition());

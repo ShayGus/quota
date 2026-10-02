@@ -138,6 +138,64 @@ pub async fn fit_overview_to_accounts(
     window::publish_state(&state.app, &state.app_instance_id, controller.state());
     result.map(window_state_response)
 }
+/// Fits the popover's height to its content, as the wireframe's popover does.
+///
+/// The renderer reports how tall its content is; the host decides the height
+/// and position inside the monitor's work area and records the geometry change,
+/// so the window is never moved outside the controller.
+#[tauri::command]
+#[specta::specta]
+pub async fn fit_overview_height(
+    state: State<'_, AppState>,
+    content_height: u32,
+) -> Result<WindowStateResponse, CommandError> {
+    use crate::platform::popover_height::{self, Placement, WorkArea};
+    let mut controller = state.window.lock().await;
+    let native = window::get(&state.app, "overview")?;
+    let monitor = native
+        .current_monitor()
+        .map_err(|_| window::failed("read_current_monitor"))?
+        .or(native
+            .primary_monitor()
+            .map_err(|_| window::failed("read_primary_monitor"))?)
+        .ok_or_else(|| window::failed("find_display"))?;
+    let area = monitor.work_area();
+    let scale = monitor.scale_factor();
+    let outer = native
+        .outer_size()
+        .map_err(|_| window::failed("read_window_size"))?;
+    let inner = native
+        .inner_size()
+        .map_err(|_| window::failed("read_window_size"))?;
+    let position = native
+        .outer_position()
+        .map_err(|_| window::failed("read_window_position"))?;
+    let fitted = popover_height::fit(
+        f64::from(content_height),
+        scale,
+        Placement {
+            outer_y: position.y,
+            outer_height: outer.height,
+            inner_height: inner.height,
+        },
+        WorkArea {
+            top: area.position.y,
+            height: area.size.height,
+        },
+        controller.state().mode == OverviewMode::Tray,
+    );
+    let width = f64::from(inner.width) / scale;
+    native
+        .set_size(LogicalSize::new(width, fitted.inner_height))
+        .map_err(|_| window::failed("fit_window_height"))?;
+    native
+        .set_position(PhysicalPosition::new(position.x, fitted.outer_y))
+        .map_err(|_| window::failed("fit_window_position"))?;
+    let confirmed = controller.record_geometry_change();
+    window::publish_state(&state.app, &state.app_instance_id, confirmed);
+    Ok(window_state_response(confirmed))
+}
+
 /// Restores a position known to be inside a surviving monitor's work area.
 #[tauri::command]
 #[specta::specta]

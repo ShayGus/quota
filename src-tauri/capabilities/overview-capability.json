@@ -30,6 +30,7 @@
     "allow-set-overview-mode",
     "allow-set-overview-always-on-top",
     "allow-fit-overview-to-accounts",
+    "allow-fit-overview-height",
     "allow-reset-overview-position",
     "allow-export-sanitized-diagnostics",
     "allow-reconnect-account",

@@ -87,6 +87,14 @@ export const commands = {
 	 *  may resize or relocate the window on its own.
 	 */
 	fitOverviewToAccounts: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_to_accounts")),
+	/**
+	 *  Fits the popover's height to its content, as the wireframe's popover does.
+	 * 
+	 *  The renderer reports how tall its content is; the host decides the height
+	 *  and position inside the monitor's work area and records the geometry change,
+	 *  so the window is never moved outside the controller.
+	 */
+	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
 	/**  Restores a position known to be inside a surviving monitor's work area. */
 	resetOverviewPosition: () => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("reset_overview_position")),
 	/**

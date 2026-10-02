@@ -5,6 +5,7 @@
 //! through a seam and so the renderer never holds a Tauri handle.
 
 pub mod autostart;
+pub mod popover_height;
 pub mod tray;
 pub mod window;
 mod window_transition;

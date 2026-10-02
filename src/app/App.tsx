@@ -254,7 +254,7 @@ function Popover({
 
   const pinned = state.preferences?.overview_mode === "floating";
   const root = useRef<HTMLDivElement | null>(null);
-  useFitContentHeight(root, !pinned);
+  useFitContentHeight(root);
 
   return (
     <div className={`window popover${pinned ? " pinned" : ""}`} ref={root}>
