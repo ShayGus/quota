@@ -126,7 +126,9 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
     const facts = document.querySelector(".detail-list")?.textContent ?? "";
     expect(facts).toContain("new@example.test");
-    expect(facts).toContain("1 window available");
+    // The reading being approved, not just a count of windows.
+    expect(facts).toContain("5-hour · Subscription");
+    expect(facts).toContain("72% remaining");
     // Nothing is saved yet: the account list is unchanged.
     expect(getRendererState().snapshot?.accounts).toHaveLength(1);
     const add = screen.getByRole("button", { name: "Add account" });

@@ -10,8 +10,9 @@
  */
 import { useEffect, useRef, useState, type JSX } from "react";
 
-import type { AttemptRef } from "../../generated/bindings";
+import type { AttemptRef, QuotaWindow } from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
+import { formatRemaining } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
 import type { RendererState } from "../../shared/state/types";
@@ -19,6 +20,7 @@ import { Icon } from "../../shared/ui/Icon";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { NicknameField } from "./Primitives";
 import type { SettingsActions } from "./Settings";
+import { windowLabel } from "../overview/reading";
 
 const PROVIDERS = ["codex", "claude", "open_code_go"] as const;
 
@@ -37,6 +39,22 @@ const AUTHENTICATION_RECOVERY = {
   open_code_go:
     "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
 };
+
+/**
+ * A verified window's name on Verify: its period and the allowance it measures,
+ * so two windows of one period stay distinct.
+ */
+function verifiedWindowName(window: QuotaWindow): string {
+  const period = windowLabel(window);
+  const scope = window.scope.label;
+  return scope === "" || scope === period ? period : `${period} · ${scope}`;
+}
+
+/** The reading being approved, in the words the overview uses. */
+function verifiedReading(window: QuotaWindow): string {
+  const value = formatRemaining(window.measurement);
+  return /\d/.test(value) ? `${value} remaining` : value;
+}
 
 /** The nickname a new account starts with, as the wireframe suggests it. */
 const DEFAULT_NICKNAME = "Personal";
@@ -207,7 +225,6 @@ export function ConnectionWizard({
     );
   } else if (candidate !== null) {
     const identity = candidate.identity;
-    const windows = candidate.windows.length;
     body = (
       <>
         <div className="success-icon">
@@ -232,14 +249,19 @@ export function ConnectionWizard({
               {alias ? "Workspace hidden" : (identity.workspace_label ?? "Not reported")}
             </dd>
           </div>
-          <div>
-            <dt>Quota reading</dt>
-            <dd>
-              {windows === 0
-                ? "Not reported"
-                : `${String(windows)} ${windows === 1 ? "window" : "windows"} available`}
-            </dd>
-          </div>
+          {candidate.windows.length === 0 ? (
+            <div>
+              <dt>Quota reading</dt>
+              <dd>Not reported</dd>
+            </div>
+          ) : (
+            candidate.windows.map((window) => (
+              <div key={window.id}>
+                <dt>{verifiedWindowName(window)}</dt>
+                <dd>{verifiedReading(window)}</dd>
+              </div>
+            ))
+          )}
         </dl>
         <NicknameField
           id="account-nickname"
