@@ -71,6 +71,7 @@ const settingsActions: SettingsActions = {
     return accepted === null ? null : { id: accepted.attempt_id };
   },
   cancelConnection: (attempt) => actions.cancelConnection(attempt),
+  confirmConnection: (attempt) => actions.confirmConnection(attempt),
   reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));

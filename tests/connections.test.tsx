@@ -26,6 +26,7 @@ function settingsActions(): SettingsActions {
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve(null)),
     cancelConnection: vi.fn(() => Promise.resolve()),
+    confirmConnection: vi.fn(() => Promise.resolve(true)),
     reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
     exportDiagnostics: vi.fn(),
@@ -110,16 +111,10 @@ describe("pending connection acceptance", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "Verifying…" })).toBeNull();
-    expect(screen.getByRole("heading", { name: "Verify your connection" })).toBeDefined();
-    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
-      "disabled",
-      true,
-    );
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "Manage accounts" })).toHaveProperty(
-      "disabled",
-      false,
-    );
+    expect(screen.getByRole("heading", { name: "Account added" })).toBeDefined();
+    expect(
+      screen.getByRole<HTMLButtonElement>("button", { name: "Manage accounts" }).disabled,
+    ).toBe(false);
   });
 
   it("releases the controls after acceptance is refused", async () => {

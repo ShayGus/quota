@@ -27,7 +27,20 @@ pub async fn begin_connection(
     state.monitor.begin_connection(request).await
 }
 
-/// Cancels one running local connection attempt.
+/// Saves the verified candidate one attempt is holding.
+///
+/// Nothing is written until this command runs, so declining a verified
+/// connection in the wizard leaves storage untouched.
+#[tauri::command]
+#[specta::specta]
+pub async fn confirm_connection(
+    state: State<'_, AppState>,
+    attempt_ref: AttemptRef,
+) -> Result<(), CommandError> {
+    state.monitor.confirm_connection(attempt_ref.id()).await
+}
+
+/// Cancels one running attempt, or discards one verified candidate.
 #[tauri::command]
 #[specta::specta]
 pub async fn cancel_connection(

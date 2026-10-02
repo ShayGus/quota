@@ -28,23 +28,23 @@ opens Provider → Connect → Verify in the settings window. Details retain Set
 Provider usage page, and Manage accounts. The overview explains ordering, clears hidden
 searches, and counts fully visible rows over the filtered rows.
 
-The connection wizard uses `begin_connection`, `cancel_connection`, and the existing
-attempt events; it never simulates verification. Each explicit Add account request opens a
-fresh connection route, including when settings was hidden on a completed attempt.
-Verification displays Account, Workspace, and Quota reading from the provider's saved
-account snapshots as they arrive, respecting account aliases. The attempt result does not
-name an account, so these records are labelled as saved provider accounts rather than
-attributed to this attempt. Provider sign-in and connection adapter implementation belong
-to the connection task.
+Every settings destination carries a fresh route id, so Manage accounts from the overview
+and the Accounts section from the settings nav both open the account management list
+rather than reusing a retained panel left on one account's details.
+
+The connection wizard uses `begin_connection`, `confirm_connection`, `cancel_connection`,
+and the existing attempt events; it never simulates verification. Each explicit Add
+account request opens a fresh connection route, including when settings was hidden on a
+completed attempt. A successful attempt verifies the provider identity and one quota
+reading and reports them as a pending candidate instead of saving anything, so the Verify
+step shows Account, Workspace, and Quota reading and asks the person to confirm the
+identity before adding this subscription to their overview. Nothing is written and no
+monitoring starts until Add account; Cancel discards the candidate, and a restart or an
+abandoned attempt leaves no account behind. The Hide account labels preference hides a
+pending identity the same way it hides a saved one. Provider sign-in and connection
+adapter implementation belong to the connection task.
 
 ## Known gaps
-
-Confirmation currently happens **after the host saves the account**, rather than before
-adding it to the overview. The owner explicitly deferred confirm-before-adding to a
-follow-up task after [Quota PR 4](https://github.com/ShayGus/quota/pull/4), which is
-rewriting the connection code, merges. This PR does not extend the host protocol. Attempt
-events provide connection state but no account ID, verified workspace, or quota reading;
-those details are available through saved account snapshots.
 
 Notifications now carry three independent alert switches, so 20%, 10%, and 0% are separate
 choices and deselecting one never writes a null percentage. Quiet hours are UTC.

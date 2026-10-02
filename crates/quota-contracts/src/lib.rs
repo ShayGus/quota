@@ -17,7 +17,8 @@ pub mod refs;
 
 pub use commands::{
     AccountSelection, BeginConnectionRequest, ConnectionAttemptAccepted, RefreshReason,
-    RegisteredProvider, SetAccountEnabledRequest, SnapshotResponse, WindowModeChange,
+    RegisteredProvider, SetAccountEnabledRequest, SnapshotResponse, VerifiedCandidate,
+    WindowModeChange,
 };
 pub use errors::CommandError;
 pub use events::{

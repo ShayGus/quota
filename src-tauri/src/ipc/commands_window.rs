@@ -211,14 +211,18 @@ pub async fn open_settings_window(
     destination: SettingsDestination,
 ) -> Result<(), CommandError> {
     let native = window::get(&state.app, "settings")?;
-    let script = match destination {
-        SettingsDestination::General => "window.location.hash = '#/settings';".to_owned(),
-        SettingsDestination::Accounts => "window.location.hash = '#/settings/accounts';".to_owned(),
-        SettingsDestination::Connect => format!(
-            "window.location.hash = '#/settings/connect/{}';",
-            uuid::Uuid::new_v4()
-        ),
+    // Every destination carries a fresh route id. Asking for a section the
+    // window already shows would otherwise reuse the unchanged hash and leave
+    // the previous visit's selection on screen.
+    let section = match destination {
+        SettingsDestination::General => "general/",
+        SettingsDestination::Accounts => "accounts/",
+        SettingsDestination::Connect => "connect/",
     };
+    let script = format!(
+        "window.location.hash = '#/settings/{section}{}';",
+        uuid::Uuid::new_v4()
+    );
     native
         .eval(&script)
         .map_err(|_| window::failed("navigate_settings"))?;

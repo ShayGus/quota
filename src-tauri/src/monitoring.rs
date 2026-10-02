@@ -23,6 +23,7 @@ use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::snapshot::MonitoringState;
 use tokio::sync::{Semaphore, mpsc, watch};
 
+use confirm::PendingConnections;
 use connection::AttemptReporter;
 
 /// The live handle to one connection attempt.
@@ -37,6 +38,7 @@ struct AttemptHandle {
     reporter: Arc<AttemptReporter>,
 }
 
+mod confirm;
 mod connection;
 mod policy;
 mod queue;
@@ -103,6 +105,8 @@ pub struct MonitoringRuntime {
     shutdown: watch::Sender<bool>,
     attempts: Arc<tokio::sync::Mutex<HashMap<ConnectionAttemptId, AttemptHandle>>>,
     connection_gate: Arc<tokio::sync::Mutex<()>>,
+    /// Verified candidates waiting for the person's decision, not yet saved.
+    pending: PendingConnections,
     state: RuntimeState,
 }
 
@@ -160,6 +164,7 @@ impl MonitoringRuntime {
             shutdown,
             attempts: Arc::new(tokio::sync::Mutex::new(HashMap::new())),
             connection_gate: Arc::new(tokio::sync::Mutex::new(())),
+            pending: PendingConnections::default(),
             state,
         };
         tauri::async_runtime::spawn(worker::run_coordinator(
@@ -289,26 +294,47 @@ impl MonitoringRuntime {
         })
     }
 
-    /// Cancels one active connection attempt.
+    /// Cancels one active attempt, or discards one verified candidate.
+    ///
+    /// A candidate the person has not confirmed is dropped with nothing stored,
+    /// so declining a verified connection leaves no account behind.
     pub async fn cancel_connection(
         &self,
         attempt_id: &ConnectionAttemptId,
     ) -> Result<(), quota_contracts::CommandError> {
         // Taken before the flag is set and before Cancelled is reported, so an
         // attempt that is already committing finishes first and is reported as
-        // verified rather than cancelled, and one that has not reached the gate
-        // sees the flag and stops.
+        // verified rather than cancelled, one that has not reached the gate
+        // sees the flag and stops, and no candidate can be held between this
+        // removal and the removal below.
         let _connection_gate = self.connection_gate.lock().await;
         let handle = self.attempts.lock().await.remove(attempt_id);
-        let Some(handle) = handle else {
-            return Err(CommandError::Cancelled);
+        let candidate = self.pending.take(attempt_id).await;
+        let reporter = match handle {
+            Some(handle) => {
+                handle.cancel.send_replace(true);
+                handle.reporter
+            }
+            None => match candidate {
+                Some(candidate) => candidate.reporter,
+                None => return Err(CommandError::Cancelled),
+            },
         };
-        handle.cancel.send_replace(true);
-        handle
-            .reporter
+        reporter
             .emit(&self.state, attempt_id, ConnectionProgress::Cancelled)
             .await;
         Ok(())
+    }
+
+    /// Saves the verified candidate one attempt is holding, then starts it.
+    ///
+    /// This is the only step that persists a new account, so a candidate that
+    /// is never confirmed leaves storage untouched.
+    pub async fn confirm_connection(
+        &self,
+        attempt_id: &ConnectionAttemptId,
+    ) -> Result<(), quota_contracts::CommandError> {
+        confirm::commit_pending(self, attempt_id).await
     }
 
     /// Takes the one boundary every durable account change shares.

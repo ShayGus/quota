@@ -77,12 +77,13 @@ credential is missing or rejected, follow the provider-specific recovery guidanc
 - OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
   environment.
 
-After signing in, press Connect again. On Verify, review the saved provider accounts,
-check the review acknowledgement, and choose Manage accounts. See the
-[confirmation limitation](docs/ui-fidelity/README.md#known-gaps) before connecting. Cancel
-leaves the wizard; starting a new Add account request opens a fresh wizard.
-[Provider credential discovery](docs/providers.md) owns the supported locations and
-overrides, including Windows defaults that work without `HOME`.
+After signing in, press Connect again. On Verify, review the verified Account, Workspace,
+and Quota reading, then choose Add account to add this subscription to your overview.
+Nothing is saved and no monitoring starts before that choice; Cancel discards the verified
+result, and so does restarting the app. With Hide account labels enabled, a pending
+identity is replaced exactly as a saved one is. Starting a new Add account request opens a
+fresh wizard. [Provider credential discovery](docs/providers.md) owns the supported
+locations and overrides, including Windows defaults that work without `HOME`.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any
 backoff deadline. Checks that do not send a request leave the due time unchanged. The

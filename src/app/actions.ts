@@ -20,7 +20,7 @@ import {
   type SettingsDestination,
 } from "../generated/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { reportAsync } from "../shared/ipc/report";
+import { reportAsync, reportSettled } from "../shared/ipc/report";
 import { acceptAttempt, clearAttempt, getRendererState } from "../shared/state/store";
 
 /** The renderer's command surface. Every function awaits its own failure path. */
@@ -85,9 +85,20 @@ export const actions = {
   async reconnectAccount(accountId: AccountId): Promise<void> {
     await reportAsync(commands.reconnectAccount({ id: accountId }));
   },
-  /** Cancels one live attempt. Cancellation is a deliberate result, not a failure. */
+  /** Cancels a live attempt or discards a verified candidate. Neither is a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {
     await reportAsync(commands.cancelConnection(attempt));
+  },
+  /**
+   * Saves the verified candidate the person confirmed, and answers whether it
+   * was saved.
+   *
+   * Nothing is written before this call, so a candidate that is never confirmed
+   * leaves no account behind. The wizard stays on the review step when the
+   * answer is false.
+   */
+  async confirmConnection(attempt: AttemptRef): Promise<boolean> {
+    return reportSettled(commands.confirmConnection(attempt));
   },
   /** Moves the overview between floating and tray mode. */
   async setOverviewMode(mode: OverviewMode): Promise<void> {

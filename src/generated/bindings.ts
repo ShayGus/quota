@@ -33,8 +33,15 @@ export const commands = {
 	refreshAccounts: (selection: AccountSelection, reason: RefreshReason) => typedError<AccountId[], CommandError>(__TAURI_INVOKE("refresh_accounts", { selection, reason })),
 	/**  Starts one cancellable local-credential connection attempt. */
 	beginConnection: (request: BeginConnectionRequest) => typedError<ConnectionAttemptAccepted, CommandError>(__TAURI_INVOKE("begin_connection", { request })),
-	/**  Cancels one running local connection attempt. */
+	/**  Cancels one running attempt, or discards one verified candidate. */
 	cancelConnection: (attemptRef: AttemptRef) => typedError<null, CommandError>(__TAURI_INVOKE("cancel_connection", { attemptRef })),
+	/**
+	 *  Saves the verified candidate one attempt is holding.
+	 * 
+	 *  Nothing is written until this command runs, so declining a verified
+	 *  connection in the wizard leaves storage untouched.
+	 */
+	confirmConnection: (attemptRef: AttemptRef) => typedError<null, CommandError>(__TAURI_INVOKE("confirm_connection", { attemptRef })),
 	/**  Re-verifies one account under a new generation and queues a fresh read. */
 	reconnectAccount: (accountRef: AccountRef) => typedError<number, CommandError>(__TAURI_INVOKE("reconnect_account", { accountRef })),
 	/**  Saves committed preferences and returns what was actually persisted. */
@@ -362,7 +369,16 @@ export type ConnectionProgress =
 { kind: "started" } | 
 /**  The provider asked the user to do something. */
 { kind: "awaiting_user" } | 
-/**  The attempt produced a verified binding. */
+/**
+ *  The attempt verified an identity and is waiting for a decision.
+ * 
+ *  Nothing is stored and no monitoring starts until the person confirms.
+ */
+{ kind: "awaiting_confirmation"; context: {
+	/**  The verified identity, which is not saved yet. */
+	candidate: VerifiedCandidate,
+} } | 
+/**  The person confirmed the candidate and the account is now saved. */
 { kind: "verified"; context: {
 	/**  The verified connection state. */
 	state: ConnectionState,
@@ -1154,6 +1170,22 @@ export type UnrankedReason =
 "monitoring_paused" | 
 /**  No included allowance applies to this account. */
 "no_included_allowance";
+
+/**
+ *  A verified identity held for the person's decision, and not yet saved.
+ *  Nothing about this type names a stored account, so a candidate that is never
+ *  confirmed leaves no account behind. It carries no secret material.
+ */
+export type VerifiedCandidate = {
+	/**  The adapter that reported this identity. */
+	provider_id: ProviderId,
+	/**  The nickname the person asked for. Presentation only. */
+	nickname: string,
+	/**  The provider-verified principal, workspace, plan, and source. */
+	identity: VerifiedIdentity,
+	/**  The quota reading this attempt verified. */
+	windows: QuotaWindow[],
+};
 
 /**  A provider-verified identity, shown for confirmation. */
 export type VerifiedIdentity = {

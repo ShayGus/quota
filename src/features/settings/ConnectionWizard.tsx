@@ -1,7 +1,7 @@
 import { useState, type JSX } from "react";
 
 import type { AttemptRef } from "../../generated/bindings";
-import { accountLabel, displayName } from "../../shared/format/alias";
+import { accountLabel } from "../../shared/format/alias";
 import { formatRemaining, hasReading } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
@@ -34,29 +34,30 @@ export function ConnectionWizard({
   const [nickname, setNickname] = useState("Personal");
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
+  const candidate =
+    progress?.kind === "awaiting_confirmation" ? progress.context.candidate : null;
   const verified = progress?.kind === "verified";
   const accounts = state.snapshot?.accounts ?? [];
-  const savedAccounts = accounts.filter(
-    (account) =>
-      account.provider_id === provider && account.connection_state === "connected",
-  );
+  // A candidate is not in the account list yet, so it falls outside the set the
+  // alias index is built from and takes that helper's label for one it has not
+  // numbered, exactly as the details screen does for an account it cannot place.
+  const alias = accountLabel(state.preferences, accounts, "");
   const busy =
     starting ||
     (attempt !== null &&
       (progress === undefined ||
         progress.kind === "started" ||
         progress.kind === "awaiting_user"));
-  const step = provider === null ? 1 : verified ? 3 : 2;
+  const step = provider === null ? 1 : candidate !== null || verified ? 3 : 2;
 
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
     setStarting(true);
-    setConfirmed(false);
     setRefusal(null);
     setAttempt(null);
     try {
@@ -76,8 +77,21 @@ export function ConnectionWizard({
   };
 
   const cancel = async (): Promise<void> => {
-    if (attempt !== null && busy) await actions.cancelConnection(attempt);
+    // A verified candidate is discarded here too, so declining one leaves
+    // nothing behind in the host.
+    if (attempt !== null && (busy || candidate !== null))
+      await actions.cancelConnection(attempt);
     onDone();
+  };
+
+  const add = async (): Promise<void> => {
+    if (attempt === null || adding) return;
+    setAdding(true);
+    try {
+      if (await actions.confirmConnection(attempt)) onDone();
+    } finally {
+      setAdding(false);
+    }
   };
 
   return (
@@ -135,6 +149,67 @@ export function ConnectionWizard({
             tool first; credentials never enter this window.
           </p>
         </>
+      ) : candidate !== null ? (
+        <>
+          <div className="success-icon">
+            <Icon name="check" size={24} />
+          </div>
+          <h2>Is this the right account?</h2>
+          <p className="settings__intro">
+            Confirm the identity before adding this subscription to your overview.
+          </p>
+          <dl className="detail__list">
+            <div>
+              <dt>Provider</dt>
+              <dd>{providerLabel(candidate.provider_id)}</dd>
+            </div>
+            <div>
+              <dt>Account</dt>
+              <dd>{alias || candidate.identity.principal_label}</dd>
+            </div>
+            <div>
+              <dt>Workspace</dt>
+              <dd>
+                {alias
+                  ? "Workspace hidden"
+                  : (candidate.identity.workspace_label ?? "Not reported")}
+              </dd>
+            </div>
+            <div>
+              <dt>Quota reading</dt>
+              <dd>
+                {candidate.windows.length === 0
+                  ? "Not reported"
+                  : candidate.windows.map((window) => (
+                      <p key={window.id}>
+                        {window.scope.label || "Allowance"}:{" "}
+                        {formatRemaining(window.measurement)}{" "}
+                        {hasReading(window.measurement)
+                          ? "remaining (just verified)"
+                          : "(not reported)"}
+                      </p>
+                    ))}
+              </dd>
+            </div>
+          </dl>
+          <p className="note">
+            Nothing is saved yet and no monitoring has started. Add account saves this
+            subscription; Cancel discards it and leaves no account behind.
+          </p>
+          <div className="wizard-action">
+            <button
+              type="button"
+              className="button button--primary"
+              disabled={adding}
+              onClick={() => {
+                launch(add());
+              }}
+            >
+              <Icon name={adding ? "clock" : "plus"} size={14} />
+              {adding ? "Adding…" : "Add account"}
+            </button>
+          </div>
+        </>
       ) : verified ? (
         <>
           <div className="success-icon">
@@ -143,95 +218,12 @@ export function ConnectionWizard({
               size={24}
             />
           </div>
-          <h2>Verify your connection</h2>
-          <p className="settings__intro">Review the result reported by the provider.</p>
-          <dl className="detail__list">
-            <div>
-              <dt>Provider</dt>
-              <dd>{providerLabel(provider)}</dd>
-            </div>
-            <div>
-              <dt>Requested nickname</dt>
-              <dd>{nickname.trim()}</dd>
-            </div>
-            <div>
-              <dt>Connection</dt>
-              <dd>{progress.context.state}</dd>
-            </div>
-          </dl>
-          <h3>Saved {providerLabel(provider)} accounts</h3>
-          {savedAccounts.length === 0 ? (
-            <p className="note">
-              Account, workspace, and quota reading have not arrived in the account
-              snapshot yet.
-            </p>
-          ) : (
-            savedAccounts.map((account) => {
-              const alias = accountLabel(state.preferences, accounts, account.account_id);
-              return (
-                <article
-                  key={account.account_id}
-                  aria-label={`Saved ${displayName(state.preferences, accounts, account)}`}
-                >
-                  <h4>{displayName(state.preferences, accounts, account)}</h4>
-                  <dl className="detail__list">
-                    <div>
-                      <dt>Account</dt>
-                      <dd>
-                        {alias || account.identity?.principal_label || "Not reported"}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Workspace</dt>
-                      <dd>
-                        {alias
-                          ? "Workspace hidden"
-                          : (account.identity?.workspace_label ?? "Not reported")}
-                      </dd>
-                    </div>
-                    <div>
-                      <dt>Quota reading</dt>
-                      <dd>
-                        {account.windows.length === 0
-                          ? "Not reported"
-                          : account.windows.map((window) => (
-                              <p key={window.id}>
-                                {window.scope.label || "Allowance"}:{" "}
-                                {formatRemaining(window.measurement)}{" "}
-                                {hasReading(window.measurement)
-                                  ? "remaining (last reported)"
-                                  : "(not reported)"}
-                              </p>
-                            ))}
-                      </dd>
-                    </div>
-                  </dl>
-                </article>
-              );
-            })
-          )}
-          <p className="note">
-            The host saves verified accounts before this review. The attempt result does
-            not identify which account it saved; these are the provider's saved accounts
-            from the latest snapshot. Confirmation before saving is not available yet.
+          <h2>Account added</h2>
+          <p className="settings__intro">
+            {nickname.trim()} is now monitored and appears in your overview.
           </p>
-          <label className="checkline">
-            <input
-              type="checkbox"
-              checked={confirmed}
-              onChange={(event) => {
-                setConfirmed(event.currentTarget.checked);
-              }}
-            />
-            I will review the connected account in Accounts.
-          </label>
           <div className="wizard-action">
-            <button
-              type="button"
-              className="button button--primary"
-              disabled={!confirmed}
-              onClick={onDone}
-            >
+            <button type="button" className="button button--primary" onClick={onDone}>
               Manage accounts
             </button>
           </div>

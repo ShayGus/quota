@@ -28,6 +28,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands::refresh_accounts,
             commands_connection::begin_connection,
             commands_connection::cancel_connection,
+            commands_connection::confirm_connection,
             commands_connection::reconnect_account,
             commands_prefs::update_preferences,
             commands_prefs::set_indicator_style,
