@@ -4,7 +4,7 @@
 //! resizes, or hides the window as a side effect of an unrelated change.
 
 use quota_contracts::CommandError;
-use quota_contracts::commands::WindowModeChange;
+use quota_contracts::commands::{SettingsDestination, WindowModeChange};
 use quota_contracts::events::OverviewWindowState as WindowStateResponse;
 use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::ProviderId;
@@ -196,8 +196,19 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
 /// one side.
 #[tauri::command]
 #[specta::specta]
-pub async fn open_settings_window(state: State<'_, AppState>) -> Result<(), CommandError> {
+pub async fn open_settings_window(
+    state: State<'_, AppState>,
+    destination: SettingsDestination,
+) -> Result<(), CommandError> {
     let native = window::get(&state.app, "settings")?;
+    let script = match destination {
+        SettingsDestination::General => "window.location.hash = '#/settings';",
+        SettingsDestination::Accounts => "window.location.hash = '#/settings/accounts';",
+        SettingsDestination::Connect => "window.location.hash = '#/settings/connect';",
+    };
+    native
+        .eval(script)
+        .map_err(|_| window::failed("navigate_settings"))?;
     native
         .show()
         .map_err(|_| window::failed("show_settings_window"))?;

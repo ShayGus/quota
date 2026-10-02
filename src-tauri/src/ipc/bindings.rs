@@ -30,6 +30,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_connection::cancel_connection,
             commands_connection::reconnect_account,
             commands_prefs::update_preferences,
+            commands_prefs::set_indicator_style,
             commands_prefs::set_polling_preferences,
             commands_prefs::clear_local_history,
             commands_prefs::export_sanitized_diagnostics,

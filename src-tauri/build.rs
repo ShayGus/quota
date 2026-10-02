@@ -21,6 +21,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "set_monitoring_state",
         "set_polling_preferences",
         "update_preferences",
+        "set_indicator_style",
         "set_overview_mode",
         "set_overview_always_on_top",
         "fit_overview_to_accounts",

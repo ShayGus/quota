@@ -25,6 +25,7 @@ import { Icon } from "../../shared/ui/Icon";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { Ring } from "../../shared/ui/Meter";
 import { freshnessCaption, readingState } from "../overview/freshness";
+import { columnLabel } from "../overview/QuotaCell";
 import { statusOf } from "../overview/status";
 
 /** The time zone used for exact boundary times. */
@@ -37,18 +38,6 @@ const SOURCE_WORDS: Record<QuotaWindow["source"], string> = {
   observed_web_endpoint: "Observed web endpoint",
   local_capture: "Local capture",
   manual: "Entered by hand",
-};
-
-/**
- * The card title of each standard window. A window outside the standard three
- * is named by its own scope, because no column name would describe it.
- */
-const WINDOW_TITLES: Record<QuotaWindow["category"], string | null> = {
-  session: "5-hour",
-  weekly: "Weekly",
-  monthly: "Monthly",
-  daily: null,
-  custom: null,
 };
 
 /** The words for what an allowance represents in the plan. */
@@ -88,7 +77,11 @@ function WindowCard({
         onSelect(window.id);
       }}
     >
-      <h3>{WINDOW_TITLES[window.category] ?? (window.scope.label || "Allowance")}</h3>
+      <h3>
+        {window.category === "daily" || window.category === "custom"
+          ? window.scope.label || "Allowance"
+          : columnLabel(window.category)}
+      </h3>
       <Ring
         fraction={arcFraction(window.measurement)}
         severity={severity}
@@ -117,10 +110,14 @@ export function AccountDetail({
   now,
   onBack,
   label,
+  onUsagePage,
+  onManageAccounts,
 }: {
   readonly account: AccountSnapshot;
   readonly now: number;
   readonly onBack: () => void;
+  readonly onUsagePage: () => void;
+  readonly onManageAccounts: () => void;
   /** The name to show: the account's own, or its alias under the privacy setting. */
   readonly label: string;
 }): JSX.Element {
@@ -258,6 +255,15 @@ export function AccountDetail({
           {String(account.order.value.rule_version)}.
         </p>
       )}
+      <div className="detail__bottom">
+        <button type="button" className="text-button" onClick={onUsagePage}>
+          <Icon name="external" size={13} />
+          Provider usage page
+        </button>
+        <button type="button" className="text-button" onClick={onManageAccounts}>
+          Manage accounts
+        </button>
+      </div>
     </section>
   );
 }

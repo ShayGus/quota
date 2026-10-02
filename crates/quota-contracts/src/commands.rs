@@ -104,6 +104,18 @@ pub enum WindowModeChange {
     },
 }
 
+/// The settings surface requested by an overview action.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum SettingsDestination {
+    /// General window and monitoring settings.
+    General,
+    /// Connected account management.
+    Accounts,
+    /// Provider connection wizard.
+    Connect,
+}
+
 /// The snapshot plus the revision the renderer should reconcile against.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 pub struct SnapshotResponse {

@@ -7,6 +7,7 @@ use quota_contracts::CommandError;
 use quota_contracts::preferences::Preferences;
 use quota_contracts::refs::AccountRef;
 use quota_domain::polling::ProviderPollingPolicy;
+use quota_domain::preferences::IndicatorStyle;
 use quota_domain::provider::ProviderId;
 use tauri::State;
 
@@ -20,6 +21,16 @@ pub async fn update_preferences(
     preferences: Preferences,
 ) -> Result<Preferences, CommandError> {
     persist_preferences(&state, preferences).await
+}
+
+/// Saves only the allowance indicator style.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_indicator_style(
+    state: State<'_, AppState>,
+    style: IndicatorStyle,
+) -> Result<Preferences, CommandError> {
+    change_preferences(&state, |preferences| preferences.indicator_style = style).await
 }
 
 /// Saves a full preference aggregate after locking the preference writers.

@@ -4,7 +4,7 @@
  * These exercise the whole window, with the IPC boundary replaced by a test
  * double, so the renderer's own behaviour is what is measured (spec 17.1).
  */
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,6 +16,15 @@ vi.mock("@tauri-apps/api/core", () => ({
     invoked.push({ command, args });
     return Promise.resolve(null);
   },
+}));
+
+vi.mock("@tauri-apps/api/window", () => ({
+  getCurrentWindow: () => ({
+    close: () => {
+      invoked.push({ command: "native-close", args: null });
+      return Promise.resolve();
+    },
+  }),
 }));
 
 vi.mock("@tauri-apps/api/event", () => ({
@@ -150,5 +159,154 @@ describe("the settings window route", () => {
     acceptPreferences(preferences());
     render(<App />);
     expect(screen.getByLabelText("Quota settings")).toBeTruthy();
+  });
+});
+
+describe("approved control actions", () => {
+  it("saves only indicator style from either overview control", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Bar indicators" }));
+      fireEvent.click(screen.getByRole("button", { name: "Ring indicators" }));
+    });
+    expect(commandsMatching("set_indicator_style").map((call) => call.args)).toEqual([
+      { style: "bar" },
+      { style: "ring" },
+    ]);
+    expect(commandsMatching("update_preferences")).toHaveLength(0);
+  });
+
+  it("keeps search visible and active after returning from details", () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a1" } });
+    fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
+    fireEvent.click(screen.getByRole("button", { name: "All accounts" }));
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("a1");
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(screen.getByRole("article")).toBeTruthy();
+  });
+
+  it("wires mode, hide, Add account, and detail actions", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Switch to tray popover" }));
+      fireEvent.click(screen.getByRole("button", { name: "Hide Quota to tray" }));
+      fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+      fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Provider usage page" }));
+      fireEvent.click(screen.getByRole("button", { name: "Manage accounts" }));
+      fireEvent.click(screen.getByRole("button", { name: "Open settings" }));
+    });
+    expect(commandsMatching("set_overview_mode")[0]?.args).toEqual({ mode: "tray" });
+    expect(commandsMatching("native-close")).toHaveLength(1);
+    expect(commandsMatching("open_provider_usage_page")[0]?.args).toEqual({
+      providerId: "codex",
+    });
+    expect(commandsMatching("open_settings_window").map((call) => call.args)).toEqual([
+      { destination: "connect" },
+      { destination: "accounts" },
+      { destination: "general" },
+    ]);
+  });
+
+  it("opens the same wizard from first launch", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, []));
+    render(<App />);
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Add your first account" })),
+    );
+    expect(commandsMatching("open_settings_window")[0]?.args).toEqual({
+      destination: "connect",
+    });
+  });
+
+  it("renders the dedicated settings header and six sections without refresh", () => {
+    window.location.hash = "#/settings";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+    expect(screen.getByRole("heading", { name: "Quota settings" })).toBeTruthy();
+    for (const name of [
+      "General",
+      "Accounts",
+      "Appearance",
+      "Notifications",
+      "Privacy",
+      "Diagnostics",
+    ])
+      expect(screen.getByRole("button", { name })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Refresh the readings now" })).toBeNull();
+    expect(screen.queryByTestId("visible-count")).toBeNull();
+  });
+
+  it("uses standard titles and scope labels for extra windows", () => {
+    const owner = account("a1", "codex", 1, [
+      quotaWindow("s", "session", percent(72)),
+      quotaWindow("d", "daily", percent(30), { label: "Daily scope" }),
+      quotaWindow("c", "custom", percent(10), { label: "Model X" }),
+    ]);
+    acceptSnapshot(snapshot("instance-1", 1, [owner]));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: "Details for a1" }));
+    for (const name of ["5-hour", "Daily scope", "Model X"])
+      expect(screen.getByRole("heading", { name })).toBeTruthy();
+  });
+
+  it("counts fully visible filtered rows on scroll and resize", () => {
+    let bottom = 200;
+    let offset = 0;
+    const rect = (top: number, end: number): DOMRect => ({
+      top,
+      bottom: end,
+      left: 0,
+      right: 810,
+      width: 810,
+      height: end - top,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.classList.contains("shell__main")) return rect(0, bottom);
+      if (this.classList.contains("table__columns")) return rect(0, 26);
+      const id = this.dataset["accountId"];
+      if (id !== undefined) {
+        const top = Number(id.slice(1)) * 60 - offset;
+        return rect(top, top + 54);
+      }
+      return rect(0, 0);
+    });
+    acceptSnapshot(
+      snapshot(
+        "instance-1",
+        1,
+        [1, 2, 3, 4].map((ordinal) =>
+          account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
+        ),
+      ),
+    );
+    render(<App />);
+    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
+    offset = 60;
+    fireEvent.scroll(document.querySelector(".shell__main")!);
+    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
+    bottom = 280;
+    fireEvent(window, new Event("resize"));
+    expect(screen.getByTestId("visible-count").textContent).toBe("3 / 4 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a3" } });
+    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 1 visible");
   });
 });

@@ -16,8 +16,22 @@ width, with the prototype's guide above it. The app images are the real renderer
 same width, driven by one deterministic snapshot with the ten sample accounts the
 wireframe draws.
 
-Two controls the wireframe draws have no counterpart in the app, because the app has no
-command for them: the header's close button (the native close handler hides the window to
-the tray, and the overview webview is not allowed to drive it) and the footer's
-`+ Add account` (the add-account flow lives in the settings window, which the first-launch
-empty state opens).
+The approved controls are wired to the host: mode and topmost remain separate, hide uses
+the authorized native close handler that keeps the overview alive, and every Add account
+entry opens Provider → Connect → Verify in the settings window. Details retain Settings,
+Provider usage page, and Manage accounts. The overview explains ordering, clears hidden
+searches, and counts fully visible rows over the filtered rows.
+
+The connection wizard uses `begin_connection`, `cancel_connection`, and the existing
+attempt events; it never simulates verification. The host commits the verified account
+before publishing `verified`, so there is no separate confirm-and-add command. Attempt
+events contain connection state but no account ID or verified workspace, which prevents an
+exact account identity confirmation in the wizard. The requested nickname is sent before
+connection; the verified identity is available in Accounts after publication. Provider
+sign-in and connection adapter implementation belong to the connection task.
+
+Notifications use the existing policy. It has one critical threshold, so 10% and 0% are
+mutually exclusive. Quiet hours are UTC. Notification preview stays inside the renderer
+because no host preview command exists. The committed screenshots show the initial
+fidelity implementation, before review fixes; they are historical evidence rather than
+captures of the updated settings and wizard.

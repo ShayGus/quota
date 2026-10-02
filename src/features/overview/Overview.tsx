@@ -6,10 +6,15 @@
  * immediately, while row identity, focus, and the click target stay put until
  * the list is idle (spec 4.3, AC-51).
  */
-import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
+import { useEffect, useRef, type JSX, type RefObject } from "react";
 
-import type { AccountId, IndicatorStyle, Preferences } from "../../generated/bindings";
-import { applyOrder, placeAccounts, type PlacedAccount } from "../../shared/state/order";
+import type { AccountId, IndicatorStyle } from "../../generated/bindings";
+import {
+  applyOrder,
+  placeAccounts,
+  type PlacedAccount,
+  type OverviewSection,
+} from "../../shared/state/order";
 import { applyPendingOrder } from "../../shared/state/store";
 import type { RendererState } from "../../shared/state/types";
 import { Icon, Logo } from "../../shared/ui/Icon";
@@ -17,6 +22,7 @@ import { useNow } from "../../shared/ui/useNow";
 import { AccountColumns, AccountRow } from "./AccountRow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
 import { displayName } from "../../shared/format/alias";
+import { providerLabel } from "../../shared/format/provider";
 import { needsAttention } from "./status";
 import { RefreshNotice } from "../../shared/ui/RefreshNotice";
 
@@ -30,7 +36,7 @@ export const REORDER_IDLE_MS = 1200;
  * precedes it: a separator there would name a group the reader can already see.
  */
 const SECTION_HEADING: Record<
-  string,
+  OverviewSection,
   readonly [heading: string, subLabel: string, countsItself: boolean]
 > = {
   needs_checking: ["Needs checking", "Unknown is not zero or full", true],
@@ -127,7 +133,7 @@ export function overviewRows(
     }
     const haystack = [
       account.nickname,
-      account.provider_id,
+      providerLabel(account.provider_id),
       account.identity?.workspace_label ?? "",
       account.identity?.plan_label ?? "",
     ]
@@ -144,9 +150,11 @@ export function Overview({
   onFilter,
   search,
   onSearch,
+  searchOpen,
+  onSearchOpen,
   onFit,
   onAddAccount,
-  onSavePreferences,
+  onIndicatorStyle,
   onOpenAccount,
   onReconnect,
 }: {
@@ -155,16 +163,16 @@ export function Overview({
   readonly onFilter: (filter: OverviewFilter) => void;
   readonly search: string;
   readonly onSearch: (search: string) => void;
+  readonly searchOpen: boolean;
+  readonly onSearchOpen: (open: boolean) => void;
   /** Widens the window so every account and limit is visible at once. */
   readonly onFit: () => void;
   /** Opens the settings surface, where accounts are added. */
   readonly onAddAccount: () => void;
-  /** Saves the next confirmed preference object. */
-  readonly onSavePreferences: (next: Preferences) => void;
+  readonly onIndicatorStyle: (style: IndicatorStyle) => void;
   readonly onOpenAccount: (accountId: AccountId) => void;
   readonly onReconnect: (accountId: AccountId) => void;
 }): JSX.Element {
-  const [searchOpen, setSearchOpen] = useState(false);
   // The indicator style is a confirmed preference, so the overview reads it
   // rather than keeping an unsaved local copy that never reaches the host.
   const style: IndicatorStyle = state.preferences?.indicator_style ?? "ring";
@@ -184,31 +192,25 @@ export function Overview({
   const attentionCount = placements.filter((entry) =>
     needsAttention(entry.account),
   ).length;
-  const uncheckedAbove = matches.some((entry) => entry.section === "needs_checking");
-  const sectionSizes: Record<string, number> = {};
-  for (const entry of matches) {
-    sectionSizes[entry.section] = (sectionSizes[entry.section] ?? 0) + 1;
-  }
-
   let renderedSection: string | null = null;
   const rows: JSX.Element[] = [];
-  for (const entry of matches) {
+  for (const [index, entry] of matches.entries()) {
     if (entry.section !== renderedSection) {
       renderedSection = entry.section;
-      const [heading, subLabel, countsItself] = SECTION_HEADING[entry.section] ?? [
-        entry.section,
-        "",
-        false,
-      ];
-      if (entry.section !== "ranked" || uncheckedAbove) {
+      const [heading, subLabel, countsItself] = SECTION_HEADING[entry.section];
+      let runEnd = index + 1;
+      while (runEnd < matches.length && matches[runEnd]?.section === entry.section) {
+        runEnd += 1;
+      }
+      if (entry.section !== "ranked" || index > 0) {
         rows.push(
           <p
-            key={`section-${entry.section}`}
+            key={`section-${entry.section}-${entry.account.account_id}`}
             className={`section-separator${entry.section === "needs_checking" ? " section-separator--needs" : ""}`}
           >
             <strong>
               {heading}
-              {countsItself ? ` · ${String(sectionSizes[entry.section] ?? 0)}` : ""}
+              {countsItself ? ` · ${String(runEnd - index)}` : ""}
             </strong>
             <span>{subLabel}</span>
           </p>,
@@ -242,7 +244,7 @@ export function Overview({
         filter={filter}
         onFilter={onFilter}
         searchOpen={searchOpen}
-        onSearchOpen={setSearchOpen}
+        onSearchOpen={onSearchOpen}
         search={search}
         onSearch={onSearch}
         onClearSearch={() => {
@@ -254,12 +256,7 @@ export function Overview({
         onApplyOrder={applyPendingOrder}
         onFit={onFit}
         indicatorStyle={style}
-        onIndicatorStyle={(next) => {
-          const preferences = state.preferences;
-          if (preferences !== null) {
-            onSavePreferences({ ...preferences, indicator_style: next });
-          }
-        }}
+        onIndicatorStyle={onIndicatorStyle}
       />
       <RefreshNotice accounts={accounts} preferences={state.preferences} now={now} />
       {matches.length === 0 ? (
@@ -268,6 +265,17 @@ export function Overview({
             {search.length > 0 ? "No matching accounts" : "No accounts need attention"}
           </h2>
           <p>Change the filter to return to all subscriptions.</p>
+          <button
+            type="button"
+            className="button"
+            onClick={() => {
+              onFilter("all");
+              onSearchOpen(false);
+              onSearch("");
+            }}
+          >
+            Show all accounts
+          </button>
         </div>
       ) : (
         <div className="table">

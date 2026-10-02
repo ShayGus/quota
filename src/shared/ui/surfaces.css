@@ -170,3 +170,10 @@
   line-height: 1.65;
   color: var(--muted);
 }
+
+.detail__bottom {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+}

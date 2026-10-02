@@ -17,12 +17,10 @@ export function AppHeader({
   state,
   view,
   onSettings,
-  onOverview,
 }: {
   readonly state: RendererState;
   readonly view: "overview" | "detail" | "settings";
   readonly onSettings: () => void;
-  readonly onOverview: () => void;
 }): JSX.Element {
   const accountCount = state.snapshot?.accounts.length ?? 0;
   const providerCount =
@@ -32,6 +30,24 @@ export function AppHeader({
   const alwaysOnTop = state.preferences?.always_on_top ?? false;
   const mode = state.preferences?.overview_mode ?? "floating";
   const paused = state.monitoring?.kind === "paused";
+  if (view === "settings") {
+    return (
+      <header className="settings-head">
+        <div>
+          <h2>Quota settings</h2>
+          <p>Window, accounts, and monitoring preferences</p>
+        </div>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Close settings"
+          onClick={() => launch(actions.closeWindow())}
+        >
+          <Icon name="close" size={17} />
+        </button>
+      </header>
+    );
+  }
   return (
     <header className="shell__header">
       <div className="shell__brand">
@@ -45,10 +61,19 @@ export function AppHeader({
       </div>
       <div className="shell__actions">
         {alwaysOnTop ? <span className="shell__top-label">Always on top</span> : null}
-        <span className="mode-control">
+        <button
+          type="button"
+          className="mode-control"
+          aria-label={
+            mode === "floating" ? "Switch to tray popover" : "Switch to floating window"
+          }
+          onClick={() =>
+            launch(actions.setOverviewMode(mode === "floating" ? "tray" : "floating"))
+          }
+        >
           <Icon name={mode === "floating" ? "layers" : "external"} size={14} />
           {mode === "floating" ? "Floating" : "Tray"}
-        </span>
+        </button>
         <button
           type="button"
           className="icon-button"
@@ -73,27 +98,24 @@ export function AppHeader({
         >
           <Icon name="refresh" size={17} />
         </button>
-        {view === "overview" ? (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Open settings"
-            title="Settings"
-            onClick={onSettings}
-          >
-            <Icon name="settings" size={17} />
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="icon-button"
-            aria-label="Back to the overview"
-            title="Back to the overview"
-            onClick={onOverview}
-          >
-            <Icon name="donut" size={17} />
-          </button>
-        )}
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Open settings"
+          title="Settings"
+          onClick={onSettings}
+        >
+          <Icon name="settings" size={17} />
+        </button>
+        <button
+          type="button"
+          className="icon-button"
+          aria-label="Hide Quota to tray"
+          title="Hide to tray; keep monitoring"
+          onClick={() => launch(actions.closeWindow())}
+        >
+          <Icon name="close" size={17} />
+        </button>
       </div>
     </header>
   );

@@ -9,6 +9,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { act, useState } from "react";
 import { describe, expect, it, vi } from "vitest";
 
+import { QuotaCell } from "../src/features/overview/QuotaCell";
 import { Overview, REORDER_IDLE_MS } from "../src/features/overview/Overview";
 import type { OverviewFilter } from "../src/features/overview/OverviewToolbar";
 import type { RendererState } from "../src/shared/state/types";
@@ -21,6 +22,7 @@ import { acceptSnapshot } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
 import {
   account,
+  NOW,
   percent,
   preferences,
   snapshot,
@@ -33,16 +35,22 @@ function Harness(): React.ReactElement {
   const state: RendererState = useRendererState();
   const [filter, setFilter] = useState<OverviewFilter>("all");
   const [search, setSearch] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   return (
     <Overview
       state={state}
       filter={filter}
       onFilter={setFilter}
+      searchOpen={searchOpen}
+      onSearchOpen={(open) => {
+        setSearchOpen(open);
+        if (!open) setSearch("");
+      }}
       search={search}
       onSearch={setSearch}
       onFit={() => undefined}
       onAddAccount={() => undefined}
-      onSavePreferences={() => undefined}
+      onIndicatorStyle={() => undefined}
       onOpenAccount={() => undefined}
       onReconnect={() => undefined}
     />
@@ -587,4 +595,127 @@ describe("the privacy alias setting", () => {
     expect(screen.getByText("Account 1")).toBeTruthy();
     expect(screen.getByText("Account 2")).toBeTruthy();
   });
+});
+
+describe("review regressions", () => {
+  it("searches displayed provider names and clears a dismissed query", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("go", "open_code_go", 1, []),
+        account("other", "codex", 2, []),
+      ]),
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "OpenCode Go" } });
+    expect(rowOrder()).toEqual(["go"]);
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(rowOrder()).toHaveLength(2);
+  });
+
+  it("restores every account from the empty attention filter", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("calm", "codex", 1, [quotaWindow("w", "session", percent(90))], {
+          rank: 90,
+        }),
+      ]),
+    );
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: /Attention/ }));
+    expect(rowOrder()).toHaveLength(0);
+    fireEvent.click(screen.getByRole("button", { name: "Show all accounts" }));
+    expect(rowOrder()).toEqual(["calm"]);
+  });
+
+  it("opens ordering help when no update is pending", () => {
+    acceptSnapshot(snapshot("instance-1", 1, [account("a", "codex", 1, [])]));
+    applyPendingOrder();
+    render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
+    expect(screen.getByRole("status").textContent).toContain(
+      "lowest current remaining allowance",
+    );
+  });
+
+  it.each([
+    ["needs_checking", "ranked", "needs_checking"],
+    ["ranked", "needs_checking", "ranked"],
+    ["monitoring_off", "ranked", "monitoring_off"],
+  ] as const)("labels held runs %s / %s / %s without moving rows", (...sections) => {
+    const initial = [1, 2, 3].map((ordinal) =>
+      account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
+    );
+    acceptSnapshot(snapshot("instance-1", 1, initial));
+    applyPendingOrder();
+    render(<Harness />);
+    act(() =>
+      acceptSnapshot(
+        snapshot(
+          "instance-1",
+          2,
+          initial.map((entry, index) => {
+            const section = sections[index];
+            return account(entry.account_id, "codex", index + 1, [], {
+              rank: section === "ranked" ? index + 1 : null,
+              unrankedReason: section === "monitoring_off" ? "disabled" : "stale",
+              monitoringEnabled: section !== "monitoring_off",
+            });
+          }),
+        ),
+      ),
+    );
+    expect(rowOrder()).toEqual(["a1", "a2", "a3"]);
+    const headings = [...document.querySelectorAll(".section-separator strong")].map(
+      (element) => element.textContent,
+    );
+    expect(headings).toEqual(
+      sections.flatMap((section, index) =>
+        section === "ranked"
+          ? index === 0
+            ? []
+            : ["Ranked accounts"]
+          : [section === "needs_checking" ? "Needs checking · 1" : "Monitoring off · 1"],
+      ),
+    );
+  });
+
+  it.each(["ring", "bar"] as const)(
+    "preserves all boundary meanings in %s indicators",
+    (style) => {
+      const kinds = [
+        "full_reset",
+        "next_replenishment",
+        "billing_boundary",
+        "unknown",
+      ] as const;
+      const words = [
+        "Resets in",
+        "Next replenishment in",
+        "Billing boundary in",
+        "Boundary in",
+      ];
+      const { rerender, container } = render(<></>);
+      for (const [index, kind] of kinds.entries()) {
+        const window = {
+          ...quotaWindow("w", "session", percent(72)),
+          boundary: { kind, at: "2026-10-01T14:00:00Z" },
+        };
+        const owner = account("a", "claude", 1, [window], { rank: 72 });
+        rerender(
+          <QuotaCell
+            account={owner}
+            window={window}
+            column="session"
+            style={style}
+            now={NOW}
+            onOpen={() => undefined}
+          />,
+        );
+        expect(container.textContent).toContain(words[index]);
+        expect(container.textContent).toContain("2h 0m");
+      }
+    },
+  );
 });

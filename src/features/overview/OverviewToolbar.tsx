@@ -5,7 +5,7 @@
  * backend truth and are not saved (spec 7.8). The sort statement names the rule
  * the backend used, so a row's position can be explained (spec 4.1).
  */
-import { useId, type JSX } from "react";
+import { useId, useState, type JSX } from "react";
 
 import type { IndicatorStyle } from "../../generated/bindings";
 import { Icon } from "../../shared/ui/Icon";
@@ -49,6 +49,7 @@ export function OverviewToolbar({
   readonly onIndicatorStyle: (style: IndicatorStyle) => void;
 }): JSX.Element {
   const searchId = useId();
+  const [helpOpen, setHelpOpen] = useState(false);
   return (
     <>
       <div className="toolbar">
@@ -86,6 +87,8 @@ export function OverviewToolbar({
             onClick={() => {
               if (orderUpdatePending) {
                 onApplyOrder();
+              } else {
+                setHelpOpen(!helpOpen);
               }
             }}
           >
@@ -141,6 +144,20 @@ export function OverviewToolbar({
           </div>
         </div>
       </div>
+      {helpOpen ? (
+        <div className="note" role="status">
+          Accounts are ranked by their lowest current remaining allowance. Unknown and
+          stale readings need checking; monitoring-off accounts are separate. Row order
+          stays put while you interact.{" "}
+          <button
+            type="button"
+            className="text-button"
+            onClick={() => setHelpOpen(false)}
+          >
+            Close ordering help
+          </button>
+        </div>
+      ) : null}
       {searchOpen ? (
         <div className="search-line">
           <label className="sr-only" htmlFor={searchId}>

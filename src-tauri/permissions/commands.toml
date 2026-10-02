@@ -41,6 +41,9 @@ description = "Pause or resume monitoring."
 [allow-set-polling-preferences]
 description = "Change the validated polling policy for a provider."
 
+[allow-set-indicator-style]
+description = "Change only the allowance indicator style."
+
 [allow-update-preferences]
 description = "Save confirmed presentation and notification preferences."
 

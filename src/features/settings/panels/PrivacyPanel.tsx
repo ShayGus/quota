@@ -26,7 +26,7 @@ const ALIAS_MODES: readonly (readonly [PrivacyAliasMode, string])[] = [
  * never invents a path, and the export contains no tokens, no cookies, and no
  * provider payloads.
  */
-function DiagnosticExportRow({
+export function DiagnosticExportRow({
   actions,
 }: {
   readonly actions: SettingsActions;
@@ -136,7 +136,6 @@ export function PrivacyPanel({
           />
         }
       />
-      <DiagnosticExportRow actions={actions} />
     </>
   );
 }

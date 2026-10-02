@@ -39,20 +39,26 @@ export function AppearancePanel({
         The same account rows, drawn with rings or with compact bars. Both styles show the
         session, weekly, and monthly limits together.
       </p>
-      <SettingRow
-        label="Colour scheme"
-        description="Follow system uses the operating system setting and updates when it changes."
-        control={
-          <Select
-            label="Colour scheme"
-            value={preferences.theme}
-            options={THEMES}
-            onChange={(theme) => {
-              actions.savePreferences(withTheme(preferences, theme));
-            }}
-          />
-        }
-      />
+      <div className="theme-options">
+        {THEMES.map(([theme, label]) => (
+          <button
+            key={theme}
+            type="button"
+            className="theme-option"
+            aria-pressed={preferences.theme === theme}
+            onClick={() => actions.savePreferences(withTheme(preferences, theme))}
+          >
+            <div className={`theme-thumbnail theme-thumbnail--${theme}`}>
+              <span>
+                <i />
+                <i />
+                <i />
+              </span>
+            </div>
+            <b>{label}</b>
+          </button>
+        ))}
+      </div>
       <SettingRow
         label="Allowance indicators"
         description="Rings show a draining arc. Bars show the same values horizontally."
