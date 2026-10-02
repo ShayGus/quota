@@ -66,6 +66,11 @@ export interface SettingsActions {
     request: BeginConnectionRequest,
   ) => Promise<AttemptRef | null>;
   readonly cancelConnection: (attempt: AttemptRef) => Promise<void>;
+  /**
+   * Saves the verified candidate one attempt is holding, and answers whether
+   * it was saved. Nothing is written before this call.
+   */
+  readonly confirmConnection: (attempt: AttemptRef, nickname: string) => Promise<boolean>;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
   /** Drops retained history for one account. The host has no all-accounts clear. */
@@ -84,6 +89,12 @@ export interface SettingsActions {
   readonly showAccountDetail: (accountId: AccountId) => void;
 }
 
+/**
+ * Counts route requests, so asking for a section the window already shows is a
+ * new route rather than the unchanged hash.
+ */
+let requestedRoutes = 0;
+
 /** The settings surface: the section rail and the selected panel. */
 export function Settings({
   state,
@@ -95,7 +106,8 @@ export function Settings({
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
   const navigate = useCallback((next: SettingsTab): void => {
-    window.location.hash = `#/settings/${next}`;
+    requestedRoutes += 1;
+    window.location.hash = `#/settings/${next}/${String(requestedRoutes)}`;
   }, []);
   const now = useNow();
   const preferences = state.preferences;
@@ -154,6 +166,7 @@ export function Settings({
           <AppearancePanel preferences={preferences} actions={actions} />
         ) : selected === "accounts" ? (
           <AccountsPanel
+            key={route}
             accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
             preferences={preferences}
             actions={actions}

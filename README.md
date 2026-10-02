@@ -83,11 +83,13 @@ rejected, follow the provider-specific recovery guidance:
 - OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
   environment.
 
-After signing in, press Connect again. On Verify, check the account and workspace the
-provider verified, confirm that it is the account you intended, set its nickname, and
-choose Add account. Going back or cancelling at Verify removes a newly saved account
-again; starting a new Add account request opens a fresh wizard.
-[Provider credential discovery](docs/providers.md) owns the supported locations and
+After signing in, press Connect again. On Verify, review the verified Account, Workspace,
+and Quota reading, set the account's nickname, confirm that it is the account you
+intended, and choose Add account. Nothing is saved and no monitoring starts before that
+choice; Back, Cancel, closing the popover, or restarting the app discards the verified
+result and leaves no account behind. With Hide account labels enabled, a pending identity
+is replaced exactly as a saved one is. Starting a new Add account request opens a fresh
+wizard. [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 
 Ordinary refreshes, including manual requests, wait for the polling interval and any

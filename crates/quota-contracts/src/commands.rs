@@ -7,9 +7,11 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use quota_domain::account::VerifiedIdentity;
 use quota_domain::ids::ConnectionAttemptId;
 use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
+use quota_domain::quota::window::QuotaWindow;
 use quota_domain::snapshot::AppSnapshot;
 
 use crate::refs::{AccountRef, AttemptRef};
@@ -76,6 +78,21 @@ pub struct ConnectionAttemptAccepted {
     pub attempt_ref: AttemptRef,
     /// The raw attempt identifier, for reconciliation lookups.
     pub attempt_id: ConnectionAttemptId,
+}
+
+/// A verified identity held for the person's decision, and not yet saved.
+/// Nothing about this type names a stored account, so a candidate that is never
+/// confirmed leaves no account behind. It carries no secret material.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct VerifiedCandidate {
+    /// The adapter that reported this identity.
+    pub provider_id: ProviderId,
+    /// The nickname the person asked for. Presentation only.
+    pub nickname: String,
+    /// The provider-verified principal, workspace, plan, and source.
+    pub identity: VerifiedIdentity,
+    /// The quota reading this attempt verified.
+    pub windows: Vec<QuotaWindow>,
 }
 
 /// One compiled adapter and what it declares it can do.

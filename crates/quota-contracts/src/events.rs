@@ -12,6 +12,7 @@ use quota_domain::ids::{AppInstanceId, ConnectionAttemptId};
 use quota_domain::preferences::OverviewMode;
 use quota_domain::snapshot::{AppSnapshot, MonitoringState, PersistenceStatus};
 
+use crate::commands::VerifiedCandidate;
 use crate::errors::CommandError;
 use crate::preferences::Preferences;
 
@@ -29,14 +30,21 @@ pub struct SnapshotUpdatedPayload {
 }
 
 /// Where an authorized connection attempt stands.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case", tag = "kind", content = "context")]
 pub enum ConnectionProgress {
     /// The attempt is running.
     Started,
     /// The provider asked the user to do something.
     AwaitingUser,
-    /// The attempt produced a verified binding.
+    /// The attempt verified an identity and is waiting for a decision.
+    ///
+    /// Nothing is stored and no monitoring starts until the person confirms.
+    AwaitingConfirmation {
+        /// The verified identity, which is not saved yet.
+        candidate: VerifiedCandidate,
+    },
+    /// The person confirmed the candidate and the account is now saved.
     Verified {
         /// The verified connection state.
         state: ConnectionState,
@@ -51,7 +59,7 @@ pub enum ConnectionProgress {
 }
 
 /// Progress of one connection attempt.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, Type)]
 pub struct ConnectionProgressChangedPayload {
     /// Which application instance published this.
     pub app_instance_id: AppInstanceId,

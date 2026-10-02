@@ -49,6 +49,7 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       openUsagePage: vi.fn(),
       beginConnection: vi.fn(() => Promise.resolve({ id: "attempt-1" })),
       cancelConnection: vi.fn(() => Promise.resolve(undefined)),
+      confirmConnection: vi.fn(() => Promise.resolve(true)),
       reconnectAccount: vi.fn(() => Promise.resolve(undefined)),
       clearHistory: vi.fn(),
       exportDiagnostics: vi.fn(),

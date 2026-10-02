@@ -13,6 +13,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "get_connection_progress",
         "begin_connection",
         "cancel_connection",
+        "confirm_connection",
         "reconnect_account",
         "set_account_enabled",
         "rename_account",

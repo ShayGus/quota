@@ -2,20 +2,15 @@
  * Add an account: Provider → Connect → Verify.
  *
  * Connecting uses the provider's existing local sign-in; credentials never
- * enter this window. The host saves an account as soon as it verifies one, and
- * its result does not say which account that was, so the wizard records the
- * provider's accounts when Connect is pressed and identifies the new one when
- * it arrives in the snapshot. The person then confirms the identity and names
- * the account; going back or cancelling removes an account they did not confirm.
+ * enter this window. A verified attempt is held by the host as a pending
+ * candidate: nothing is saved and no monitoring starts until the person
+ * confirms it and names it here. Leaving the wizard by any route, whether
+ * Back, Cancel, Escape, or opening a fresh wizard, discards the candidate, so
+ * an unconfirmed account is never left behind.
  */
-import { useState, type JSX } from "react";
+import { useEffect, useRef, useState, type JSX } from "react";
 
-import type {
-  AccountId,
-  AccountSnapshot,
-  AttemptRef,
-  ProviderId,
-} from "../../generated/bindings";
+import type { AttemptRef } from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
@@ -48,33 +43,8 @@ const DEFAULT_NICKNAME = "Personal";
 /** The actions the wizard needs. */
 export type WizardActions = Pick<
   SettingsActions,
-  "beginConnection" | "cancelConnection" | "renameAccount" | "disconnectAccount"
+  "beginConnection" | "cancelConnection" | "confirmConnection"
 >;
-
-/**
- * The account a verified attempt saved: one of the provider's connected
- * accounts that was not there when Connect was pressed.
- *
- * Verification can arrive before the snapshot that carries the new account, so
- * an account that already existed is never taken for it: confirming, naming,
- * or discarding must only ever touch the account this attempt added.
- */
-function savedAccount(
-  accounts: readonly AccountSnapshot[],
-  provider: ProviderId,
-  before: ReadonlySet<AccountId>,
-): AccountSnapshot | null {
-  return (
-    accounts
-      .filter(
-        (account) =>
-          account.provider_id === provider &&
-          account.connection_state === "connected" &&
-          !before.has(account.account_id),
-      )
-      .sort((a, b) => b.connection_ordinal - a.connection_ordinal)[0] ?? null
-  );
-}
 
 export function ConnectionWizard({
   state,
@@ -83,33 +53,49 @@ export function ConnectionWizard({
 }: {
   readonly state: RendererState;
   readonly actions: WizardActions;
-  /** Leaves the wizard, whether or not an account was added. */
-  readonly onDone: () => void;
+  /** Leaves the wizard. `added` says whether an account was saved. */
+  readonly onDone: (added: boolean) => void;
 }): JSX.Element {
   const [provider, setProvider] = useState<(typeof PROVIDERS)[number] | null>(null);
   const [nickname, setNickname] = useState(DEFAULT_NICKNAME);
-  const [before, setBefore] = useState<ReadonlySet<AccountId>>(new Set());
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
+  const [adding, setAdding] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
   const progress = state.attempts.find(
     (entry) => entry.attemptId === attempt?.id,
   )?.progress;
+  const candidate =
+    progress?.kind === "awaiting_confirmation" ? progress.context.candidate : null;
   const accounts = state.snapshot?.accounts ?? [];
-  const saved =
-    provider !== null && progress?.kind === "verified"
-      ? savedAccount(accounts, provider, before)
-      : null;
+  // A candidate is not in the account list yet, so it takes the label the alias
+  // helper gives an account it has not numbered, as details does.
+  const alias = accountLabel(state.preferences, accounts, "");
   const busy =
     starting ||
     (attempt !== null &&
       (progress === undefined ||
         progress.kind === "started" ||
-        progress.kind === "awaiting_user" ||
-        // Verified, but the account has not arrived in the snapshot yet.
-        (progress.kind === "verified" && saved === null)));
-  const step = provider === null ? 1 : saved !== null ? 3 : 2;
+        progress.kind === "awaiting_user"));
+  const step = provider === null ? 1 : candidate !== null ? 3 : 2;
+
+  // What must be discarded if the wizard goes away: a running attempt or a
+  // held candidate. Kept in a ref so the unmount cleanup sees the latest.
+  const pending = useRef<AttemptRef | null>(null);
+  const live =
+    attempt !== null && !adding && (busy || candidate !== null) ? attempt : null;
+  useEffect(() => {
+    pending.current = live;
+  }, [live]);
+  useEffect(() => {
+    return () => {
+      const held = pending.current;
+      if (held !== null) {
+        launch(actions.cancelConnection(held));
+      }
+    };
+  }, [actions]);
 
   const connect = async (): Promise<void> => {
     if (provider === null || busy) return;
@@ -117,13 +103,6 @@ export function ConnectionWizard({
     setConfirmed(false);
     setRefusal(null);
     setAttempt(null);
-    setBefore(
-      new Set(
-        accounts
-          .filter((account) => account.provider_id === provider)
-          .map((account) => account.account_id),
-      ),
-    );
     try {
       const accepted = await actions.beginConnection({
         provider_id: provider,
@@ -140,28 +119,25 @@ export function ConnectionWizard({
     }
   };
 
-  /** Removes an account the person did not confirm, then forgets the attempt. */
-  const discardUnconfirmed = (): void => {
-    if (saved !== null) {
-      actions.disconnectAccount(saved.account_id);
-    }
+  /** Discards the live attempt or candidate, if any, and forgets it. */
+  const discard = async (): Promise<void> => {
+    pending.current = null;
     setAttempt(null);
     setConfirmed(false);
+    if (live !== null) await actions.cancelConnection(live);
   };
 
-  const cancel = async (): Promise<void> => {
-    if (attempt !== null && busy) await actions.cancelConnection(attempt);
-    discardUnconfirmed();
-    onDone();
-  };
-
-  const finish = (): void => {
-    if (saved === null || !confirmed || nickname.trim().length === 0) return;
-    const name = nickname.trim();
-    if (name !== saved.nickname) {
-      actions.renameAccount(saved.account_id, name);
+  const add = async (): Promise<void> => {
+    if (attempt === null || adding || !confirmed || nickname.trim().length === 0) return;
+    setAdding(true);
+    try {
+      if (await actions.confirmConnection(attempt, nickname.trim())) {
+        pending.current = null;
+        onDone(true);
+      }
+    } finally {
+      setAdding(false);
     }
-    onDone();
   };
 
   const steps = (
@@ -204,10 +180,9 @@ export function ConnectionWizard({
         </div>
       </>
     );
-  } else if (saved !== null) {
-    const alias = accountLabel(state.preferences, accounts, saved.account_id);
-    const identity = saved.identity;
-    const windows = saved.windows.length;
+  } else if (candidate !== null) {
+    const identity = candidate.identity;
+    const windows = candidate.windows.length;
     body = (
       <>
         <div className="success-icon">
@@ -220,23 +195,23 @@ export function ConnectionWizard({
         <dl className="detail-list">
           <div>
             <dt>Provider</dt>
-            <dd>{providerLabel(provider)}</dd>
+            <dd>{providerLabel(candidate.provider_id)}</dd>
           </div>
           <div>
             <dt>Account</dt>
-            <dd>{alias || identity?.principal_label || "Not reported"}</dd>
+            <dd>{alias || identity.principal_label}</dd>
           </div>
           <div>
             <dt>Workspace</dt>
             <dd>
-              {alias ? "Workspace hidden" : (identity?.workspace_label ?? "Not reported")}
+              {alias ? "Workspace hidden" : (identity.workspace_label ?? "Not reported")}
             </dd>
           </div>
           <div>
             <dt>Quota reading</dt>
             <dd>
               {windows === 0
-                ? "Not reported yet"
+                ? "Not reported"
                 : `${String(windows)} ${windows === 1 ? "window" : "windows"} available`}
             </dd>
           </div>
@@ -257,8 +232,7 @@ export function ConnectionWizard({
           }}
         />
         <div className="form-hint">
-          Shown below the provider name. Going back or cancelling removes this account
-          again.
+          Shown below the provider name. Nothing is saved until you add the account.
         </div>
         <label className="checkline">
           <input
@@ -272,17 +246,26 @@ export function ConnectionWizard({
           This is the account I intended to connect.
         </label>
         <div className="wizard-action">
-          <button type="button" className="button" onClick={discardUnconfirmed}>
+          <button
+            type="button"
+            className="button"
+            disabled={adding}
+            onClick={() => {
+              launch(discard());
+            }}
+          >
             Back
           </button>
           <button
             type="button"
             className="button primary"
-            disabled={!confirmed || nickname.trim().length === 0}
-            onClick={finish}
+            disabled={adding || !confirmed || nickname.trim().length === 0}
+            onClick={() => {
+              launch(add());
+            }}
           >
-            <Icon name="plus" />
-            Add account
+            <Icon name={adding ? "clock" : "plus"} />
+            {adding ? "Adding…" : "Add account"}
           </button>
         </div>
       </>
@@ -308,12 +291,6 @@ export function ConnectionWizard({
             account the provider verified, for you to confirm.
           </p>
         </div>
-        {progress?.kind === "verified" ? (
-          <div className="note" role="status">
-            The provider verified the connection. Waiting for the new account to arrive;
-            if it was already connected, Cancel and find it in your overview.
-          </div>
-        ) : null}
         {progress?.kind === "awaiting_user" ? (
           <div className="note" role="status">
             Finish signing in with the provider's own tool.
@@ -337,8 +314,8 @@ export function ConnectionWizard({
           </div>
         )}
         <div className="note">
-          A connection is complete only after its account identity and an actual quota
-          reading have been verified.
+          A connection is added only after its account identity and an actual quota
+          reading have been verified and you confirm it.
         </div>
         <div className="wizard-action">
           <button
@@ -375,9 +352,17 @@ export function ConnectionWizard({
         <button
           type="button"
           className="back-button"
-          disabled={starting}
+          disabled={starting || adding}
           onClick={() => {
-            launch(cancel());
+            if (live === null) {
+              onDone(false);
+              return;
+            }
+            launch(
+              discard().then(() => {
+                onDone(false);
+              }),
+            );
           }}
         >
           <Icon name="arrow-left" />

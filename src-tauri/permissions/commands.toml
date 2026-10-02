@@ -18,7 +18,10 @@ description = "Read the typed progress of one connection attempt."
 description = "Start one authorized connection attempt."
 
 [allow-cancel-connection]
-description = "Cancel a running connection attempt."
+description = "Cancel a running connection attempt, or discard one verified candidate."
+
+[allow-confirm-connection]
+description = "Save one verified connection candidate the person confirmed."
 
 [allow-reconnect-account]
 description = "Re-verify and reconnect one account."

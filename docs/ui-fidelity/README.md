@@ -35,10 +35,12 @@ does, in the same place and at the same length.
   down buttons. Quota ranks accounts by their least remaining allowance (spec 4.1), and
   the host has no reorder command, so the order buttons are shown disabled with that
   reason.
-- **Connection.** The host saves an account as soon as the provider verifies it. The
-  Verify step identifies the new account in the snapshot, asks the person to confirm it
-  and name it, and removes it again if they go back or cancel, which gives the wireframe's
-  confirm-before-adding behaviour.
+- **Connection.** The wizard uses `begin_connection`, `confirm_connection`, and
+  `cancel_connection`. A verified attempt is held by the host as a pending candidate, so
+  nothing is saved and no monitoring starts until Add account. Verify shows the
+  candidate's account, workspace, and reading, asks for the nickname and the
+  confirmation check the wireframe draws, and saves it under that nickname. Back,
+  Cancel, closing the popover, or restarting the app discards the candidate.
 - **Launch at login** registers a login item through the autostart plugin. A launch at
   sign-in starts quietly in the tray, and the switch shows what the system reports.
 - **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus

@@ -16,6 +16,7 @@
     "allow-set-monitoring-state",
     "allow-begin-connection",
     "allow-cancel-connection",
+    "allow-confirm-connection",
     "allow-reconnect-account",
     "allow-set-account-enabled",
     "allow-rename-account",

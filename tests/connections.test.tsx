@@ -8,7 +8,13 @@ import { Settings, type SettingsActions } from "../src/features/settings/Setting
 import { Overview } from "../src/features/overview/Overview";
 import { initialRendererState } from "../src/shared/state/types";
 import { refreshMessage, Toast, TOAST_MS } from "../src/shared/ui/RefreshNotice";
-import { account, preferences, snapshot } from "./fixtures";
+import {
+  account,
+  awaitingConfirmation,
+  candidate,
+  preferences,
+  snapshot,
+} from "./fixtures";
 
 function settingsActions(): SettingsActions {
   return {
@@ -25,6 +31,7 @@ function settingsActions(): SettingsActions {
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve(null)),
     cancelConnection: vi.fn(() => Promise.resolve()),
+    confirmConnection: vi.fn(() => Promise.resolve(true)),
     reconnectAccount: vi.fn(() => Promise.resolve()),
     clearHistory: vi.fn(),
     exportDiagnostics: vi.fn(),
@@ -93,41 +100,13 @@ describe("pending connection acceptance", () => {
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Verifying…" }).disabled,
     ).toBe(true);
+    // Verified: the host holds the candidate and nothing is saved yet.
     panel.rerender(
       <ConnectionWizard
         state={{
           ...initialRendererState,
           preferences: preferences(),
-          attempts: [
-            {
-              attemptId: "attempt",
-              revision: 2,
-              progress: { kind: "verified", context: { state: "connected" } },
-            },
-          ],
-        }}
-        actions={actions}
-        onDone={vi.fn()}
-      />,
-    );
-    // Verified, but the saved account has not reached the snapshot yet.
-    expect(screen.getByRole("button", { name: "Verifying…" })).toHaveProperty(
-      "disabled",
-      true,
-    );
-    panel.rerender(
-      <ConnectionWizard
-        state={{
-          ...initialRendererState,
-          preferences: preferences(),
-          snapshot: snapshot("instance-1", 1, [account("new", "codex", 1, [])]),
-          attempts: [
-            {
-              attemptId: "attempt",
-              revision: 2,
-              progress: { kind: "verified", context: { state: "connected" } },
-            },
-          ],
+          attempts: [awaitingConfirmation("attempt", candidate("codex"))],
         }}
         actions={actions}
         onDone={vi.fn()}

@@ -86,6 +86,7 @@ const settingsActions: SettingsActions = {
     return accepted === null ? null : { id: accepted.attempt_id };
   },
   cancelConnection: (attempt) => actions.cancelConnection(attempt),
+  confirmConnection: (attempt, nickname) => actions.confirmConnection(attempt, nickname),
   reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
@@ -280,7 +281,10 @@ function Popover({
               key={view.serial}
               state={state}
               actions={settingsActions}
-              onDone={() => {
+              onDone={(added) => {
+                if (added) {
+                  onToast({ text: "Account added. It now appears in your overview." });
+                }
                 setFilter("all");
                 setView({ name: "overview" });
               }}
