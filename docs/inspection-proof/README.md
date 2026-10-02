@@ -13,11 +13,13 @@ the development-only inspection plugin. They are the evidence behind the table i
 
 The screenshot is 810x720, the real size of the overview window. It needed two things this
 display does not give for free — `GDK_BACKEND=x11` before `bun run inspect`, and
-`docs/publish-x11-client-list.py 0x600010` after the windows appeared. Both are explained
+`docs/publish-x11-client-list.py 0x600010` after the overview appeared. Both are explained
 in [Screenshots on WSLg](../inspecting-the-app.md#screenshots-on-wslg). The image agrees
 with `element-map.txt` line for line: `Quota`, `0 accounts · 0 providers`, `Floating`,
 `Least remaining first`, `No account matches the current filter or search text.`,
 `0 / 0 shown`, `Monitoring active`.
+
+A launch opens only overview. Settings is created hidden and opens when a person asks for it.
 
 `console-log.txt` is the important one. `push_log` is the single command that has to
 travel through the Tauri capability allowlist before the plugin can see it; the plugin

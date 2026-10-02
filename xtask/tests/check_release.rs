@@ -269,9 +269,9 @@ fn dependent_aliases_are_resolved_across_dependency_representations() -> Outcome
     let declarations = [
         "[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
         "[dependencies.desktop]\npackage = 'quota-desktop'\npath = '../../src-tauri'\nfeatures = [\n 'inspect',\n]\n",
-        "[build-dependencies]\ndesktop = { package = 'quota-desktop', features = ['inspect'] }\n",
-        "[dev-dependencies]\ndesktop = { package = 'quota-desktop', features = ['inspect'] }\n",
-        "[target.'cfg(unix)'.dependencies]\ndesktop = { package = 'quota-desktop', features = ['inspect'] }\n",
+        "[build-dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
+        "[dev-dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
+        "[target.'cfg(unix)'.dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
         "[dependencies]\ndesktop = { workspace = true }\n",
     ];
     for declaration in declarations {
@@ -444,4 +444,256 @@ fn workspace_pins_are_parsed_as_sources_and_commit_values() -> Outcome {
         fails_with(directory.path(), "40-character commit SHA")?;
     }
     Ok(())
+}
+
+fn write_manifest(root: &Path, name: &str, body: &str) -> Outcome {
+    let directory = root.join("crates").join(name);
+    fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
+    fs::write(directory.join("Cargo.toml"), body).map_err(|error| error.to_string())
+}
+
+#[test]
+fn incoming_features_are_unified_before_weak_forwarding() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = directory.path();
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    write_manifest(
+        root,
+        "bridge",
+        "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
+    )?;
+    write_manifest(
+        root,
+        "left",
+        "[package]\nname = 'left'\n[dependencies]\nbridge = { path = '../bridge', features = ['activate'] }\n",
+    )?;
+    write_manifest(
+        root,
+        "right",
+        "[package]\nname = 'right'\n[dependencies]\nbridge = { path = '../bridge', features = ['inspect'] }\n",
+    )?;
+    write_manifest(
+        root,
+        "probe",
+        "[package]\nname = 'probe'\n[dependencies]\nleft = { path = '../left' }\nright = { path = '../right' }\n",
+    )?;
+    fails_with(root, "a release build must never select it")
+}
+
+#[test]
+fn optional_dependencies_without_default_features_still_receive_features() -> Outcome {
+    for activation in ["dep:bridge", "bridge/activate"] {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        let root = directory.path();
+        tree(root, &workspace_manifest(), &member_manifest())?;
+        write_manifest(
+            root,
+            "bridge",
+            "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
+        )?;
+        write_manifest(
+            root,
+            "probe",
+            &format!(
+                "[package]\nname = 'probe'\n[features]\ndefault = ['{activation}']\n[dependencies]\nbridge = {{ path = '../bridge', optional = true, default-features = false, features = ['activate', 'inspect'] }}\n"
+            ),
+        )?;
+        fails_with(root, "in a default feature set")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn unselected_optional_dependency_features_do_not_activate_inspection() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = directory.path();
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    write_manifest(
+        root,
+        "probe",
+        "[package]\nname = 'probe'\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false, features = ['agent-inspection'] }\n",
+    )?;
+    let (passed, report) = gate(root)?;
+    if !passed {
+        return Err(format!(
+            "an inactive optional dependency must stay disabled:\n{report}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn identically_named_packages_from_different_paths_do_not_unify() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let root = directory.path();
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    let bridge = "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n";
+    write_manifest(
+        root,
+        "bridge-left",
+        &bridge.replace("name = 'bridge'", "name = 'bridge'\nversion = '1.0.0'"),
+    )?;
+    write_manifest(
+        root,
+        "bridge-right",
+        &bridge.replace("name = 'bridge'", "name = 'bridge'\nversion = '2.0.0'"),
+    )?;
+    write_manifest(
+        root,
+        "probe",
+        "[package]\nname = 'probe'\n[dependencies]\nleft = { package = 'bridge', path = '../bridge-left', features = ['activate'] }\nright = { package = 'bridge', path = '../bridge-right', features = ['inspect'] }\n",
+    )?;
+    let (passed, report) = gate(root)?;
+    if !passed {
+        return Err(format!(
+            "different package sources must not share features:\n{report}"
+        ));
+    }
+    Ok(())
+}
+
+#[test]
+fn inspection_source_overrides_are_rejected_in_all_manifest_forms() -> Outcome {
+    let overrides = [
+        "[patch.'https://github.com/P3GLEG/tauri-plugin-mcp']\ntauri-plugin-mcp = { path = 'plugin' }\n",
+        "[patch.'https://github.com/P3GLEG/tauri-plugin-mcp'.inspection]\npackage = 'tauri-plugin-mcp'\npath = 'plugin'\n",
+        "[patch.crates-io]\ninspection = { package = 'tauri-plugin-mcp', git = 'https://example.org/plugin', rev = 'other' }\n",
+        "[replace]\n\"tauri-plugin-mcp:0.3.1\" = { path = 'plugin' }\n",
+        "[replace]\n\"inspection:0.3.1\" = { package = 'tauri-plugin-mcp', path = 'plugin' }\n",
+        "[replace]\n\"https://github.com/P3GLEG/tauri-plugin-mcp#tauri-plugin-mcp:0.3.1\" = { path = 'plugin' }\n",
+        "[replace]\n\"https://github.com/P3GLEG/tauri-plugin-mcp#0.3.1\" = { path = 'plugin' }\n",
+    ];
+    for source_override in overrides {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        tree(
+            directory.path(),
+            &format!("{}\n{source_override}", workspace_manifest()),
+            &member_manifest(),
+        )?;
+        fails_with(directory.path(), "source override is forbidden")?;
+    }
+    Ok(())
+}
+
+#[test]
+fn unrelated_source_overrides_remain_allowed() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    tree(
+        directory.path(),
+        &format!(
+            "{}\n[patch.crates-io]\nserde = {{ path = 'serde' }}\n",
+            workspace_manifest()
+        ),
+        &member_manifest(),
+    )?;
+    let (passed, report) = gate(directory.path())?;
+    if !passed {
+        return Err(format!(
+            "unrelated source overrides must remain allowed:\n{report}"
+        ));
+    }
+    Ok(())
+}
+
+fn renderer_tree(root: &Path, main: &str) -> Outcome {
+    tree(root, &workspace_manifest(), &member_manifest())?;
+    fs::create_dir_all(root.join("src")).map_err(|error| error.to_string())?;
+    fs::create_dir_all(root.join("node_modules/tauri-plugin-mcp"))
+        .map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("index.html"),
+        "<script type='module' src='/src/main.tsx'></script>",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(root.join("src/main.tsx"), main).map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("package.json"),
+        "{\"name\":\"quota-renderer-fixture\",\"private\":true}",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(
+        root.join("node_modules/tauri-plugin-mcp/package.json"),
+        "{\"name\":\"tauri-plugin-mcp\",\"type\":\"module\",\"exports\":\"./index.js\"}",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(root.join("node_modules/tauri-plugin-mcp/index.js"),
+        "globalThis.inspectionLoaded = true; export function setupPluginListeners() { return Promise.resolve(); }")
+        .map_err(|error| error.to_string())
+}
+
+#[test]
+fn production_renderer_rejects_inspection_imports_in_every_reachable_module() -> Outcome {
+    for main in [
+        "import { setupPluginListeners } from 'tauri-plugin-mcp'; if (import.meta.env.DEV) setupPluginListeners();",
+        "import './inspection.js';",
+        "import('tauri-plugin-mcp');",
+        "export { setupPluginListeners } from 'tauri-plugin-mcp';",
+        "import '../node_modules/tauri-plugin-mcp/index.js';",
+    ] {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        renderer_tree(directory.path(), main)?;
+        fs::write(
+            directory.path().join("src/inspection.js"),
+            "import 'tauri-plugin-mcp';",
+        )
+        .map_err(|error| error.to_string())?;
+        fails_with(
+            directory.path(),
+            "production renderer includes tauri-plugin-mcp",
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn production_renderer_accepts_development_guarded_dynamic_imports() -> Outcome {
+    for main in [
+        "if (import.meta.env.DEV) { import('tauri-plugin-mcp').then(({ setupPluginListeners }) => setupPluginListeners()).catch(console.error); } document.title = 'Quota';",
+        "if (import.meta.env.DEV) { import('./inspection.js'); } document.title = 'Quota';",
+        "// import 'tauri-plugin-mcp'\ndocument.title = 'tauri-plugin-mcp is a development tool';",
+    ] {
+        let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+        renderer_tree(directory.path(), main)?;
+        fs::write(
+            directory.path().join("src/inspection.js"),
+            "import 'tauri-plugin-mcp';",
+        )
+        .map_err(|error| error.to_string())?;
+        let (passed, report) = gate(directory.path())?;
+        if !passed {
+            return Err(format!(
+                "a production renderer without inspection must pass:\n{report}"
+            ));
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn production_renderer_rejects_renamed_and_external_inspection_modules() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    renderer_tree(directory.path(), "import 'inspection-alias';")?;
+    fs::rename(
+        directory.path().join("node_modules/tauri-plugin-mcp"),
+        directory.path().join("node_modules/inspection-alias"),
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(
+        directory.path(),
+        "production renderer includes tauri-plugin-mcp",
+    )?;
+    fs::write(
+        directory.path().join("src/main.tsx"),
+        "import('tauri-plugin-mcp');",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::write(
+        directory.path().join("vite.config.mjs"),
+        "export default { build: { rolldownOptions: { external: ['tauri-plugin-mcp'] } } };",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(
+        directory.path(),
+        "production renderer includes tauri-plugin-mcp",
+    )
 }

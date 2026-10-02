@@ -53,9 +53,9 @@ def main() -> int:
     windows = (ctypes.c_ulong * (len(sys.argv) - 1))(
         *[int(arg, 16) for arg in sys.argv[1:]]
     )
-    cardinality = X11.XInternAtom(display, b"CARDINAL", 1)
+    cardinality = X11.XInternAtom(display, b"CARDINAL", 0)
     for name in ("_NET_CLIENT_LIST", "_NET_CLIENT_LIST_STACKING"):
-        atom = X11.XInternAtom(display, name.encode(), 1)
+        atom = X11.XInternAtom(display, name.encode(), 0)
         X11.XChangeProperty(
             display,
             root,

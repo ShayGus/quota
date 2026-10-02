@@ -82,10 +82,11 @@ preference.
 ## Development-only agent inspection
 
 [`tauri-plugin-mcp`](https://github.com/P3GLEG/tauri-plugin-mcp) lets an AI agent read the
-running app: screenshots, the DOM, the console log, and the IPC calls the renderer makes.
-It is not published to crates.io, so it is a git dependency pinned to the full commit
-`c7d271a06469bdf4744bfdeadca7458a1f3d02e5` in the root manifest.
-`cargo xtask check-release` fails if that ever becomes a branch or a tag.
+running app: screenshots, the DOM, the console log, and IPC calls an agent issues through
+the plugin's own tools. `manage_ipc` records only those agent-issued calls; ordinary
+frontend invokes are not intercepted. It is not published to crates.io, so it is a git
+dependency pinned to the full commit `c7d271a06469bdf4744bfdeadca7458a1f3d02e5` in the
+root manifest. `cargo xtask check-release` fails if that ever becomes a branch or a tag.
 
 It is an `optional` dependency behind the non-default `agent-inspection` feature, and
 `src-tauri/src/bootstrap.rs` registers it only when both that feature and

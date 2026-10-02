@@ -1,9 +1,10 @@
 # Inspecting the running app from an AI agent
 
 A debug build of Quota can be inspected by an AI agent: a screenshot of either window, the
-DOM of either window, the console log, and the IPC calls the renderer makes. This is how a
-worker checks that the real interface matches a mockup and that behaviour is correct,
-instead of guessing from the source.
+DOM of either window, the console log, and the IPC calls an agent issues through the
+plugin's own tools. `manage_ipc` records only those agent-issued calls; ordinary frontend
+invokes are not intercepted. This is how a worker checks that the real interface matches a
+mockup and that behaviour is correct, instead of guessing from the source.
 
 Nothing described here exists in a release build. See
 [Why it cannot reach a release](#why-it-cannot-reach-a-release). What works and what does
@@ -15,16 +16,16 @@ not on this particular machine is recorded under
 
 The plugin exposes nineteen tools over a Unix socket. The ones an agent uses most:
 
-| Tool                                                  | What it answers                                                                             |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| `take_screenshot`                                     | what the window actually looks like                                                         |
-| `query_page`                                          | the element map, the raw DOM, the URL and title, or the pixel coordinates of a CSS selector |
-| `read_text`                                           | the visible text of everything matching a selector                                          |
-| `inspect_element`                                     | the bounding box and the computed styles of one element                                     |
-| `click`, `type_text`, `press_key`, `dispatch_pointer` | drive the interface                                                                         |
-| `query_logs`                                          | the Rust log, the webview `console.*` output, and intercepted dialogs                       |
-| `manage_ipc`                                          | the `invoke` calls the page made, with arguments, results, and latency                      |
-| `execute_js`                                          | run anything the structured tools do not cover                                              |
+| Tool                                                  | What it answers                                                                                          |
+| ----------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `take_screenshot`                                     | what the window actually looks like                                                                      |
+| `query_page`                                          | the element map, the raw DOM, the URL and title, or the pixel coordinates of a CSS selector              |
+| `read_text`                                           | the visible text of everything matching a selector                                                       |
+| `inspect_element`                                     | the bounding box and the computed styles of one element                                                  |
+| `click`, `type_text`, `press_key`, `dispatch_pointer` | drive the interface                                                                                      |
+| `query_logs`                                          | the Rust log, the webview `console.*` output, and intercepted dialogs                                    |
+| `manage_ipc`                                          | only IPC calls an agent issues through the plugin's tools; ordinary frontend invokes are not intercepted |
+| `execute_js`                                          | run anything the structured tools do not cover                                                           |
 
 ## Start the app
 
@@ -45,10 +46,10 @@ Both halves matter.
 - `--features agent-inspection` compiles the plugin. Without the feature the build
   succeeds and opens a socket nobody is listening on.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
-  a capability file the allowlist does not name, so without this the console and IPC tools
-  return nothing while every other tool still works. The allowlist in
-  `src-tauri/tauri.conf.json` deliberately keeps the shipping two capabilities only,
-  because the plugin's permissions do not exist in a build that does not compile it.
+  a capability file the allowlist does not name, so without this console forwarding fails.
+  The allowlist in `src-tauri/tauri.conf.json` deliberately keeps the shipping two
+  capabilities only, because the plugin's permissions do not exist in a build that does
+  not compile it.
 
 The renderer needs the Vite dev server on port 1420. If that port is taken, move both
 ends:
@@ -58,7 +59,8 @@ bun tauri dev --features agent-inspection \
   --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
 ```
 
-The app opens both windows: `overview` and `settings`.
+A launch opens only `overview`. The `settings` window is created hidden and opens when a
+person asks for it.
 
 For `take_screenshot` on WSLg, export `GDK_BACKEND=x11` first. See
 [Screenshots on WSLg](#screenshots-on-wslg).
@@ -129,17 +131,17 @@ Run on 2026-10-02 under WSL2 with WSLg, `bun run inspect`, first with the Vite p
 to 1433 because a sibling checkout held 1420, then on port 1420 with `GDK_BACKEND=x11` for
 the screenshot:
 
-| Check                                                                              | Result                                                             |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                |
-| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                |
-| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                |
-| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                |
-| `tools/list`                                                                       | 19 tools                                                           |
-| `query_page` `mode: "map"`                                                         | the real element tree with refs                                    |
-| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                            |
-| `query_logs`                                                                       | real `console.*` output from both windows                          |
-| `take_screenshot`                                                                  | a 810x720 JPEG of the overview window, in `docs/inspection-proof/` |
+| Check                                                                              | Result                                                                           |
+| ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                              |
+| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                              |
+| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                              |
+| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                              |
+| `tools/list`                                                                       | 19 tools                                                                         |
+| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                  |
+| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                          |
+| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window |
+| `take_screenshot`                                                                  | a 810x720 JPEG of the overview window, in `docs/inspection-proof/`               |
 
 The console output proves the capability grant works: `push_log` is the one command that
 has to pass through the capability allowlist, and without `agent-inspection-capability`
@@ -185,8 +187,8 @@ window before capturing it.
 
 To check window selection, show settings and publish both window ids. Request one
 `take_screenshot` with `window_label: "overview"` and another with
-`window_label: "settings"`; each must show the corresponding interface. Publish the
-same ids in reverse order and repeat; neither requested interface should change.
+`window_label: "settings"`; each must show the corresponding interface. Publish the same
+ids in reverse order and repeat; neither requested interface should change.
 
 `take_screenshot` scales the result to `max_width`, which defaults to 512. Pass
 `max_width` above the window width — 1400 for both windows — to get the image at its real

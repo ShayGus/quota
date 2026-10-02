@@ -2,6 +2,7 @@
 
 use std::collections::BTreeSet;
 use std::path::Path;
+use std::process::Command;
 
 use cargo_toml::Value;
 
@@ -24,6 +25,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     cargo_manifest::check_dependency_feature_selection(root, &mut outcome);
     check_deny_config(root, &mut outcome);
     check_agent_inspection(root, &mut outcome);
+    check_inspection_renderer(root, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
     outcome
@@ -119,40 +121,48 @@ fn check_agent_inspection(root: &Path, outcome: &mut Outcome) {
         pins += check_inspection_pin(file, document, outcome);
         let plugin_aliases = check_inspection_crate(file, document, workspace, outcome);
         dependencies += plugin_aliases.len();
-        let workspace_entries = document
-            .get("workspace")
-            .and_then(|workspace| workspace.get("dependencies"))
-            .and_then(Value::as_table)
-            .into_iter()
-            .flatten()
-            .map(|(alias, value)| (alias.as_str(), value));
-        for (alias, specification) in dependency_entries(document)
-            .into_iter()
-            .chain(workspace_entries)
-        {
-            if dependency_selects_inspection(
-                alias,
-                specification,
-                &[],
-                &manifests,
-                workspace,
-                &mut BTreeSet::new(),
-            ) {
-                outcome.fail(file.clone(), 1,
-                    format!("`{alias}` selects `{INSPECTION_FEATURE}`; a release build must never select it"));
-            }
-        }
+        check_inspection_overrides(file, document, outcome);
         features += check_inspection_feature(file, document, &plugin_aliases, outcome);
-        if selects_inspection(
-            file,
-            document,
-            &["default"],
-            &manifests,
-            workspace,
-            &mut BTreeSet::new(),
-        ) {
+    }
+    let graph: Vec<Vec<InspectionDependency<'_>>> = manifests
+        .iter()
+        .map(|(file, document)| {
+            dependency_entries(document)
+                .into_iter()
+                .map(|(alias, specification)| {
+                    InspectionDependency::resolve(
+                        root,
+                        file,
+                        alias,
+                        specification,
+                        workspace,
+                        &manifests,
+                    )
+                })
+                .collect()
+        })
+        .collect();
+    let selected = unified_features(&manifests, &graph);
+    for (index, (file, document)) in manifests.iter().enumerate() {
+        if inspection_enabled(document, &graph[index], &selected[index]) {
             outcome.fail(file.clone(), 1,
-                format!("`{INSPECTION_FEATURE}` is in a default feature set; release builds must exclude it"));
+                format!("`{INSPECTION_FEATURE}` is in a default feature set or dependency feature selection; release builds must exclude it"));
+        }
+        for dependency in &graph[index] {
+            if dependency.active(document, &selected[index])
+                && dependency.target.is_some_and(|target| {
+                    inspection_enabled(&manifests[target].1, &graph[target], &selected[target])
+                })
+            {
+                outcome.fail(
+                    file.clone(),
+                    1,
+                    format!(
+                        "`{}` selects `{INSPECTION_FEATURE}`; a release build must never select it",
+                        dependency.alias
+                    ),
+                );
+            }
         }
     }
     if dependencies != 1 || features != 1 || pins != 1 {
@@ -323,123 +333,243 @@ fn dependency_source<'a>(
     }
 }
 
-fn dependency_selects_inspection(
-    alias: &str,
-    specification: &Value,
-    forwarded: &[&str],
-    manifests: &[(String, Value)],
-    workspace: Option<&cargo_toml::Table>,
-    visited: &mut BTreeSet<(String, String)>,
-) -> bool {
-    let source = dependency_source(alias, specification, workspace);
-    let package = dependency_package(alias, source);
-    let Some((target_file, target)) = manifests.iter().find(|(_, target)| {
-        target
-            .get("package")
-            .and_then(|package| package.get("name"))
-            .and_then(Value::as_str)
-            == Some(package)
-    }) else {
-        return false;
-    };
-    let mut selected = string_array(specification.get("features"));
-    selected.extend_from_slice(forwarded);
-    let inherited = specification.get("workspace").and_then(Value::as_bool) == Some(true);
-    if inherited {
-        selected.extend(string_array(source.get("features")));
-    }
-    let defaults = if inherited {
-        source.get("default-features").and_then(Value::as_bool) != Some(false)
-            || specification
-                .get("default-features")
-                .and_then(Value::as_bool)
-                == Some(true)
-    } else {
-        specification
-            .get("default-features")
-            .and_then(Value::as_bool)
-            != Some(false)
-    };
-    if defaults {
-        selected.push("default");
-    }
-    selects_inspection(
-        target_file,
-        target,
-        &selected,
-        manifests,
-        workspace,
-        visited,
-    )
+struct InspectionDependency<'a> {
+    alias: &'a str,
+    package: &'a str,
+    target: Option<usize>,
+    selected: BTreeSet<String>,
+    optional: bool,
 }
 
-fn selects_inspection(
-    file: &str,
-    document: &Value,
-    selected: &[&str],
-    manifests: &[(String, Value)],
-    workspace: Option<&cargo_toml::Table>,
-    visited: &mut BTreeSet<(String, String)>,
-) -> bool {
-    let mut expanded = BTreeSet::new();
-    let mut pending = selected.to_vec();
-    while let Some(feature) = pending.pop() {
-        if !expanded.insert(feature) {
-            continue;
-        }
-        if feature == INSPECTION_FEATURE {
-            return true;
-        }
-        pending.extend(string_array(
-            document
-                .get("features")
-                .and_then(|table| table.get(feature)),
-        ));
-    }
-    if !visited.insert((
-        file.to_string(),
-        expanded.iter().copied().collect::<Vec<_>>().join("\0"),
-    )) {
-        return false;
-    }
-    dependency_entries(document)
-        .into_iter()
-        .any(|(alias, specification)| {
-            let forwarded: Vec<&str> = expanded
-                .iter()
-                .filter_map(|feature| {
-                    feature
-                        .split_once('/')
-                        .filter(|(name, _)| name.trim_end_matches('?') == alias)
-                        .map(|(_, feature)| feature)
-                })
-                .collect();
-            let active = specification.get("optional").and_then(Value::as_bool) != Some(true)
-                || expanded.contains(format!("dep:{alias}").as_str())
-                || (expanded.contains(alias)
+impl<'a> InspectionDependency<'a> {
+    fn resolve(
+        root: &Path,
+        file: &str,
+        alias: &'a str,
+        specification: &'a Value,
+        workspace: Option<&'a cargo_toml::Table>,
+        manifests: &[(String, Value)],
+    ) -> Self {
+        let source = dependency_source(alias, specification, workspace);
+        let inherited = specification.get("workspace").and_then(Value::as_bool) == Some(true);
+        let package = dependency_package(alias, source);
+        let target = source.get("path").and_then(Value::as_str).and_then(|path| {
+            let member = root.join(file);
+            let base = if inherited { root } else { member.parent()? };
+            let manifest_path = normalize_path(&base.join(path).join("Cargo.toml"));
+            manifests.iter().position(|(file, document)| {
+                normalize_path(&root.join(file)) == manifest_path
                     && document
+                        .get("package")
+                        .and_then(|package| package.get("name"))
+                        .and_then(Value::as_str)
+                        == Some(package)
+            })
+        });
+        let mut selected: BTreeSet<String> = string_array(specification.get("features"))
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        if inherited {
+            selected.extend(
+                string_array(source.get("features"))
+                    .into_iter()
+                    .map(str::to_string),
+            );
+        }
+        let defaults = if inherited {
+            source.get("default-features").and_then(Value::as_bool) != Some(false)
+                || specification
+                    .get("default-features")
+                    .and_then(Value::as_bool)
+                    == Some(true)
+        } else {
+            specification
+                .get("default-features")
+                .and_then(Value::as_bool)
+                != Some(false)
+        };
+        if defaults {
+            selected.insert("default".to_string());
+        }
+        Self {
+            alias,
+            package,
+            target,
+            selected,
+            optional: specification.get("optional").and_then(Value::as_bool) == Some(true),
+        }
+    }
+
+    fn active(&self, document: &Value, selected: &BTreeSet<String>) -> bool {
+        !self.optional
+            || selected.contains(&format!("dep:{}", self.alias))
+            || (selected.contains(self.alias)
+                && document
+                    .get("features")
+                    .and_then(|table| table.get(self.alias))
+                    .is_none())
+            || selected.iter().any(|feature| {
+                feature
+                    .split_once('/')
+                    .is_some_and(|(alias, _)| alias == self.alias)
+            })
+    }
+}
+
+fn normalize_path(path: &Path) -> std::path::PathBuf {
+    let mut normalized = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            std::path::Component::CurDir => {}
+            component => normalized.push(component),
+        }
+    }
+    normalized
+}
+
+fn unified_features(
+    manifests: &[(String, Value)],
+    graph: &[Vec<InspectionDependency<'_>>],
+) -> Vec<BTreeSet<String>> {
+    let mut selected: Vec<BTreeSet<String>> = manifests
+        .iter()
+        .map(|(_, document)| {
+            if document.get("package").is_some() {
+                BTreeSet::from(["default".to_string()])
+            } else {
+                BTreeSet::new()
+            }
+        })
+        .collect();
+    loop {
+        let previous = selected.clone();
+        for (index, (_, document)) in manifests.iter().enumerate() {
+            let mut pending: Vec<String> = selected[index].iter().cloned().collect();
+            while let Some(feature) = pending.pop() {
+                for enabled in string_array(
+                    document
                         .get("features")
-                        .and_then(|table| table.get(alias))
-                        .is_none())
-                || expanded.iter().any(|feature| {
+                        .and_then(|features| features.get(&feature)),
+                ) {
+                    if selected[index].insert(enabled.to_string()) {
+                        pending.push(enabled.to_string());
+                    }
+                }
+            }
+            for dependency in &graph[index] {
+                if !dependency.active(document, &selected[index]) {
+                    continue;
+                }
+                let Some(target) = dependency.target else {
+                    continue;
+                };
+                let mut incoming = dependency.selected.clone();
+                incoming.extend(selected[index].iter().filter_map(|feature| {
                     feature
                         .split_once('/')
-                        .is_some_and(|(name, _)| name == alias)
-                });
-            if !active {
-                return false;
+                        .filter(|(alias, _)| alias.trim_end_matches('?') == dependency.alias)
+                        .map(|(_, feature)| feature.to_string())
+                }));
+                selected[target].extend(incoming);
             }
-            let source = dependency_source(alias, specification, workspace);
-            dependency_package(alias, source) == INSPECTION_CRATE
-                || dependency_selects_inspection(
-                    alias,
-                    specification,
-                    &forwarded,
-                    manifests,
-                    workspace,
-                    visited,
-                )
+        }
+        if selected == previous {
+            return selected;
+        }
+    }
+}
+
+fn inspection_enabled(
+    document: &Value,
+    dependencies: &[InspectionDependency<'_>],
+    selected: &BTreeSet<String>,
+) -> bool {
+    selected.contains(INSPECTION_FEATURE)
+        || dependencies.iter().any(|dependency| {
+            dependency.package == INSPECTION_CRATE && dependency.active(document, selected)
         })
+}
+
+fn check_inspection_overrides(file: &str, document: &Value, outcome: &mut Outcome) {
+    let patches = document
+        .get("patch")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten()
+        .flat_map(|(_, source)| source.as_table().into_iter().flatten());
+    let replacements = document
+        .get("replace")
+        .and_then(Value::as_table)
+        .into_iter()
+        .flatten();
+    for (alias, specification) in patches.chain(replacements) {
+        let id = alias.rsplit('#').next().unwrap_or(alias);
+        let name = if id.starts_with(|character: char| character.is_ascii_digit()) {
+            alias
+                .split('#')
+                .next()
+                .unwrap_or(alias)
+                .rsplit('/')
+                .next()
+                .unwrap_or(alias)
+                .trim_end_matches(".git")
+        } else {
+            id.split(':').next().unwrap_or(id)
+        };
+        if dependency_package(name, specification) == INSPECTION_CRATE {
+            outcome.fail(file.to_string(), 1,
+                format!("`{INSPECTION_CRATE}` source override is forbidden; the audited workspace pin must be its only source"));
+        }
+    }
+}
+
+fn check_inspection_renderer(root: &Path, outcome: &mut Outcome) {
+    if !root.join("index.html").is_file() && !root.join("src/main.tsx").is_file() {
+        return;
+    }
+    let directory = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let script = directory.join("check-release-renderer.mjs");
+    let root = match std::path::absolute(root) {
+        Ok(root) => root,
+        Err(error) => {
+            outcome.fail(
+                "src/main.tsx".to_string(),
+                1,
+                format!("cannot resolve production renderer root: {error}"),
+            );
+            return;
+        }
+    };
+    match Command::new("bun")
+        .arg(script)
+        .arg(root)
+        .current_dir(directory)
+        .output()
+    {
+        Ok(output) if output.status.success() => {
+            outcome.note("production renderer excludes the inspection guest module".to_string());
+        }
+        Ok(output) => {
+            outcome.fail(
+                "src/main.tsx".to_string(),
+                1,
+                format!(
+                    "production renderer inspection check failed: {}{}",
+                    String::from_utf8_lossy(&output.stdout),
+                    String::from_utf8_lossy(&output.stderr)
+                ),
+            );
+        }
+        Err(error) => outcome.fail(
+            "src/main.tsx".to_string(),
+            1,
+            format!("cannot check production renderer: {error}"),
+        ),
+    }
 }
 
 /// Every workflow `uses:` must name a full 40-character commit SHA.
