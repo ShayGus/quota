@@ -7,22 +7,37 @@
  */
 import type { JSX } from "react";
 
-import type { OverviewWindowState, Preferences } from "../../../generated/bindings";
+import type {
+  MonitoringState,
+  OverviewWindowState,
+  Preferences,
+} from "../../../generated/bindings";
 import { SettingRow, Select, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
+import { backgroundRefreshSeconds, withBackgroundRefresh } from "../polling";
 import { withDensity } from "../preferences";
 
 /** The window settings panel. */
 export function WindowPanel({
   preferences,
   nativeWindow,
+  monitoring,
   actions,
 }: {
   readonly preferences: Preferences;
+  readonly monitoring: MonitoringState | null;
   readonly nativeWindow: OverviewWindowState | null;
   readonly actions: SettingsActions;
 }): JSX.Element {
   const confirmed = nativeWindow?.kind === "confirmed" ? nativeWindow.value : null;
+  const intervals = preferences.polling.map(backgroundRefreshSeconds);
+  const uniformInterval = intervals[0];
+  const refresh =
+    uniformInterval !== undefined &&
+    intervals.every((interval) => interval === uniformInterval) &&
+    [60, 300, 900].includes(uniformInterval)
+      ? String(uniformInterval)
+      : "";
   return (
     <>
       <h3 className="settings__title">Window &amp; monitoring</h3>
@@ -58,6 +73,104 @@ export function WindowPanel({
               actions.setAlwaysOnTop(next);
             }}
           />
+        }
+      />
+      <SettingRow
+        label="Window width"
+        description="Use the wider view to compare accounts. A narrow-width command is unavailable; Try narrow view resets the floating window so you can resize its borders."
+        control={
+          <span className="setting-row__actions">
+            <button
+              type="button"
+              className="button button--small"
+              onClick={actions.resetPosition}
+            >
+              Try narrow view
+            </button>
+            <button
+              type="button"
+              className="button button--small"
+              onClick={actions.fitToAccounts}
+            >
+              Use wide view
+            </button>
+          </span>
+        }
+      />
+      <SettingRow
+        label="Window position"
+        description="Keyboard movement is unavailable in the host. Move with keys currently resets the window to a visible floating position; use the title bar to move it."
+        control={
+          <button
+            type="button"
+            className="button button--small"
+            onClick={actions.resetPosition}
+          >
+            Move with keys
+          </button>
+        }
+      />
+      <SettingRow
+        label="Launch at login"
+        description="This saves startup behavior: on restores the chosen mode, off starts quietly in the tray. The host cannot register or unregister login startup yet."
+        control={
+          <Switch
+            label="Launch at login"
+            checked={preferences.launch_behavior === "restore_last_mode"}
+            onChange={(enabled) =>
+              actions.savePreferences({
+                ...preferences,
+                launch_behavior: enabled ? "restore_last_mode" : "quiet_in_tray",
+              })
+            }
+          />
+        }
+      />
+      <SettingRow
+        label="Pause monitoring"
+        description="Keep last-known readings. A paused view is not a current ranking."
+        control={
+          monitoring === null ? (
+            <button
+              type="button"
+              role="switch"
+              className="switch"
+              aria-label="Pause monitoring"
+              aria-checked={false}
+              disabled
+            />
+          ) : (
+            <Switch
+              label="Pause monitoring"
+              checked={monitoring.kind === "paused"}
+              onChange={actions.setMonitoring}
+            />
+          )
+        }
+      />
+      <SettingRow
+        label="Background refresh"
+        description="Per-provider floors, shared-credential limits, and backoff take precedence. This changes the ordinary read schedule, keeping the provider's strategy."
+        control={
+          <select
+            aria-label="Background refresh"
+            value={refresh}
+            disabled={preferences.polling.length === 0}
+            onChange={(event) => {
+              const seconds = Number(event.currentTarget.value);
+              for (const policy of preferences.polling)
+                actions.savePollingPreferences(withBackgroundRefresh(policy, seconds));
+            }}
+          >
+            <option value="" disabled>
+              {intervals.length === 0
+                ? "No provider policy yet"
+                : "Provider-specific intervals"}
+            </option>
+            <option value="60">Every minute</option>
+            <option value="300">Every 5 minutes</option>
+            <option value="900">Every 15 minutes</option>
+          </select>
         }
       />
       <SettingRow

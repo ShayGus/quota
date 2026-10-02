@@ -22,6 +22,8 @@ import { account, preferences, snapshot } from "./fixtures";
 function settingsActions(): SettingsActions {
   return {
     savePreferences: vi.fn(),
+    setMonitoring: vi.fn(),
+    savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
     setOverviewMode: vi.fn(),
     fitToAccounts: vi.fn(),

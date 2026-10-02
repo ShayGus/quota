@@ -157,6 +157,7 @@ export function Overview({
   onIndicatorStyle,
   onOpenAccount,
   onReconnect,
+  onResume,
 }: {
   readonly state: RendererState;
   readonly filter: OverviewFilter;
@@ -171,6 +172,7 @@ export function Overview({
   readonly onAddAccount: () => void;
   readonly onIndicatorStyle: (style: IndicatorStyle) => void;
   readonly onOpenAccount: (accountId: AccountId) => void;
+  readonly onResume: () => void;
   readonly onReconnect: (accountId: AccountId) => void;
 }): JSX.Element {
   // The indicator style is a confirmed preference, so the overview reads it
@@ -258,63 +260,11 @@ export function Overview({
         indicatorStyle={style}
         onIndicatorStyle={onIndicatorStyle}
       />
-      <RefreshNotice accounts={accounts} preferences={state.preferences} now={now} />
-      {matches.length === 0 ? (
-        <div className="empty empty--compact">
-          <h2>
-            {search.length > 0 ? "No matching accounts" : "No accounts need attention"}
-          </h2>
-          <p>Change the filter to return to all subscriptions.</p>
-          <button
-            type="button"
-            className="button"
-            onClick={() => {
-              onFilter("all");
-              onSearchOpen(false);
-              onSearch("");
-            }}
-          >
-            Show all accounts
+      {state.monitoring?.kind === "paused" ? (
+        <div className="list-note">
+          <span>Monitoring paused. These are last-known readings, not ranked.</span>
+          <button type="button" className="text-button" onClick={onResume}>
+            Resume
           </button>
         </div>
-      ) : (
-        <div className="table">
-          <AccountColumns />
-          {rows}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The first launch: no account yet, so the window explains what it is for. */
-function FirstLaunch({
-  onAddAccount,
-}: {
-  readonly onAddAccount: () => void;
-}): JSX.Element {
-  return (
-    <div className="empty">
-      <div className="empty__art">
-        <Logo size={42} />
-      </div>
-      <h2>
-        Your subscriptions,
-        <br />
-        in one small window.
-      </h2>
-      <p>
-        See what is left in each quota window, when it resets, and how recently it was
-        checked.
-      </p>
-      <button
-        type="button"
-        className="button button--primary button--full"
-        onClick={onAddAccount}
-      >
-        <Icon name="plus" size={15} />
-        Add your first account
-      </button>
-    </div>
-  );
-}
+      ) : null}

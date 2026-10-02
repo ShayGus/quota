@@ -52,6 +52,7 @@ function Harness(): React.ReactElement {
       onAddAccount={() => undefined}
       onIndicatorStyle={() => undefined}
       onOpenAccount={() => undefined}
+      onResume={() => undefined}
       onReconnect={() => undefined}
     />
   );

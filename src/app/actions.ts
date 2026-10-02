@@ -14,6 +14,7 @@ import {
   type ConnectionAttemptId,
   type OverviewMode,
   type Preferences,
+  type ProviderPollingPolicy,
   type RefreshReason,
   type IndicatorStyle,
   type SettingsDestination,
@@ -107,6 +108,9 @@ export const actions = {
   /** Returns the overview to a visible work area. */
   async resetPosition(): Promise<void> {
     await reportAsync(commands.resetOverviewPosition());
+  },
+  async savePollingPreferences(policy: ProviderPollingPolicy): Promise<void> {
+    await reportAsync(commands.setPollingPreferences(policy.provider_id, policy));
   },
   /** Saves the whole preference object. The confirmed object arrives by event. */
   async savePreferences(next: Preferences): Promise<void> {

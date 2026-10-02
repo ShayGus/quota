@@ -35,3 +35,23 @@ mutually exclusive. Quiet hours are UTC. Notification preview stays inside the r
 because no host preview command exists. The committed screenshots show the initial
 fidelity implementation, before review fixes; they are historical evidence rather than
 captures of the updated settings and wizard.
+
+General includes Window width, Move with keys, Launch at login, Pause monitoring, and
+Background refresh. The host exposes Fit and Reset but no narrow-width or keyboard
+movement command: Use wide view fits all accounts; Try narrow view and Move with keys
+reset the floating window for manual resizing or dragging. `launch_behavior` controls
+quiet tray startup versus restoring the last mode; there is no login registration command
+or stored enabled flag. The Launch at login switch saves that nearest startup preference
+and states the limitation beside the control.
+
+Pause monitoring and the overview Resume action share `set_monitoring_state`. Background
+refresh saves each provider's existing polling strategy via `set_polling_preferences`,
+preserving floors, adaptive bounds, boundary verification, backoff, and read budgets.
+Fixed and boundary-aware schedules update the active and background intervals together
+because the current supervisor uses the active interval for all ordinary reads; there is
+no distinct hidden-window schedule yet.
+
+Fit from overview or settings uses one native transition: floating chrome and confirmed
+mode, fitted geometry, and an overview reset that clears filter/search and returns from
+details. Viewport counts also observe the overview content so opening or closing ordering
+help updates the fully visible row count.

@@ -100,6 +100,7 @@ pub async fn fit_overview_to_accounts(
     let height = (280.0 + f64::from(account_count) * 68.0)
         .min(max_height)
         .max(1.0);
+    window::apply_mode_chrome(&native, OverviewMode::Floating)?;
     native
         .set_size(LogicalSize::new(width, height))
         .map_err(|_| window::failed("fit_window_size"))?;
@@ -109,8 +110,16 @@ pub async fn fit_overview_to_accounts(
             f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
         ))
         .map_err(|_| window::failed("center_fitted_window"))?;
-    let visible = window::set_visible(&state.app, "overview", true, true)?;
+    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+        preferences.overview_mode = OverviewMode::Floating;
+    })
+    .await?;
     let mut controller = state.window.lock().await;
+    controller.set_mode(OverviewMode::Floating);
+    native
+        .eval("window.dispatchEvent(new Event('quota-fit-overview'));")
+        .map_err(|_| window::failed("fit_overview_content"))?;
+    let visible = window::set_visible(&state.app, "overview", true, true)?;
     controller.set_visible(visible);
     let confirmed = controller.record_geometry_change();
     window::publish_state(&state.app, &state.app_instance_id, confirmed);

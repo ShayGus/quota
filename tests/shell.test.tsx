@@ -35,7 +35,13 @@ vi.mock("@tauri-apps/api/event", () => ({
 // is replaced before the module graph under test is evaluated.
 import { App } from "../src/app/App";
 import { FeatureBoundary } from "../src/app/ErrorBoundary";
-import { acceptPreferences, acceptSnapshot } from "../src/shared/state/store";
+import {
+  acceptMonitoring,
+  acceptPreferences,
+  acceptSnapshot,
+  applyPendingOrder,
+} from "../src/shared/state/store";
+import type { PollingStrategy, ProviderPollingPolicy } from "../src/generated/bindings";
 import {
   account,
   percent,
@@ -308,5 +314,317 @@ describe("approved control actions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
     fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a3" } });
     expect(screen.getByTestId("visible-count").textContent).toBe("1 / 1 visible");
+  });
+});
+
+describe("General settings controls", () => {
+  it("uses existing geometry actions and waits for startup and monitoring confirmation", async () => {
+    window.location.hash = "#/settings";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    const initial = preferences();
+    acceptPreferences(initial);
+    render(<App />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Try narrow view" }));
+      fireEvent.click(screen.getByRole("button", { name: "Move with keys" }));
+      fireEvent.click(screen.getByRole("button", { name: "Use wide view" }));
+      fireEvent.click(screen.getByRole("button", { name: "Fit all accounts" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Launch at login" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" }));
+    });
+    expect(commandsMatching("reset_overview_position")).toHaveLength(2);
+    expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(2);
+    expect(commandsMatching("update_preferences")[0]?.args).toEqual({
+      preferences: { ...initial, launch_behavior: "restore_last_mode" },
+    });
+    expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: true });
+    expect(
+      screen
+        .getByRole("switch", { name: "Launch at login" })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+    expect(
+      screen
+        .getByRole("switch", { name: "Pause monitoring" })
+        .getAttribute("aria-checked"),
+    ).toBe("false");
+    act(() => {
+      acceptPreferences({
+        ...initial,
+        revision: 8,
+        launch_behavior: "restore_last_mode",
+      });
+      acceptMonitoring({ kind: "paused" });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("switch", { name: "Launch at login" }));
+      fireEvent.click(screen.getByRole("switch", { name: "Pause monitoring" }));
+    });
+    expect(commandsMatching("update_preferences")[1]?.args).toEqual({
+      preferences: { ...initial, revision: 8, launch_behavior: "quiet_in_tray" },
+    });
+    expect(commandsMatching("set_monitoring_state")[1]?.args).toEqual({ paused: false });
+  });
+
+  it("offers Resume until monitoring is confirmed running", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount(), { kind: "paused" }));
+    render(<App />);
+    await act(async () =>
+      fireEvent.click(screen.getByRole("button", { name: "Resume" })),
+    );
+    expect(commandsMatching("set_monitoring_state")[0]?.args).toEqual({ paused: false });
+    expect(screen.getByRole("button", { name: "Resume" })).toBeTruthy();
+    act(() => acceptMonitoring({ kind: "running" }));
+    expect(screen.queryByRole("button", { name: "Resume" })).toBeNull();
+  });
+
+  const fixed = {
+    visible_seconds: 300,
+    background_seconds: 300,
+    battery_saver_seconds: 600,
+    minimum_seconds: 120,
+  };
+  const strategies: readonly {
+    strategy: PollingStrategy;
+    requested: string;
+    expected: PollingStrategy;
+  }[] = [
+    {
+      strategy: { kind: "fixed_interval", settings: fixed },
+      requested: "60",
+      expected: {
+        kind: "fixed_interval",
+        settings: { ...fixed, visible_seconds: 120, background_seconds: 120 },
+      },
+    },
+    {
+      strategy: {
+        kind: "boundary_aware",
+        settings: { base: fixed, boundary_grace_seconds: 30, max_boundary_attempts: 2 },
+      },
+      requested: "900",
+      expected: {
+        kind: "boundary_aware",
+        settings: {
+          base: {
+            ...fixed,
+            visible_seconds: 900,
+            background_seconds: 900,
+            battery_saver_seconds: 900,
+          },
+          boundary_grace_seconds: 30,
+          max_boundary_attempts: 2,
+        },
+      },
+    },
+    {
+      strategy: {
+        kind: "adaptive",
+        settings: { minimum_seconds: 120, maximum_seconds: 600, step_seconds: 300 },
+      },
+      requested: "900",
+      expected: {
+        kind: "adaptive",
+        settings: { minimum_seconds: 120, maximum_seconds: 600, step_seconds: 600 },
+      },
+    },
+    {
+      strategy: {
+        kind: "event_assisted",
+        settings: { minimum_seconds: 120, verification_seconds: 300 },
+      },
+      requested: "60",
+      expected: {
+        kind: "event_assisted",
+        settings: { minimum_seconds: 120, verification_seconds: 120 },
+      },
+    },
+  ];
+  it.each(strategies)(
+    "saves a bounded interval without replacing $strategy.kind",
+    async ({ strategy, requested, expected }) => {
+      window.location.hash = "#/settings";
+      const policy: ProviderPollingPolicy = {
+        provider_id: "codex",
+        strategy,
+        request_timeout_seconds: 30,
+        helper_timeout_seconds: 20,
+        backoff_minutes: [1, 5, 15],
+        max_concurrent_remote_reads: 1,
+        version: 1,
+      };
+      acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+      acceptPreferences(preferences({ polling: [policy] }));
+      render(<App />);
+      const select = screen.getByRole("combobox", {
+        name: "Background refresh",
+      }) as HTMLSelectElement;
+      expect(select.value).toBe("300");
+      await act(async () => fireEvent.change(select, { target: { value: requested } }));
+      const saved = { ...policy, strategy: expected };
+      expect(commandsMatching("set_polling_preferences")[0]?.args).toEqual({
+        providerId: "codex",
+        policy: saved,
+      });
+      expect(commandsMatching("update_preferences")).toHaveLength(0);
+      expect(select.value).toBe("300");
+      act(() => acceptPreferences(preferences({ revision: 8, polling: [saved] })));
+      expect(select.value).toBe(
+        requested === "900" && strategy.kind === "boundary_aware" ? "900" : "",
+      );
+    },
+  );
+
+  it("updates every provider policy when providers have different intervals", async () => {
+    window.location.hash = "#/settings";
+    const policy: ProviderPollingPolicy = {
+      provider_id: "codex",
+      strategy: { kind: "fixed_interval", settings: fixed },
+      request_timeout_seconds: 30,
+      helper_timeout_seconds: 20,
+      backoff_minutes: [1, 5],
+      max_concurrent_remote_reads: 1,
+      version: 1,
+    };
+    const sibling: ProviderPollingPolicy = {
+      ...policy,
+      provider_id: "claude",
+      strategy: {
+        kind: "event_assisted",
+        settings: { minimum_seconds: 60, verification_seconds: 900 },
+      },
+    };
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences({ polling: [policy, sibling] }));
+    render(<App />);
+    const select = screen.getByRole("combobox", {
+      name: "Background refresh",
+    }) as HTMLSelectElement;
+    expect(select.value).toBe("");
+    await act(async () => fireEvent.change(select, { target: { value: "300" } }));
+    expect(commandsMatching("set_polling_preferences").map((call) => call.args)).toEqual([
+      { providerId: "codex", policy },
+      {
+        providerId: "claude",
+        policy: {
+          ...sibling,
+          strategy: {
+            kind: "event_assisted",
+            settings: { minimum_seconds: 60, verification_seconds: 300 },
+          },
+        },
+      },
+    ]);
+  });
+});
+
+describe("Fit presentation and layout changes", () => {
+  it("restores all accounts and closes search when the host completes Fit", async () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        ...oneAccount(),
+        account("a2", "claude", 2, [quotaWindow("low", "session", percent(5))], {
+          rank: 5,
+        }),
+      ]),
+    );
+    acceptPreferences(preferences({ overview_mode: "tray" }));
+    render(<App />);
+    fireEvent.click(screen.getByRole("button", { name: /Attention/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a2" } });
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    await act(async () => fireEvent.click(screen.getByRole("button", { name: "Fit 2" })));
+    expect(commandsMatching("fit_overview_to_accounts")).toHaveLength(1);
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+    act(() => window.dispatchEvent(new Event("quota-fit-overview")));
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.queryByRole("searchbox")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^All accounts/ }).getAttribute("aria-pressed"),
+    ).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Find an account" }));
+    expect((screen.getByRole("searchbox") as HTMLInputElement).value).toBe("");
+    fireEvent.click(screen.getByRole("button", { name: "Details for a2" }));
+    act(() => window.dispatchEvent(new Event("quota-fit-overview")));
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.queryByRole("button", { name: "All accounts" })).toBeNull();
+  });
+
+  it("recounts help opening and both closing paths while viewport and row sizes stay fixed", () => {
+    const observers: { targets: Set<Element>; notify: () => void }[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class implements ResizeObserver {
+        readonly targets = new Set<Element>();
+        constructor(callback: ResizeObserverCallback) {
+          observers.push({ targets: this.targets, notify: () => callback([], this) });
+        }
+        observe(target: Element): void {
+          this.targets.add(target);
+        }
+        unobserve(target: Element): void {
+          this.targets.delete(target);
+        }
+        disconnect(): void {
+          this.targets.clear();
+        }
+      },
+    );
+    const rect = (top: number, bottom: number): DOMRect => ({
+      top,
+      bottom,
+      left: 0,
+      right: 810,
+      width: 810,
+      height: bottom - top,
+      x: 0,
+      y: top,
+      toJSON: () => ({}),
+    });
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const shift =
+        screen.queryByRole("button", { name: "Close ordering help" }) === null ? 0 : 80;
+      if (this.classList.contains("shell__main")) return rect(0, 200);
+      if (this.classList.contains("table__columns")) return rect(0, 26);
+      if (this.classList.contains("overview")) return rect(0, 400 + shift);
+      const id = this.dataset["accountId"];
+      if (id !== undefined) {
+        const top = Number(id.slice(1)) * 60 + shift;
+        return rect(top, top + 54);
+      }
+      return rect(0, 0);
+    });
+    acceptSnapshot(
+      snapshot(
+        "instance-1",
+        1,
+        [1, 2, 3, 4].map((ordinal) =>
+          account(`a${ordinal}`, "codex", ordinal, [], { rank: ordinal }),
+        ),
+      ),
+    );
+    applyPendingOrder();
+    render(<App />);
+    const content = document.querySelector(".overview")!;
+    const resized = (): void => {
+      for (const observer of observers)
+        if (observer.targets.has(content)) observer.notify();
+    };
+    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
+    act(resized);
+    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 4 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
+    act(resized);
+    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Least remaining first" }));
+    act(resized);
+    expect(screen.getByTestId("visible-count").textContent).toBe("1 / 4 visible");
+    fireEvent.click(screen.getByRole("button", { name: "Close ordering help" }));
+    act(resized);
+    expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
   });
 });

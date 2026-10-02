@@ -13,6 +13,7 @@ import type {
   BeginConnectionRequest,
   AttemptRef,
   Preferences,
+  ProviderPollingPolicy,
 } from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
 import { Icon, type IconName } from "../../shared/ui/Icon";
@@ -40,6 +41,8 @@ const TABS: readonly (readonly [SettingsTab, string, IconName])[] = [
 
 /** The actions a settings panel may ask the application to perform. */
 export interface SettingsActions {
+  readonly setMonitoring: (paused: boolean) => void;
+  readonly savePollingPreferences: (policy: ProviderPollingPolicy) => void;
   readonly savePreferences: (next: Preferences) => void;
   readonly setAlwaysOnTop: (alwaysOnTop: boolean) => void;
   readonly setOverviewMode: (mode: Preferences["overview_mode"]) => void;
@@ -61,6 +64,7 @@ export interface SettingsActions {
           <WindowPanel
             preferences={preferences}
             nativeWindow={state.nativeWindow}
+            monitoring={state.monitoring}
             actions={actions}
           />
         ) : tab === "appearance" ? (
