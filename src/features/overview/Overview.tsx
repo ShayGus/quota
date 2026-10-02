@@ -104,8 +104,8 @@ function useApplyWhenIdle(
  *
  * The state is handed in rather than read from the store, because the React
  * Compiler treats an argument-free store read as pure and memoises it for the
- * life of the component. The footer, which counts from this, would then keep
- * reporting the accounts of the first render for ever.
+ * life of the component. The list would then keep showing the accounts of the
+ * first render for ever.
  */
 export function overviewPlacements(state: RendererState): readonly PlacedAccount[] {
   return applyOrder(placeAccounts(state.snapshot?.accounts ?? []), state.appliedOrder);
@@ -114,8 +114,8 @@ export function overviewPlacements(state: RendererState): readonly PlacedAccount
 /**
  * The accounts the current filter and search text leave on screen.
  *
- * The footer counts what the list shows, so both read this one function rather
- * than each keeping its own copy of the rule.
+ * The footer measures the rendered rows, so filtering here also determines its
+ * denominator without a second copy of the matching rule.
  */
 export function overviewRows(
   state: RendererState,
@@ -166,7 +166,6 @@ export function Overview({
   readonly onSearch: (search: string) => void;
   readonly searchOpen: boolean;
   readonly onSearchOpen: (open: boolean) => void;
-  /** Widens the window so every account and limit is visible at once. */
   readonly onFit: () => void;
   /** Opens the settings surface, where accounts are added. */
   readonly onAddAccount: () => void;

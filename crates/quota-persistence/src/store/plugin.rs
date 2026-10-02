@@ -38,6 +38,8 @@ impl<R: Runtime> PreferenceDocumentStore for PluginDocumentStore<R> {
         let previous = self.store.get(key);
         self.store.set(key.to_owned(), value.clone());
         if self.store.save().is_err() {
+            // The plugin saves its cache again on exit. Restore it so a failed
+            // write cannot become durable later and undo a window-mode rollback.
             if let Some(previous) = previous {
                 self.store.set(key.to_owned(), previous);
             } else {

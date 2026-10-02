@@ -257,7 +257,7 @@ function WindowFooter({
   counts,
   onAddAccount,
 }: {
-  /** How many accounts the filter leaves visible, or `null` off the overview. */
+  /** Fully visible rows and total filtered rows, or `null` off the overview. */
   readonly counts: { readonly visible: number; readonly total: number } | null;
   readonly onAddAccount: () => void;
 }): JSX.Element {

@@ -1,6 +1,6 @@
 # UI fidelity pairs
 
-These pairs compare the real Quota screens with the approved wireframe
+These recorded captures compare real Quota screens with the approved wireframe
 (`quota-owner-test-1/wireframe.html`, Quota wireframe v0.3) in the same state.
 
 | Wireframe                      | App                                    | State                                 |
@@ -19,6 +19,8 @@ The wireframe images are the wireframe's own 810 px popover rendered at the desk
 width, with the prototype's guide above it. The app images are the real renderer at the
 same width, driven by one deterministic snapshot with the ten sample accounts the
 wireframe draws. The settings images are the settings window at its own 780 px width.
+The Accounts capture predates the verified-identity row restoration and remains
+historical evidence rather than a capture of the submitted head.
 
 The approved controls remain visible: mode and topmost remain separate, hide uses the
 authorized native close handler that keeps the overview alive, and every Add account entry
@@ -42,8 +44,7 @@ adding it to the overview. The owner explicitly deferred confirm-before-adding t
 follow-up task after [Quota PR 4](https://github.com/ShayGus/quota/pull/4), which is
 rewriting the connection code, merges. This PR does not extend the host protocol. Attempt
 events provide connection state but no account ID, verified workspace, or quota reading;
-those details are available through saved account snapshots. The delivery description in
-[PR-description.md](PR-description.md) carries the same approved deferral.
+those details are available through saved account snapshots.
 
 Notifications now carry three independent alert switches, so 20%, 10%, and 0% are separate
 choices and deselecting one never writes a null percentage. Quiet hours are UTC.
@@ -52,7 +53,9 @@ Notification preview stays inside the renderer because no host preview command e
 Local history retention is the approved selector. This build has no retention sweep, so
 only **Disabled** and **Keep indefinitely** are real choices; the mockup's 7 days and 30
 days periods are shown but refused, and the current state is named honestly with an option
-the mockup does not list. Adding a sweep is persistence work, not a visual change.
+the mockup does not list. This follows the owner's R18 decision to preserve default
+retention behavior and disable unsupported durations when a small host extension is
+insufficient. Adding a sweep is persistence work, not a visual change.
 
 General includes Window width, Move with keys, Launch at login, Pause monitoring, and
 Background refresh. Use wide view runs the existing Fit command. Try narrow view and Move

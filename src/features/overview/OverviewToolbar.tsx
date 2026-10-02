@@ -43,7 +43,6 @@ export function OverviewToolbar({
   /** Whether a newer order is waiting for a safe idle point. */
   readonly orderUpdatePending: boolean;
   readonly onApplyOrder: () => void;
-  /** Widens the window so every account and limit is visible at once. */
   readonly onFit: () => void;
   readonly indicatorStyle: IndicatorStyle;
   readonly onIndicatorStyle: (style: IndicatorStyle) => void;

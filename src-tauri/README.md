@@ -24,8 +24,10 @@ its own; every rule lives in `quota-domain` or `quota-core`.
 
 Application commands are permissive by default unless the permission manifest in
 `build.rs` assigns them. The manifest names every command, and the two shipping capability
-files grant only what each window needs. The settings window cannot change native
-geometry; the overview window cannot change preferences.
+files grant only what each window needs. The
+[overview capability](capabilities/overview-capability.json) and
+[settings capability](capabilities/settings-capability.json) own the command grants;
+consult their permission lists for each window's allowed operations.
 
 No capability grants `store:*`, `sql:*`, `http:*`, `fs:*`, or `shell:*`. The raw IPC call
 boundary is owned by

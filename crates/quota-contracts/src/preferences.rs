@@ -1,7 +1,8 @@
 //! The preference aggregate handed to the renderer.
 //!
-//! This is assembled from the typed store and `SQLite` owners after both saves
-//! succeed. It is not an instruction to write the same object into every store.
+//! This is assembled from the typed store and `SQLite` owners after the required
+//! saves succeed. Presentation-only changes do not write the `SQLite` owner.
+//! It is not an instruction to write the same object into every store.
 
 use serde::{Deserialize, Serialize};
 use specta::Type;

@@ -32,7 +32,7 @@ quota-desktop (src-tauri) — composition, thin commands, OS adapters
 | `quota-core`        | `quota-domain`, Tokio, `tracing`, `serde`        | Tauri, any concrete provider adapter, any storage plugin, any UI transport type |
 | `quota-contracts`   | `quota-domain`, `serde`, `specta`                | business services, credential types, Tauri                                      |
 | `quota-providers`   | `quota-core` ports, `quota-domain`               | Tauri, React, the desktop host                                                  |
-| `quota-persistence` | `quota-core` ports, `quota-domain`, `sqlx`       | the renderer; Tauri only behind the non-default `tauri-plugins` feature         |
+| `quota-persistence` | `quota-core` ports, `quota-domain`, `sqlx`       | the renderer; runtime Tauri only behind the non-default `tauri-plugins` feature |
 | `quota-desktop`     | everything above                                 | — it is the outermost composition layer                                         |
 
 The graph is acyclic. Adapters implement interfaces the core declares; the core never
