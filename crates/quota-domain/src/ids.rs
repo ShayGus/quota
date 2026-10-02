@@ -176,16 +176,16 @@ mod tests {
 
     #[test]
     fn accepts_maximum_length() {
-        assert!(AccountId::new("a".repeat(MAX_ID_LEN)).is_ok());
+        AccountId::new("a".repeat(MAX_ID_LEN)).unwrap();
     }
 
     #[test]
     fn deserialization_enforces_the_same_invariant() {
         let ok: Result<AccountId, _> = serde_json::from_str("\"acct-1\"");
         assert_eq!(ok.unwrap().as_str(), "acct-1");
-        assert!(serde_json::from_str::<AccountId>("\"\"").is_err());
+        serde_json::from_str::<AccountId>("\"\"").unwrap_err();
         let long = format!("\"{}\"", "a".repeat(MAX_ID_LEN + 1));
-        assert!(serde_json::from_str::<AccountId>(&long).is_err());
+        serde_json::from_str::<AccountId>(&long).unwrap_err();
     }
 
     #[test]

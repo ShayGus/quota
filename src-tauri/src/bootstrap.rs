@@ -374,8 +374,13 @@ async fn install_managed_state(
     crate::platform::window::apply_mode_chrome(&native, saved_mode, &mut controller)
         .map_err(|_| "window_mode_chrome_restore_failed")?;
     drop(controller);
-    if saved_mode == quota_domain::preferences::OverviewMode::Tray {
-        let _ = crate::platform::window::anchor_to_tray(app);
+    if saved_mode == quota_domain::preferences::OverviewMode::Tray
+        && let Err(error) = crate::platform::window::anchor_to_tray(app)
+    {
+        tracing::warn!(
+            code = error.diagnostic_code(),
+            "overview could not anchor to the tray"
+        );
     }
     // One refresh through the shared supervisor fills each seeded account's
     // reading by the ordinary read path.
@@ -422,7 +427,9 @@ pub fn start() -> Result<(), String> {
                 // A second launch only brings the running overview forward. It
                 // never opens the settings window, which stays as the person left
                 // it.
-                let _ = crate::platform::window::activate_overview(app);
+                if let Err(error) = crate::platform::window::activate_overview(app) {
+                    tracing::warn!(%error, "second launch could not focus the overview");
+                }
             }))
             .plugin(tauri_plugin_store::Builder::new().build())
             .plugin(tauri_plugin_sql::Builder::default().build())

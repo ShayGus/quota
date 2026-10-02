@@ -88,8 +88,8 @@ pub fn set_visible(
 /// Anchors the window beside the tray icon.
 ///
 /// The positioner only learns where the icon is from a tray event, so this
-/// fails until one has arrived. Callers that run at startup treat the failure as
-/// deferred work rather than a failure.
+/// fails until one has arrived. At startup the failure is logged as a warning;
+/// a later tray event retries the anchor.
 pub fn anchor_to_tray(app: &AppHandle) -> Result<(), CommandError> {
     use tauri_plugin_positioner::{Position, WindowExt};
     let native = get(app, "overview")?;
@@ -109,7 +109,9 @@ pub fn install_close_handlers(app: &AppHandle) {
         native.on_window_event(move |event| match event {
             tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
-                let _ = native_for_event.hide();
+                if let Err(error) = native_for_event.hide() {
+                    tracing::warn!(%error, %label, "the window could not be hidden on close");
+                }
                 if label == "overview"
                     && let Some(state) = app.try_state::<crate::state::AppState>()
                 {

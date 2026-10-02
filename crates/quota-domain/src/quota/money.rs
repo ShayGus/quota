@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn refuses_a_percentage_for_a_zero_cap() {
-        assert!(money(0, 0).remaining_percent().is_err());
+        money(0, 0).remaining_percent().unwrap_err();
     }
 
     #[test]

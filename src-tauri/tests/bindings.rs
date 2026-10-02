@@ -3,6 +3,10 @@
 //! This test is the gate. It exports the real bindings to a temporary file and
 //! compares that file with the checked-in one. A hand edit, a changed command
 //! signature, or a renamed event fails here rather than at runtime in the app.
+#![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
 
 use std::path::PathBuf;
 

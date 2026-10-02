@@ -90,6 +90,10 @@ const INSPECTION_OWNER: &str = "src-tauri/Cargo.toml";
 ///   feature or plugin, including through aliases and optional forwarding;
 /// - the git source must be pinned to a 40-character commit, because a branch
 ///   or tag can move after review.
+#[expect(
+    clippy::indexing_slicing,
+    reason = "graph, selected, and manifests are built one entry per manifest, and a dependency target is an index into manifests"
+)]
 fn check_agent_inspection(root: &Path, outcome: &mut Outcome) {
     let manifests: Vec<(String, Value)> = scan::files_with_extension(root, "toml")
         .into_iter()
@@ -280,7 +284,9 @@ fn check_inspection_feature(
     let selected = string_array(Some(declaration));
     if file != INSPECTION_OWNER
         || selected.len() != 1
-        || !plugin_aliases.iter().any(|alias| selected[0] == alias)
+        || !selected
+            .first()
+            .is_some_and(|only| plugin_aliases.iter().any(|alias| *only == alias.as_str()))
     {
         outcome.fail(file.to_string(), 1,
             format!("`{INSPECTION_FEATURE}` may only be declared once, in `{INSPECTION_OWNER}` as a non-default feature enabling the inspection dependency"));
@@ -431,6 +437,10 @@ fn normalize_path(path: &Path) -> std::path::PathBuf {
     normalized
 }
 
+#[expect(
+    clippy::indexing_slicing,
+    reason = "selected is built one entry per manifest and is only ever indexed by those positions"
+)]
 fn unified_features(
     manifests: &[(String, Value)],
     graph: &[Vec<InspectionDependency<'_>>],
@@ -623,7 +633,12 @@ fn check_inspection_grant(file: &str, capability: &serde_json::Value, outcome: &
         let overview = capability
             .get("windows")
             .and_then(serde_json::Value::as_array)
-            .is_some_and(|windows| windows.len() == 1 && windows[0].as_str() == Some("overview"));
+            .is_some_and(|windows| {
+                windows.len() == 1
+                    && windows
+                        .first()
+                        .is_some_and(|window| window.as_str() == Some("overview"))
+            });
         let webviews = capability
             .get("webviews")
             .and_then(serde_json::Value::as_array);
@@ -672,7 +687,10 @@ fn check_workflow_pins(root: &Path, outcome: &mut Outcome) {
             let Some(position) = line.find(USES_KEY) else {
                 continue;
             };
-            let reference = toml::strip_comment(&line[position + USES_KEY.len()..])
+            let Some(after_key) = line.get(position + USES_KEY.len()..) else {
+                continue;
+            };
+            let reference = toml::strip_comment(after_key)
                 .trim()
                 .trim_matches('"')
                 .trim_matches('\'');

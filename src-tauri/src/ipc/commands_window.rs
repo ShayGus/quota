@@ -3,6 +3,12 @@
 //! Mode, geometry, and topmost are separate controls. No handler here moves,
 //! resizes, or hides the window as a side effect of an unrelated change.
 
+#![expect(
+    clippy::unreachable,
+    clippy::let_underscore_must_use,
+    reason = "`#[tauri::command]` expands to `let _check: ReturnType = unreachable!()`, which both lints report against the handler signature"
+)]
+
 use quota_contracts::CommandError;
 use quota_contracts::commands::{SettingsDestination, WindowModeChange};
 use quota_contracts::events::OverviewWindowState as WindowStateResponse;

@@ -216,7 +216,7 @@ mod tests {
             1.0,
             2.0,
         );
-        assert!(result.is_err());
+        result.unwrap_err();
     }
 
     #[test]

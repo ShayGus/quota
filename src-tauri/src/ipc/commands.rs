@@ -3,6 +3,12 @@
 //! Handlers validate scope, call one application service or durable port, and
 //! return committed state. Refresh commands enter the one shared supervisor.
 
+#![expect(
+    clippy::unreachable,
+    clippy::let_underscore_must_use,
+    reason = "`#[tauri::command]` expands to `let _check: ReturnType = unreachable!()`, which both lints report against the handler signature"
+)]
+
 use quota_contracts::CommandError;
 use quota_contracts::RegisteredProvider;
 use quota_contracts::commands::{AccountSelection, RefreshReason, SnapshotResponse};

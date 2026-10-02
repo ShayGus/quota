@@ -4,6 +4,10 @@
 // this file only: every allowance covers a fixture literal or an assertion that
 // must fail loudly when a decode is wrong.
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::panic,
     reason = "fixture reads must fail loudly when a decode is wrong"

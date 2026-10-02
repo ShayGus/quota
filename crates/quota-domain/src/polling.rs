@@ -83,8 +83,11 @@ pub struct BoundaryAwarePolicy {
     pub max_boundary_attempts: u32,
 }
 
+/// The last backoff step, used when a policy declares no steps at all.
+const MAX_BACKOFF_MINUTES: u32 = 30;
+
 /// Backoff steps for transient failures, in minutes.
-pub const DEFAULT_BACKOFF_MINUTES: [u32; 5] = [1, 2, 5, 15, 30];
+pub const DEFAULT_BACKOFF_MINUTES: [u32; 5] = [1, 2, 5, 15, MAX_BACKOFF_MINUTES];
 
 /// The domain a rate limit or backoff applies to.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, Type)]
@@ -131,7 +134,7 @@ impl ProviderPollingPolicy {
             .get(index)
             .copied()
             .or_else(|| self.backoff_minutes.last().copied())
-            .unwrap_or(DEFAULT_BACKOFF_MINUTES[DEFAULT_BACKOFF_MINUTES.len() - 1]);
+            .unwrap_or(MAX_BACKOFF_MINUTES);
         Duration::minutes(i64::from(minutes))
     }
 }

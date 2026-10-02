@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, PoisonError};
 
 use quota_core::ports::RepositoryError;
 use quota_domain::preferences::{
@@ -24,17 +24,16 @@ struct DocumentStore {
 
 impl PreferenceDocumentStore for DocumentStore {
     fn read(&self, key: &str) -> PersistenceResult<Option<Value>> {
-        Ok(self.values.lock().unwrap().get(key).cloned())
+        let values = self.values.lock().unwrap_or_else(PoisonError::into_inner);
+        Ok(values.get(key).cloned())
     }
 
     fn write(&self, key: &str, value: &Value) -> PersistenceResult<()> {
         if self.fail_writes.load(Ordering::Relaxed) {
             return Err(PersistenceError::StoreUnavailable);
         }
-        self.values
-            .lock()
-            .unwrap()
-            .insert(key.into(), value.clone());
+        let mut values = self.values.lock().unwrap_or_else(PoisonError::into_inner);
+        values.insert(key.into(), value.clone());
         Ok(())
     }
 }
@@ -167,11 +166,9 @@ async fn failed_presentation_saves_preserve_the_mode_restored_at_restart() {
         } else {
             OverviewMode::Tray
         };
-        assert!(
-            persist_preference_owners(&presentation, &operational, &requested, &confirmed,)
-                .await
-                .is_err()
-        );
+        persist_preference_owners(&presentation, &operational, &requested, &confirmed)
+            .await
+            .unwrap_err();
         assert_eq!(
             PresentationPreferencesCodec::new(document).load().unwrap(),
             before

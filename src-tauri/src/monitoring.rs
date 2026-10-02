@@ -55,7 +55,7 @@ pub struct RefreshRequest {
     pub account_id: AccountId,
     /// The reason is logged as a closed vocabulary, never parsed from text.
     pub reason: RefreshReason,
-    #[expect(missing_docs)]
+    /// A later refresh for the same account may arrive with this generation.
     pub generation: u32,
 }
 
@@ -64,7 +64,7 @@ pub struct RefreshRequest {
 pub enum RefreshReason {
     /// The user asked for a refresh.
     UserRequested,
-    #[expect(missing_docs)]
+    /// The person asked to reconnect the account.
     Reconnect,
     /// The shared provider-specific schedule became due.
     Scheduled,

@@ -80,8 +80,11 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
             {
                 deferred = controller.state().mode == quota_domain::preferences::OverviewMode::Tray;
             }
-            if deferred {
-                let _ = window::anchor_to_tray(app);
+            if deferred && let Err(error) = window::anchor_to_tray(app) {
+                tracing::warn!(
+                    code = error.diagnostic_code(),
+                    "overview could not anchor to the tray"
+                );
             }
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
@@ -112,16 +115,15 @@ fn tray_image() -> tauri::image::Image<'static> {
     const SIZE: usize = 24;
     let side = u32::try_from(SIZE).unwrap_or(0);
     let mut rgba = vec![0; SIZE * SIZE * 4];
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let index = (y * SIZE + x) * 4;
+    for (y, row) in rgba.chunks_exact_mut(SIZE * 4).enumerate() {
+        for (x, pixel) in row.chunks_exact_mut(4).enumerate() {
             let dx = i32::try_from(x).unwrap_or(0) - 12;
             let dy = i32::try_from(y).unwrap_or(0) - 12;
             if dx * dx + dy * dy <= 121 {
                 let bar = (5..=7).contains(&x) && (10..=17).contains(&y)
                     || (10..=12).contains(&x) && (7..=17).contains(&y)
                     || (15..=17).contains(&x) && (4..=17).contains(&y);
-                rgba[index..index + 4].copy_from_slice(if bar {
+                pixel.copy_from_slice(if bar {
                     &[255, 255, 255, 255]
                 } else {
                     &[35, 112, 230, 255]
@@ -136,7 +138,12 @@ fn activate_from_tray(app: &AppHandle, repeated: bool) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let Some(state) = app.try_state::<crate::state::AppState>() else {
-            let _ = window::set_visible(&app, "overview", true, true);
+            if let Err(error) = window::set_visible(&app, "overview", true, true) {
+                tracing::warn!(
+                    code = error.diagnostic_code(),
+                    "overview could not be shown from the tray"
+                );
+            }
             return;
         };
         let state = state.inner().clone();
@@ -177,7 +184,12 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             });
         }
         "settings" => {
-            let _ = window::set_visible(app, "settings", true, true);
+            if let Err(error) = window::set_visible(app, "settings", true, true) {
+                tracing::warn!(
+                    code = error.diagnostic_code(),
+                    "settings could not be shown from the tray"
+                );
+            }
         }
         "refresh" => {
             let app = app.clone();

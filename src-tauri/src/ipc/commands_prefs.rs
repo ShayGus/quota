@@ -3,6 +3,12 @@
 //! A command returns the confirmed durable state, never an optimistic success
 //! badge. A save that failed returns a typed persistence error.
 
+#![expect(
+    clippy::unreachable,
+    clippy::let_underscore_must_use,
+    reason = "`#[tauri::command]` expands to `let _check: ReturnType = unreachable!()`, which both lints report against the handler signature"
+)]
+
 use quota_contracts::CommandError;
 use quota_contracts::preferences::Preferences;
 use quota_contracts::refs::AccountRef;

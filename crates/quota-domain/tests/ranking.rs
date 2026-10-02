@@ -2,6 +2,10 @@
 // Integration tests are compiled without `cfg(test)`, so the crate-wide
 // test-context allowance in `clippy.toml` does not reach this file. The scope
 // is this file only, and every `unwrap` builds an inline literal fixture.
+#![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
 #![expect(clippy::unwrap_used, reason = "inline fixtures must be constructible")]
 use chrono::{DateTime, Duration};
 use proptest::prelude::*;

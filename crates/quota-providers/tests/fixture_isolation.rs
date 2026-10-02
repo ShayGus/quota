@@ -8,6 +8,10 @@
 // this file only: every allowance covers a fixture literal or an assertion that
 // must fail loudly when a reading is wrong.
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
@@ -120,7 +124,7 @@ fn one_accounts_failure_leaves_its_siblings_correct() {
     let mut broken = fixture_binding(FixtureProfile::StaleBoundary);
     broken.profile_label = Some("not-a-profile".to_owned());
     let failure = block_on(adapter.read_quota(&broken, fixture_context()));
-    assert!(failure.is_err());
+    failure.unwrap_err();
     let again = read(&adapter, FixtureProfile::Healthy);
     // The receipt instant legitimately differs between the two reads, so the
     // comparison covers the stable parts: identity, windows, and measures.

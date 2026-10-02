@@ -164,8 +164,11 @@ bun tauri build        # release bundles
 - Every `uses:` in `.github/workflows/` is pinned to a full 40-character commit SHA. A tag
   or a branch fails `cargo xtask check-release`, and a `run:` step must not interpolate
   event text such as a pull-request title or a branch name.
-- Production code denies `unwrap`, `expect`, `panic!`, `todo!`, and `unimplemented!`.
-  Tests may use them; see `docs/exceptions.md`.
+- [The workspace lint tables](Cargo.toml) own Rust and Clippy lint levels;
+  [clippy.toml](clippy.toml) owns thresholds and test-context allowances. CI runs Clippy
+  with `-D warnings`, so a warn-level lint fails the build. Rewrite the site first; an
+  `#[expect(..., reason = "...")]` is for the case where the rewrite is genuinely worse,
+  and that reason belongs in [the exception register](docs/exceptions.md).
 - An `#[expect(...)]` that stops firing is a warning, because
   `unfulfilled_lint_expectations = "warn"`. Do not add a blanket `#[allow(...)]`.
 

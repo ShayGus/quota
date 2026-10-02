@@ -1,6 +1,10 @@
 //! Operational preferences survive `SQLite` round trips without default replacement.
 
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "the fixture is local and a failed setup must fail the test"
 )]

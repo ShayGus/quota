@@ -40,6 +40,35 @@ too_many_lines = "warn"
 undocumented_unsafe_blocks = "deny"
 used_underscore_binding = "deny"
 
+# Panicking alternatives to `unwrap`/`expect`, from the recommended-lints gist.
+# `indexing_slicing` and `string_slice` are the pair a sparse provider list
+# would have tripped before it panicked.
+indexing_slicing = "warn"
+string_slice = "warn"
+unreachable = "warn"
+get_unwrap = "warn"
+unwrap_in_result = "warn"
+panic_in_result_fn = "warn"
+# Silent failure. `let_underscore_must_use` and `map_err_ignore` are what let a
+# swallowed connection error leave Connect broken with no message.
+let_underscore_must_use = "warn"
+unused_result_ok = "warn"
+map_err_ignore = "warn"
+assertions_on_result_states = "warn"
+# Resource, numeric, and diagnostic hygiene.
+mem_forget = "warn"
+rc_mutex = "warn"
+float_cmp_const = "warn"
+lossy_float_literal = "warn"
+debug_assert_with_mut_call = "warn"
+# A suppression is `#[expect(..., reason = "...")]` or nothing at all.
+allow_attributes = "warn"
+allow_attributes_without_reason = "warn"
+# The gist's "exit" section.
+tests_outside_test_module = "warn"
+error_impl_error = "warn"
+or_fun_call = "warn"
+
 [workspace.dependencies]
 quota-contracts = { path = "crates/quota-contracts" }
 async-trait = "0.1.92"

@@ -4,6 +4,12 @@
 //! can be reconciled instead of creating a duplicate connection. Credential
 //! refresh remains owned by the provider's local tool.
 
+#![expect(
+    clippy::unreachable,
+    clippy::let_underscore_must_use,
+    reason = "`#[tauri::command]` expands to `let _check: ReturnType = unreachable!()`, which both lints report against the handler signature"
+)]
+
 use quota_contracts::CommandError;
 use quota_contracts::commands::{BeginConnectionRequest, ConnectionAttemptAccepted};
 use quota_contracts::refs::{AccountRef, AttemptRef};

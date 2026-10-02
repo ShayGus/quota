@@ -29,6 +29,13 @@
 //! token, a cookie, an address, a profile path, a request body, or a full URL.
 
 #![forbid(unsafe_code)]
+// Provider failures are mapped onto this crate's closed `ProviderError`, whose
+// variant is the classification the supervisor acts on. Response bodies and
+// transport text are deliberately not carried across that boundary.
+#![expect(
+    clippy::map_err_ignore,
+    reason = "ProviderError's variant is the classification; response text is not carried"
+)]
 
 pub mod credentials;
 pub(crate) mod decode;

@@ -109,11 +109,10 @@ fn forbidden_dependency(key: &str, value: &str) -> Option<String> {
 
 /// Reads the `package = "..."` rename inside an inline dependency table.
 fn package_rename(value: &str) -> Option<String> {
-    let start = value.find("package")?;
-    let rest = &value[start..];
-    let open = rest.find('"')?;
-    let close = rest[open + 1..].find('"')?;
-    Some(rest[open + 1..open + 1 + close].to_string())
+    let (_, after_key) = value.split_once("package")?;
+    let (_, after_quote) = after_key.split_once('"')?;
+    let (name, _) = after_quote.split_once('"')?;
+    Some(name.to_string())
 }
 
 /// Features that must never reach a release artifact.

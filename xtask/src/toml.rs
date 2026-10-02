@@ -28,37 +28,34 @@ impl Document {
     /// Parses `text`. Unrecognised lines are skipped rather than rejected.
     #[must_use]
     pub(crate) fn parse(text: &str) -> Self {
-        let lines: Vec<&str> = text.lines().collect();
+        let mut lines = text.lines().enumerate();
         let mut entries = Vec::new();
         let mut table = String::new();
-        let mut index = 0;
-        while index < lines.len() {
-            let trimmed = lines[index].trim();
+        while let Some((number, raw)) = lines.next() {
+            let trimmed = raw.trim();
             if trimmed.is_empty() || trimmed.starts_with('#') {
-                index += 1;
                 continue;
             }
             if let Some(name) = table_header(trimmed) {
                 table.clone_from(&name);
-                index += 1;
                 continue;
             }
             if let Some((key, first)) = trimmed.split_once('=') {
-                let start = index;
                 let mut value = first.trim().to_string();
-                while !balanced(&value) && index + 1 < lines.len() {
-                    index += 1;
+                while !balanced(&value) {
+                    let Some((_, next)) = lines.next() else {
+                        break;
+                    };
                     value.push(' ');
-                    value.push_str(lines[index].trim());
+                    value.push_str(next.trim());
                 }
                 entries.push(Entry {
                     table: table.clone(),
                     key: key.trim().to_string(),
                     value,
-                    line: start + 1,
+                    line: number + 1,
                 });
             }
-            index += 1;
         }
         Self { entries }
     }
@@ -129,7 +126,7 @@ pub(crate) fn strip_comment(line: &str) -> &str {
         match character {
             '\\' if in_string => escaped = true,
             '"' => in_string = !in_string,
-            '#' if !in_string => return &line[..offset],
+            '#' if !in_string => return line.get(..offset).unwrap_or(line),
             _ => {}
         }
     }

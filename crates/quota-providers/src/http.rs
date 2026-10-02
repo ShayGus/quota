@@ -128,6 +128,12 @@ impl ProviderHttp {
 /// A second install of a different provider fails harmlessly and leaves the
 /// first one in place.
 static CRYPTO_PROVIDER: LazyLock<()> = LazyLock::new(|| {
+    // Installing a second provider fails by design and leaves the first one in
+    // place, so the outcome carries no information for the caller.
+    #[expect(
+        clippy::let_underscore_must_use,
+        reason = "a second provider install is the documented no-op"
+    )]
     let _ = rustls::crypto::ring::default_provider().install_default();
 });
 
@@ -274,7 +280,7 @@ mod tests {
 
     #[test]
     fn a_client_builds_without_network_access() {
-        assert!(ProviderHttp::new().is_ok());
+        ProviderHttp::new().unwrap();
     }
     #[tokio::test]
     async fn overflowing_retry_headers_return_typed_failures_without_losing_refusals() {
@@ -286,7 +292,7 @@ mod tests {
                 let server = std::thread::spawn(move || {
                     let (mut stream, _) = listener.accept().unwrap();
                     let mut request = [0; 4096];
-                    let _ = stream.read(&mut request);
+                    let _read = stream.read(&mut request);
                     write!(stream, "HTTP/1.1 {status}\r\nRetry-After: {value}\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{{}}").unwrap();
                 });
                 let result = ProviderHttp::new()
@@ -325,7 +331,7 @@ mod tests {
             let server = std::thread::spawn(move || {
                 let (mut stream, _) = listener.accept().unwrap();
                 let mut request = [0; 4096];
-                let _ = stream.read(&mut request);
+                let _read = stream.read(&mut request);
                 write!(stream, "HTTP/1.1 {status}\r\nRetry-After: 60\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len()).unwrap();
             });
             let before = Utc::now();

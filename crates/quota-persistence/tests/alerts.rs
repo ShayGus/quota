@@ -4,6 +4,10 @@
 //! the workspace's test-mode allowance does not reach it.
 
 #![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
+#![expect(
     clippy::unwrap_used,
     reason = "test fixtures assert the setup they build, so a broken fixture must fail loudly"
 )]
@@ -120,8 +124,10 @@ async fn a_missing_episode_is_reported_instead_of_invented() {
     let unknown = key("acct-absent", "win-absent", 1, AlertLevel::Low);
     assert!(!repo.is_open(&unknown).await.unwrap());
     assert!(repo.mark_armed(&unknown, support::at(0)).await.is_err());
-    assert!(repo.episode(&unknown).await.is_err());
-    assert!(repo.close_episode(&unknown, support::at(0)).await.is_err());
+    repo.episode(&unknown).await.unwrap_err();
+    repo.close_episode(&unknown, support::at(0))
+        .await
+        .unwrap_err();
 
     pool.close().await;
 }

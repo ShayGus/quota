@@ -1,4 +1,8 @@
 #![doc = "Account dispatch binding behavior."]
+#![expect(
+    clippy::tests_outside_test_module,
+    reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
+)]
 #![expect(clippy::unwrap_used, reason = "synthetic account fixtures")]
 
 use chrono::{DateTime, Duration};
