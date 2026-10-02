@@ -4,12 +4,13 @@ Compares the running app with the approved wireframe, `quota-wireframe.html`, el
 element. The wireframe is maintained outside this repository.
 
 The same script, [`measure.js`](measure.js), runs in the app's overview webview and in the
-wireframe page, and reads the computed font, colour, spacing, border, radius, and size of
-every shared element. [`cases.mjs`](cases.mjs) lists what to open in each and which
-properties differ only by data, such as which account is on screen.
-[`compare.mjs`](compare.mjs) writes one result per case to [`results/`](results/) and
-exits non-zero when a design difference remains. Results record measurements only, never
-on-screen text, so they carry no account data.
+wireframe page. For each listed selector it reads the first matching element's computed
+font, colour, spacing, border, radius and shadow properties and its width and height;
+later matches of the same selector are not compared. [`cases.mjs`](cases.mjs) lists what
+to open in each and which properties differ only by data, such as which account is on
+screen. [`compare.mjs`](compare.mjs) writes one result per case to [`results/`](results/)
+and exits non-zero when a design difference remains. Results record measurements only,
+never on-screen text, so they carry no account data.
 
 ## Run it
 

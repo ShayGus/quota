@@ -86,13 +86,17 @@ does, in the same place and at the same length.
 The real application was checked with `bun run inspect`, which exposes the overview
 webview to an agent. [`tools/ui-parity`](../../tools/ui-parity/README.md) runs the same
 measurement script in the live webview and in the wireframe (headless Chrome at the same
-125% scale) and compares the computed font, colour, spacing, border, radius, and size of
-every shared element: popover header, toolbar, cards, rings, footer, quota detail, the
-wizard's first two steps, and every settings panel. Its recorded results in
-[`tools/ui-parity/results`](../../tools/ui-parity/results/) show no difference in any of
-the ten cases; what each case ignores is data (which accounts exist and their values, the
-window width the native border takes) and the text listed above. Leaving the wizard was
-driven live as well: after a real verification reached Verify, Escape sent
+125% scale). For each listed selector it measures the first matching element, reading 15
+computed properties (font, colour, spacing, border, radius, shadow and similar) and its
+width and height, across ten cases: the overview, quota detail, the wizard's first two
+steps, and each settings panel. The recorded results in
+[`tools/ui-parity/results`](../../tools/ui-parity/results/) name the commit they were
+measured at and show no difference in those measurements. What each case ignores is listed
+in its result: data (which accounts exist and their values), the width the native border
+takes, and, for the settings panels, width, height and margins, because the settings route
+is measured inside the overview window. Repeated elements after the first, and settings
+sizes, are therefore not compared; the paired screenshots cover those. Leaving the wizard
+was driven live as well: after a real verification reached Verify, Escape sent
 `cancel_connection` and never `confirm_connection`, and the account list was unchanged.
 Native behaviour was driven with real input: a floating window drags by its header,
 docking anchors the popover above the taskbar, Escape steps back and then hides, settings
