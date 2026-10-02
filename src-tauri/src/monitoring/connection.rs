@@ -107,7 +107,7 @@ pub(super) async fn run_connection_attempt(
         return Ok(());
     };
     let ids = confirm::candidate_binding(&adapter, &candidate);
-    let Some(read) = read_candidate_quota(
+    let Some((read, dispatched_at, completed_at)) = read_candidate_quota(
         &runtime,
         &adapter,
         &ids.binding,
@@ -118,8 +118,15 @@ pub(super) async fn run_connection_attempt(
     else {
         return Ok(());
     };
-    let pending =
-        confirm::PendingConnection::new(candidate, request, ids, read, Arc::clone(&reporter));
+    let pending = confirm::PendingConnection::new(
+        candidate,
+        request,
+        ids,
+        read,
+        dispatched_at,
+        completed_at,
+        Arc::clone(&reporter),
+    );
     let verified = confirm::hold_candidate(&runtime, &attempt_id, pending, &cancelled).await?;
     reporter
         .emit(
@@ -181,13 +188,21 @@ async fn read_candidate_quota(
     binding: &quota_core::ports::ConnectionBinding,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
-) -> Result<Option<quota_core::ports::QuotaRead>, CommandError> {
+) -> Result<
+    Option<(
+        quota_core::ports::QuotaRead,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+    )>,
+    CommandError,
+> {
     let permit = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
         permit = runtime.state.permits.clone().acquire_owned() => {
             permit.map_err(|_| CommandError::Cancelled)?
         }
     };
+    let dispatched_at = runtime.state.clock.now();
     let response = tokio::select! {
         _ = cancelled.changed() => {
             drop(permit);
@@ -199,7 +214,7 @@ async fn read_candidate_quota(
                 binding,
                 quota_core::ports::ReadContext {
                     attempt_id: attempt_id.clone(),
-                    deadline: Some(runtime.state.clock.now() + chrono::Duration::seconds(10)),
+                    deadline: Some(dispatched_at + chrono::Duration::seconds(10)),
                 },
             ),
         ) => result
@@ -208,6 +223,7 @@ async fn read_candidate_quota(
             })?
             .map_err(provider_command_error)?,
     };
+    let completed_at = runtime.state.clock.now();
     drop(permit);
     let read = response
         .read()
@@ -215,7 +231,7 @@ async fn read_candidate_quota(
         .ok_or_else(|| CommandError::Internal {
             code: "connection_read_unavailable".into(),
         })?;
-    Ok(Some(read))
+    Ok(Some((read, dispatched_at, completed_at)))
 }
 
 pub(super) fn provider_command_error(error: ProviderError) -> CommandError {

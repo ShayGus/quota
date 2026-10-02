@@ -22,6 +22,7 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { reportAsync, reportSettled } from "../shared/ipc/report";
+import { reconcileSnapshot } from "../shared/ipc/subscription";
 import {
   acceptAttempt,
   clearAttempt,
@@ -105,7 +106,15 @@ export const actions = {
   },
   /** Cancels a live attempt or discards a verified candidate. Neither is a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {
-    await reportAsync(commands.cancelConnection(attempt));
+    await reportAsync(
+      commands
+        .cancelConnection(attempt)
+        .then((result) =>
+          result.status === "error" && result.error.kind === "cancelled"
+            ? { status: "ok" as const, data: null }
+            : result,
+        ),
+    );
   },
   /**
    * Saves the verified candidate the person confirmed, and answers whether it
@@ -116,7 +125,9 @@ export const actions = {
    * answer is false.
    */
   async confirmConnection(attempt: AttemptRef, nickname: string): Promise<boolean> {
-    return reportSettled(commands.confirmConnection(attempt, nickname));
+    const saved = await reportSettled(commands.confirmConnection(attempt, nickname));
+    if (saved) await reconcileSnapshot();
+    return saved;
   },
   /** Moves the overview between floating and tray mode. */
   async setOverviewMode(mode: OverviewMode): Promise<void> {

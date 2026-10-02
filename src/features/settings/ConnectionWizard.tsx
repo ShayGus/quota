@@ -83,13 +83,18 @@ export function ConnectionWizard({
   // What must be discarded if the wizard goes away: a running attempt or a
   // held candidate. Kept in a ref so the unmount cleanup sees the latest.
   const pending = useRef<AttemptRef | null>(null);
+  // Whether the wizard is still on screen, so an answer that arrives after it
+  // has gone neither leaves an attempt running nor navigates.
+  const mounted = useRef(false);
   const live =
     attempt !== null && !adding && (busy || candidate !== null) ? attempt : null;
   useEffect(() => {
     pending.current = live;
   }, [live]);
   useEffect(() => {
+    mounted.current = true;
     return () => {
+      mounted.current = false;
       const held = pending.current;
       if (held !== null) {
         launch(actions.cancelConnection(held));
@@ -109,6 +114,10 @@ export function ConnectionWizard({
         nickname: nickname.trim() || DEFAULT_NICKNAME,
         profile_label: null,
       });
+      if (!mounted.current) {
+        if (accepted !== null) await actions.cancelConnection(accepted);
+        return;
+      }
       setAttempt(accepted);
       if (accepted === null)
         setRefusal(
@@ -133,7 +142,7 @@ export function ConnectionWizard({
     try {
       if (await actions.confirmConnection(attempt, nickname.trim())) {
         pending.current = null;
-        onDone(true);
+        if (mounted.current) onDone(true);
       }
     } finally {
       setAdding(false);

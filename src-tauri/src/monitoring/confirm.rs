@@ -8,10 +8,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use chrono::{DateTime, Utc};
 use quota_contracts::CommandError;
 use quota_contracts::commands::{BeginConnectionRequest, VerifiedCandidate};
 use quota_contracts::events::ConnectionProgress;
-use quota_core::Clock;
 use quota_core::ports::{ConnectionBinding, DiscoveredAccount, ProviderAdapter, QuotaRead};
 use quota_domain::account::ConnectionState;
 use quota_domain::ids::{AccountId, ConnectionAttemptId, ConnectionId};
@@ -34,6 +34,8 @@ pub(super) struct PendingConnection {
     request: BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
+    dispatched_at: DateTime<Utc>,
+    completed_at: DateTime<Utc>,
     /// The attempt's reporter, so a later result keeps that attempt's revisions.
     pub(super) reporter: Arc<AttemptReporter>,
 }
@@ -45,6 +47,8 @@ impl PendingConnection {
         request: BeginConnectionRequest,
         ids: CandidateIds,
         read: QuotaRead,
+        dispatched_at: DateTime<Utc>,
+        completed_at: DateTime<Utc>,
         reporter: Arc<AttemptReporter>,
     ) -> Self {
         Self {
@@ -52,6 +56,8 @@ impl PendingConnection {
             request,
             ids,
             read,
+            dispatched_at,
+            completed_at,
             reporter,
         }
     }
@@ -143,15 +149,28 @@ pub(super) async fn commit_pending(
     let Some(pending) = runtime.pending.take(attempt_id).await else {
         return Err(CommandError::AccountNotFound);
     };
+    let _commit = runtime.state.commit.lock().await;
     let PendingConnection {
         candidate,
         mut request,
         ids,
         read,
+        dispatched_at,
+        completed_at,
         reporter,
     } = pending;
     request.nickname = nickname;
-    if let Err(error) = commit_candidate(runtime, candidate, &request, ids, read).await {
+    if let Err(error) = commit_candidate(
+        runtime,
+        candidate,
+        &request,
+        ids,
+        read,
+        dispatched_at,
+        completed_at,
+    )
+    .await
+    {
         // The candidate is spent either way, so the wizard returns to the
         // connect step with the typed reason rather than a dead Add button.
         reporter
@@ -174,11 +193,10 @@ pub(super) async fn commit_pending(
             },
         )
         .await;
-    publish_snapshot(&runtime.state)
-        .await
-        .map_err(|_| CommandError::Internal {
-            code: "snapshot_publish_failed".into(),
-        })
+    if let Err(code) = publish_snapshot(&runtime.state).await {
+        tracing::warn!(%code, "the saved connection snapshot was not delivered");
+    }
+    Ok(())
 }
 
 /// Persists one confirmed candidate and registers it with the supervisor.
@@ -188,8 +206,9 @@ async fn commit_candidate(
     request: &BeginConnectionRequest,
     ids: CandidateIds,
     read: QuotaRead,
+    dispatched_at: DateTime<Utc>,
+    completed_at: DateTime<Utc>,
 ) -> Result<(), CommandError> {
-    let now = runtime.state.clock.now();
     let stored = quota_core::ports::StoredAccount {
         account_id: ids.account_id.clone(),
         connection: quota_domain::account::ConnectionSummary {
@@ -209,9 +228,9 @@ async fn commit_candidate(
         monitoring_enabled: true,
         connection_state: ConnectionState::Connected,
         fetch_state: quota_domain::account::FetchState::Idle,
-        last_attempt_at: Some(now),
-        last_success_at: Some(now),
-        next_attempt_at: Some(now + chrono::Duration::seconds(300)),
+        last_attempt_at: Some(dispatched_at),
+        last_success_at: Some(completed_at),
+        next_attempt_at: Some(completed_at + chrono::Duration::seconds(300)),
         identity: Some(read.identity),
         windows: read.windows,
         expected_but_missing_window_ids: read.expected_but_missing,

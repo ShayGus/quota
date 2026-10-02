@@ -110,6 +110,9 @@ export function Settings({
     requestedRoutes += 1;
     window.location.hash = `#/settings/${next}/${String(requestedRoutes)}`;
   }, []);
+  const showAccounts = useCallback(() => {
+    navigate("accounts");
+  }, [navigate]);
   const now = useNow();
   const preferences = state.preferences;
   const selected: SettingsTab | "connect" = TABS.some(([id]) => id === tab)
@@ -148,9 +151,7 @@ export function Settings({
             key={route}
             state={state}
             actions={actions}
-            onDone={() => {
-              navigate("accounts");
-            }}
+            onDone={showAccounts}
           />
         ) : preferences === null ? (
           <p className="note">

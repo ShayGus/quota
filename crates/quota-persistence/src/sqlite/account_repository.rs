@@ -192,25 +192,22 @@ impl AccountRepository {
         &self,
         account_id: &AccountId,
         state: FetchState,
-        attempted_at: DateTime<Utc>,
+        attempted_at: Option<DateTime<Utc>>,
+        succeeded_at: Option<DateTime<Utc>>,
         next_attempt_at: Option<DateTime<Utc>>,
     ) -> PersistenceResult<()> {
         let encoded = codec::encode(&state, "accounts")?;
-        let succeeded = i64::from(state == FetchState::Idle);
-        let at = codec::instant(attempted_at);
-
         let updated = sqlx::query(
             "UPDATE accounts
                 SET fetch_state = ?,
                     last_attempt_at = ?,
-                    last_success_at = CASE WHEN ? = 1 THEN ? ELSE last_success_at END,
+                    last_success_at = ?,
                     next_attempt_at = ?
               WHERE id = ?",
         )
         .bind(encoded)
-        .bind(&at)
-        .bind(succeeded)
-        .bind(&at)
+        .bind(attempted_at.map(codec::instant))
+        .bind(succeeded_at.map(codec::instant))
         .bind(next_attempt_at.map(codec::instant))
         .bind(account_id.as_str())
         .execute(&self.pool)

@@ -197,7 +197,13 @@ async fn metadata_during_dispatch_does_not_persist_a_successful_read() {
         .unwrap();
     repositories
         .accounts()
-        .record_attempt(&account_id, FetchState::Idle, at(1), None)
+        .record_attempt(
+            &account_id,
+            FetchState::Idle,
+            Some(at(1)),
+            Some(at(1)),
+            None,
+        )
         .await
         .unwrap();
     let port = SqliteAccountPortAdapter::new(repositories);
@@ -254,4 +260,88 @@ async fn metadata_during_dispatch_does_not_persist_a_successful_read() {
         restored.get(&account_id).unwrap().stored.last_success_at,
         Some(at(4))
     );
+}
+
+#[tokio::test]
+async fn read_timestamps_survive_reopening_the_database() -> Result<(), Box<dyn std::error::Error>>
+{
+    let directory = TempDir::new("read-timestamps");
+    let mut pool = migrated(&directory).await;
+    let repositories = SqliteRepositories::new(pool.clone());
+    repositories
+        .accounts()
+        .upsert_connection(&connection("conn-a"))
+        .await?;
+    repositories
+        .accounts()
+        .upsert_account(&account("acct-a", "conn-a", 1, "Personal"))
+        .await?;
+    let mut port = SqliteAccountPortAdapter::new(repositories);
+    let mut stored = port
+        .load_accounts()
+        .await?
+        .into_iter()
+        .next()
+        .ok_or("account missing")?;
+    let dispatched = at(1);
+    let completed = dispatched + chrono::Duration::seconds(3);
+    let next = completed + chrono::Duration::seconds(300);
+    for (state, attempted_at, succeeded_at, next_at) in [
+        (
+            FetchState::Idle,
+            Some(dispatched),
+            Some(completed),
+            Some(next),
+        ),
+        (
+            FetchState::Fetching,
+            Some(at(2)),
+            Some(completed),
+            Some(at(3)),
+        ),
+        (FetchState::Error, Some(at(2)), Some(completed), Some(at(3))),
+        (
+            FetchState::Backoff,
+            Some(at(2)),
+            Some(completed),
+            Some(at(3)),
+        ),
+        (
+            FetchState::Offline,
+            Some(at(2)),
+            Some(completed),
+            Some(at(3)),
+        ),
+        (FetchState::Idle, None, Some(completed), None),
+        (FetchState::Idle, Some(dispatched), None, Some(next)),
+        (FetchState::Idle, None, None, None),
+    ] {
+        stored.fetch_state = state;
+        stored.last_attempt_at = attempted_at;
+        stored.last_success_at = succeeded_at;
+        stored.next_attempt_at = next_at;
+        port.upsert_account(stored.clone()).await?;
+        pool.close().await;
+        pool = migrated(&directory).await;
+        port = SqliteAccountPortAdapter::new(SqliteRepositories::new(pool.clone()));
+        let restored = port
+            .load_accounts()
+            .await?
+            .into_iter()
+            .next()
+            .ok_or("account missing")?;
+        assert_eq!(restored.fetch_state, state);
+        assert_eq!(restored.last_attempt_at, attempted_at);
+        assert_eq!(restored.last_success_at, succeeded_at);
+        assert_eq!(restored.next_attempt_at, next_at);
+        let snapshot = port
+            .snapshot_of(&stored.account_id)
+            .await?
+            .ok_or("snapshot missing")?;
+        assert_eq!(snapshot.last_attempt_at, attempted_at);
+        assert_eq!(snapshot.last_success_at, succeeded_at);
+        assert_eq!(snapshot.next_attempt_at, next_at);
+    }
+    pool.close().await;
+    Ok(())
 }

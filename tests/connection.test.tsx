@@ -11,12 +11,17 @@ vi.mock("@tauri-apps/api/event", () => ({
 import { actions as hostActions } from "../src/app/actions";
 import { ConnectionWizard } from "../src/features/settings/ConnectionWizard";
 import { Settings, type SettingsActions } from "../src/features/settings/Settings";
-import type { ProviderId, VerifiedCandidate } from "../src/generated/bindings";
+import type {
+  AttemptRef,
+  ProviderId,
+  VerifiedCandidate,
+} from "../src/generated/bindings";
 import {
   acceptAttempt,
   acceptPreferences,
   acceptSnapshot,
   getRendererState,
+  setFailure,
 } from "../src/shared/state/store";
 import { useRendererState } from "../src/shared/state/useRendererState";
 import {
@@ -106,6 +111,7 @@ const VERIFY = { name: "Is this the right account?" };
 beforeEach(() => {
   window.location.hash = "";
   invoke.mockReset();
+  setFailure(null);
   acceptPreferences(preferences());
   acceptSnapshot(snapshot("instance-1", 1, [existing]));
 });
@@ -342,5 +348,116 @@ describe("the settings connection route", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
     expect(window.location.hash).toMatch(/^#\/settings\/accounts\//);
+  });
+
+  it("cancels a late begin reply after a fresh route replaces the wizard", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const accepted = Promise.withResolvers<AttemptRef | null>();
+    const actions = {
+      ...settingsActions(),
+      beginConnection: vi.fn(() => accepted.promise),
+    };
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+    await act(async () => {
+      accepted.resolve({ id: "late-attempt" });
+      await accepted.promise;
+    });
+    expect(actions.cancelConnection).toHaveBeenCalledExactlyOnceWith({
+      id: "late-attempt",
+    });
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+    expect(actions.confirmConnection).not.toHaveBeenCalled();
+  });
+
+  it("keeps the fresh route when an abandoned confirmation finishes", async () => {
+    window.location.hash = "#/settings/connect/request-1";
+    const confirmed = Promise.withResolvers<boolean>();
+    const actions = {
+      ...settingsActions(),
+      confirmConnection: vi.fn(() => confirmed.promise),
+    };
+    render(<SettingsHarness actions={actions} />);
+    await connect("Claude");
+    hold("attempt-1", "claude");
+    fireEvent.click(screen.getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    act(() => {
+      window.location.hash = "#/settings/connect/request-2";
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    await act(async () => {
+      confirmed.resolve(true);
+      await confirmed.promise;
+    });
+    expect(window.location.hash).toBe("#/settings/connect/request-2");
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
+  });
+});
+
+describe("the connection commands", () => {
+  it("reconciles a saved confirmation without waiting for its Verified event", async () => {
+    const saved = snapshot("instance-1", 2, [
+      existing,
+      account("saved", "claude", 2, []),
+    ]);
+    invoke.mockImplementation((command: string) =>
+      Promise.resolve(command === "get_snapshot" ? { snapshot: saved } : null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(true);
+    expect(invoke).toHaveBeenCalledWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+      nickname: "Work",
+    });
+    expect(invoke).toHaveBeenCalledWith("get_snapshot");
+    expect(getRendererState().snapshot).toEqual(saved);
+  });
+
+  it("does not reconcile a confirmation the host refused before saving", async () => {
+    invoke.mockRejectedValue({
+      kind: "persistence_unavailable",
+      context: { owner: "sqlite" },
+    });
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(false);
+    expect(invoke).toHaveBeenCalledExactlyOnceWith("confirm_connection", {
+      attemptRef: { id: "attempt-1" },
+      nickname: "Work",
+    });
+  });
+
+  it("keeps a confirmation successful when reconciliation cannot reach the host", async () => {
+    invoke.mockImplementation((command: string) =>
+      command === "get_snapshot"
+        ? Promise.reject(new Error("snapshot unavailable"))
+        : Promise.resolve(null),
+    );
+    expect(await hostActions.confirmConnection({ id: "attempt-1" }, "Work")).toBe(true);
+    expect(getRendererState().failure).toMatchObject({ kind: "transport" });
+  });
+
+  it("treats cancelling an attempt that already finished as harmless", async () => {
+    invoke.mockRejectedValue({ kind: "cancelled" });
+    await hostActions.cancelConnection({ id: "finished-attempt" });
+    expect(invoke).toHaveBeenCalledWith("cancel_connection", {
+      attemptRef: { id: "finished-attempt" },
+    });
+    expect(getRendererState().failure).toBeNull();
+  });
+
+  it("reports other cancellation failures", async () => {
+    invoke.mockRejectedValue({
+      kind: "permission_denied",
+      context: { window_label: "settings" },
+    });
+    await hostActions.cancelConnection({ id: "attempt-1" });
+    expect(getRendererState().failure).toEqual({
+      kind: "domain",
+      error: { kind: "permission_denied", context: { window_label: "settings" } },
+    });
   });
 });
