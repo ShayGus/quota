@@ -8,7 +8,12 @@
  */
 import { useState, type JSX } from "react";
 
-import type { AccountId, AccountSnapshot, Preferences } from "../../../generated/bindings";
+import type {
+  AccountId,
+  AccountSnapshot,
+  Preferences,
+} from "../../../generated/bindings";
+import { accountLabel } from "../../../shared/format/alias";
 import { formatAge, instantOf } from "../../../shared/format/duration";
 import { providerLabel } from "../../../shared/format/provider";
 import { ProviderMark } from "../../../shared/ui/ProviderMark";
@@ -25,27 +30,33 @@ function ManagedAccount({
   now,
   actions,
   onDetails,
+  accounts,
+  preferences,
 }: {
+  readonly accounts: readonly AccountSnapshot[];
+  readonly preferences: Preferences | null;
   readonly onDetails: () => void;
   readonly account: AccountSnapshot;
   readonly now: number;
   readonly actions: SettingsActions;
 }): JSX.Element {
+  const alias = accountLabel(preferences, accounts, account.account_id);
+  const label = alias || account.nickname;
   const [renaming, setRenaming] = useState(false);
   const [nickname, setNickname] = useState(account.nickname);
   const status = statusOf(account);
   const lastSuccess = instantOf(account.last_success_at);
   const dirty = nickname.trim().length > 0 && nickname.trim() !== account.nickname;
   return (
-    <article className="account-manage-card" aria-label={`Manage ${account.nickname}`}>
+    <article className="account-manage-card" aria-label={`Manage ${label}`}>
       <div className="account-manage-card__head">
         <div className="identity">
           <ProviderMark providerId={account.provider_id} />
           <div>
-            <span className="account-manage-card__name">{account.nickname}</span>
+            <span className="account-manage-card__name">{label}</span>
             <span className="account-manage-card__meta">
               {providerLabel(account.provider_id)}
-              {account.identity?.workspace_label != null
+              {!alias && account.identity?.workspace_label != null
                 ? ` · ${account.identity.workspace_label}`
                 : ""}
               {` · ${String(account.windows.length)} limits`}
@@ -57,7 +68,7 @@ function ManagedAccount({
           role="switch"
           className="switch"
           aria-checked={account.monitoring_enabled}
-          aria-label={`Monitor ${account.nickname}`}
+          aria-label={`Monitor ${label}`}
           onClick={() => {
             actions.setAccountEnabled(account.account_id, !account.monitoring_enabled);
           }}
@@ -74,6 +85,7 @@ function ManagedAccount({
         <button
           type="button"
           className="text-button"
+          disabled={alias !== ""}
           onClick={() => {
             setNickname(account.nickname);
             setRenaming(!renaming);
@@ -81,7 +93,7 @@ function ManagedAccount({
         >
           Rename
         </button>
-        {renaming ? (
+        {renaming && !alias ? (
           <>
             <label className="account-manage-card__rename">
               <span>Nickname</span>
@@ -169,7 +181,8 @@ export function AccountsPanel({
     return (
       <AccountDetail
         account={selected}
-        label={selected.nickname}
+        preferences={preferences}
+        accounts={accounts}
         now={now}
         onBack={() => {
           setSelectedId(null);
@@ -206,6 +219,8 @@ export function AccountsPanel({
         <ManagedAccount
           key={account.account_id}
           account={account}
+          accounts={accounts}
+          preferences={preferences}
           now={now}
           actions={actions}
           onDetails={() => {

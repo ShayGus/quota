@@ -4,7 +4,7 @@
  * These exercise the whole window, with the IPC boundary replaced by a test
  * double, so the renderer's own behaviour is what is measured (spec 17.1).
  */
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -633,4 +633,80 @@ describe("Fit presentation and layout changes", () => {
     act(resized);
     expect(screen.getByTestId("visible-count").textContent).toBe("2 / 4 visible");
   });
+});
+
+describe("account details privacy", () => {
+  it.each(["overview", "settings"])(
+    "aliases every identity from the %s entry point and responds to confirmed changes",
+    (entry) => {
+      const owner = account(
+        "a2",
+        "codex",
+        2,
+        [
+          quotaWindow("session", "session", percent(72), { label: "Private workspace" }),
+          quotaWindow("custom", "custom", percent(30), { label: "Private workspace" }),
+        ],
+        { nickname: "Private nickname", rank: 72 },
+      );
+      owner.identity = {
+        principal_label: "private@example.test",
+        workspace_label: "Private workspace",
+        plan_label: "Max",
+        source: "documented_api",
+      };
+      const base = preferences();
+      const hidden = preferences({
+        privacy: { ...base.privacy, alias_mode: "stable_aliases" },
+      });
+      window.location.hash = entry === "settings" ? "#/settings/accounts" : "";
+      acceptSnapshot(snapshot("instance-1", 1, [owner, account("a1", "claude", 1, [])]));
+      acceptPreferences(hidden);
+      render(<App />);
+      if (entry === "settings") {
+        const card = screen.getByRole("article", { name: "Manage Account 2" });
+        expect(card.textContent).not.toContain("Private nickname");
+        expect(card.textContent).not.toContain("Private workspace");
+        expect(within(card).getByRole("button", { name: "Rename" })).toHaveProperty(
+          "disabled",
+          true,
+        );
+        fireEvent.click(within(card).getByRole("button", { name: "Details" }));
+      } else {
+        fireEvent.click(screen.getByRole("button", { name: "Details for Account 2" }));
+      }
+      const details = screen.getByRole("region", {
+        name: "Account details for Account 2",
+      });
+      for (const privateLabel of [
+        "Private nickname",
+        "private@example.test",
+        "Private workspace",
+      ])
+        expect(details.outerHTML).not.toContain(privateLabel);
+      expect(within(details).getByRole("heading", { name: "Account 2" })).toBeTruthy();
+      expect(details.textContent).toContain("Workspace hidden");
+      expect(details.textContent).toContain("72%");
+      expect(details.textContent).toContain("Documented API");
+      fireEvent.click(within(details).getByRole("button", { name: /Scope hidden: 30%/ }));
+      expect(details.textContent).toContain("Scope hidden boundary");
+
+      act(() => acceptPreferences(preferences({ revision: hidden.revision + 1 })));
+      expect(
+        within(details).getByRole("heading", { name: "Private nickname" }),
+      ).toBeTruthy();
+      expect(details.textContent).toContain("private@example.test");
+      expect(details.textContent).toContain("Private workspace");
+      expect(details.getAttribute("aria-label")).toBe(
+        "Account details for Private nickname",
+      );
+      act(() => acceptPreferences({ ...hidden, revision: hidden.revision + 2 }));
+      for (const privateLabel of [
+        "Private nickname",
+        "private@example.test",
+        "Private workspace",
+      ])
+        expect(details.outerHTML).not.toContain(privateLabel);
+    },
+  );
 });

@@ -22,17 +22,22 @@ pub async fn set_overview_mode(
 ) -> Result<WindowModeChange, CommandError> {
     let mut controller = state.window.lock().await;
     let native = window::get(&state.app, "overview")?;
-    window::apply_mode_chrome(&native, mode)?;
-    if mode == OverviewMode::Tray {
-        window::anchor_to_tray(&state.app)?;
-    }
-    let confirmed = controller.set_mode(mode);
-    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
-        preferences.overview_mode = mode;
+    let result = window::transition_mode(&native, &mut controller, mode, async {
+        if mode == OverviewMode::Tray {
+            window::anchor_to_tray(&state.app)?;
+        }
+        let visible = native
+            .is_visible()
+            .map_err(|_| window::failed("read_window_visibility"))?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = mode;
+        })
+        .await?;
+        Ok(visible)
     })
-    .await?;
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(WindowModeChange::Applied(confirmed.mode))
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    Ok(WindowModeChange::Applied(result?.mode))
 }
 
 /// Changes the native topmost flag and saves the same confirmed preference.
@@ -99,37 +104,29 @@ pub async fn fit_overview_to_accounts(
     let height = (280.0 + f64::from(account_count) * 68.0)
         .min(max_height)
         .max(1.0);
-    window::apply_mode_chrome(&native, OverviewMode::Floating)?;
-    native
-        .set_size(LogicalSize::new(width, height))
-        .map_err(|_| window::failed("fit_window_size"))?;
-    native
-        .set_position(PhysicalPosition::new(
-            f64::from(area.position.x) + (f64::from(area.size.width) - width * scale) / 2.0,
-            f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
-        ))
-        .map_err(|_| window::failed("center_fitted_window"))?;
-    // Applying the chrome and recording the mode are one transition. If the
-    // saved preference never takes, the window goes back to the chrome it had,
-    // rather than floating with no recorded mode behind it.
-    let previous_mode = controller.state().mode;
-    if let Err(error) = crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
-        preferences.overview_mode = OverviewMode::Floating;
+    let result = window::transition_mode(&native, &mut controller, OverviewMode::Floating, async {
+        native
+            .set_size(LogicalSize::new(width, height))
+            .map_err(|_| window::failed("fit_window_size"))?;
+        native
+            .set_position(PhysicalPosition::new(
+                f64::from(area.position.x) + (f64::from(area.size.width) - width * scale) / 2.0,
+                f64::from(area.position.y) + (f64::from(area.size.height) - height * scale) / 2.0,
+            ))
+            .map_err(|_| window::failed("center_fitted_window"))?;
+        native
+            .eval("window.dispatchEvent(new Event('quota-fit-overview'));")
+            .map_err(|_| window::failed("fit_overview_content"))?;
+        let visible = window::set_visible(&state.app, "overview", true, true)?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = OverviewMode::Floating;
+        })
+        .await?;
+        Ok(visible)
     })
-    .await
-    {
-        let _ = window::apply_mode_chrome(&native, previous_mode);
-        return Err(error);
-    }
-    controller.set_mode(OverviewMode::Floating);
-    native
-        .eval("window.dispatchEvent(new Event('quota-fit-overview'));")
-        .map_err(|_| window::failed("fit_overview_content"))?;
-    let visible = window::set_visible(&state.app, "overview", true, true)?;
-    controller.set_visible(visible);
-    let confirmed = controller.record_geometry_change();
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(window_state_response(confirmed))
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    result.map(window_state_response)
 }
 /// Restores a position known to be inside a surviving monitor's work area.
 #[tauri::command]
@@ -150,30 +147,23 @@ pub async fn reset_overview_position(
     let size = native
         .outer_size()
         .map_err(|_| window::failed("read_window_size"))?;
-    native
-        .set_position(PhysicalPosition::new(
-            area.position.x + (area.size.width.saturating_sub(size.width) / 2).cast_signed(),
-            area.position.y + (area.size.height.saturating_sub(size.height) / 2).cast_signed(),
-        ))
-        .map_err(|_| window::failed("reset_window_position"))?;
-    native
-        .set_decorations(true)
-        .map_err(|_| window::failed("set_window_decorations"))?;
-    native
-        .set_skip_taskbar(false)
-        .map_err(|_| window::failed("set_taskbar_visibility"))?;
-    let visible = window::set_visible(&state.app, "overview", true, true)?;
-    controller.set_visible(visible);
-    controller.detach_to_floating();
-    let confirmed = controller.record_geometry_change();
-    // Detaching is a mode change, so the preference it produced is saved rather
-    // than left for the next restart to undo.
-    crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
-        preferences.overview_mode = OverviewMode::Floating;
+    let result = window::transition_mode(&native, &mut controller, OverviewMode::Floating, async {
+        native
+            .set_position(PhysicalPosition::new(
+                area.position.x + (area.size.width.saturating_sub(size.width) / 2).cast_signed(),
+                area.position.y + (area.size.height.saturating_sub(size.height) / 2).cast_signed(),
+            ))
+            .map_err(|_| window::failed("reset_window_position"))?;
+        let visible = window::set_visible(&state.app, "overview", true, true)?;
+        crate::ipc::commands_prefs::change_preferences(&state, |preferences| {
+            preferences.overview_mode = OverviewMode::Floating;
+        })
+        .await?;
+        Ok(visible)
     })
-    .await?;
-    window::publish_state(&state.app, &state.app_instance_id, confirmed);
-    Ok(window_state_response(confirmed))
+    .await;
+    window::publish_state(&state.app, &state.app_instance_id, controller.state());
+    result.map(window_state_response)
 }
 
 /// Opens one allowlisted provider usage page in the external browser.

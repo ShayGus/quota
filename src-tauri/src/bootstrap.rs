@@ -368,13 +368,12 @@ async fn install_managed_state(
     controller.set_always_on_top(confirmed_topmost);
     controller.set_visible(visible);
     let saved_mode = state.preferences_state.read().await.overview_mode;
-    controller.set_mode(saved_mode);
-    drop(controller);
     // The saved mode's chrome needs no tray geometry, so it applies now. The
     // anchor waits for the first tray event, which is when the positioner
     // learns where the icon is.
-    crate::platform::window::apply_mode_chrome(&native, saved_mode)
+    crate::platform::window::apply_mode_chrome(&native, saved_mode, &mut controller)
         .map_err(|_| "window_mode_chrome_restore_failed")?;
+    drop(controller);
     if saved_mode == quota_domain::preferences::OverviewMode::Tray {
         let _ = crate::platform::window::anchor_to_tray(app);
     }

@@ -12,6 +12,7 @@ use quota_contracts::CommandError;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_window_state::StateFlags;
 
+pub(crate) use super::window_transition::{apply_mode_chrome, transition_mode};
 use quota_domain::preferences::OverviewMode;
 
 /// The window state the saved-state plugin may restore.
@@ -82,24 +83,6 @@ pub fn set_visible(
     window
         .is_visible()
         .map_err(|_| failed("read_window_visibility"))
-}
-
-/// Applies the window chrome the mode implies.
-///
-/// Decorations and taskbar presence need no tray geometry, so this is safe to
-/// call at startup, before the tray icon has reported where it is.
-pub fn apply_mode_chrome(native: &WebviewWindow, mode: OverviewMode) -> Result<(), CommandError> {
-    let (decorations, skip_taskbar) = match mode {
-        OverviewMode::Tray => (false, true),
-        OverviewMode::Floating => (true, false),
-    };
-    native
-        .set_decorations(decorations)
-        .map_err(|_| failed("set_window_decorations"))?;
-    native
-        .set_skip_taskbar(skip_taskbar)
-        .map_err(|_| failed("set_taskbar_visibility"))?;
-    Ok(())
 }
 
 /// Anchors the window beside the tray icon.
@@ -266,11 +249,6 @@ impl OverviewWindowController {
         self.state
     }
 
-    /// Detaches a dragged tray view to floating, leaving topmost untouched.
-    pub fn detach_to_floating(&mut self) -> OverviewWindowState {
-        self.set_mode(OverviewMode::Floating)
-    }
-
     /// Records a confirmed size or position change.
     pub fn record_geometry_change(&mut self) -> OverviewWindowState {
         self.bump();
@@ -312,10 +290,10 @@ mod tests {
     }
 
     #[test]
-    fn dragging_a_tray_view_does_not_enable_topmost() {
+    fn changing_a_tray_view_to_floating_does_not_enable_topmost() {
         let mut controller = OverviewWindowController::new();
         controller.set_mode(OverviewMode::Tray);
-        controller.detach_to_floating();
+        controller.set_mode(OverviewMode::Floating);
         assert_eq!(controller.state().mode, OverviewMode::Floating);
         assert!(!controller.state().always_on_top);
     }

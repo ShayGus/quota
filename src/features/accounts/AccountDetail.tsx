@@ -7,7 +7,7 @@
  */
 import { useState, type JSX } from "react";
 
-import type { AccountSnapshot, QuotaWindow } from "../../generated/bindings";
+import type { AccountSnapshot, Preferences, QuotaWindow } from "../../generated/bindings";
 import {
   arcFraction,
   formatRemaining,
@@ -20,6 +20,7 @@ import {
   formatExactInstant,
   instantOf,
 } from "../../shared/format/duration";
+import { accountLabel } from "../../shared/format/alias";
 import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
@@ -54,7 +55,9 @@ function WindowCard({
   now,
   selected,
   onSelect,
+  hideLabels,
 }: {
+  readonly hideLabels: boolean;
   readonly window: QuotaWindow;
   readonly account: AccountSnapshot;
   readonly now: number;
@@ -63,6 +66,7 @@ function WindowCard({
 }): JSX.Element {
   // The same freshness the overview uses, so a window that has gone stale or
   // whose boundary has passed cannot look healthy here (spec 6, AC-15).
+  const scope = hideLabels ? "Scope hidden" : window.scope.label || "Allowance";
   const state = readingState(account, window, now);
   const severity = state === "current" ? severityOf(window.measurement) : "stale";
   const value = formatRemaining(window.measurement);
@@ -72,14 +76,14 @@ function WindowCard({
       type="button"
       className={`limit-card${selected ? " limit-card--selected" : ""}`}
       aria-pressed={selected}
-      aria-label={`${window.scope.label || "Allowance"}: ${value} remaining. ${formatBoundary(window.boundary, now)}`}
+      aria-label={`${scope}: ${value} remaining. ${formatBoundary(window.boundary, now)}`}
       onClick={() => {
         onSelect(window.id);
       }}
     >
       <h3>
         {window.category === "daily" || window.category === "custom"
-          ? window.scope.label || "Allowance"
+          ? scope
           : columnLabel(window.category)}
       </h3>
       <Ring
@@ -99,7 +103,7 @@ function WindowCard({
           : formatExactInstant(window.boundary.at, DISPLAY_TIME_ZONE)}
       </p>
       <p className="limit-card__role">{ROLE_WORDS[window.metric_role]}</p>
-      <p className="limit-card__scope">{window.scope.label || "Allowance"}</p>
+      <p className="limit-card__scope">{scope}</p>
     </button>
   );
 }
@@ -109,7 +113,8 @@ export function AccountDetail({
   account,
   now,
   onBack,
-  label,
+  accounts,
+  preferences,
   onUsagePage,
   onManageAccounts,
 }: {
@@ -118,9 +123,12 @@ export function AccountDetail({
   readonly onBack: () => void;
   readonly onUsagePage: () => void;
   readonly onManageAccounts: () => void;
-  /** The name to show: the account's own, or its alias under the privacy setting. */
-  readonly label: string;
+  readonly accounts: readonly AccountSnapshot[];
+  readonly preferences: Preferences | null;
 }): JSX.Element {
+  const alias = accountLabel(preferences, accounts, account.account_id);
+  const label = alias || account.nickname;
+  const workspace = alias ? "Workspace hidden" : account.identity?.workspace_label;
   const [selectedWindow, setSelectedWindow] = useState<QuotaWindow["id"] | null>(
     account.windows[0]?.id ?? null,
   );
@@ -143,7 +151,7 @@ export function AccountDetail({
   const readingSource =
     shown === undefined
       ? "No reading"
-      : `${SOURCE_WORDS[shown.source]} · ${shown.scope.label}`;
+      : `${SOURCE_WORDS[shown.source]} · ${alias ? "Scope hidden" : shown.scope.label}`;
   return (
     <section className="detail" aria-label={`Account details for ${label}`}>
       <div className="detail__back">
@@ -160,9 +168,7 @@ export function AccountDetail({
             <h2>{label}</h2>
             <p>
               {providerLabel(account.provider_id)}
-              {account.identity?.workspace_label != null
-                ? ` · ${account.identity.workspace_label}`
-                : ""}
+              {workspace != null ? ` · ${workspace}` : ""}
               {account.identity?.plan_label != null
                 ? ` · ${account.identity.plan_label}`
                 : ""}
@@ -182,6 +188,7 @@ export function AccountDetail({
             <WindowCard
               key={window.id}
               window={window}
+              hideLabels={alias !== ""}
               account={account}
               now={now}
               selected={window.id === selectedWindow}
@@ -193,7 +200,7 @@ export function AccountDetail({
       <dl className="detail__list">
         <div>
           <dt>Account</dt>
-          <dd>{account.identity?.principal_label ?? account.nickname}</dd>
+          <dd>{alias || account.identity?.principal_label || account.nickname}</dd>
         </div>
         <div>
           <dt>Local account ID</dt>
@@ -205,7 +212,7 @@ export function AccountDetail({
         </div>
         <div>
           <dt>Workspace</dt>
-          <dd>{account.identity?.workspace_label ?? "Not reported"}</dd>
+          <dd>{workspace ?? "Not reported"}</dd>
         </div>
         <div>
           <dt>Plan</dt>
@@ -248,7 +255,9 @@ export function AccountDetail({
         </div>
         {selected === null ? null : (
           <div>
-            <dt>{selected.scope.label || "Allowance"} boundary</dt>
+            <dt>
+              {alias ? "Scope hidden" : selected.scope.label || "Allowance"} boundary
+            </dt>
             <dd>
               {selected.boundary === null
                 ? "Not reported"
@@ -265,8 +274,8 @@ export function AccountDetail({
         </p>
       ) : (
         <p className="note">
-          Ranked by {account.order.value.scope_label}: {controllingValue}. Rule version{" "}
-          {String(account.order.value.rule_version)}.
+          Ranked by {alias ? "Scope hidden" : account.order.value.scope_label}:{" "}
+          {controllingValue}. Rule version {String(account.order.value.rule_version)}.
         </p>
       )}
       <div className="detail__bottom">
