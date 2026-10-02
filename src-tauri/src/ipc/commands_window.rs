@@ -16,6 +16,7 @@ use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::ProviderId;
 use tauri::{LogicalSize, PhysicalPosition, State};
 
+use crate::platform::tray_anchor::Edge;
 use crate::platform::window::{self, OverviewWindowState as WindowModelState};
 use crate::state::AppState;
 
@@ -182,7 +183,10 @@ pub async fn fit_overview_height(
             top: area.position.y,
             height: area.size.height,
         },
-        controller.state().mode == OverviewMode::Tray,
+        // A tray popover keeps the edge nearest the tray: its bottom above a
+        // bottom taskbar, its top below a menu bar or beside a side taskbar.
+        controller.state().mode == OverviewMode::Tray
+            && window::tray_layout(&state.app, &native)?.edge == Edge::Bottom,
     );
     let width = f64::from(inner.width) / scale;
     native

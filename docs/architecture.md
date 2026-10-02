@@ -21,6 +21,9 @@ quota-desktop (src-tauri) — composition, thin commands, OS adapters
   └── platform modules — tray, popover window, login item
 ```
 
+Operating-system differences are confined to the platform modules and a few named files;
+[Platforms](platforms.md) lists them and what adding macOS takes.
+
 `xtask` is a build tool, and nothing in the application depends on it.
 [`xtask/Cargo.toml`](../xtask/Cargo.toml) owns its dependencies.
 

@@ -27,7 +27,7 @@ pub struct Placement {
 pub struct WorkArea {
     /// Top edge of the work area.
     pub top: i32,
-    /// Height of the work area, which excludes the taskbar.
+    /// Height of the work area, which excludes the taskbar or menu bar.
     pub height: u32,
 }
 
@@ -45,8 +45,9 @@ pub struct Fitted {
 ///
 /// The height is held between the minimum and the wireframe's ceiling, and
 /// never exceeds the work area, even when the work area is shorter than the
-/// minimum. A tray popover keeps its bottom edge, so it stays anchored above
-/// the taskbar; a pinned window keeps its top edge. Either way the result is
+/// minimum. With `anchor_bottom` the window keeps its bottom edge, as a tray
+/// popover above a bottom taskbar does; otherwise it keeps its top edge, as a
+/// pinned window or a popover below a menu bar does. Either way the result is
 /// moved back inside the work area.
 #[must_use]
 pub fn fit(

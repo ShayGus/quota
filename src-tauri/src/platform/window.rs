@@ -10,6 +10,8 @@
 
 use quota_contracts::CommandError;
 use tauri::{AppHandle, Manager, WebviewWindow};
+
+use super::tray_anchor::{self, Edge};
 use tauri_plugin_window_state::StateFlags;
 
 pub(crate) use super::window_transition::{apply_mode_chrome, transition_mode};
@@ -85,49 +87,105 @@ pub fn set_visible(
         .map_err(|_| failed("read_window_visibility"))
 }
 
-/// Anchors the window beside the tray icon.
+/// Anchors the window against the tray, on whichever screen edge the tray is.
 ///
-/// The positioner only learns where the icon is from a tray event, so this
-/// fails until one has arrived. At startup the failure is logged as a warning;
-/// a later tray event retries the anchor.
+/// See [`tray_anchor`] for how the edge and the
+/// position are chosen; nothing here depends on the operating system.
 pub fn anchor_to_tray(app: &AppHandle) -> Result<(), CommandError> {
-    use tauri_plugin_positioner::{Position, WindowExt};
-    let native = get(app, "overview")?;
-    if native
-        .move_window_constrained(Position::TrayBottomCenter)
-        .is_ok()
-    {
-        return Ok(());
-    }
-    // The tray's position is known only after its first event. Until then the
-    // popover sits where the wireframe draws it: the work area's bottom-right
-    // corner, just above the taskbar.
-    anchor_to_work_area_corner(&native)
-}
-
-/// Places the window at the bottom-right of its monitor's work area.
-fn anchor_to_work_area_corner(native: &tauri::WebviewWindow) -> Result<(), CommandError> {
     /// The gap the wireframe leaves between the popover and the screen edge.
     const MARGIN: f64 = 12.0;
-    let monitor = native
-        .current_monitor()
-        .map_err(|_| failed("read_current_monitor"))?
-        .or(native
-            .primary_monitor()
-            .map_err(|_| failed("read_primary_monitor"))?)
-        .ok_or_else(|| failed("find_display"))?;
-    let area = monitor.work_area();
+    let native = get(app, "overview")?;
+    let layout = tray_layout(app, &native)?;
     let size = native
         .outer_size()
         .map_err(|_| failed("read_window_size"))?;
-    let margin = MARGIN * monitor.scale_factor();
-    let x =
-        f64::from(area.position.x) + f64::from(area.size.width) - f64::from(size.width) - margin;
-    let y =
-        f64::from(area.position.y) + f64::from(area.size.height) - f64::from(size.height) - margin;
+    let (x, y) = tray_anchor::place(
+        layout.work_area,
+        layout.edge,
+        layout.icon,
+        (f64::from(size.width), f64::from(size.height)),
+        MARGIN * layout.scale,
+    );
     native
         .set_position(tauri::PhysicalPosition::new(x, y))
         .map_err(|_| failed("anchor_tray_window"))
+}
+
+/// The tray's screen edge and the work area beside it, in physical pixels.
+pub struct TrayLayout {
+    /// The edge the tray is on.
+    pub edge: Edge,
+    /// The work area of the monitor the tray is on.
+    pub work_area: tray_anchor::Rect,
+    /// The tray icon, when the system reports where it is.
+    pub icon: Option<tray_anchor::Rect>,
+    /// That monitor's scale factor.
+    pub scale: f64,
+}
+
+/// Reads where the tray is: the icon's rectangle when the system reports one
+/// (Windows and macOS do, Linux does not), and the monitor it is on, else the
+/// overview's own monitor.
+pub fn tray_layout(
+    app: &AppHandle,
+    native: &tauri::WebviewWindow,
+) -> Result<TrayLayout, CommandError> {
+    let icon = tray_icon_rect(app);
+    let beside_icon = icon.and_then(|icon| {
+        let (x, y) = (icon.x + icon.width / 2.0, icon.y + icon.height / 2.0);
+        app.monitor_from_point(x, y).ok().flatten()
+    });
+    let monitor = match beside_icon {
+        Some(monitor) => monitor,
+        None => native
+            .current_monitor()
+            .map_err(|_| failed("read_current_monitor"))?
+            .or(native
+                .primary_monitor()
+                .map_err(|_| failed("read_primary_monitor"))?)
+            .ok_or_else(|| failed("find_display"))?,
+    };
+    let bounds = physical_rect(*monitor.position(), *monitor.size());
+    let area = monitor.work_area();
+    let work_area = physical_rect(area.position, area.size);
+    let icon = tray_anchor::reserved_icon(bounds, work_area, icon);
+    Ok(TrayLayout {
+        edge: tray_anchor::tray_edge(bounds, work_area, icon),
+        work_area,
+        icon,
+        scale: monitor.scale_factor(),
+    })
+}
+
+/// The tray icon's rectangle in physical pixels, when the system reports it.
+fn tray_icon_rect(app: &AppHandle) -> Option<tray_anchor::Rect> {
+    let rect = app.tray_by_id("quota")?.rect().ok().flatten()?;
+    let scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map_or(1.0, |monitor| monitor.scale_factor());
+    let position = rect.position.to_physical::<f64>(scale);
+    let size = rect.size.to_physical::<f64>(scale);
+    Some(tray_anchor::Rect {
+        x: position.x,
+        y: position.y,
+        width: size.width,
+        height: size.height,
+    })
+}
+
+/// A monitor rectangle as the placement module takes it.
+fn physical_rect(
+    position: tauri::PhysicalPosition<i32>,
+    size: tauri::PhysicalSize<u32>,
+) -> tray_anchor::Rect {
+    tray_anchor::Rect {
+        x: f64::from(position.x),
+        y: f64::from(position.y),
+        width: f64::from(size.width),
+        height: f64::from(size.height),
+    }
 }
 
 /// Keeps both configured windows alive when the user closes them.

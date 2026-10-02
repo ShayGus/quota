@@ -89,4 +89,4 @@ forward, and a `--autostart` launch stays hidden. Launch at login wrote the `Quo
 in `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` and removed it again. The
 popover's height follows its content between 320 and 760 pixels, as the wireframe's does:
 the renderer reports its content height and the host resizes the window inside the work
-area, keeping a tray popover anchored above the taskbar.
+area, keeping a tray popover against the screen edge the tray is on.

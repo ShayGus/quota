@@ -7,6 +7,7 @@
 pub mod autostart;
 pub mod popover_height;
 pub mod tray;
+pub mod tray_anchor;
 pub mod window;
 mod window_transition;
 
