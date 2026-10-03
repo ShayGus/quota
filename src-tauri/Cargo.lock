@@ -4543,6 +4543,7 @@ dependencies = [
  "quota-domain",
  "quota-providers",
  "reqwest",
+ "ring",
  "rustls",
  "serde",
  "serde_json",

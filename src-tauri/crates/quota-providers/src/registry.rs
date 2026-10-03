@@ -18,6 +18,7 @@ use crate::grok::GrokAdapter;
 use crate::kimi::KimiAdapter;
 use crate::minimax::MinimaxAdapter;
 use crate::muse::MuseAdapter;
+use crate::ollama::OllamaAdapter;
 use crate::opencode_go::OpenCodeGoAdapter;
 use crate::openrouter::OpenRouterAdapter;
 use crate::zai::ZaiAdapter;
@@ -50,6 +51,7 @@ impl ProviderRegistry {
                 Arc::new(GrokAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(MuseAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(CursorAdapter::new()?),
+                Arc::new(OllamaAdapter::new(Arc::clone(&secrets))?),
             ],
             secrets,
         })
@@ -127,6 +129,7 @@ mod tests {
             ProviderId::Grok,
             ProviderId::MuseCode,
             ProviderId::Cursor,
+            ProviderId::OllamaCloud,
         ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);

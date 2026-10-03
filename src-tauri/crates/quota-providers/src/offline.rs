@@ -13,7 +13,9 @@ use quota_domain::provider::ProviderId;
 use quota_domain::quota::window::QuotaWindow;
 
 use crate::decode::{self, DecodedUsage};
-use crate::{claude, codex, cursor, grok, kimi, minimax, muse, opencode_go, openrouter, zai};
+use crate::{
+    claude, codex, cursor, grok, kimi, minimax, muse, ollama, opencode_go, openrouter, zai,
+};
 
 /// A decoded payload, before an identity is attached.
 #[derive(Clone, Debug, PartialEq)]
@@ -86,27 +88,38 @@ pub fn decode_offline(
             detail: "the provider body was not valid JSON".to_owned(),
         })?;
     let pool: QuotaPoolId = decode::pool_id(provider, pool_seed);
+    let decoded = decode_document(provider, document, &pool, received_at)?;
+    Ok(OfflineReading::from_decoded(decoded))
+}
+
+/// Decodes one provider's parsed payload.
+fn decode_document(
+    provider: ProviderId,
+    document: serde_json::Value,
+    pool: &QuotaPoolId,
+    received_at: DateTime<Utc>,
+) -> Result<DecodedUsage, ProviderError> {
     let decoded = match provider {
         ProviderId::Codex => {
             let envelope: codex::wire::CodexEnvelope =
                 serde_json::from_value(document).map_err(|_| ProviderError::UnsupportedSchema {
                     detail: "the payload did not match the supported Codex shape".to_owned(),
                 })?;
-            codex::mapping::decode(&envelope, &pool, received_at)?
+            codex::mapping::decode(&envelope, pool, received_at)?
         }
         ProviderId::Claude => {
             let usage: claude::wire::ClaudeUsage =
                 serde_json::from_value(document).map_err(|_| ProviderError::UnsupportedSchema {
                     detail: "the payload did not match the supported Claude usage shape".to_owned(),
                 })?;
-            claude::mapping::decode(&usage, &pool, received_at)?
+            claude::mapping::decode(&usage, pool, received_at)?
         }
         ProviderId::OpenCodeGo => {
             let envelope: opencode_go::wire::OpenCodeGoEnvelope = serde_json::from_value(document)
                 .map_err(|_| ProviderError::UnsupportedSchema {
                     detail: "the payload did not match the supported OpenCode Go shape".to_owned(),
                 })?;
-            opencode_go::mapping::decode(&envelope, &pool, received_at)?
+            opencode_go::mapping::decode(&envelope, pool, received_at)?
         }
         ProviderId::Openrouter => {
             // The key answer alone; the credit balance is a second endpoint.
@@ -117,34 +130,38 @@ pub fn decode_offline(
                     detail: "the payload did not match the supported OpenRouter key shape"
                         .to_owned(),
                 })?;
-            openrouter::mapping::decode(&key, None, &pool, received_at)?
+            openrouter::mapping::decode(&key, None, pool, received_at)?
         }
         ProviderId::Zai => {
             let envelope = offline_shape::<zai::wire::QuotaEnvelope>(document, "Z.ai quota")?;
             let data = envelope.data.ok_or_else(|| unsupported("Z.ai quota"))?;
-            zai::mapping::decode(&data, &pool, received_at)?
+            zai::mapping::decode(&data, pool, received_at)?
         }
         ProviderId::Minimax => {
             let envelope =
                 offline_shape::<minimax::wire::RemainsEnvelope>(document, "MiniMax plan")?;
-            minimax::mapping::decode(envelope.buckets(), &pool, received_at)?
+            minimax::mapping::decode(envelope.buckets(), pool, received_at)?
         }
         ProviderId::Kimi => {
             let envelope = offline_shape::<kimi::wire::UsageEnvelope>(document, "Kimi usage")?;
-            kimi::mapping::decode(&envelope, &pool, received_at)?
+            kimi::mapping::decode(&envelope, pool, received_at)?
         }
         ProviderId::Grok => {
             let envelope = offline_shape::<grok::wire::BillingEnvelope>(document, "Grok billing")?;
-            grok::mapping::decode(envelope.config.as_ref(), None, &pool, received_at)?
+            grok::mapping::decode(envelope.config.as_ref(), None, pool, received_at)?
         }
         ProviderId::MuseCode => {
             let answer =
                 offline_shape::<muse::wire::SubscriptionAnswer>(document, "Muse Code usage")?;
-            muse::mapping::decode(&answer, &pool, received_at)?
+            muse::mapping::decode(&answer, pool, received_at)?
         }
         ProviderId::Cursor => {
             let summary = offline_shape::<cursor::wire::UsageSummary>(document, "Cursor usage")?;
-            cursor::mapping::decode(&summary, &pool, received_at)?
+            cursor::mapping::decode(&summary, pool, received_at)?
+        }
+        ProviderId::OllamaCloud => {
+            let body = offline_shape::<ollama::wire::UsageBody>(document, "Ollama usage")?;
+            ollama::mapping::decode(&body, pool, received_at)?
         }
         ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {
@@ -152,7 +169,7 @@ pub fn decode_offline(
             });
         }
     };
-    Ok(OfflineReading::from_decoded(decoded))
+    Ok(decoded)
 }
 
 /// Reads a captured payload as one provider's wire shape.

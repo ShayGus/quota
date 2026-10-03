@@ -26,6 +26,9 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "rt", "sync", "time"] }
 tracing = { workspace = true }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls-no-provider"] }
+# Signs Ollama requests with the Ed25519 key Ollama keeps, as its CLI does.
+# Already in the graph as rustls's crypto provider.
+ring = { version = "0.17.14", default-features = false }
 rustls = { version = "0.23.45", default-features = false, features = ["ring", "std", "tls12"] }
 # The operating system's credential store holds every credential Quota owns
 # itself: one store crate per system, behind keyring-core's common entry API.
