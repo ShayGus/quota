@@ -13,7 +13,7 @@ use quota_domain::provider::ProviderId;
 use quota_domain::quota::window::QuotaWindow;
 
 use crate::decode::{self, DecodedUsage};
-use crate::{claude, codex, opencode_go};
+use crate::{claude, codex, opencode_go, openrouter};
 
 /// A decoded payload, before an identity is attached.
 #[derive(Clone, Debug, PartialEq)]
@@ -107,6 +107,17 @@ pub fn decode_offline(
                     detail: "the payload did not match the supported OpenCode Go shape".to_owned(),
                 })?;
             opencode_go::mapping::decode(&envelope, &pool, received_at)?
+        }
+        ProviderId::Openrouter => {
+            // The key answer alone; the credit balance is a second endpoint.
+            let key = serde_json::from_value::<openrouter::wire::KeyEnvelope>(document)
+                .ok()
+                .and_then(|envelope| envelope.data)
+                .ok_or_else(|| ProviderError::UnsupportedSchema {
+                    detail: "the payload did not match the supported OpenRouter key shape"
+                        .to_owned(),
+                })?;
+            openrouter::mapping::decode(&key, None, &pool, received_at)?
         }
         ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {

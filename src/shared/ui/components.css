@@ -56,7 +56,8 @@ select {
   max-width: 100%;
 }
 
-input[type="text"] {
+input[type="text"],
+input[type="password"] {
   padding: 10px 12px;
   width: 100%;
 }

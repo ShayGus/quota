@@ -165,7 +165,8 @@ pub(super) async fn commit_pending(
         reporter,
     } = pending;
     request.nickname = nickname;
-    if let Err(error) = commit_candidate(runtime, candidate, &request, ids, read, timestamps).await
+    if let Err(error) =
+        commit_with_credential(runtime, candidate, &request, ids, read, timestamps).await
     {
         // The candidate is spent either way, so the wizard returns to the
         // connect step with the typed reason rather than a dead Add button.
@@ -193,6 +194,31 @@ pub(super) async fn commit_pending(
         tracing::warn!(%code, "the saved connection snapshot was not delivered");
     }
     Ok(())
+}
+
+/// Stores the credential the person supplied, under the connection it signs
+/// in, then saves the account that uses it. When the account cannot be saved,
+/// its credential is removed again, so nothing is left behind.
+async fn commit_with_credential(
+    runtime: &MonitoringRuntime,
+    candidate: DiscoveredAccount,
+    request: &BeginConnectionRequest,
+    ids: CandidateIds,
+    read: QuotaRead,
+    timestamps: ReadTimestamps,
+) -> Result<(), CommandError> {
+    let Some(credential) = request.credential.as_ref() else {
+        return commit_candidate(runtime, candidate, request, ids, read, timestamps).await;
+    };
+    let secrets = runtime.state.providers.secrets();
+    let connection_id = ids.connection_id.clone();
+    let secret = quota_core::ports::Secret::new(credential.expose().to_owned());
+    super::credentials::store(secrets, &connection_id, secret).await?;
+    let committed = commit_candidate(runtime, candidate, request, ids, read, timestamps).await;
+    if committed.is_err() {
+        super::credentials::forget(secrets, connection_id).await;
+    }
+    committed
 }
 
 /// Persists one confirmed candidate and registers it with the supervisor.

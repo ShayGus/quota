@@ -7,6 +7,7 @@
 pub mod provider;
 pub mod publisher;
 pub mod repository;
+pub mod secrets;
 
 pub use provider::{
     ConnectionBinding, DiscoveredAccount, FetchOutcome, ProviderAdapter, ProviderError,
@@ -18,3 +19,4 @@ pub use repository::{
     HistoryRepository, MonitoringRepository, OperationalPreferencesRepository,
     PreferenceRepository, RepositoryError, StoredAccount, default_history_retention,
 };
+pub use secrets::{Secret, SecretStore, SecretStoreError};

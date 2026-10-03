@@ -28,7 +28,7 @@ use quota_providers::registry::ProviderRegistry;
 /// The registry offers the fixture only when the feature is compiled in.
 #[test]
 fn the_fixture_provider_is_registered_for_this_build() {
-    let registry = ProviderRegistry::with_fixture().unwrap();
+    let registry = ProviderRegistry::with_fixture(quota_providers::secrets::unavailable()).unwrap();
     assert!(registry.provider(ProviderId::Fixture).is_some());
     assert_eq!(
         registry

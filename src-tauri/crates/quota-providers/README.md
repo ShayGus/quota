@@ -10,16 +10,17 @@ a quota reading.
 
 ## Verification status
 
-**No live call was made by this crate or its tests.** Every endpoint below is
-undocumented, and the field spellings were supplied as a specification, not observed by
-this crate from a real login. The status column therefore separates what an automated test
-proves from what only a real login can prove:
+**No live call was made by this crate or its tests.** Every endpoint below except
+OpenRouter's is undocumented, and their field spellings were supplied as a specification,
+not observed by this crate from a real login. The status column therefore separates what
+an automated test proves from what only a real login can prove:
 
 | Provider    | Endpoint behaviour | Field spellings | Live-login verification |
 | ----------- | ------------------ | --------------- | ----------------------- |
 | Codex       | ASSUMED            | ASSUMED         | Not performed           |
 | Claude      | ASSUMED            | ASSUMED         | Not performed           |
 | OpenCode Go | ASSUMED            | ASSUMED         | Not performed           |
+| OpenRouter  | DOCUMENTED         | DOCUMENTED      | See the pull request    |
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -54,7 +55,7 @@ Reads the quota the Codex CLI reports for its own login.
   without trying the fallback. A decisive failure from the fallback takes precedence;
   otherwise, if both endpoints fail, the first error is retained.
 - Credential discovery: see the
-  [Codex credential reference](../../docs/providers.md#codex).
+  [Codex credential reference](../../../docs/providers.md#codex).
 - Credential owner: the Codex CLI. It owns and refreshes this file. This adapter never
   writes to, refreshes, or rotates it, and never runs the Codex CLI. An expired or
   rejected token becomes `ProviderError::Authentication` for the user to fix in Codex.
@@ -102,7 +103,7 @@ Reads Claude subscription usage for the Claude Code login.
   `GET https://api.anthropic.com/api/oauth/profile` for the identity. Both are
   undocumented, and both require the `anthropic-beta: oauth-2025-04-20` header.
 - Credential discovery: see the
-  [Claude credential reference](../../docs/providers.md#claude).
+  [Claude credential reference](../../../docs/providers.md#claude).
 - Credential owner: Claude Code. It owns and refreshes this file. This adapter never
   refreshes the token, never writes to the file, and never runs Claude Code. The optional
   inference-based quota path is out of scope and does not exist in this crate.
@@ -142,7 +143,7 @@ Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
 - Endpoint: `GET https://opencode.ai/zen/go/v1/usage` with a bearer key and a JSON accept
   header. It is undocumented.
 - Credential discovery: see the
-  [OpenCode Go credential reference](../../docs/providers.md#opencode-go).
+  [OpenCode Go credential reference](../../../docs/providers.md#opencode-go).
 - Credential owner: the `OpenCode` login. Quota has no refresh path for this credential at
   all, and never writes to the file.
 - Decoded fields: `usage` or the root object; `rollingUsage`/`rolling`,
@@ -161,6 +162,29 @@ Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
   connector, not a defect to paper over.
 - Cadence: a fixed interval with a 300-second minimum. HTTP 429 becomes `RateLimited` with
   the `Retry-After` deadline.
+
+## OpenRouter
+
+Reads the credits and the API key limit of a key the person pasted. Quota owns this
+credential: there is no OpenRouter tool on the computer to read a sign-in from.
+
+- Endpoints: `GET https://openrouter.ai/api/v1/key` and
+  `GET https://openrouter.ai/api/v1/credits`, both documented, with a bearer key.
+- Credential: kept by `secrets::SystemSecretStore` in the system credential store under
+  the connection it signs in, and read from there on every read. During verification the
+  host passes the pasted key through `discover_with` and `read_with` instead, so nothing
+  is stored before the person adds the account. See the
+  [OpenRouter reference](../../../docs/providers.md#openrouter).
+- Decoded fields: `data.label`, `data.limit`, `data.limit_remaining`, `data.limit_reset`,
+  `data.is_free_tier`; `data.total_credits`, `data.total_usage`. Amounts are US dollars,
+  rounded to the cent.
+- Window mapping: the key limit is an `ExtraSpendCap` in the period `limit_reset` names
+  (`Custom` when it never resets), `Unlimited` when the key has no limit. The credit
+  balance is a `CreditBalance` of what was bought less what was spent. Both are marked as
+  read from a documented API.
+- A key the credits endpoint refuses (401 or 403) still connects; only its key limit is
+  shown.
+- Cadence: a fixed interval with a 300-second minimum.
 
 ## Fixture
 
@@ -184,11 +208,13 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production()` holds the three real adapters;
-`ProviderRegistry::with_fixture()` adds the fixture when the feature is on. `provider(id)`
-returns `None` for any provider this build does not contain, so the application reports an
-explicit unsupported-provider state. There is no dynamic adapter lookup, no downloaded
-parser, and no plugin loading.
+`ProviderRegistry::production(secrets)` holds the four real adapters and the credential
+store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
+that refuses every operation when there is none);
+`ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
+`provider(id)` returns `None` for any provider this build does not contain, so the
+application reports an explicit unsupported-provider state. There is no dynamic adapter
+lookup, no downloaded parser, and no plugin loading.
 
 ## Transport
 
@@ -207,9 +233,9 @@ contacted, and every request is HTTPS.
 
 ## Dependencies added by this crate
 
-[The dependency record](../../docs/dependencies.md) points to the authoritative manifests
-and lockfiles. This crate's `Cargo.toml` declares the explicit rustls `ring` backend;
-`http::ProviderHttp` installs that crypto provider once on first use.
+[The dependency record](../../../docs/dependencies.md) points to the authoritative
+manifests and lockfiles. This crate's `Cargo.toml` declares the explicit rustls `ring`
+backend; `http::ProviderHttp` installs that crypto provider once on first use.
 
 ## Tests
 

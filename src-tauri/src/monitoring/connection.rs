@@ -6,7 +6,7 @@ use quota_contracts::CommandError;
 use quota_contracts::commands::BeginConnectionRequest;
 use quota_contracts::events::{ConnectionProgress, ConnectionProgressChangedPayload};
 use quota_core::clock::Clock;
-use quota_core::ports::{ProviderAdapter, ProviderError};
+use quota_core::ports::{ProviderAdapter, ProviderError, Secret};
 use quota_domain::ids::ConnectionAttemptId;
 use tauri_specta::Event;
 use tokio::sync::watch;
@@ -76,6 +76,7 @@ pub(super) async fn run_connection_attempt(
     mut cancelled: watch::Receiver<bool>,
     reporter: Arc<AttemptReporter>,
 ) -> Result<(), CommandError> {
+    let secret = super::credentials::supplied(&adapter, &request)?;
     let Some(candidates) = discover_connection_candidates(
         &runtime,
         &adapter,
@@ -111,6 +112,7 @@ pub(super) async fn run_connection_attempt(
         &runtime,
         &adapter,
         &ids.binding,
+        secret.as_ref(),
         &attempt_id,
         &mut cancelled,
     )
@@ -139,7 +141,8 @@ pub(super) async fn run_connection_attempt(
     Ok(())
 }
 
-/// Discovers locally visible accounts, filtered to the requested profile.
+/// Discovers locally visible accounts, filtered to the requested profile, or
+/// the account a supplied credential signs in.
 ///
 /// Returns `None` when cancellation wins the discovery race.
 async fn discover_connection_candidates(
@@ -156,9 +159,13 @@ async fn discover_connection_candidates(
     reporter
         .emit(&runtime.state, attempt_id, ConnectionProgress::Started)
         .await;
+    let secret = super::credentials::supplied(adapter, request)?;
     let discovered = tokio::select! {
         _ = cancelled.changed() => return Ok(None),
-        result = tokio::time::timeout(REMOTE_TIMEOUT, adapter.discover_accounts()) => {
+        result = tokio::time::timeout(REMOTE_TIMEOUT, match secret {
+            Some(ref secret) => adapter.discover_with(secret),
+            None => adapter.discover_accounts(),
+        }) => {
             result
                 .map_err(|_| CommandError::Internal {
                     code: "connection_discovery_timeout".into(),
@@ -185,6 +192,7 @@ async fn read_candidate_quota(
     runtime: &MonitoringRuntime,
     adapter: &Arc<dyn ProviderAdapter>,
     binding: &quota_core::ports::ConnectionBinding,
+    secret: Option<&Secret>,
     attempt_id: &ConnectionAttemptId,
     cancelled: &mut watch::Receiver<bool>,
 ) -> Result<Option<(quota_core::ports::QuotaRead, confirm::ReadTimestamps)>, CommandError> {
@@ -202,13 +210,16 @@ async fn read_candidate_quota(
         }
         result = tokio::time::timeout(
             REMOTE_TIMEOUT,
-            adapter.read_quota(
-                binding,
-                quota_core::ports::ReadContext {
+            {
+                let context = quota_core::ports::ReadContext {
                     attempt_id: attempt_id.clone(),
                     deadline: Some(dispatched_at + chrono::Duration::seconds(10)),
-                },
-            ),
+                };
+                match secret {
+                    Some(secret) => adapter.read_with(binding, context, secret),
+                    None => adapter.read_quota(binding, context),
+                }
+            },
         ) => result
             .map_err(|_| CommandError::Internal {
                 code: "connection_read_timeout".into(),

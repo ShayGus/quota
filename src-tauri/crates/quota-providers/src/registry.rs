@@ -8,32 +8,43 @@
 
 use std::sync::Arc;
 
-use quota_core::ports::{ProviderAdapter, ProviderError};
+use quota_core::ports::{ProviderAdapter, ProviderError, SecretStore};
 use quota_domain::provider::ProviderId;
 
 use crate::claude::ClaudeAdapter;
 use crate::codex::CodexAdapter;
 use crate::opencode_go::OpenCodeGoAdapter;
+use crate::openrouter::OpenRouterAdapter;
 
 /// The adapters this build contains.
 #[derive(Debug)]
 pub struct ProviderRegistry {
     adapters: Vec<Arc<dyn ProviderAdapter>>,
+    secrets: Arc<dyn SecretStore>,
 }
 
 impl ProviderRegistry {
-    /// Builds the production registry: Codex, Claude, and `OpenCode` Go.
+    /// Builds the production registry: Codex, Claude, `OpenCode` Go, and
+    /// `OpenRouter`, whose keys live in `secrets`.
     ///
     /// # Errors
     /// Returns a transient failure when an adapter's HTTP client cannot be built.
-    pub fn production() -> Result<Self, ProviderError> {
+    pub fn production(secrets: Arc<dyn SecretStore>) -> Result<Self, ProviderError> {
         Ok(Self {
             adapters: vec![
                 Arc::new(CodexAdapter::new()?),
                 Arc::new(ClaudeAdapter::new()?),
                 Arc::new(OpenCodeGoAdapter::new()?),
+                Arc::new(OpenRouterAdapter::new(Arc::clone(&secrets))?),
             ],
+            secrets,
         })
+    }
+
+    /// Where the credentials Quota owns itself are kept.
+    #[must_use]
+    pub fn secrets(&self) -> &Arc<dyn SecretStore> {
+        &self.secrets
     }
 
     /// Builds the production registry plus the deterministic local fixture.
@@ -45,8 +56,8 @@ impl ProviderRegistry {
     /// # Errors
     /// Returns a transient failure when an adapter's HTTP client cannot be built.
     #[cfg(feature = "test-fixtures")]
-    pub fn with_fixture() -> Result<Self, ProviderError> {
-        let mut registry = Self::production()?;
+    pub fn with_fixture(secrets: Arc<dyn SecretStore>) -> Result<Self, ProviderError> {
+        let mut registry = Self::production(secrets)?;
         registry
             .adapters
             .push(Arc::new(crate::fixture::FixtureAdapter::new()));
@@ -78,11 +89,13 @@ mod tests {
     fn registry() -> ProviderRegistry {
         #[cfg(feature = "test-fixtures")]
         {
-            ProviderRegistry::with_fixture().expect("the registry builds")
+            ProviderRegistry::with_fixture(crate::secrets::unavailable())
+                .expect("the registry builds")
         }
         #[cfg(not(feature = "test-fixtures"))]
         {
-            ProviderRegistry::production().expect("the registry builds")
+            ProviderRegistry::production(crate::secrets::unavailable())
+                .expect("the registry builds")
         }
     }
 
@@ -93,6 +106,7 @@ mod tests {
             ProviderId::Codex,
             ProviderId::Claude,
             ProviderId::OpenCodeGo,
+            ProviderId::Openrouter,
         ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);
@@ -110,7 +124,8 @@ mod tests {
     #[cfg(feature = "test-fixtures")]
     #[test]
     fn the_fixture_adapter_is_offered_when_the_feature_is_on() {
-        let registry = ProviderRegistry::with_fixture().expect("the registry builds");
+        let registry = ProviderRegistry::with_fixture(crate::secrets::unavailable())
+            .expect("the registry builds");
         assert!(registry.provider(ProviderId::Fixture).is_some());
     }
 }

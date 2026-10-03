@@ -3,9 +3,9 @@
  *
  * The approved wireframe draws each provider as a short glyph inside the
  * account's square tile, so the same tile works in the popover card, on the
- * detail surface, and in settings without bundling anything. Codex is the
- * exception: its own mark, a rounded blossom around a `>_` prompt, is drawn
- * inline, in the tile's text colour, because a glyph cannot carry it.
+ * detail surface, and in settings without bundling anything. Codex and
+ * `OpenRouter` are the exceptions: their own marks, which a glyph cannot carry,
+ * are drawn inline in the tile's text colour.
  */
 import type { JSX } from "react";
 
@@ -23,11 +23,19 @@ const CODEX_MARK = (
   </svg>
 );
 
+/** The `OpenRouter` route mark, from Simple Icons 16.33, on a 24-unit grid. */
+const OPENROUTER_MARK = (
+  <svg viewBox="0 0 24 24" fill="currentColor" focusable="false">
+    <path d="M16.778 1.844v1.919q-.569-.026-1.138-.032-.708-.008-1.415.037c-1.93.126-4.023.728-6.149 2.237-2.911 2.066-2.731 1.95-4.14 2.75-.396.223-1.342.574-2.185.798-.841.225-1.753.333-1.751.333v4.229s.768.108 1.61.333c.842.224 1.789.575 2.185.799 1.41.798 1.228.683 4.14 2.75 2.126 1.509 4.22 2.11 6.148 2.236.88.058 1.716.041 2.555.005v1.918l7.222-4.168-7.222-4.17v2.176c-.86.038-1.611.065-2.278.021-1.364-.09-2.417-.357-3.979-1.465-2.244-1.593-2.866-2.027-3.68-2.508.889-.518 1.449-.906 3.822-2.59 1.56-1.109 2.614-1.377 3.978-1.466.667-.044 1.418-.017 2.278.02v2.176L24 6.014Z" />
+  </svg>
+);
+
 /** What each provider's tile shows. */
 const MARKS: Record<ProviderId, JSX.Element | string> = {
   codex: CODEX_MARK,
   claude: "✳",
   open_code_go: "GO",
+  openrouter: OPENROUTER_MARK,
   fixture: "FX",
 };
 

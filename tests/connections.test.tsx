@@ -69,6 +69,7 @@ describe("pending connection acceptance", () => {
       provider_id: "codex",
       nickname: "Personal",
       profile_label: null,
+      credential: null,
     });
 
     await act(async () => {

@@ -42,10 +42,12 @@ pub(crate) mod decode;
 pub(crate) mod http;
 pub mod offline;
 pub mod registry;
+pub mod secrets;
 
 pub(crate) mod claude;
 pub(crate) mod codex;
 pub(crate) mod opencode_go;
+pub(crate) mod openrouter;
 pub(crate) mod platform_paths;
 
 #[cfg(feature = "test-fixtures")]

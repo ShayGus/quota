@@ -1,14 +1,15 @@
 /**
  * Add an account: Provider → Connect → Verify.
  *
- * Connecting uses the provider's existing local sign-in; credentials never
- * enter this window. A verified attempt is held by the host as a pending
+ * Connecting uses the provider's existing local sign-in, or, for a provider
+ * with no local tool, an API key the person pastes, which goes straight to the
+ * host. A verified attempt is held by the host as a pending
  * candidate: nothing is saved and no monitoring starts until the person
  * confirms it and names it here. Leaving the wizard by any route, whether
  * Back, Cancel, Escape, or opening a fresh wizard, discards the candidate, so
  * an unconfirmed account is never left behind.
  */
-import { useEffect, useRef, useState, type JSX } from "react";
+import { useEffect, useId, useRef, useState, type JSX } from "react";
 
 import type { AttemptRef, QuotaWindow } from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
@@ -21,34 +22,15 @@ import { ProviderMark } from "../../shared/ui/ProviderMark";
 import { NicknameField } from "./Primitives";
 import type { SettingsActions } from "./Settings";
 import { windowLabel } from "../overview/reading";
-
-const PROVIDERS = ["codex", "claude", "open_code_go"] as const;
-
-/** The quota windows each provider reports, as the picker lists them. */
-const PROVIDER_WINDOWS: Record<(typeof PROVIDERS)[number], string> = {
-  codex: "5-hour · Weekly",
-  claude: "5-hour · Weekly · Model-specific",
-  open_code_go: "5-hour · Weekly · Monthly",
-};
-
-const AUTHENTICATION_RECOVERY = {
-  codex:
-    "Codex sign-in is required. Open a terminal, run codex login, then press Connect again.",
-  claude:
-    "Claude Code sign-in is required. Run claude in a terminal, sign in, then press Connect again.",
-  open_code_go:
-    "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
-};
-
-/** How to put a different account into each provider's own sign-in. */
-const SWITCH_ACCOUNT = {
-  codex:
-    "To add a different Codex account, run codex login with it, then press Connect again.",
-  claude:
-    "To add a different Claude account, sign in to it in Claude Code (/login), then press Connect again.",
-  open_code_go:
-    "To add a different OpenCode Go account, sign in to it with OpenCode, then press Connect again.",
-};
+import {
+  AUTHENTICATION_RECOVERY,
+  PROVIDER_WINDOWS,
+  PROVIDERS,
+  SIGN_IN,
+  SWITCH_ACCOUNT,
+  credentialStoreName,
+  type OfferedProvider,
+} from "./providers";
 
 /**
  * A verified window's name on Verify: its period and the allowance it measures,
@@ -85,8 +67,12 @@ export function ConnectionWizard({
   /** Leaves the wizard. `added` says whether an account was saved. */
   readonly onDone: (added: boolean) => void;
 }): JSX.Element {
-  const [provider, setProvider] = useState<(typeof PROVIDERS)[number] | null>(null);
+  const [provider, setProvider] = useState<OfferedProvider | null>(null);
   const [nickname, setNickname] = useState(DEFAULT_NICKNAME);
+  // A pasted API key, held only until the host has it.
+  const [apiKey, setApiKey] = useState("");
+  const signIn = provider === null ? null : SIGN_IN[provider];
+  const needsKey = signIn?.kind === "api_key";
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -151,7 +137,7 @@ export function ConnectionWizard({
   });
 
   const connect = async (): Promise<void> => {
-    if (provider === null || busy) return;
+    if (provider === null || busy || (needsKey && apiKey.trim() === "")) return;
     setStarting(true);
     setNotice(null);
     setRefusal(null);
@@ -161,12 +147,15 @@ export function ConnectionWizard({
         provider_id: provider,
         nickname: nickname.trim() || DEFAULT_NICKNAME,
         profile_label: null,
+        credential: needsKey ? apiKey.trim() : null,
       });
       if (!mounted.current) {
         if (accepted !== null) await actions.cancelConnection(accepted);
         return;
       }
       setAttempt(accepted);
+      // The host holds the key from here on, so the window lets go of it.
+      if (accepted !== null) setApiKey("");
       if (accepted === null)
         setRefusal(
           "The connection was refused. Check the provider's local sign-in and try again.",
@@ -228,8 +217,9 @@ export function ConnectionWizard({
           </button>
         ))}
         <div className="note">
-          Quota reads the provider's existing local sign-in. It never asks for a password,
-          and credentials never enter this window.
+          Codex, Claude and OpenCode Go use the sign-in their own tools keep on this
+          computer. OpenRouter takes an API key, which Quota keeps in{" "}
+          {credentialStoreName()}. Quota never asks for a password.
         </div>
       </>
     );
@@ -311,21 +301,37 @@ export function ConnectionWizard({
       <>
         <h2>Connect {providerLabel(provider)}</h2>
         <p className="intro">
-          Quota uses this provider's existing local sign-in to read your quota.
+          {signIn?.kind === "api_key"
+            ? `Paste an API key from ${signIn.keyPage}. Quota checks it with ${providerLabel(provider)} before anything is saved.`
+            : "Quota uses this provider's existing local sign-in to read your quota."}
         </p>
         <div className="connection-box">
           <div className="identity">
             <ProviderMark providerId={provider} />
             <span className="provider-copy">
               <span className="provider-name">{providerLabel(provider)}</span>
-              <span className="provider-meta">Existing local sign-in</span>
+              <span className="provider-meta">
+                {needsKey ? "API key" : "Existing local sign-in"}
+              </span>
             </span>
           </div>
-          <h3>Quota-only connection</h3>
-          <p>
-            No sign-in opens here and no inference is submitted. The next step shows the
-            account the provider verified, for you to confirm.
-          </p>
+          {signIn?.kind === "api_key" ? (
+            <ApiKeyField
+              value={apiKey}
+              placeholder={signIn.placeholder}
+              providerName={providerLabel(provider)}
+              disabled={busy}
+              onChange={setApiKey}
+            />
+          ) : (
+            <>
+              <h3>Quota-only connection</h3>
+              <p>
+                No sign-in opens here and no inference is submitted. The next step shows
+                the account the provider verified, for you to confirm.
+              </p>
+            </>
+          )}
         </div>
         {progress?.kind === "awaiting_user" ? (
           <div className="note" role="status">
@@ -367,6 +373,7 @@ export function ConnectionWizard({
               setProvider(null);
               setAttempt(null);
               setRefusal(null);
+              setApiKey("");
             }}
           >
             Back
@@ -374,7 +381,7 @@ export function ConnectionWizard({
           <button
             type="button"
             className="button primary"
-            disabled={busy}
+            disabled={busy || (needsKey && apiKey.trim() === "")}
             onClick={() => {
               launch(connect());
             }}
@@ -409,7 +416,7 @@ export function ConnectionWizard({
           <Icon name="arrow-left" />
           Cancel
         </button>
-        <span className="badge">LOCAL SIGN-IN</span>
+        <span className="badge">{needsKey ? "API KEY" : "LOCAL SIGN-IN"}</span>
       </div>
       <div className="wizard">
         {steps}
@@ -441,5 +448,46 @@ function StepMarker({
       </span>
       <span>{label}</span>
     </>
+  );
+}
+
+/** The API key a provider without a local tool is signed in with. */
+function ApiKeyField({
+  value,
+  placeholder,
+  providerName,
+  disabled,
+  onChange,
+}: {
+  readonly value: string;
+  readonly placeholder: string;
+  readonly providerName: string;
+  readonly disabled: boolean;
+  readonly onChange: (value: string) => void;
+}): JSX.Element {
+  const hintId = useId();
+  return (
+    <div className="api-key">
+      <label className="field-label" htmlFor="provider-api-key">
+        API key
+      </label>
+      <input
+        type="password"
+        id="provider-api-key"
+        autoComplete="off"
+        spellCheck={false}
+        value={value}
+        placeholder={placeholder}
+        disabled={disabled}
+        aria-describedby={hintId}
+        onChange={(event) => {
+          onChange(event.currentTarget.value);
+        }}
+      />
+      <div className="form-hint" id={hintId}>
+        Quota keeps it in {credentialStoreName()} and sends it only to {providerName}, to
+        read your credits and the key&apos;s limit. It never submits a request to a model.
+      </div>
+    </div>
   );
 }

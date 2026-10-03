@@ -13,6 +13,7 @@ const LABELS: Record<ProviderId, string> = {
   codex: "Codex",
   claude: "Claude",
   open_code_go: "OpenCode Go",
+  openrouter: "OpenRouter",
   fixture: "Fixture",
 };
 

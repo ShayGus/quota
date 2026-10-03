@@ -215,6 +215,32 @@ pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
         binding: &ConnectionBinding,
         context: ReadContext,
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>>;
+
+    /// The account a credential the person supplied signs in, for an adapter
+    /// that declares `supports_app_owned_authorization`.
+    ///
+    /// Nothing is stored: the caller keeps the credential until the person
+    /// confirms the account. Any other adapter refuses.
+    fn discover_with<'a>(
+        &'a self,
+        credential: &'a super::Secret,
+    ) -> ProviderFuture<'a, Result<Vec<DiscoveredAccount>, ProviderError>> {
+        let _ = credential;
+        Box::pin(async { Err(ProviderError::Authorization) })
+    }
+
+    /// Reads the quota with a credential the person supplied, before it is
+    /// stored, so the account can be verified first. Any adapter that does not
+    /// declare `supports_app_owned_authorization` refuses.
+    fn read_with<'a>(
+        &'a self,
+        binding: &'a ConnectionBinding,
+        context: ReadContext,
+        credential: &'a super::Secret,
+    ) -> ProviderFuture<'a, Result<FetchOutcome, ProviderError>> {
+        let _ = (binding, context, credential);
+        Box::pin(async { Err(ProviderError::Authorization) })
+    }
 }
 
 #[cfg(test)]

@@ -187,6 +187,44 @@ describe("the account card", () => {
     expect(screen.queryByRole("button", { name: /model limit/ })).toBeNull();
   });
 
+  it("draws a pay-as-you-go account's balance and key limit, never an empty card", () => {
+    acceptSnapshot(
+      snapshot("instance-1", 1, [
+        account("a1", "openrouter", 1, [
+          quotaWindow(
+            "key-limit",
+            "weekly",
+            { kind: "unlimited" },
+            { label: "API key limit", role: "extra_spend_cap" },
+          ),
+          quotaWindow(
+            "credits",
+            "custom",
+            {
+              kind: "money",
+              value: {
+                currency: "USD",
+                scale: 2,
+                used_minor_units: 746,
+                remaining_minor_units: 1754,
+                limit_minor_units: 2500,
+              },
+            },
+            { label: "Credit balance", resource: "credits", role: "credit_balance" },
+          ),
+        ]),
+      ]),
+    );
+    render(<Harness />);
+    expect(screen.queryByText(/reports no allowance windows/)).toBeNull();
+    // The balance first, then the key's cap, which is named for what it is
+    // rather than as a bare period that would read as included quota.
+    const rings = ringsOf("a1").map((ring) => ring.getAttribute("aria-label") ?? "");
+    expect(rings).toHaveLength(2);
+    expect(rings[0]).toMatch(/^OpenRouter a1, Credit balance/);
+    expect(rings[1]).toMatch(/^OpenRouter a1, Weekly · API key limit/);
+  });
+
   it("lists other independent limits on request", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [

@@ -5,7 +5,7 @@ document codec for presentation preferences.
 
 ## What this crate owns
 
-[The architecture ownership table](../../docs/architecture.md#persisted-state-ownership)
+[The architecture ownership table](../../../docs/architecture.md#persisted-state-ownership)
 owns the Store, SQLite, native geometry, and credential boundaries. This crate implements
 the Store document codec and SQLite repositories; it stores no token, cookie,
 authorization header, or credential locator.
