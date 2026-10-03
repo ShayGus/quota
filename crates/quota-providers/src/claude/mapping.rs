@@ -123,13 +123,21 @@ fn usable_limits_named(limits: &[ClaudeLimit]) -> Vec<(&ClaudeLimit, String)> {
         .collect()
 }
 
+/// The model a named limit is scoped to, by its identifier or, when the
+/// provider sends none, by its display name.
+///
+/// Claude reports some model limits, such as Fable's weekly allowance, with a
+/// display name and a `null` identifier. Without this fallback such a limit
+/// reads as account-wide and is dropped as a duplicate of the weekly window.
 fn model_id(limit: &ClaudeLimit) -> Option<&str> {
-    limit
+    let model = limit
         .scope
         .as_ref()
-        .and_then(|scope| scope.model.as_ref())
-        .and_then(|model| model.id.as_deref())
-        .filter(|id| !id.trim().is_empty())
+        .and_then(|scope| scope.model.as_ref())?;
+    [model.id.as_deref(), model.display_name.as_deref()]
+        .into_iter()
+        .flatten()
+        .find(|name| !name.trim().is_empty())
 }
 
 /// The period a named limit's own group text names.
