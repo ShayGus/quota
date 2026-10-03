@@ -11,10 +11,9 @@ Usage:
     xwininfo -root -tree            # find the window id, e.g. 0x600004
     docs/publish-x11-client-list.py 0x600004
 
-Only the ids you pass are published. Both Quota windows can be published
-together: application-name matching is disabled, so the requested label selects
-the distinct title (`Quota` or `Quota settings`). Show the requested window
-before capturing it. Needs only `libX11.so.6`, no Python packages.
+Only the ids you pass are published. For window selection and screenshot
+instructions, see docs/inspecting-the-app.md#screenshots-on-wslg.
+Needs only `libX11.so.6`, no Python packages.
 """
 
 import ctypes
