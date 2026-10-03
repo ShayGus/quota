@@ -18,7 +18,7 @@ use quota_domain::account::{CredentialOwnership, FetchState};
 use quota_domain::ids::AccountId;
 use quota_domain::provider::ProviderId;
 use quota_domain::snapshot::{AppSnapshot, PersistenceStatus};
-use tauri::State;
+use tauri::{Manager, State};
 
 use crate::state::AppState;
 
@@ -26,9 +26,21 @@ use crate::state::AppState;
 ///
 /// The renderer registers its listener first and then calls this once, so a
 /// missed event is repaired without any frontend polling.
+///
+/// A window loads before the backend has finished starting, so this can be
+/// called before the application state exists. It then answers
+/// `InitializationPending`, which the renderer retries, rather than failing
+/// with a framework error the renderer cannot tell from a real failure: a
+/// window that gave up there showed no accounts until the next refresh.
+///
+/// # Errors
+/// `InitializationPending` while the backend is starting.
 #[tauri::command]
 #[specta::specta]
-pub async fn get_snapshot(state: State<'_, AppState>) -> Result<SnapshotResponse, CommandError> {
+pub async fn get_snapshot(app: tauri::AppHandle) -> Result<SnapshotResponse, CommandError> {
+    let Some(state) = app.try_state::<AppState>() else {
+        return Err(CommandError::InitializationPending);
+    };
     let monitoring = state.monitoring_state.read().await.clone();
     let registry = state.registry.read().await;
     let snapshot: AppSnapshot = state.snapshots.lock().await.build(
