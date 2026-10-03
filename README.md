@@ -42,10 +42,10 @@ Install the frontend dependencies once, then start the application:
 
 ```bash
 bun install
-bun run dev:native
+bun tauri dev
 ```
 
-`bun run dev:native` starts the Vite dev server on port 1420 itself, compiles the Rust
+`bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust
 host, and opens only the overview. Open Settings with the overview's settings button or
 the tray menu's Settings action; it stays hidden at launch even if it was open when you
 last quit. Quota runs as a single instance: launching it again brings the running overview
@@ -55,9 +55,9 @@ Settings, Show App, and Exit. Exit, or Ctrl-C in the terminal, stops the applica
 Settings → General → Launch at login registers Quota with the system so it starts quietly
 in the tray when you sign in; turning it off removes the login item.
 
-A development build runs under its own identity, `app.quota.monitor.dev`, so it keeps its
-data directory, its saved sign-ins, its login item and its single-instance lock away from
-an installed production build. See
+Every debug build automatically runs under its own identity, `app.quota.monitor.dev`, so it
+keeps its data directory, its saved sign-ins, its login item and its single-instance lock
+away from an installed production build. See
 [the development identity](CONTRIBUTING.md#development-identity).
 
 The native host logs warnings for failed close-time hiding, tray anchoring, second-launch
