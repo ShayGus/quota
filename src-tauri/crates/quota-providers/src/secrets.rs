@@ -284,7 +284,9 @@ mod linux_system_store {
         runtime.block_on(async {
             // The development identifier, so this never reaches a production entry.
             let store = system_off_the_runtime("app.quota.monitor.dev").await;
-            let read = store.read(&ConnectionId::generate());
+            let read = tokio::task::spawn_blocking(move || store.read(&ConnectionId::generate()))
+                .await
+                .expect("the credential read worker completes");
             assert!(
                 matches!(&read, Ok(None) | Err(SecretStoreError::Unavailable)),
                 "the store neither worked nor reported itself unavailable: {read:?}"
