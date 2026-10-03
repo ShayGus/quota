@@ -153,6 +153,12 @@
   background: var(--surface-3);
 }
 
+/* The pointed-at highlight already marks the focused tile; an outline on top
+   of it, after a click, only adds noise. */
+.widget .widget-tile:focus-visible {
+  outline: none;
+}
+
 .widget-tile-rings {
   position: relative;
   width: 44px;
@@ -261,39 +267,53 @@
   border-radius: 50%;
 }
 
+/* Under the tiles, the breakdown is part of the widget: a divider, then rows
+   in the same columns. Over other rows it is a card, so it covers them. */
 .widget-breakdown {
   width: 100%;
   display: grid;
-  grid-auto-rows: 13px;
+  grid-auto-rows: 15px;
   align-content: start;
   gap: 3px;
-  padding: 6px 9px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
+  margin-top: 2px;
+  padding: 7px 6px 1px;
+  border-top: 1px solid var(--line);
 }
 
+/* Over other rows the lines are tighter, so three limits fit over one row
+   (RingStrip.tsx measures with these same numbers). */
 .widget-breakdown.overlay {
   position: absolute;
   left: 8px;
   right: 8px;
   width: auto;
+  grid-auto-rows: 13px;
+  margin: 0;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
   box-shadow: var(--shadow);
 }
 
 .widget-breakdown-name {
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 650;
+  line-height: 15px;
+}
+
+.widget-breakdown.overlay .widget-breakdown-name,
+.widget-breakdown.overlay .widget-breakdown-row {
   line-height: 13px;
 }
 
 .widget-breakdown-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  grid-template-columns: 14px minmax(0, 1fr) auto 38px;
   align-items: center;
-  column-gap: 7px;
+  column-gap: 8px;
   font-size: 11px;
-  line-height: 13px;
+  line-height: 15px;
 }
 
 .widget-breakdown-label {
@@ -309,16 +329,21 @@
 }
 
 .widget-breakdown-row .widget-value {
-  min-width: 32px;
+  min-width: 38px;
   text-align: right;
   white-space: nowrap;
   overflow: visible;
 }
 
+/* An amount is wider than a share, so it takes the reset column's room. */
+.widget-breakdown-row .widget-value.amount {
+  grid-column: 3 / 5;
+}
+
 .widget-ring-map circle {
   fill: none;
   stroke: var(--line);
-  stroke-width: 1.4;
+  stroke-width: 1.5;
 }
 
 .widget-ring-map circle.lit {

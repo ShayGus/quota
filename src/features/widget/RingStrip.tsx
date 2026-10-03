@@ -25,6 +25,14 @@ const ROW_GAP = 4;
 /** Where the strip's first row starts, inside the widget's border. */
 const FIRST_ROW_TOP = 9;
 
+/** The key's height under the tiles. */
+const KEY_HEIGHT = 14;
+
+/** The overlay breakdown's padding, line height and line gap (see widget.css). */
+const OVERLAY_PADDING = 5;
+const OVERLAY_LINE = 13;
+const OVERLAY_GAP = 3;
+
 /** The names the key gives each period. */
 const PERIOD_NAMES: Record<Period, string> = {
   session: "5-hour",
@@ -45,8 +53,10 @@ export function RingStrip({
   const rows = Math.ceil(accounts.length / PER_ROW);
   const perRow = Math.ceil(accounts.length / rows);
   const target = pointing === null ? undefined : accounts[pointing];
-  const overlay = target !== undefined && rows > 1;
-  const inFlow = target !== undefined && rows === 1;
+  const pointedRow = Math.floor((pointing ?? 0) / perRow);
+  const overlay =
+    target !== undefined && rows > 1 && overlayFits(pointedRow, rows, target.rows.length);
+  const inFlow = target !== undefined && !overlay;
   return (
     <section
       className="widget-strip"
@@ -98,12 +108,7 @@ export function RingStrip({
       ) : (
         <Key periods={periodsOf(accounts)} />
       )}
-      {overlay ? (
-        <Breakdown
-          account={target}
-          placement={placement(Math.floor((pointing ?? 0) / perRow))}
-        />
-      ) : null}
+      {overlay ? <Breakdown account={target} placement={placement(pointedRow)} /> : null}
     </section>
   );
 }
@@ -144,7 +149,28 @@ function placement(row: number): CSSProperties {
   if (row === 0) {
     return { top: FIRST_ROW_TOP + TILE_HEIGHT + 2, bottom: 3 };
   }
-  return { top: 3, height: row * (TILE_HEIGHT + ROW_GAP) + 4 };
+  return { top: 3, height: overlayRoom(row, 0) };
+}
+
+/** The height the overlay breakdown has over the other rows, in CSS pixels. */
+function overlayRoom(row: number, rows: number): number {
+  if (row > 0) {
+    return row * (TILE_HEIGHT + ROW_GAP) + 4;
+  }
+  const strip = 2 + 16 + rows * TILE_HEIGHT + (rows - 1) * ROW_GAP + ROW_GAP + KEY_HEIGHT;
+  return strip - 3 - (FIRST_ROW_TOP + TILE_HEIGHT + 2);
+}
+
+/**
+ * Whether the breakdown fits over the other rows. When it does not, as for an
+ * account with many limits pointed at in a lower row, it opens under the tiles
+ * and the window grows to fit it, so no limit is ever cut off.
+ */
+function overlayFits(row: number, rows: number, limits: number): boolean {
+  const lines = limits + 1;
+  const needed =
+    2 * OVERLAY_PADDING + 2 + lines * OVERLAY_LINE + (lines - 1) * OVERLAY_GAP;
+  return needed <= overlayRoom(row, rows);
 }
 
 /** The periods the strip draws, in ring order. */
@@ -198,8 +224,14 @@ function Breakdown({
             lit={row.kind === "share" ? ringPeriods.indexOf(row.period) : -1}
           />
           <span className="widget-breakdown-label">{row.name}</span>
-          <span className="widget-breakdown-reset">{row.reset}</span>
-          <span className={`widget-value${row.low ? " low" : ""}`}>{row.value}</span>
+          {row.kind === "amount" ? null : (
+            <span className="widget-breakdown-reset">{row.reset}</span>
+          )}
+          <span
+            className={`widget-value${row.kind === "amount" ? " amount" : ""}${row.low ? " low" : ""}`}
+          >
+            {row.value}
+          </span>
         </span>
       ))}
     </div>

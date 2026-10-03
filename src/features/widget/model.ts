@@ -18,14 +18,15 @@ import { displayName } from "../../shared/format/alias";
 import { moneyLeft, remainingPercent } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
 import { placeAccounts } from "../../shared/state/order";
+import { boundaryCountdown } from "../../shared/format/duration";
 import {
   ACCOUNT_RESOURCE,
-  resetLine,
   viewFraction,
   viewKnown,
   viewValue,
   windowLabel,
   windowView,
+  type WindowView,
 } from "../overview/reading";
 import { statusOf } from "../overview/status";
 
@@ -60,7 +61,7 @@ export interface WidgetRow {
   /** `41%`, `$15.00 left`, `—`. */
   readonly value: string;
   readonly low: boolean;
-  /** When it resets, or why that is not known. */
+  /** When it next changes, `in 6d 2h`, or a word on why there is no number. */
   readonly reset: string;
 }
 
@@ -169,7 +170,6 @@ function row(account: AccountSnapshot, window: QuotaWindow, now: number): Widget
   const money = known ? moneyLeft(window.measurement) : null;
   const fraction = money === null ? viewFraction(view, window) : null;
   const percent = known ? remainingPercent(window.measurement) : null;
-  const reset = resetLine(view, window, now);
   return {
     tag: tagOf(window),
     name: windowLabel(window),
@@ -178,8 +178,27 @@ function row(account: AccountSnapshot, window: QuotaWindow, now: number): Widget
     fraction,
     value: money === null ? viewValue(view, window) : `${money} left`,
     low: money === null && percent !== null && percent <= LOW_PERCENT,
-    reset: reset.time === null ? reset.lead : `${reset.lead} ${reset.time}`,
+    reset: resetWords(view, window, now),
   };
+}
+
+/**
+ * When a window next changes, in the fewest words the breakdown has room for.
+ * A window that reports no change says nothing rather than a sentence.
+ */
+function resetWords(view: WindowView, window: QuotaWindow, now: number): string {
+  switch (view) {
+    case "current":
+      return window.boundary === null
+        ? ""
+        : `in ${boundaryCountdown(window.boundary, now)}`;
+    case "stale":
+      return "last known";
+    case "pending":
+      return "verifying";
+    case "unavailable":
+      return "";
+  }
 }
 
 /** The short label of a window. */

@@ -197,7 +197,11 @@ function formatMoney(minor: number, scale: number): string {
 function formatNumber(value: number, precision: number): string {
   const places =
     Number.isInteger(precision) && precision >= 0 ? Math.min(precision, 9) : 0;
-  return value.toFixed(places);
+  // Grouped, so a large count reads at a glance: 62,500 rather than 62500.
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  });
 }
 
 /**
