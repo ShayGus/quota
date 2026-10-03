@@ -251,13 +251,14 @@ only native units with no denominator, and an account with an unlimited window.
 ## Registry
 
 `ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
-store Quota's own sign-ins live in (`secrets::system(identifier)` opens this system's and
-files every entry under the given application identifier, so a development build keeps its
-own entries, or returns a store that refuses every operation when there is none);
-`ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
-`provider(id)` returns `None` for any provider this build does not contain, so the
-application reports an explicit unsupported-provider state. There is no dynamic adapter
-lookup, no downloaded parser, and no plugin loading.
+store Quota's own sign-ins live in (`secrets::system_off_the_runtime(identifier)` opens
+this system's store on a blocking worker and files every entry under the given application
+identifier, so a development build keeps its own entries, or returns a store that refuses
+every operation when opening fails; see [`secrets`' API documentation](src/secrets.rs) for
+runtime constraints); `ProviderRegistry::with_fixture(secrets)` adds the fixture when the
+feature is on. `provider(id)` returns `None` for any provider this build does not contain,
+so the application reports an explicit unsupported-provider state. There is no dynamic
+adapter lookup, no downloaded parser, and no plugin loading.
 
 ## Transport
 
@@ -292,4 +293,10 @@ backend; `http::ProviderHttp` installs that crypto provider once on first use.
 
 The suite never makes a live network call, never reads a real credential file, and never
 needs one. Fixtures are sanitized payloads written for this crate, using obviously
-synthetic values and example.invalid addresses.
+synthetic values and example.invalid addresses. The one exception is the Linux test that
+calls `system_off_the_runtime` from a running runtime to open this system's own credential
+store, then reads a generated connection and drops the store on a blocking worker. It
+writes nothing, so a session with no Secret Service behind it simply reports the store as
+unavailable. `startup_failure_drops_both_registries_outside_the_runtime` separately uses
+an in-memory store to check destruction after a simulated startup failure for both
+production and fixture registries.
