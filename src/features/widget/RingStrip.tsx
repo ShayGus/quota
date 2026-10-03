@@ -1,9 +1,12 @@
 /**
- * The ring strip: one tile per account, up to five a row, rows as even as they
+ * The ring strip: one tile per account, up to four a row, rows as even as they
  * can be and centred.
  *
- * Under each tile's rings is the tightest allowance, named ("5h 41%") so the
- * number and its ring read together. A key under the tiles names the colours.
+ * Under each tile's rings is every ring's value, outside in, each after the
+ * letter of its period in the ring's colour: "H 99% W 50%". With up to three
+ * tiles a row the tiles are wide and two values share a line; with four they
+ * are narrow and each value has its own line. Every tile is as tall as the
+ * tallest, so the rows stay even. A key under the tiles names the colours.
  * Pointing at a tile, clicking it, or focusing it, opens a breakdown of every limit, outside
  * in, each with a small copy of the rings that lights the one it belongs to.
  * With two rows or more the breakdown covers the rows other than the tile's
@@ -16,11 +19,19 @@ import type { Period, WidgetAccount } from "./model";
 import { periodClass, RADII, Rings } from "./Rings";
 
 /** The most tiles in one row. */
-const PER_ROW = 5;
+const PER_ROW = 4;
 
-/** A tile's height and the gap between rows, in CSS pixels. */
-const TILE_HEIGHT = 66;
+/** A tile's width with up to three a row, and with four, in CSS pixels. */
+const WIDE_TILE = 96;
+const NARROW_TILE = 72;
+
+/** The gaps between tiles and between rows, in CSS pixels. */
+const TILE_GAP = 2;
 const ROW_GAP = 4;
+
+/** A tile's height without its values, and the height of one line of them. */
+const TILE_BASE_HEIGHT = 52;
+const VALUE_LINE = 14;
 
 /** Where the strip's first row starts, inside the widget's border. */
 const FIRST_ROW_TOP = 9;
@@ -52,10 +63,15 @@ export function RingStrip({
   useClearWhenLeft(setPointing);
   const rows = Math.ceil(accounts.length / PER_ROW);
   const perRow = Math.ceil(accounts.length / rows);
+  const wide = perRow < PER_ROW;
+  const tileWidth = wide ? WIDE_TILE : NARROW_TILE;
+  const tileHeight = tileHeightOf(accounts, wide ? 2 : 1);
   const target = pointing === null ? undefined : accounts[pointing];
   const pointedRow = Math.floor((pointing ?? 0) / perRow);
   const overlay =
-    target !== undefined && rows > 1 && overlayFits(pointedRow, rows, target.rows.length);
+    target !== undefined &&
+    rows > 1 &&
+    overlayFits(pointedRow, rows, tileHeight, target.rows.length);
   const inFlow = target !== undefined && !overlay;
   return (
     <section
@@ -65,12 +81,13 @@ export function RingStrip({
         setPointing(null);
       }}
     >
-      <div className="widget-tiles" style={{ width: tilesWidth(perRow) }}>
+      <div className="widget-tiles" style={{ width: tilesWidth(perRow, tileWidth) }}>
         {accounts.map((account, index) => (
           <button
             key={account.id}
             type="button"
             className={`widget-tile${index === pointing ? " pointing" : ""}`}
+            style={{ width: tileWidth, height: tileHeight }}
             aria-label={account.description}
             onPointerEnter={() => {
               setPointing(index);
@@ -92,14 +109,30 @@ export function RingStrip({
               <Rings rings={account.rings} size={44} stroke={3} />
               <ProviderMark providerId={account.providerId} />
             </span>
-            <span className="widget-headline">
-              {account.headline.tag === "" ? null : (
-                <span className="widget-tag">{account.headline.tag}</span>
-              )}
-              <span className={`widget-value${account.headline.low ? " low" : ""}`}>
-                {account.headline.value}
+            {account.ringValues ? (
+              <span className="widget-readings">
+                {account.rings.map((ring) => (
+                  <span
+                    key={ring.period}
+                    className={`widget-reading ${periodClass(ring.period)}`}
+                  >
+                    <span className="widget-letter">{ring.letter}</span>
+                    <span className={`widget-value${ring.low ? " low" : ""}`}>
+                      {ring.value}
+                    </span>
+                  </span>
+                ))}
               </span>
-            </span>
+            ) : (
+              <span className="widget-headline">
+                {account.headline.tag === "" ? null : (
+                  <span className="widget-tag">{account.headline.tag}</span>
+                )}
+                <span className={`widget-value${account.headline.low ? " low" : ""}`}>
+                  {account.headline.value}
+                </span>
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -108,7 +141,9 @@ export function RingStrip({
       ) : (
         <Key periods={periodsOf(accounts)} />
       )}
-      {overlay ? <Breakdown account={target} placement={placement(pointedRow)} /> : null}
+      {overlay ? (
+        <Breakdown account={target} placement={placement(pointedRow, tileHeight)} />
+      ) : null}
     </section>
   );
 }
@@ -137,28 +172,39 @@ function useClearWhenLeft(setPointing: (pointing: null) => void): void {
 }
 
 /** The tiles' row width, so rows wrap at the balanced count and centre. */
-function tilesWidth(perRow: number): number {
-  return perRow * 56 + (perRow - 1) * ROW_GAP;
+function tilesWidth(perRow: number, tileWidth: number): number {
+  return perRow * tileWidth + (perRow - 1) * TILE_GAP;
+}
+
+/** Every tile's height: tall enough for the account with the most ring values. */
+function tileHeightOf(accounts: readonly WidgetAccount[], perLine: number): number {
+  const lines = Math.max(
+    1,
+    ...accounts.map((account) =>
+      account.ringValues ? Math.ceil(account.rings.length / perLine) : 1,
+    ),
+  );
+  return TILE_BASE_HEIGHT + lines * VALUE_LINE;
 }
 
 /**
  * Where the overlay breakdown sits: over the rows below the first row when the
  * first row is pointed at, else over the rows above the pointed one.
  */
-function placement(row: number): CSSProperties {
+function placement(row: number, tileHeight: number): CSSProperties {
   if (row === 0) {
-    return { top: FIRST_ROW_TOP + TILE_HEIGHT + 2, bottom: 3 };
+    return { top: FIRST_ROW_TOP + tileHeight + 2, bottom: 3 };
   }
-  return { top: 3, height: overlayRoom(row, 0) };
+  return { top: 3, height: overlayRoom(row, 0, tileHeight) };
 }
 
 /** The height the overlay breakdown has over the other rows, in CSS pixels. */
-function overlayRoom(row: number, rows: number): number {
+function overlayRoom(row: number, rows: number, tileHeight: number): number {
   if (row > 0) {
-    return row * (TILE_HEIGHT + ROW_GAP) + 4;
+    return row * (tileHeight + ROW_GAP) + 4;
   }
-  const strip = 2 + 16 + rows * TILE_HEIGHT + (rows - 1) * ROW_GAP + ROW_GAP + KEY_HEIGHT;
-  return strip - 3 - (FIRST_ROW_TOP + TILE_HEIGHT + 2);
+  const strip = 2 + 16 + rows * tileHeight + (rows - 1) * ROW_GAP + ROW_GAP + KEY_HEIGHT;
+  return strip - 3 - (FIRST_ROW_TOP + tileHeight + 2);
 }
 
 /**
@@ -166,11 +212,16 @@ function overlayRoom(row: number, rows: number): number {
  * account with many limits pointed at in a lower row, it opens under the tiles
  * and the window grows to fit it, so no limit is ever cut off.
  */
-function overlayFits(row: number, rows: number, limits: number): boolean {
+function overlayFits(
+  row: number,
+  rows: number,
+  tileHeight: number,
+  limits: number,
+): boolean {
   const lines = limits + 1;
   const needed =
     2 * OVERLAY_PADDING + 2 + lines * OVERLAY_LINE + (lines - 1) * OVERLAY_GAP;
-  return needed <= overlayRoom(row, rows);
+  return needed <= overlayRoom(row, rows, tileHeight);
 }
 
 /** The periods the strip draws, in ring order. */

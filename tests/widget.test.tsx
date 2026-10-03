@@ -122,7 +122,9 @@ describe("the widget's model", () => {
 
   it("draws a lone ring as the outer ring", () => {
     const [shown] = accountsOf(cursor);
-    expect(shown?.rings).toEqual([{ period: "monthly", fraction: 0.48 }]);
+    expect(shown?.rings).toEqual([
+      { period: "monthly", fraction: 0.48, letter: "M", value: "48%", low: false },
+    ]);
   });
 
   it("lets two limits of one period share a ring that shows the tighter", () => {
@@ -219,7 +221,7 @@ describe("the mini cards", () => {
 });
 
 describe("the ring strip", () => {
-  it("balances its rows: nine tiles make rows of five and four", () => {
+  it("balances its rows: nine tiles make three rows of three", () => {
     const nine = Array.from({ length: 9 }, (_, index) =>
       account(
         `a${String(index)}`,
@@ -233,7 +235,34 @@ describe("the ring strip", () => {
     );
     const { container } = render(<RingStrip accounts={accountsOf(...nine)} />);
     const tiles = container.querySelector<HTMLElement>(".widget-tiles");
-    expect(tiles?.style.width).toBe("296px");
+    expect(tiles?.style.width).toBe("292px");
+  });
+
+  it("writes every ring's value under its tile, after its period's letter", () => {
+    const { container } = render(<RingStrip accounts={accountsOf(kimi, claude)} />);
+    const readings = [...container.querySelectorAll(".widget-readings")].map(
+      (element) => element.textContent,
+    );
+    expect(readings).toEqual(["H8%W52%M77%", "H41%W30%"]);
+    expect(
+      container.querySelector(".widget-reading .widget-value.low")?.textContent,
+    ).toBe("8%");
+  });
+
+  it("says what is wrong instead of the values when an account needs attention", () => {
+    const lapsed = account(
+      "lapsed",
+      "grok",
+      7,
+      [quotaWindow("g", "weekly", percent(83))],
+      {
+        rank: 83,
+        connectionState: "reauthentication_required",
+      },
+    );
+    const { container } = render(<RingStrip accounts={accountsOf(lapsed)} />);
+    expect(container.querySelector(".widget-readings")).toBeNull();
+    expect(container.querySelector(".widget-headline")?.textContent).toBe("Reconnect");
   });
 
   it("names every ring colour in its key", () => {

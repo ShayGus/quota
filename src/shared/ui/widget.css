@@ -132,12 +132,11 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 4px;
+  gap: 4px 2px;
 }
 
+/* RingStrip.tsx sets the size: wide or narrow, as tall as the tallest values. */
 .widget-tile {
-  width: 56px;
-  height: 66px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -218,11 +217,34 @@
   stroke-dasharray: 2 3;
 }
 
+/* Every ring's value, each after its period's letter in the ring's colour. */
+.widget-readings {
+  max-width: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 5px;
+  line-height: 14px;
+}
+
+.widget-reading {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  white-space: nowrap;
+}
+
+.widget-letter {
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--period);
+}
+
 .widget-headline {
   display: flex;
   align-items: baseline;
   gap: 3px;
-  max-width: 56px;
+  max-width: 100%;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }

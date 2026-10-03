@@ -46,6 +46,11 @@ const LOW_PERCENT = 20;
 export interface WidgetRing {
   readonly period: Period;
   readonly fraction: number | null;
+  /** The letter for the ring's period under the tile: H, D, W or M. */
+  readonly letter: string;
+  /** What is left in the ring, as it is written: `50%`, or `—`. */
+  readonly value: string;
+  readonly low: boolean;
 }
 
 /** One limit, as a mini card row or a line of the breakdown. */
@@ -79,6 +84,12 @@ export interface WidgetAccount {
     readonly value: string;
     readonly low: boolean;
   };
+  /**
+   * Whether every ring's value is written under the tile. Not when something
+   * is wrong with the account, which the headline says instead, and not when
+   * there are no rings, as for an account that has only money.
+   */
+  readonly ringValues: boolean;
   /** Every limit: the rings' windows first, then money and other limits. */
   readonly rows: readonly WidgetRow[];
   /** The sentence an assistive technology reads for the whole account. */
@@ -141,12 +152,14 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
   const rings = ringsOf(rows.slice(0, included.length));
   const headline = headlineOf(account, rows, included.length, now);
   const words = rows.map((entry) => `${entry.name} ${entry.value}`).join(", ");
+  const ringValues = rings.length > 0 && !PROBLEMS.has(statusOf(account, now).text);
   return {
     id: account.account_id,
     providerId: account.provider_id,
     name,
     rings,
     headline,
+    ringValues,
     rows,
     description: words === "" ? `${name}: ${headline.value}` : `${name}: ${words}`,
   };
@@ -237,13 +250,28 @@ function ringsOf(rows: readonly WidgetRow[]): readonly WidgetRing[] {
     if (members.length === 0 || rings.length === MAX_RINGS) {
       continue;
     }
-    const known = members
-      .map((entry) => entry.fraction)
-      .filter((fraction): fraction is number => fraction !== null);
-    rings.push({ period, fraction: known.length === 0 ? null : Math.min(...known) });
+    // The tighter of two limits in one period is the one the ring shows.
+    const shown = members.reduce((tightest, entry) =>
+      (entry.fraction ?? Infinity) < (tightest.fraction ?? Infinity) ? entry : tightest,
+    );
+    rings.push({
+      period,
+      fraction: shown.fraction,
+      letter: LETTERS[period] ?? (shown.tag[0] ?? "").toUpperCase(),
+      value: shown.value,
+      low: shown.low,
+    });
   }
   return rings;
 }
+
+/** The letter each standard period goes by under a tile. */
+const LETTERS: Partial<Record<Period, string>> = {
+  session: "H",
+  daily: "D",
+  weekly: "W",
+  monthly: "M",
+};
 
 /**
  * The number under the rings: what is wrong with the account when something
