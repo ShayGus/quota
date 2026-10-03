@@ -42,7 +42,17 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
         policies,
         &confirmed_operational,
     )
-    .await
+    .await?;
+    // Every window loaded while the backend was starting. One snapshot now
+    // reaches each of them, so none waits for the next scheduled refresh to
+    // show the accounts it could not read during startup.
+    if let Err(error) = app.state::<AppState>().monitor.publish().await {
+        tracing::warn!(
+            code = error.diagnostic_code(),
+            "the first snapshot could not be published"
+        );
+    }
+    Ok(())
 }
 
 /// Opens the `SQLite` pool, migrates it, and hands it to the SQL plugin.

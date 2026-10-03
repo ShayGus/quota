@@ -11,6 +11,15 @@ export const commands = {
 	 * 
 	 *  The renderer registers its listener first and then calls this once, so a
 	 *  missed event is repaired without any frontend polling.
+	 * 
+	 *  A window loads before the backend has finished starting, so this can be
+	 *  called before the application state exists. It then answers
+	 *  `InitializationPending`, which the renderer retries, rather than failing
+	 *  with a framework error the renderer cannot tell from a real failure: a
+	 *  window that gave up there showed no accounts until the next refresh.
+	 * 
+	 *  # Errors
+	 *  `InitializationPending` while the backend is starting.
 	 */
 	getSnapshot: () => typedError<SnapshotResponse, CommandError>(__TAURI_INVOKE("get_snapshot")),
 	/**  Lists every provider this build knows about, including unavailable adapters. */
