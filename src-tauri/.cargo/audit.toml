@@ -1,7 +1,0 @@
-# cargo-audit reads the whole lockfile, including packages no build compiles.
-# An advisory is ignored here only after it is recorded in docs/exceptions.md
-# with an owner, a scope, a rationale, and a review date.
-
-[advisories]
-# rsa, through sqlx-mysql: in the lockfile, never compiled. Exception 13.
-ignore = ["RUSTSEC-2023-0071"]

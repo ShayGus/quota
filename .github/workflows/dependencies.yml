@@ -3,9 +3,13 @@
 # This workflow changes nothing. It reports, so a reviewer can decide. Every
 # `uses:` is pinned to a full 40-character commit SHA; see ci.yml for why.
 #
-# `cargo deny` reads src-tauri/deny.toml, which holds the approved licence set, the
-# allowed registry, and the duplicate-version policy. `cargo audit` reads the
-# RustSec advisory database directly and reports the crates that need action.
+# `cargo deny` reads src-tauri/deny.toml, which holds the advisory policy, the
+# approved licence set, the allowed registry, and the duplicate-version policy.
+# Its advisory check reads the RustSec database for the packages the shipped
+# targets actually compile. `cargo audit` is deliberately not run: it reports
+# every Cargo.lock entry, including optional packages no build compiles, so it
+# fails on advisories Quota cannot be affected by, and the only way to quiet it
+# is an ignore that would also hide the advisory if the package were ever built.
 #
 # `cargo outdated` is deliberately not installed here. No pinned action ships
 # it, and `cargo install cargo-outdated` would compile an unpinned tool on every
@@ -57,15 +61,6 @@ jobs:
           # committed graph rather than an opportunistic update.
           arguments: --locked
           command-arguments: advisories licenses sources
-
-      # taiki-e/install-action v2.87.22
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@83ac0ad63c0167e6f06796fab0fce28db1bf3db0
-        with:
-          tool: cargo-audit
-
-      - name: cargo audit
-        run: cargo audit
 
       - name: Report in-range updates
         run: cargo update --workspace --dry-run
