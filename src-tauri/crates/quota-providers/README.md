@@ -254,12 +254,11 @@ only native units with no denominator, and an account with an unlimited window.
 store Quota's own sign-ins live in (`secrets::system_off_the_runtime(identifier)` opens
 this system's store on a blocking worker and files every entry under the given application
 identifier, so a development build keeps its own entries, or returns a store that refuses
-every operation when opening fails; see
-[`secrets`' API documentation](src/secrets.rs) for runtime constraints);
-`ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
-`provider(id)` returns `None` for any provider this build does not contain, so the
-application reports an explicit unsupported-provider state. There is no dynamic adapter
-lookup, no downloaded parser, and no plugin loading.
+every operation when opening fails; see [`secrets`' API documentation](src/secrets.rs) for
+runtime constraints); `ProviderRegistry::with_fixture(secrets)` adds the fixture when the
+feature is on. `provider(id)` returns `None` for any provider this build does not contain,
+so the application reports an explicit unsupported-provider state. There is no dynamic
+adapter lookup, no downloaded parser, and no plugin loading.
 
 ## Transport
 
