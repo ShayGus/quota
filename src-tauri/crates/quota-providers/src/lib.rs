@@ -53,6 +53,7 @@ pub(crate) mod cursor;
 pub(crate) mod kimi;
 pub(crate) mod minimax;
 pub(crate) mod muse;
+pub(crate) mod ollama;
 pub(crate) mod opencode_go;
 pub(crate) mod openrouter;
 pub(crate) mod platform_paths;

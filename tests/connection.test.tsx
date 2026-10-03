@@ -518,6 +518,19 @@ describe("Provider → Connect → Verify", () => {
     );
   });
 
+  it("lets Ollama Cloud use Ollama's own sign-in, or a pasted key", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Ollama Cloud/ }));
+    expect(
+      screen.getByText(/leave it empty to use the sign-in the Ollama app keeps/),
+    ).toBeTruthy();
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "ollama_cloud", credential: null }),
+    );
+  });
+
   it("needs a key for Z.ai, which has no tool of its own", () => {
     render(<Wizard actions={settingsActions()} onDone={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Z\.ai/ }));

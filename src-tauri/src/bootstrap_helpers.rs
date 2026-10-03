@@ -86,6 +86,7 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::Grok => Some("https://grok.com/?_s=usage"),
         ProviderId::MuseCode => Some("https://www.meta.ai/muse-code"),
         ProviderId::Cursor => Some("https://cursor.com/dashboard?tab=usage"),
+        ProviderId::OllamaCloud => Some("https://ollama.com/settings"),
         ProviderId::Fixture => None,
     }
 }
