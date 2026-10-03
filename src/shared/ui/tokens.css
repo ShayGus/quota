@@ -13,23 +13,26 @@
     Arial,
     sans-serif;
   font-synthesis: none;
-  --page: #f3f5f7;
-  --surface: #fff;
-  --surface-2: #f6f8fa;
-  --surface-3: #edf1f4;
-  --line: #e0e5eb;
-  --text: #1c2937;
-  --muted: #667482;
-  --subtle: #80909e;
-  --accent: #18775f;
-  --tint: #e8f4ef;
-  --track: #e5ebef;
-  --warn: #945b10;
-  --warn-bg: #fff3df;
-  --danger: #b33547;
-  --danger-bg: #fcecf0;
-  --shadow: 0 20px 60px #2333441d, 0 3px 10px #2333440a;
-  --focus: #2f70c1;
+  /* The light theme mirrors the dark one: cool slate greys rather than pure
+     white, so nothing glares, borders that are visible, and an accent that
+     keeps text contrast above 4.5:1 on every surface. */
+  --page: #dde3e9;
+  --surface: #f7f9fb;
+  --surface-2: #e7ecf0;
+  --surface-3: #dbe2e8;
+  --line: #ccd5de;
+  --text: #17212b;
+  --muted: #4d5b69;
+  --subtle: #66737f;
+  --accent: #157a64;
+  --tint: #d5ebe3;
+  --track: #c9d2db;
+  --warn: #8a560f;
+  --warn-bg: #f5e6c7;
+  --danger: #a3303f;
+  --danger-bg: #f4dce0;
+  --shadow: 0 18px 50px #1b283624, 0 2px 8px #1b283614;
+  --focus: #2f6fc1;
   color: var(--text);
   background: var(--page);
   font-size: 14px;
