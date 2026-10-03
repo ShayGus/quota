@@ -65,8 +65,8 @@ Both halves matter.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
   a capability file the allowlist does not name, so without this guest listeners stay
   disabled and console forwarding is denied. The allowlist in `src-tauri/tauri.conf.json`
-  deliberately keeps the shipping three capabilities only, because the plugin's permissions
-  do not exist in a build that does not compile it.
+  deliberately keeps the shipping three capabilities only, because the plugin's
+  permissions do not exist in a build that does not compile it.
 
 Debug builds automatically apply the
 [development identity](../CONTRIBUTING.md#development-identity), so an inspected build

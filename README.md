@@ -45,19 +45,19 @@ bun install
 bun tauri dev
 ```
 
-`bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust
-host, and opens only the overview. Open Settings with the overview's settings button or
-the tray menu's Settings action; it stays hidden at launch even if it was open when you
-last quit. Quota runs as a single instance: launching it again brings the running overview
-forward. Closing a window, with its close button or Alt+F4, hides it to the tray while
-monitoring continues. Left-click the tray icon to open the app; right-click it for
-Settings, Show App, and Exit. Exit, or Ctrl-C in the terminal, stops the application.
-Settings → General → Launch at login registers Quota with the system so it starts quietly
-in the tray when you sign in; turning it off removes the login item.
+`bun tauri dev` starts the Vite dev server on port 1420 itself, compiles the Rust host,
+and opens only the overview. Open Settings with the overview's settings button or the tray
+menu's Settings action; it stays hidden at launch even if it was open when you last quit.
+Quota runs as a single instance: launching it again brings the running overview forward.
+Closing a window, with its close button or Alt+F4, hides it to the tray while monitoring
+continues. Left-click the tray icon to open the app; right-click it for Settings, Show
+App, and Exit. Exit, or Ctrl-C in the terminal, stops the application. Settings → General
+→ Launch at login registers Quota with the system so it starts quietly in the tray when
+you sign in; turning it off removes the login item.
 
-Every debug build automatically runs under its own identity, `app.quota.monitor.dev`, so it
-keeps its data directory, its saved sign-ins, its login item and its single-instance lock
-away from an installed production build. See
+Every debug build automatically runs under its own identity, `app.quota.monitor.dev`, so
+it keeps its data directory, its saved sign-ins, its login item and its single-instance
+lock away from an installed production build. See
 [the development identity](CONTRIBUTING.md#development-identity).
 
 The native host logs warnings for failed close-time hiding, tray anchoring, second-launch

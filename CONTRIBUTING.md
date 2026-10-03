@@ -172,20 +172,20 @@ bun tauri build        # release bundles
 
 Every debug executable, including those produced by plain `bun tauri dev`,
 `bun tauri build --debug`, and `cargo build`, applies the identity from
-`src-tauri/tauri.dev.conf.json` to the Tauri context at startup before plugins and
-storage initialize. Its runtime identifier is `app.quota.monitor.dev`,
-its product and autostart name is `Quota Dev`, and all three window titles identify it as
-development. The runtime identifier names the data directories, window-state file,
-credential service, and single-instance lock. Window geometry, development server URLs,
-and capability overrides remain as configured.
+`src-tauri/tauri.dev.conf.json` to the Tauri context at startup before plugins and storage
+initialize. Its runtime identifier is `app.quota.monitor.dev`, its product and autostart
+name is `Quota Dev`, and all three window titles identify it as development. The runtime
+identifier names the data directories, window-state file, credential service, and
+single-instance lock. Window geometry, development server URLs, and capability overrides
+remain as configured.
 
-Use `bun run build:dev` for any development package. This command merges the overlay
-over `src-tauri/tauri.conf.json` before packaging, giving bundles the executable name
-`quota-dev`, product name `Quota Dev`, and identifier `app.quota.monitor.dev`.
-The overlay repeats the three window definitions because the merge replaces arrays,
-and `tests/dev-identity.test.ts` checks that every production window has a development
-twin. Native identity tests exercise both build modes through Tauri's path resolver and
-the credential service resolver.
+Use `bun run build:dev` for any development package. This command merges the overlay over
+`src-tauri/tauri.conf.json` before packaging, giving bundles the executable name
+`quota-dev`, product name `Quota Dev`, and identifier `app.quota.monitor.dev`. The overlay
+repeats the three window definitions because the merge replaces arrays, and
+`tests/dev-identity.test.ts` checks that every production window has a development twin.
+Native identity tests exercise both build modes through Tauri's path resolver and the
+credential service resolver.
 
 ```bash
 bun tauri dev          # debug runtime identity is automatic
@@ -196,8 +196,8 @@ Release builds without the overlay retain the production identity and executable
 `bun run build:dev` uses the development identity even though it compiles in release mode.
 
 Plain `bun tauri build --debug` without the overlay still uses production bundle metadata
-and the executable name `quota`. Its runtime identity is isolated; its raw debug bundle
-is not for installing next to the production app. Use `bun run build:dev` for that.
+and the executable name `quota`. Its runtime identity is isolated; its raw debug bundle is
+not for installing next to the production app. Use `bun run build:dev` for that.
 
 ## 7. Rules that the gates enforce
 
