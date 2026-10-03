@@ -38,7 +38,9 @@ store.
 
 `quota-providers` also depends on the workspace's `sqlx` from 3 October 2026, to read the
 Cursor app's sign-in from its SQLite state store, read-only. No new package entered the
-graph: `sqlx` was already resolved for `quota-persistence`.
+graph: `sqlx` was already resolved for `quota-persistence`. It also depends on `ring`
+0.17.14 directly, to sign Ollama requests with Ollama's Ed25519 key; `ring` was already in
+the graph as rustls's crypto provider.
 
 `libsqlite3-sys` is transitive through `sqlx-sqlite`; the linked engine version must be
 recorded from the shipping artifact at release (spec 13.6), rather than inferred from the

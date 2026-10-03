@@ -19,6 +19,7 @@ export const PROVIDERS = [
   "kimi",
   "grok",
   "muse_code",
+  "ollama_cloud",
 ] as const;
 
 export type OfferedProvider = (typeof PROVIDERS)[number];
@@ -77,6 +78,12 @@ export const SIGN_IN: Record<OfferedProvider, SignIn> = {
     account: "xAI",
     cli: { name: "Grok CLI", signIn: "grok login" },
   },
+  ollama_cloud: {
+    kind: "api_key",
+    keyPage: "ollama.com/settings/keys",
+    placeholder: "Your Ollama API key",
+    cli: { name: "Ollama app", signIn: "ollama signin" },
+  },
   muse_code: {
     kind: "browser",
     account: "Meta",
@@ -96,10 +103,13 @@ export const PROVIDER_WINDOWS: Record<OfferedProvider, string> = {
   kimi: "5-hour · Weekly · Monthly",
   grok: "Weekly · Monthly · On-demand",
   muse_code: "5-hour · Weekly",
+  ollama_cloud: "5-hour · Weekly · Monthly",
 };
 
 /** What to do when the provider refuses the sign-in. */
 export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
+  ollama_cloud:
+    "Ollama Cloud needs a sign-in. Paste an API key from ollama.com/settings/keys, or sign in with Ollama (ollama signin), then press Connect again.",
   codex:
     "Codex sign-in is required. Open a terminal, run codex login, then press Connect again.",
   claude:
@@ -121,6 +131,8 @@ export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
 
 /** How to add a different account of each provider. */
 export const SWITCH_ACCOUNT: Record<OfferedProvider, string> = {
+  ollama_cloud:
+    "To add a different Ollama account, paste an API key from it, then press Connect again.",
   codex:
     "To add a different Codex account, run codex login with it, then press Connect again.",
   claude:

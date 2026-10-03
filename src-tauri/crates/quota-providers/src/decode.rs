@@ -9,6 +9,7 @@
 //! Two neighbours hold the leaf rules: [`values`] reads the numbers, instants,
 //! and percentages, and [`identity`] derives identities and safe labels.
 
+pub(crate) mod base64;
 mod identity;
 pub(crate) mod jwt;
 mod values;

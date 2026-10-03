@@ -32,14 +32,19 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
             minimum_interval_seconds: 300,
         },
         // Signed in with a pasted key; Kimi can also read its CLI's sign-in.
-        ProviderId::Zai | ProviderId::Minimax | ProviderId::Kimi => ProviderCapabilities {
-            provider_id,
-            cardinality: AccountCardinality::Independent,
-            supports_app_owned_authorization: true,
-            supports_external_profile: matches!(provider_id, ProviderId::Kimi),
-            reports_monthly_window: !matches!(provider_id, ProviderId::Minimax),
-            minimum_interval_seconds: 300,
-        },
+        ProviderId::Zai | ProviderId::Minimax | ProviderId::Kimi | ProviderId::OllamaCloud => {
+            ProviderCapabilities {
+                provider_id,
+                cardinality: AccountCardinality::Independent,
+                supports_app_owned_authorization: true,
+                supports_external_profile: matches!(
+                    provider_id,
+                    ProviderId::Kimi | ProviderId::OllamaCloud
+                ),
+                reports_monthly_window: !matches!(provider_id, ProviderId::Minimax),
+                minimum_interval_seconds: 300,
+            }
+        }
         // Signed in through the browser, or with the provider's own CLI.
         ProviderId::Grok | ProviderId::MuseCode => ProviderCapabilities {
             provider_id,
@@ -82,5 +87,6 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
             | ProviderId::Grok
             | ProviderId::MuseCode
             | ProviderId::Cursor
+            | ProviderId::OllamaCloud
     )
 }

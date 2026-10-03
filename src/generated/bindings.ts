@@ -885,6 +885,8 @@ export type ProviderId =
 "muse_code" | 
 /**  Cursor, read with the sign-in the Cursor app keeps. */
 "cursor" | 
+/**  Ollama Cloud, read with Ollama's own sign-in or an API key. */
+"ollama_cloud" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

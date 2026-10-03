@@ -27,6 +27,7 @@ an automated test proves from what only a real login can prove:
 | Grok        | ASSUMED            | ASSUMED         | Not performed           |
 | Muse Code   | ASSUMED            | ASSUMED         | Not performed           |
 | Cursor      | ASSUMED            | ASSUMED         | Not performed           |
+| Ollama      | ASSUMED            | ASSUMED         | Not performed           |
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -208,6 +209,13 @@ SQLite state store (`cursor::app`), opened read-only on every read and never wri
 token is never refreshed. The account is the token's subject (`decode::jwt`). Endpoints
 and fields are in [the provider reference](../../../docs/providers.md#cursor).
 
+## Ollama Cloud
+
+Reads `ollama.com/api/usage` with Ollama's own sign-in, signing each request with the
+Ed25519 key Ollama keeps (`ollama::key`: an OpenSSH key parser and `ring`'s Ed25519), or
+with a pasted API key through `keyed::KeyedSource`. See
+[the provider reference](../../../docs/providers.md#ollama-cloud).
+
 ## Grok and Muse Code
 
 Signed in through the browser with the OAuth device grant (`device::DeviceClient`), using
@@ -242,7 +250,7 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production(secrets)` holds the ten real adapters and the credential
+`ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
 store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
 that refuses every operation when there is none);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.

@@ -20,6 +20,7 @@ const LABELS: Record<ProviderId, string> = {
   grok: "Grok",
   muse_code: "Muse Code",
   cursor: "Cursor",
+  ollama_cloud: "Ollama Cloud",
   fixture: "Fixture",
 };
 

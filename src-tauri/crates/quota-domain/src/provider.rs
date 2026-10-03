@@ -35,6 +35,8 @@ pub enum ProviderId {
     MuseCode,
     /// Cursor, read with the sign-in the Cursor app keeps.
     Cursor,
+    /// Ollama Cloud, read with Ollama's own sign-in or an API key.
+    OllamaCloud,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -45,7 +47,7 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 11] = [
+    pub const ALL: [Self; 12] = [
         Self::Codex,
         Self::Claude,
         Self::OpenCodeGo,
@@ -56,6 +58,7 @@ impl ProviderId {
         Self::Grok,
         Self::MuseCode,
         Self::Cursor,
+        Self::OllamaCloud,
         Self::Fixture,
     ];
 
@@ -84,6 +87,7 @@ impl ProviderId {
             Self::Grok => "grok",
             Self::MuseCode => "muse_code",
             Self::Cursor => "cursor",
+            Self::OllamaCloud => "ollama_cloud",
             Self::Fixture => "fixture",
         }
     }
