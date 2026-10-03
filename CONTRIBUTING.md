@@ -60,6 +60,7 @@ From the repository root:
 
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
+bun run test:ui                        # interface tests, see section 7
 ```
 
 CI runs exactly these commands. If a command passes locally and fails in CI, the
@@ -228,3 +229,79 @@ Include the compatibility and migration effect, and the tests that cover it, in 
 change. A new enum variant breaks every handwritten exhaustive match by design; that is
 the point of the typed contracts. Record any new exception in `docs/exceptions.md` with an
 owner, a rationale, a scope, a review date, and a removal condition.
+
+## 7. Interface tests
+
+`bun run test:ui` loads the real built renderer (`bun run build`, served by
+`vite preview`) in headless Chromium and drives it with Playwright. Only the Rust host is
+replaced: a small faked backend, `tests/ui/fake-backend.ts`, answers the typed commands
+and publishes the host's events, on top of Tauri's own `@tauri-apps/api/mocks`. It is
+bundled into the page by `tests/ui/global-setup.ts` and never into `dist`, so nothing from
+it can reach a release build.
+
+The suite covers the popover with seven accounts in the states the interface has (healthy,
+low, rate limited, offline, check failed, reconnect, monitoring off), the attention
+filter, the account detail, the first-launch screen, a host that cannot be reached, every
+settings panel, the add-account wizard through Provider, Connect and Verify, the privacy
+aliases, the light and dark theme, the 440-pixel popover width, and the mini widget. It
+does not start the native shell, so it cannot see window placement, the tray, the
+single-instance lock, or anything the Rust host does; the faked host is only as faithful
+as `tests/ui/fake-backend.ts`.
+
+```bash
+bun install --frozen-lockfile
+bunx playwright install chromium        # once; add --with-deps on a clean Linux machine
+bun run test:ui                         # about 15 s
+bunx playwright show-report             # after a CI-style run, to browse the report
+```
+
+Screenshots of every state are written to `test-results/screenshots/`, and CI uploads them
+with the traces of any failure as the `interface-test-results` artifact. A test fails if
+the page logs an error or the renderer asks the faked host for a command it does not know,
+so a new command needs an answer in `fake-backend.ts`.
+
+### Display modes covered
+
+What is on screen is decided by three confirmed preferences: `view` (full window or mini
+widget; never both), `overview_mode` (the full window docked to the tray or floating), and
+`indicator_style` (rings or bars). In the widget the indicator style picks the look: rings
+give the ring strip, bars give the mini cards. There is no third widget variant, and the
+widget ignores `overview_mode`. `tests/ui/matrix.ts` states this, and
+`tests/ui/modes.spec.ts` runs every combination that exists. The names the owner uses map
+to the code like this:
+
+| Owner's name   | In the code                                     | Test surface                                                                 |
+| -------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Full window    | `view: overview`, docked (`tray`) or `floating` | `full-tray-ring`, `full-tray-bar`, `full-floating-ring`, `full-floating-bar` |
+| Floating bar   | `view: widget` with rings: the ring strip       | `widget-strip`                                                               |
+| Floating cards | `view: widget` with bars: the mini cards        | `widget-cards`                                                               |
+
+Every surface is run against each of these (all of them for both themes; 257 interface
+tests in total, about 250 screenshots):
+
+| Axis            | Values                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account count   | 0, 1, 2, 3 (odd: the last mini card is full width), 7; for the strip, rows of at most four, as even as they can be                           |
+| Account state   | healthy, low, rate limited, offline, check failed, reconnect needed                                                                          |
+| Theme           | light, dark                                                                                                                                  |
+| Privacy aliases | off, on (no account name anywhere in the page, accessible names included)                                                                    |
+| Long names      | two accounts of one provider with 100-character nicknames: nothing is wider than the window                                                  |
+| Widget size     | always 316 px wide; its height is exactly what it asks the host for, from 0 to 12 accounts. The code sets no minimum or maximum height       |
+| Switching       | full window to widget and back, Expand from the widget, the Settings "Mini widget" switch, the pin (docked and floating), the layout buttons |
+
+Counts by theme by aliases are 6 surfaces x 5 x 2 x 2 = 120 tests, states by theme are 6 x
+6 x 2 = 72, long names 12, sizes 3, switching 5. `test-results/screenshots/index.html` is
+a contact sheet of every screenshot, grouped by folder.
+
+What the screenshots show about the mini widget, as the code stands: the mini cards draw
+readings and not statuses, so a rate-limited, offline or check-failed account looks normal
+there (only an account with no reading at all says "Reconnect"); and in the ring strip
+with four tiles in a row, "Rate limited" and "Check failed" are cut to "Rate limit…" and
+"Check fail…". These tests pin the behaviour as it is; they do not call it wrong.
+
+### How this gates a release
+
+The interface job is part of `.github/workflows/ci.yml`, not a workflow of its own. The
+release workflow accepts a commit only when that file's CI run completed successfully, so
+a release needs the unit tests, the interface tests and every other CI job green on the
+exact commit. Keep new test layers inside `ci.yml` for the same reason.

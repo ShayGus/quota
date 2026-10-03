@@ -1,0 +1,196 @@
+/**
+ * The add-account wizard, step by step against a scripted host: Provider,
+ * Connect, Verify. The faked host stands in for the provider; what is checked
+ * is what the renderer asks for and what it shows at each step.
+ */
+import { expect, test } from "./harness";
+import { defaultPreferences, scenario, verifiedConnection } from "./scenarios";
+
+const CONNECT = "#/settings/connect/1";
+
+test.describe("add-account wizard", () => {
+  test("Provider step lists every provider and Cancel leaves", async ({ open }) => {
+    const host = await open(scenario("settings"), CONNECT);
+    const { page } = host;
+    await expect(page.getByRole("heading", { name: "Add a subscription" })).toBeVisible();
+    await expect(page.locator(".step.selected")).toHaveText("1");
+    await expect(page.getByRole("button", { name: /Codex/ })).toBeVisible();
+    await expect(page.locator(".provider-pick")).toHaveCount(11);
+    await host.screenshot("wizard-1-provider");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await expect(page.getByRole("heading", { name: "Accounts", level: 3 })).toBeVisible();
+  });
+
+  test("local sign-in: Provider, Connect, Verify, then Add saves the account", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("settings", { connection: verifiedConnection() }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Codex/ }).click();
+    await expect(page.getByRole("heading", { name: "Connect Codex" })).toBeVisible();
+    await expect(page.locator(".step.selected")).toHaveText("2");
+    await host.screenshot("wizard-2-connect");
+
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
+    await expect(page.locator(".step.selected")).toHaveText("3");
+    await expect(page.getByText("new.person@example.test")).toBeVisible();
+    await expect(page.getByText("5-hour")).toBeVisible();
+    await host.screenshot("wizard-3-verify");
+    // Nothing is saved until the person adds it.
+    expect(await host.callsTo("confirm_connection")).toHaveLength(0);
+
+    await page.getByRole("textbox").fill("Night shift");
+    await page.getByRole("button", { name: "Add Codex account" }).click();
+    await expect(page.getByRole("heading", { name: "Accounts", level: 3 })).toBeVisible();
+    await expect(page.getByLabel("Manage Codex Night shift")).toBeVisible();
+    expect((await host.callsTo("confirm_connection")).at(-1)?.args).toEqual({
+      attemptRef: { id: "attempt-1" },
+      nickname: "Night shift",
+    });
+    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
+      request: { provider_id: string; credential: unknown };
+    };
+    expect(begin.request.provider_id).toBe("codex");
+    expect(begin.request.credential).toBeNull();
+  });
+
+  test("Not this account discards the candidate and says how to switch", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("settings", { connection: verifiedConnection() }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Codex/ }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await page.getByRole("button", { name: "Not this account" }).click();
+    await expect(page.getByRole("heading", { name: "Connect Codex" })).toBeVisible();
+    await expect(page.getByText(/To add a different Codex account/)).toBeVisible();
+    expect((await host.callsTo("cancel_connection")).length).toBeGreaterThan(0);
+    expect(await host.callsTo("confirm_connection")).toHaveLength(0);
+  });
+
+  test("an API-key provider needs a key and hands it to the host", async ({ open }) => {
+    const host = await open(
+      scenario("settings", { connection: verifiedConnection() }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /OpenRouter/ }).click();
+    const connect = page.getByRole("button", { name: "Connect", exact: true });
+    await expect(connect).toBeDisabled();
+    await page.getByLabel("API key").fill("sk-or-v1-not-a-real-key");
+    await expect(connect).toBeEnabled();
+    await connect.click();
+    await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
+    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
+      request: { credential: string };
+    };
+    expect(begin.request.credential).toBe("sk-or-v1-not-a-real-key");
+  });
+
+  test("a browser sign-in shows the code to enter", async ({ open }) => {
+    const host = await open(
+      scenario("settings", {
+        connection: {
+          progress: [
+            { kind: "started" },
+            {
+              kind: "awaiting_user",
+              context: {
+                sign_in: {
+                  user_code: "WXYZ-1234",
+                  verification_uri: "https://accounts.example.test/device",
+                },
+              },
+            },
+          ],
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Grok/ }).click();
+    await page.getByRole("button", { name: "Sign in with browser" }).click();
+    await expect(page.getByText("WXYZ-1234")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Waiting for the browser…" }),
+    ).toBeDisabled();
+    await host.screenshot("wizard-browser-code");
+    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
+      request: { browser_sign_in: boolean };
+    };
+    expect(begin.request.browser_sign_in).toBe(true);
+  });
+
+  test("a sign-in the provider refuses explains how to recover", async ({ open }) => {
+    const host = await open(
+      scenario("settings", {
+        connection: {
+          progress: [
+            { kind: "started" },
+            { kind: "failed", context: { error: { kind: "reconnect_required" } } },
+          ],
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Codex/ }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("run codex login");
+    await host.screenshot("wizard-failed-sign-in");
+  });
+
+  test("a refused attempt is shown on the Connect step", async ({ open }) => {
+    const host = await open(
+      scenario("settings", {
+        connection: {
+          progress: [],
+          refuseWith: {
+            kind: "validation_failed",
+            context: { field: "profile", reason: "duplicate" },
+          },
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Codex/ }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByText("The connection was refused.")).toBeVisible();
+  });
+
+  test("Back returns to the provider list", async ({ open }) => {
+    const host = await open(scenario("settings"), CONNECT);
+    const { page } = host;
+    await page.getByRole("button", { name: /Claude/ }).click();
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("heading", { name: "Add a subscription" })).toBeVisible();
+  });
+
+  test("with aliases on, the verified identity is hidden", async ({ open }) => {
+    const base = defaultPreferences();
+    const host = await open(
+      scenario("settings", {
+        connection: verifiedConnection(),
+        preferences: {
+          ...base,
+          privacy: { ...base.privacy, alias_mode: "stable_aliases" },
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /Codex/ }).click();
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
+    await expect(page.getByText("new.person@example.test")).toHaveCount(0);
+    await expect(page.getByText("Workspace hidden")).toBeVisible();
+  });
+});

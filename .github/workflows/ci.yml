@@ -142,3 +142,60 @@ jobs:
 
       - name: Build and exclude inspection from the renderer
         run: bun run check:release:renderer
+
+  # The interface tests run the real built renderer in headless Chromium with the
+  # Tauri backend faked at the IPC boundary (see CONTRIBUTING.md, "Interface
+  # tests"). This job lives in this workflow on purpose: the release workflow
+  # accepts a commit only when this workflow's run succeeded, so a failure here
+  # blocks a release exactly as a failing unit test does. Do not move it to its
+  # own workflow file.
+  interface:
+    name: Interface tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # oven-sh/setup-bun v2. The version is read from .bun-version.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # actions/cache v6.1.0. The browser build is keyed on the lockfile, which
+      # pins the Playwright version and so the Chromium revision it downloads.
+      - name: Cache the Playwright browser
+        id: playwright-browser
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+
+      - name: Download Chromium
+        if: steps.playwright-browser.outputs.cache-hit != 'true'
+        run: bunx playwright install chromium
+
+      # The system libraries Chromium needs are not part of the browser cache.
+      - name: Install Chromium system libraries
+        run: bunx playwright install-deps chromium
+
+      - name: Interface tests
+        run: bun run test:ui
+
+      # actions/upload-artifact v7.0.1. Screenshots are always kept, so a
+      # reviewer can look at every state; the report and traces explain a failure.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ !cancelled() }}
+        with:
+          name: interface-test-results
+          path: |
+            test-results/screenshots
+            test-results/ui
+            playwright-report
+          if-no-files-found: warn
+          retention-days: 14

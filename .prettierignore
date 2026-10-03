@@ -9,3 +9,6 @@ src/generated
 docs/inspection-proof
 # Written by tools/ui-parity/compare.mjs, not source.
 tools/ui-parity/results
+# Playwright output, not source.
+test-results
+playwright-report

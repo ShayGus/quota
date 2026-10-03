@@ -1,0 +1,389 @@
+/**
+ * The faked Tauri backend for the interface tests.
+ *
+ * This file is bundled into the page and runs there, in front of the real built
+ * renderer. It stands in for the Rust host at the IPC boundary and nowhere
+ * else: Tauri's own `mockIPC` supplies the `invoke` and event plumbing, and the
+ * handler below answers each typed command the way the host does, including the
+ * events the host publishes after a command. The renderer under test is the
+ * production bundle, unchanged.
+ *
+ * The host's behaviour is reproduced only as far as the renderer can observe
+ * it: a confirmed preference arrives as an event, a confirmed connection adds an
+ * account to the snapshot, and a command the host refuses rejects with the
+ * typed error. Every call is recorded, so a test can assert what the renderer
+ * asked for. A command this file does not know rejects and is recorded as
+ * unhandled, so a new command cannot slip through unnoticed.
+ */
+import { emit as emitEvent } from "@tauri-apps/api/event";
+import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+
+import type {
+  AccountSnapshot,
+  AppSnapshot,
+  CommandError,
+  ConnectionProgress,
+  MonitoringState,
+  OverviewWindowState,
+  Preferences,
+  RegisteredProvider,
+  VerifiedCandidate,
+} from "../../src/generated/bindings";
+
+/** The windows the application creates, by label. */
+export type WindowLabel = "overview" | "settings" | "widget";
+
+/** What a scripted connection attempt does after it starts. */
+export interface ConnectionScript {
+  /** The progress events the host publishes, in order, after `begin_connection`. */
+  readonly progress: readonly ConnectionProgress[];
+  /** When set, `begin_connection` itself is refused with this error. */
+  readonly refuseWith?: CommandError;
+  /** When set, `confirm_connection` is refused with this error. */
+  readonly confirmRefusedWith?: CommandError;
+}
+
+/** Everything a test decides about the faked host before the page loads. */
+export interface FakeConfig {
+  readonly window: WindowLabel;
+  readonly snapshot: AppSnapshot;
+  readonly preferences: Preferences;
+  readonly overviewWindow: OverviewWindowState;
+  readonly providers: readonly RegisteredProvider[];
+  readonly launchAtLogin: boolean;
+  readonly connection: ConnectionScript | null;
+  /** Commands the host refuses, by wire name, with the typed error. */
+  readonly refuse: Readonly<Record<string, CommandError>>;
+}
+
+/** One recorded IPC call. */
+export interface RecordedCall {
+  readonly command: string;
+  readonly args: unknown;
+}
+
+/** The handle tests use from the page. */
+export interface FakeHandle {
+  readonly calls: RecordedCall[];
+  readonly unhandled: string[];
+  /** Publishes a host event to the renderer. */
+  emit: (event: string, payload: unknown) => Promise<void>;
+  /** The host's current view of the snapshot and preferences. */
+  state: () => { snapshot: AppSnapshot; preferences: Preferences };
+}
+
+declare global {
+  interface Window {
+    __quotaFake?: FakeHandle;
+    __installQuotaFake?: (config: FakeConfig) => void;
+  }
+}
+
+type Args = Record<string, unknown> | undefined;
+
+/** Installs the faked host into the current page. */
+export function installFakeBackend(config: FakeConfig): void {
+  let snapshot: AppSnapshot = structuredClone(config.snapshot);
+  let preferences: Preferences = structuredClone(config.preferences);
+  let launchAtLogin = config.launchAtLogin;
+  let monitoringRevision = 1;
+  let attemptCounter = 0;
+  let candidate: VerifiedCandidate | null = null;
+  const calls: RecordedCall[] = [];
+  const unhandled: string[] = [];
+  const instance = snapshot.app_instance_id;
+
+  mockWindows(config.window);
+  mockConvertFileSrc("linux");
+
+  const emit = (event: string, payload: unknown): Promise<void> =>
+    emitEvent(event, payload);
+
+  /** Sends an event the renderer is not waiting on; a failure is recorded. */
+  const fire = (event: string, payload: unknown): void => {
+    emit(event, payload).catch((error: unknown) => {
+      unhandled.push(`emit ${event}: ${String(error)}`);
+    });
+  };
+
+  /** Publishes after the current command has answered, as the host's events do. */
+  const publishLater = (event: string, payload: unknown): void => {
+    setTimeout(() => {
+      fire(event, payload);
+    }, 0);
+  };
+
+  const publishPreferences = (): void => {
+    publishLater("preferences-changed", {
+      app_instance_id: instance,
+      preference_revision: preferences.revision,
+      preferences,
+    });
+  };
+
+  const publishSnapshot = (): void => {
+    snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+    publishLater("snapshot-updated", {
+      app_instance_id: instance,
+      revision: snapshot.revision,
+      schema_version: snapshot.schema_version,
+      snapshot,
+    });
+  };
+
+  const savePreferences = (next: Preferences): Preferences => {
+    preferences = { ...next, revision: preferences.revision + 1 };
+    publishPreferences();
+    return preferences;
+  };
+
+  const progress = (attemptId: string, revision: number, state: ConnectionProgress) => {
+    publishLater("connection-progress-changed", {
+      app_instance_id: instance,
+      attempt_id: attemptId,
+      attempt_revision: revision,
+      progress: state,
+    });
+  };
+
+  const updateAccount = (
+    id: string,
+    change: (account: AccountSnapshot) => AccountSnapshot,
+  ): void => {
+    snapshot = {
+      ...snapshot,
+      accounts: snapshot.accounts.map((entry) =>
+        entry.account_id === id ? change(entry) : entry,
+      ),
+    };
+    publishSnapshot();
+  };
+
+  const accountId = (args: Args): string => {
+    const request = (args?.request ?? args) as Record<string, unknown> | undefined;
+    const ref = (request?.account_ref ?? request?.accountRef) as
+      { id: string } | undefined;
+    return ref?.id ?? "";
+  };
+
+  // The three host commands a settings write may also reach through a plugin.
+  const handle = (command: string, args: Args): unknown => {
+    calls.push({ command, args });
+    const refusal = config.refuse[command];
+    if (refusal !== undefined) {
+      // Tauri rejects with the serialized error value, which is not an Error.
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw refusal;
+    }
+    switch (command) {
+      case "get_snapshot":
+        // The host answers the first read with the preferences and window state
+        // as events, after the listeners are registered.
+        publishPreferences();
+        publishLater("overview-window-state-changed", {
+          app_instance_id: instance,
+          state: config.overviewWindow,
+        });
+        publishLater("monitoring-state-changed", {
+          app_instance_id: instance,
+          monitoring_revision: monitoringRevision,
+          monitoring_state: snapshot.monitoring_state,
+        });
+        publishLater("persistence-status-changed", {
+          app_instance_id: instance,
+          status: snapshot.persistence_status,
+        });
+        return { snapshot };
+      case "list_provider_capabilities":
+        return config.providers;
+      case "refresh_accounts":
+        return [];
+      case "set_monitoring_state": {
+        const paused = args?.paused === true;
+        const state: MonitoringState = paused ? { kind: "paused" } : { kind: "running" };
+        monitoringRevision += 1;
+        snapshot = { ...snapshot, monitoring_state: state };
+        publishLater("monitoring-state-changed", {
+          app_instance_id: instance,
+          monitoring_revision: monitoringRevision,
+          monitoring_state: state,
+        });
+        publishSnapshot();
+        return state;
+      }
+      case "update_preferences":
+        return savePreferences(args?.preferences as Preferences);
+      case "set_indicator_style":
+        return savePreferences({
+          ...preferences,
+          indicator_style: args?.style as Preferences["indicator_style"],
+        });
+      case "set_app_view":
+        return savePreferences({
+          ...preferences,
+          view: args?.view as Preferences["view"],
+        });
+      case "set_polling_preferences":
+        return args?.policy;
+      case "set_overview_mode": {
+        const mode = args?.mode as Preferences["overview_mode"];
+        savePreferences({ ...preferences, overview_mode: mode });
+        return { kind: "applied", value: mode };
+      }
+      case "set_overview_always_on_top":
+        savePreferences({ ...preferences, always_on_top: args?.alwaysOnTop === true });
+        return config.overviewWindow;
+      case "fit_overview_height":
+        return config.overviewWindow;
+      case "set_account_enabled": {
+        const enabled = (args?.request as { enabled: boolean }).enabled;
+        updateAccount(accountId(args), (entry) => ({
+          ...entry,
+          monitoring_enabled: enabled,
+        }));
+        return null;
+      }
+      case "rename_account":
+        updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
+          ...entry,
+          nickname: args?.nickname as string,
+        }));
+        return null;
+      case "disconnect_account": {
+        const id = (args?.accountRef as { id: string }).id;
+        snapshot = {
+          ...snapshot,
+          accounts: snapshot.accounts.filter((entry) => entry.account_id !== id),
+        };
+        publishSnapshot();
+        return null;
+      }
+      case "reconnect_account":
+        return 2;
+      case "clear_local_history":
+      case "open_settings_window":
+      case "open_provider_usage_page":
+        return null;
+      case "export_sanitized_diagnostics":
+        return "/tmp/quota-diagnostics.json";
+      case "begin_connection": {
+        const script = config.connection;
+        if (script === null) {
+          unhandled.push(`${command} (no connection script)`);
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw { kind: "internal", context: { code: "unscripted" } };
+        }
+        if (script.refuseWith !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw script.refuseWith;
+        }
+        attemptCounter += 1;
+        const attemptId = `attempt-${String(attemptCounter)}`;
+        script.progress.forEach((state, index) => {
+          if (state.kind === "awaiting_confirmation") {
+            candidate = state.context.candidate;
+          }
+          progress(attemptId, index + 1, state);
+        });
+        return { attempt_ref: { id: attemptId }, attempt_id: attemptId };
+      }
+      case "cancel_connection":
+        candidate = null;
+        return null;
+      case "confirm_connection": {
+        const script = config.connection;
+        if (script?.confirmRefusedWith !== undefined) {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw script.confirmRefusedWith;
+        }
+        const held = candidate;
+        const attemptId = (args?.attemptRef as { id: string }).id;
+        if (held !== null) {
+          snapshot = {
+            ...snapshot,
+            accounts: [
+              ...snapshot.accounts,
+              confirmedAccount(held, args?.nickname as string, snapshot.accounts.length),
+            ],
+          };
+          publishSnapshot();
+        }
+        candidate = null;
+        progress(attemptId, 100, {
+          kind: "verified",
+          context: { state: "never_connected" },
+        });
+        return null;
+      }
+      case "plugin:autostart|is_enabled":
+        return launchAtLogin;
+      case "plugin:autostart|enable":
+        launchAtLogin = true;
+        return null;
+      case "plugin:autostart|disable":
+        launchAtLogin = false;
+        return null;
+      default:
+        // Window plumbing (`plugin:window|close`, `show`, `set_focus`) has no
+        // effect in a page; the call is recorded above and answered with unit.
+        if (command.startsWith("plugin:window|")) return null;
+        if (command === "plugin:event|emit_to") {
+          fire(args?.event as string, args?.payload);
+          return null;
+        }
+        unhandled.push(command);
+        throw new Error(`the faked host has no answer for ${command}`);
+    }
+  };
+
+  mockIPC((command, args) => handle(command, args as Args), { shouldMockEvents: true });
+
+  window.__quotaFake = {
+    calls,
+    unhandled,
+    emit,
+    state: () => ({ snapshot, preferences }),
+  };
+}
+
+/** The account a confirmed candidate becomes, as the host saves it. */
+function confirmedAccount(
+  held: VerifiedCandidate,
+  nickname: string,
+  ordinal: number,
+): AccountSnapshot {
+  const id = `saved-${String(ordinal + 1)}`;
+  return {
+    account_id: id,
+    connection_id: `${id}-connection`,
+    connection_generation: 1,
+    provider_id: held.provider_id,
+    nickname,
+    identity: {
+      principal_label: held.identity.principal_label,
+      workspace_label: held.identity.workspace_label,
+      plan_label: held.identity.plan_label,
+      source: held.identity.source,
+    },
+    connection_ordinal: ordinal + 1,
+    monitoring_enabled: true,
+    connection_state: "connected",
+    fetch_state: "idle",
+    last_attempt_at: "2026-10-01T12:00:00.000Z",
+    last_success_at: "2026-10-01T12:00:00.000Z",
+    next_attempt_at: null,
+    windows: held.windows,
+    expected_but_missing_window_ids: [],
+    order: {
+      kind: "ranked",
+      value: {
+        remaining_percent: 100,
+        controlling_window_id: held.windows[0]?.id ?? "w",
+        scope_label: held.windows[0]?.scope.label ?? "Subscription",
+        rule_version: 1,
+      },
+    },
+  };
+}
+
+window.__installQuotaFake = installFakeBackend;

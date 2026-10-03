@@ -21,3 +21,7 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Interface-test output (Playwright)
+test-results/
+playwright-report/
