@@ -80,6 +80,9 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::Claude => Some("https://claude.ai/settings/usage"),
         ProviderId::OpenCodeGo => Some("https://opencode.ai/zen"),
         ProviderId::Openrouter => Some("https://openrouter.ai/settings/credits"),
+        ProviderId::Zai => Some("https://z.ai/manage-apikey/subscription"),
+        ProviderId::Minimax => Some("https://platform.minimax.io/user-center/payment/token-plan"),
+        ProviderId::Kimi => Some("https://www.kimi.com/code/console"),
         ProviderId::Fixture => None,
     }
 }

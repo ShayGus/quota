@@ -205,6 +205,9 @@ fn provider_name(provider: ProviderId) -> &'static str {
         ProviderId::Claude => "Claude",
         ProviderId::OpenCodeGo => "OpenCode Go",
         ProviderId::Openrouter => "OpenRouter",
+        ProviderId::Zai => "Z.ai",
+        ProviderId::Minimax => "MiniMax",
+        ProviderId::Kimi => "Kimi",
         ProviderId::Fixture => "Fixture",
     }
 }

@@ -850,6 +850,12 @@ export type ProviderId =
 "open_code_go" | 
 /**  `OpenRouter` credits and API key spend limits, signed in with an API key. */
 "openrouter" | 
+/**  The Z.ai GLM Coding Plan, signed in with an API key. */
+"zai" | 
+/**  The `MiniMax` Coding (token) Plan, signed in with an API key. */
+"minimax" | 
+/**  Kimi for Coding, signed in with an API key or the Kimi CLI's sign-in. */
+"kimi" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

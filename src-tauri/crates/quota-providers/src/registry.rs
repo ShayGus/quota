@@ -13,8 +13,11 @@ use quota_domain::provider::ProviderId;
 
 use crate::claude::ClaudeAdapter;
 use crate::codex::CodexAdapter;
+use crate::kimi::KimiAdapter;
+use crate::minimax::MinimaxAdapter;
 use crate::opencode_go::OpenCodeGoAdapter;
 use crate::openrouter::OpenRouterAdapter;
+use crate::zai::ZaiAdapter;
 
 /// The adapters this build contains.
 #[derive(Debug)]
@@ -24,8 +27,9 @@ pub struct ProviderRegistry {
 }
 
 impl ProviderRegistry {
-    /// Builds the production registry: Codex, Claude, `OpenCode` Go, and
-    /// `OpenRouter`, whose keys live in `secrets`.
+    /// Builds the production registry: Codex, Claude, `OpenCode` Go, and the
+    /// providers signed in with a pasted key (`OpenRouter`, Z.ai, `MiniMax`,
+    /// Kimi), whose keys live in `secrets`.
     ///
     /// # Errors
     /// Returns a transient failure when an adapter's HTTP client cannot be built.
@@ -36,6 +40,9 @@ impl ProviderRegistry {
                 Arc::new(ClaudeAdapter::new()?),
                 Arc::new(OpenCodeGoAdapter::new()?),
                 Arc::new(OpenRouterAdapter::new(Arc::clone(&secrets))?),
+                Arc::new(ZaiAdapter::new(Arc::clone(&secrets))?),
+                Arc::new(MinimaxAdapter::new(Arc::clone(&secrets))?),
+                Arc::new(KimiAdapter::new(Arc::clone(&secrets))?),
             ],
             secrets,
         })
@@ -107,6 +114,9 @@ mod tests {
             ProviderId::Claude,
             ProviderId::OpenCodeGo,
             ProviderId::Openrouter,
+            ProviderId::Zai,
+            ProviderId::Minimax,
+            ProviderId::Kimi,
         ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);

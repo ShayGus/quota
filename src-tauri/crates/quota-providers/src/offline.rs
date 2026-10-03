@@ -13,7 +13,7 @@ use quota_domain::provider::ProviderId;
 use quota_domain::quota::window::QuotaWindow;
 
 use crate::decode::{self, DecodedUsage};
-use crate::{claude, codex, opencode_go, openrouter};
+use crate::{claude, codex, kimi, minimax, opencode_go, openrouter, zai};
 
 /// A decoded payload, before an identity is attached.
 #[derive(Clone, Debug, PartialEq)]
@@ -119,6 +119,20 @@ pub fn decode_offline(
                 })?;
             openrouter::mapping::decode(&key, None, &pool, received_at)?
         }
+        ProviderId::Zai => {
+            let envelope = offline_shape::<zai::wire::QuotaEnvelope>(document, "Z.ai quota")?;
+            let data = envelope.data.ok_or_else(|| unsupported("Z.ai quota"))?;
+            zai::mapping::decode(&data, &pool, received_at)?
+        }
+        ProviderId::Minimax => {
+            let envelope =
+                offline_shape::<minimax::wire::RemainsEnvelope>(document, "MiniMax plan")?;
+            minimax::mapping::decode(envelope.buckets(), &pool, received_at)?
+        }
+        ProviderId::Kimi => {
+            let envelope = offline_shape::<kimi::wire::UsageEnvelope>(document, "Kimi usage")?;
+            kimi::mapping::decode(&envelope, &pool, received_at)?
+        }
         ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {
                 detail: "this build has no offline decoder for that provider".to_owned(),
@@ -126,6 +140,21 @@ pub fn decode_offline(
         }
     };
     Ok(OfflineReading::from_decoded(decoded))
+}
+
+/// Reads a captured payload as one provider's wire shape.
+fn offline_shape<T: serde::de::DeserializeOwned>(
+    document: serde_json::Value,
+    name: &str,
+) -> Result<T, ProviderError> {
+    serde_json::from_value(document).map_err(|_| unsupported(name))
+}
+
+/// The failure for a payload that is not the named provider's shape.
+fn unsupported(name: &str) -> ProviderError {
+    ProviderError::UnsupportedSchema {
+        detail: format!("the payload did not match the supported {name} shape"),
+    }
 }
 
 #[cfg(test)]

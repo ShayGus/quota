@@ -21,6 +21,9 @@ an automated test proves from what only a real login can prove:
 | Claude      | ASSUMED            | ASSUMED         | Not performed           |
 | OpenCode Go | ASSUMED            | ASSUMED         | Not performed           |
 | OpenRouter  | DOCUMENTED         | DOCUMENTED      | See the pull request    |
+| Z.ai        | ASSUMED            | ASSUMED         | Not performed           |
+| MiniMax     | ASSUMED            | ASSUMED         | Not performed           |
+| Kimi        | ASSUMED            | ASSUMED         | Not performed           |
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -186,6 +189,15 @@ credential: there is no OpenRouter tool on the computer to read a sign-in from.
   shown.
 - Cadence: a fixed interval with a 300-second minimum.
 
+## Z.ai, MiniMax and Kimi
+
+Three more providers signed in with a pasted key, through the same `keyed::KeyedSource` as
+OpenRouter: the key comes from the system credential store on every read, and its
+fingerprint (`decode::fingerprint`) is the connection's profile and pool seed. Kimi can
+also read the Kimi CLI's own sign-in (`kimi::cli`), which it never refreshes; its
+connection carries the profile `kimi-cli`. Endpoints, fields and window mapping are in
+[the provider reference](../../../docs/providers.md#zai-glm-coding-plan).
+
 ## Fixture
 
 A deterministic local provider for tests and developer runs. It performs no I/O at all:
@@ -208,7 +220,7 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production(secrets)` holds the four real adapters and the credential
+`ProviderRegistry::production(secrets)` holds the seven real adapters and the credential
 store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
 that refuses every operation when there is none);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.

@@ -14,6 +14,9 @@ const LABELS: Record<ProviderId, string> = {
   claude: "Claude",
   open_code_go: "OpenCode Go",
   openrouter: "OpenRouter",
+  zai: "Z.ai",
+  minimax: "MiniMax",
+  kimi: "Kimi",
   fixture: "Fixture",
 };
 

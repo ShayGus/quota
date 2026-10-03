@@ -96,6 +96,44 @@ pub(crate) fn reset_instant(value: &Numberish) -> Option<DateTime<Utc>> {
     }
 }
 
+/// Reads a reset instant written as epoch seconds or epoch milliseconds,
+/// telling them apart by size as the sources that mix them require.
+pub(crate) fn reset_epoch(value: &Numberish) -> Option<DateTime<Utc>> {
+    let whole = value.whole()?;
+    if whole <= 0 {
+        return None;
+    }
+    if whole > 100_000_000_000 {
+        return DateTime::from_timestamp_millis(whole);
+    }
+    epoch_instant(whole)
+}
+
+/// A count against a positive allowance, in its unit, or `None` when the
+/// source did not give a usable allowance.
+///
+/// A missing used or remaining count is derived from the other, and a count
+/// above the allowance is kept, so overspend stays visible.
+pub(crate) fn counted(
+    unit: quota_domain::quota::units::QuotaUnit,
+    used: Option<f64>,
+    remaining: Option<f64>,
+    limit: Option<f64>,
+) -> Option<Measurement> {
+    let limit = limit.filter(|limit| limit.is_finite() && *limit > 0.0)?;
+    let used = used.or_else(|| remaining.map(|remaining| limit - remaining))?;
+    let remaining = remaining.unwrap_or(limit - used);
+    quota_domain::quota::measurement::QuantityMeasurement::with_limit(
+        unit,
+        DecimalPrecision::WHOLE,
+        used,
+        remaining,
+        limit,
+    )
+    .ok()
+    .map(Measurement::Quantity)
+}
+
 /// Converts epoch seconds into an instant, or `None` when out of range.
 fn epoch_instant(seconds: i64) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp(seconds, 0)

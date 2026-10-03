@@ -20,21 +20,13 @@ use quota_core::ports::{
 use quota_domain::account::{
     AccountCardinality, ConnectionState, CredentialOwnership, VerifiedIdentity,
 };
-use quota_domain::polling::{FixedIntervalPolicy, PollingStrategy, ProviderPollingPolicy};
+use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::SourceKind;
 
 use crate::decode;
-use crate::http::{GetRequest, HttpReply, ProviderHttp, classify_status};
-
-/// The shortest interval this adapter permits between reads, in seconds.
-const MINIMUM_SECONDS: u32 = 300;
-
-/// The interval used during battery saver or prolonged idle, in seconds.
-const BATTERY_SAVER_SECONDS: u32 = 900;
-
-/// The remote request deadline, in seconds.
-const REQUEST_TIMEOUT_SECONDS: u32 = 10;
+use crate::http::HttpReply;
+use crate::keyed::{self, KeyedSource};
 
 /// The key that made the request: its label and its spend limit.
 const KEY_URL: &str = "https://openrouter.ai/api/v1/key";
@@ -45,35 +37,18 @@ const CREDITS_URL: &str = "https://openrouter.ai/api/v1/credits";
 /// The adapter for `OpenRouter` credits and key limits.
 #[derive(Debug)]
 pub(crate) struct OpenRouterAdapter {
-    http: Arc<ProviderHttp>,
-    secrets: Arc<dyn SecretStore>,
+    source: KeyedSource,
 }
 
 impl OpenRouterAdapter {
     /// Builds the adapter over the store its keys live in.
     pub(crate) fn new(secrets: Arc<dyn SecretStore>) -> Result<Self, ProviderError> {
         Ok(Self {
-            http: Arc::new(ProviderHttp::new()?),
-            secrets,
+            source: KeyedSource::new(secrets)?,
         })
     }
 
-    /// The key stored for one connection.
-    async fn stored_key(&self, binding: &ConnectionBinding) -> Result<Secret, ProviderError> {
-        let secrets = Arc::clone(&self.secrets);
-        let connection = binding.connection_id.clone();
-        tokio::task::spawn_blocking(move || secrets.read(&connection))
-            .await
-            .map_err(|_| ProviderError::Transient {
-                detail: "the credential store did not answer".to_owned(),
-            })?
-            .map_err(|_| ProviderError::Transient {
-                detail: "the credential store is unavailable".to_owned(),
-            })?
-            .ok_or(ProviderError::Authentication)
-    }
-
-    /// One authorized GET, classified.
+    /// One GET authorized with the key as a bearer token.
     async fn get(
         &self,
         url: &str,
@@ -85,18 +60,7 @@ impl OpenRouterAdapter {
             ("Authorization", authorization.as_str()),
             ("Accept", "application/json"),
         ];
-        let reply = self
-            .http
-            .get(GetRequest {
-                url,
-                headers: &headers,
-                deadline: context.deadline,
-            })
-            .await?;
-        match classify_status(reply.status, reply.retry_after) {
-            Some(failure) => Err(failure),
-            None => Ok(reply),
-        }
+        self.source.get(url, &headers, context).await
     }
 
     /// The key's details, which also verify that the key works.
@@ -143,11 +107,11 @@ impl OpenRouterAdapter {
         context: ReadContext,
         key: &Secret,
     ) -> Result<FetchOutcome, ProviderError> {
-        decode::ensure_binding(binding, ProviderId::Openrouter, None, None)?;
+        let profile = keyed::check_binding(binding, ProviderId::Openrouter, key)?;
         let data = self.key_data(key, &context).await?;
         let credits = self.credits(key, &context).await?;
         let label = identity_label(&data);
-        let pool = decode::pool_id(ProviderId::Openrouter, &label);
+        let pool = decode::pool_id(ProviderId::Openrouter, &profile);
         let decoded = mapping::decode(&data, credits.as_ref(), &pool, Utc::now())?;
         Ok(decoded.into_outcome(identity(label, &data)))
     }
@@ -185,20 +149,7 @@ impl ProviderAdapter for OpenRouterAdapter {
     }
 
     fn policy(&self) -> ProviderPollingPolicy {
-        ProviderPollingPolicy {
-            provider_id: ProviderId::Openrouter,
-            strategy: PollingStrategy::FixedInterval(FixedIntervalPolicy {
-                visible_seconds: MINIMUM_SECONDS,
-                background_seconds: MINIMUM_SECONDS,
-                battery_saver_seconds: BATTERY_SAVER_SECONDS,
-                minimum_seconds: MINIMUM_SECONDS,
-            }),
-            request_timeout_seconds: REQUEST_TIMEOUT_SECONDS,
-            helper_timeout_seconds: 0,
-            backoff_minutes: quota_domain::polling::DEFAULT_BACKOFF_MINUTES.to_vec(),
-            max_concurrent_remote_reads: 1,
-            version: 1,
-        }
+        keyed::policy(ProviderId::Openrouter)
     }
 
     fn discover_accounts(
@@ -215,7 +166,7 @@ impl ProviderAdapter for OpenRouterAdapter {
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
         let binding = binding.clone();
         Box::pin(async move {
-            let key = self.stored_key(&binding).await?;
+            let key = self.source.stored_key(&binding).await?;
             self.read(&binding, context, &key).await
         })
     }
@@ -225,20 +176,20 @@ impl ProviderAdapter for OpenRouterAdapter {
         credential: &'a Secret,
     ) -> ProviderFuture<'a, Result<Vec<DiscoveredAccount>, ProviderError>> {
         Box::pin(async move {
-            let context = ReadContext {
-                attempt_id: quota_domain::ids::ConnectionAttemptId::generate(),
-                deadline: None,
-            };
-            let data = self.key_data(credential, &context).await?;
+            let data = self
+                .key_data(credential, &keyed::verification_context())
+                .await?;
             let label = identity_label(&data);
+            let profile = keyed::profile(credential);
             Ok(vec![DiscoveredAccount {
                 // The key is the account Quota reads; OpenRouter reports no
-                // account identifier for it.
+                // account identifier for it, so the key's fingerprint tells
+                // one connected key from another.
                 principal_id: None,
                 workspace_id: None,
                 entitlement_id: None,
-                profile_label: None,
-                pool_id: decode::pool_id(ProviderId::Openrouter, &label),
+                pool_id: decode::pool_id(ProviderId::Openrouter, &profile),
+                profile_label: Some(profile),
                 identity: identity(label, &data),
                 cardinality: AccountCardinality::Independent,
                 credential_ownership: CredentialOwnership::AppOwned,
@@ -258,15 +209,8 @@ impl ProviderAdapter for OpenRouterAdapter {
     }
 }
 
-/// What this adapter declares, also used before the adapter is built.
+/// What this adapter declares.
 #[must_use]
 pub(crate) const fn capabilities() -> ProviderCapabilities {
-    ProviderCapabilities {
-        provider_id: ProviderId::Openrouter,
-        cardinality: AccountCardinality::Independent,
-        supports_app_owned_authorization: true,
-        supports_external_profile: false,
-        reports_monthly_window: true,
-        minimum_interval_seconds: MINIMUM_SECONDS,
-    }
+    keyed::capabilities(ProviderId::Openrouter, false, true)
 }

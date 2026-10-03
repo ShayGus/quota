@@ -72,7 +72,9 @@ export function ConnectionWizard({
   // A pasted API key, held only until the host has it.
   const [apiKey, setApiKey] = useState("");
   const signIn = provider === null ? null : SIGN_IN[provider];
-  const needsKey = signIn?.kind === "api_key";
+  const takesKey = signIn?.kind === "api_key";
+  // A provider whose own CLI can sign it in takes a key, but does not need one.
+  const needsKey = takesKey && signIn.cli === undefined;
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -147,7 +149,7 @@ export function ConnectionWizard({
         provider_id: provider,
         nickname: nickname.trim() || DEFAULT_NICKNAME,
         profile_label: null,
-        credential: needsKey ? apiKey.trim() : null,
+        credential: takesKey && apiKey.trim() !== "" ? apiKey.trim() : null,
       });
       if (!mounted.current) {
         if (accepted !== null) await actions.cancelConnection(accepted);
@@ -218,7 +220,7 @@ export function ConnectionWizard({
         ))}
         <div className="note">
           Codex, Claude and OpenCode Go use the sign-in their own tools keep on this
-          computer. OpenRouter takes an API key, which Quota keeps in{" "}
+          computer. The others take an API key, which Quota keeps in{" "}
           {credentialStoreName()}. Quota never asks for a password.
         </div>
       </>
@@ -311,7 +313,7 @@ export function ConnectionWizard({
             <span className="provider-copy">
               <span className="provider-name">{providerLabel(provider)}</span>
               <span className="provider-meta">
-                {needsKey ? "API key" : "Existing local sign-in"}
+                {takesKey ? "API key" : "Existing local sign-in"}
               </span>
             </span>
           </div>
@@ -320,6 +322,7 @@ export function ConnectionWizard({
               value={apiKey}
               placeholder={signIn.placeholder}
               providerName={providerLabel(provider)}
+              cli={signIn.cli}
               disabled={busy}
               onChange={setApiKey}
             />
@@ -416,7 +419,7 @@ export function ConnectionWizard({
           <Icon name="arrow-left" />
           Cancel
         </button>
-        <span className="badge">{needsKey ? "API KEY" : "LOCAL SIGN-IN"}</span>
+        <span className="badge">{takesKey ? "API KEY" : "LOCAL SIGN-IN"}</span>
       </div>
       <div className="wizard">
         {steps}
@@ -456,12 +459,14 @@ function ApiKeyField({
   value,
   placeholder,
   providerName,
+  cli,
   disabled,
   onChange,
 }: {
   readonly value: string;
   readonly placeholder: string;
   readonly providerName: string;
+  readonly cli: { readonly name: string; readonly signIn: string } | undefined;
   readonly disabled: boolean;
   readonly onChange: (value: string) => void;
 }): JSX.Element {
@@ -485,8 +490,11 @@ function ApiKeyField({
         }}
       />
       <div className="form-hint" id={hintId}>
-        Quota keeps it in {credentialStoreName()} and sends it only to {providerName}, to
-        read your credits and the key&apos;s limit. It never submits a request to a model.
+        {cli === undefined
+          ? ""
+          : `Or leave it empty to use the sign-in the ${cli.name} keeps on this computer (${cli.signIn}). `}
+        Quota keeps a key in {credentialStoreName()} and sends it only to {providerName},
+        to read your quota. It never submits a request to a model.
       </div>
     </div>
   );
