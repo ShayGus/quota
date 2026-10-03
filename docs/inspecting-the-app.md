@@ -195,7 +195,7 @@ Wayland fallback asks the XDG desktop portal, and WSLg runs no portal. Publishin
 stands in for the window manager:
 
 ```bash
-xwininfo -root -tree | grep '"Quota"'
+xwininfo -root -tree | grep -E '"Quota Dev( settings)?"'
 docs/publish-x11-client-list.py 0x600010
 ```
 
@@ -206,8 +206,8 @@ change every launch.
 
 Pass the window ids to capture; both can be published together. The inspection plugin
 disables application-name matching and resolves the requested window label to its distinct
-title: `Quota` for `overview`, and `Quota settings` for `settings`. Show the requested
-window before capturing it.
+title: `Quota Dev` for `overview`, and `Quota Dev settings` for `settings`. Show the
+requested window before capturing it.
 
 To check window selection, show settings and publish both window ids. Request one
 `take_screenshot` with `window_label: "overview"` and another with
