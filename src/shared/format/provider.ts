@@ -17,6 +17,8 @@ const LABELS: Record<ProviderId, string> = {
   zai: "Z.ai",
   minimax: "MiniMax",
   kimi: "Kimi",
+  grok: "Grok",
+  muse_code: "Muse Code",
   fixture: "Fixture",
 };
 

@@ -83,6 +83,8 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::Zai => Some("https://z.ai/manage-apikey/subscription"),
         ProviderId::Minimax => Some("https://platform.minimax.io/user-center/payment/token-plan"),
         ProviderId::Kimi => Some("https://www.kimi.com/code/console"),
+        ProviderId::Grok => Some("https://grok.com/?_s=usage"),
+        ProviderId::MuseCode => Some("https://www.meta.ai/muse-code"),
         ProviderId::Fixture => None,
     }
 }

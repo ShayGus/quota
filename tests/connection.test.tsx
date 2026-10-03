@@ -456,6 +456,54 @@ describe("Provider → Connect → Verify", () => {
     );
   });
 
+  it("signs Grok in through the browser and shows the code to enter", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Grok/ }));
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with browser" })),
+    );
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_id: "grok",
+        browser_sign_in: true,
+        credential: null,
+      }),
+    );
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 2,
+        progress: {
+          kind: "awaiting_user",
+          context: {
+            sign_in: {
+              user_code: "WDJB-MJHT",
+              verification_uri: "https://accounts.x.ai/device",
+            },
+          },
+        },
+      });
+    });
+    expect(screen.getByText("WDJB-MJHT")).toBeTruthy();
+    expect(screen.getByText(/https:\/\/accounts\.x\.ai\/device/)).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Waiting for the browser…" }),
+    ).toHaveProperty("disabled", true);
+  });
+
+  it("can use the Grok CLI's sign-in instead of the browser", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Grok/ }));
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Use the Grok CLI sign-in" })),
+    );
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "grok", browser_sign_in: false }),
+    );
+  });
+
   it("needs a key for Z.ai, which has no tool of its own", () => {
     render(<Wizard actions={settingsActions()} onDone={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Z\.ai/ }));

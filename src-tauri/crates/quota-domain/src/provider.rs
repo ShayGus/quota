@@ -29,6 +29,10 @@ pub enum ProviderId {
     Minimax,
     /// Kimi for Coding, signed in with an API key or the Kimi CLI's sign-in.
     Kimi,
+    /// `SuperGrok`, signed in through the browser or the Grok CLI.
+    Grok,
+    /// Meta's Muse Code, signed in through the browser or the Muse CLI.
+    MuseCode,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -39,7 +43,7 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 8] = [
+    pub const ALL: [Self; 10] = [
         Self::Codex,
         Self::Claude,
         Self::OpenCodeGo,
@@ -47,6 +51,8 @@ impl ProviderId {
         Self::Zai,
         Self::Minimax,
         Self::Kimi,
+        Self::Grok,
+        Self::MuseCode,
         Self::Fixture,
     ];
 
@@ -72,6 +78,8 @@ impl ProviderId {
             Self::Zai => "zai",
             Self::Minimax => "minimax",
             Self::Kimi => "kimi",
+            Self::Grok => "grok",
+            Self::MuseCode => "muse_code",
             Self::Fixture => "fixture",
         }
     }

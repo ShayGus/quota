@@ -241,6 +241,23 @@ pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
         let _ = (binding, context, credential);
         Box::pin(async { Err(ProviderError::Authorization) })
     }
+
+    /// Starts a browser sign-in with a code, for an adapter that offers one.
+    /// Any other adapter refuses.
+    fn begin_device_sign_in(
+        &self,
+    ) -> ProviderFuture<'_, Result<super::DeviceAuthorization, ProviderError>> {
+        Box::pin(async { Err(ProviderError::Authorization) })
+    }
+
+    /// Asks once whether the person has finished a started browser sign-in.
+    fn poll_device_sign_in<'a>(
+        &'a self,
+        authorization: &'a super::DeviceAuthorization,
+    ) -> ProviderFuture<'a, Result<super::DevicePoll, ProviderError>> {
+        let _ = authorization;
+        Box::pin(async { Err(ProviderError::Authorization) })
+    }
 }
 
 #[cfg(test)]

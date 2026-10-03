@@ -36,7 +36,11 @@ pub enum ConnectionProgress {
     /// The attempt is running.
     Started,
     /// The provider asked the user to do something.
-    AwaitingUser,
+    AwaitingUser {
+        /// The code to enter on the provider's sign-in page, when the person
+        /// is signing in through the browser.
+        sign_in: Option<BrowserSignIn>,
+    },
     /// The attempt verified an identity and is waiting for a decision.
     ///
     /// Nothing is stored and no monitoring starts until the person confirms.
@@ -56,6 +60,16 @@ pub enum ConnectionProgress {
     },
     /// The attempt was cancelled.
     Cancelled,
+}
+
+/// A browser sign-in waiting for the person: the page Quota opened, and the
+/// code to enter there.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct BrowserSignIn {
+    /// The code to enter.
+    pub user_code: String,
+    /// The provider's sign-in page.
+    pub verification_uri: String,
 }
 
 /// Progress of one connection attempt.

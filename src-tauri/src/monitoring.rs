@@ -41,6 +41,7 @@ struct AttemptHandle {
 mod confirm;
 mod connection;
 pub(crate) mod credentials;
+mod device;
 mod policy;
 mod queue;
 mod read_path;

@@ -320,3 +320,17 @@
 .connection-box .api-key {
   margin-top: 12px;
 }
+
+/* The code a browser sign-in asks the person to enter on the provider's page. */
+.sign-in-code {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.sign-in-code strong {
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  font-size: 26px;
+  letter-spacing: 3px;
+  user-select: all;
+}

@@ -208,6 +208,8 @@ fn provider_name(provider: ProviderId) -> &'static str {
         ProviderId::Zai => "Z.ai",
         ProviderId::Minimax => "MiniMax",
         ProviderId::Kimi => "Kimi",
+        ProviderId::Grok => "Grok",
+        ProviderId::MuseCode => "Muse Code",
         ProviderId::Fixture => "Fixture",
     }
 }

@@ -63,6 +63,11 @@ pub struct BeginConnectionRequest {
     /// in the system credential store.
     #[serde(default)]
     pub credential: Option<PastedCredential>,
+    /// Whether to sign in through the provider's page in the browser, for a
+    /// provider Quota signs in to that way. The token it grants is then held
+    /// and stored like a pasted credential.
+    #[serde(default)]
+    pub browser_sign_in: bool,
 }
 
 /// A credential the person pasted, such as an API key.
