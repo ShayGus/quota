@@ -117,7 +117,7 @@ export function Select<T extends string>({
 }
 
 /**
- * The nickname input. With Hide account labels on, a nickname is an account
+ * The nickname input. With Hide account names on, a nickname is an account
  * label like any other, so the field masks what is typed and says why; the
  * value is still saved as typed.
  */
@@ -135,7 +135,7 @@ export function NicknameField({
   readonly hint?: string;
 }): JSX.Element {
   const hintId = useId();
-  const note = hidden ? "Hidden while Hide account labels is on." : hint;
+  const note = hidden ? "Hidden while Hide account names is on." : hint;
   return (
     <>
       <label className="field-label" htmlFor={id}>
