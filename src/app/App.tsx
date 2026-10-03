@@ -11,6 +11,7 @@ import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import type { OverviewFilter } from "../features/overview/OverviewToolbar";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
+import { Widget } from "../features/widget/Widget";
 import type { AccountId, QuotaWindowId } from "../generated/bindings";
 import {
   describeCommandError,
@@ -57,6 +58,9 @@ const settingsActions: SettingsActions = {
   },
   setAlwaysOnTop: (alwaysOnTop) => {
     launch(actions.setAlwaysOnTop(alwaysOnTop));
+  },
+  setWidgetVisible: (visible) => {
+    launch(actions.setWidgetVisible(visible));
   },
   setOverviewMode: (mode) => {
     launch(actions.setOverviewMode(mode));
@@ -126,7 +130,7 @@ export function App(): JSX.Element {
   );
 }
 
-/** The window: the settings window, or the popover. */
+/** The window: the settings window, the mini widget, or the popover. */
 function QuotaWindow(): JSX.Element {
   const state = useRendererState();
   useTheme(state);
@@ -135,6 +139,14 @@ function QuotaWindow(): JSX.Element {
   const isSettingsWindow = window.location.hash.startsWith("#/settings");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   useFailureToast(state.failure, setToast);
+  // The widget window is opened with its own hash and only reads.
+  if (window.location.hash.startsWith("#/widget")) {
+    return (
+      <FeatureBoundary surface="widget">
+        <Widget state={state} />
+      </FeatureBoundary>
+    );
+  }
   if (isSettingsWindow) {
     return (
       <div className="window settings-window">

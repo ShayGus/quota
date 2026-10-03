@@ -39,6 +39,7 @@ pub fn publish_preferences(
     });
     emit_preferences(app, &event, "overview", "overview_preferences_event_failed");
     emit_preferences(app, &event, "settings", "settings_preferences_event_failed");
+    emit_preferences(app, &event, "widget", "widget_preferences_event_failed");
 }
 
 fn emit_preferences(app: &tauri::AppHandle, event: &PreferencesChanged, label: &str, code: &str) {

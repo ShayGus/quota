@@ -1,6 +1,6 @@
 //! What closing or leaving a window does.
 //!
-//! Neither window is ever destroyed: closing hides it, so the tray can bring it
+//! No window is ever destroyed: closing hides it, so the tray can bring it
 //! back. Closing settings on its add-account page also leaves that page, and a
 //! tray popover that loses focus hides, as a popover does.
 
@@ -13,9 +13,9 @@ use super::window::{publish_state, set_visible};
 /// wizard unmounts and discards a verified account that was never confirmed.
 const LEAVE_ADD_ACCOUNT: &str = "if (window.location.hash.startsWith('#/settings/connect')) { window.location.hash = '#/settings/accounts/closed'; }";
 
-/// Keeps both configured windows alive when the user closes them.
+/// Keeps every configured window alive when the user closes it.
 pub fn install_close_handlers(app: &AppHandle) {
-    for label in ["overview", "settings"] {
+    for label in ["overview", "settings", super::widget::LABEL] {
         let Some(native) = app.get_webview_window(label) else {
             continue;
         };
@@ -34,8 +34,13 @@ pub fn install_close_handlers(app: &AppHandle) {
     }
 }
 
-/// Hides a window instead of closing it.
+/// Hides a window instead of closing it. A closed widget is also saved off,
+/// so it stays closed at the next launch.
 fn close(app: &AppHandle, native: &WebviewWindow, label: &'static str) {
+    if label == super::widget::LABEL {
+        super::widget::closed(app);
+        return;
+    }
     if let Err(error) = native.hide() {
         tracing::warn!(%error, %label, "the window could not be hidden on close");
     }

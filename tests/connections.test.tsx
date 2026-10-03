@@ -22,6 +22,7 @@ function settingsActions(): SettingsActions {
     setMonitoring: vi.fn(),
     savePollingPreferences: vi.fn(),
     setAlwaysOnTop: vi.fn(),
+    setWidgetVisible: vi.fn(),
     setOverviewMode: vi.fn(),
     setAccountEnabled: vi.fn(),
     renameAccount: vi.fn(),

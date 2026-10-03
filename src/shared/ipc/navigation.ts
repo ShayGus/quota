@@ -17,7 +17,7 @@ import type { AccountId, QuotaWindowId } from "../../generated/bindings";
 import { setFailure } from "../state/store";
 
 /** The event the popover listens for. */
-const NAVIGATE_EVENT = "quota-popover-navigate";
+export const NAVIGATE_EVENT = "quota-popover-navigate";
 
 /** A popover surface another window may ask for. */
 export type PopoverTarget =

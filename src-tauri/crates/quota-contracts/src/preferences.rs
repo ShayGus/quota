@@ -57,6 +57,8 @@ pub struct Preferences {
     pub launch_behavior: LaunchBehavior,
     /// Whether animations are suppressed.
     pub reduce_motion: bool,
+    /// Whether the mini widget is on screen. Off by default.
+    pub show_widget: bool,
     /// Notification behaviour.
     pub notifications: NotificationPolicy,
     /// Retention and export behaviour.

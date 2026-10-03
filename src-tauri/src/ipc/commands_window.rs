@@ -138,6 +138,19 @@ pub async fn fit_overview_height(
     Ok(window_state_response(confirmed))
 }
 
+/// Shows or hides the mini widget and saves the choice.
+///
+/// The native window is confirmed first, so a widget the system refused to
+/// show is never saved as on. The tray item follows the same confirmed state.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_widget_visible(
+    state: State<'_, AppState>,
+    visible: bool,
+) -> Result<quota_contracts::preferences::Preferences, CommandError> {
+    crate::platform::widget::apply(&state, visible).await
+}
+
 /// Opens one allowlisted provider usage page in the external browser.
 ///
 /// The renderer cannot supply a URL. It names a provider, and the host owns the

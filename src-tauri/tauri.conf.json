@@ -38,6 +38,24 @@
         "visible": false,
         "skipTaskbar": true,
         "dragDropEnabled": false
+      },
+      {
+        "label": "widget",
+        "title": "Quota widget",
+        "url": "index.html#/widget",
+        "width": 316,
+        "height": 172,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "focus": false,
+        "skipTaskbar": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {
@@ -49,7 +67,7 @@
         "enable": false,
         "scope": []
       },
-      "capabilities": ["overview-capability", "settings-capability"],
+      "capabilities": ["overview-capability", "settings-capability", "widget-capability"],
       "pattern": {
         "use": "brownfield"
       }

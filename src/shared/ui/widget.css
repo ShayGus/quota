@@ -1,0 +1,394 @@
+/**
+ * The mini widget, from the approved canvas: the ring strip and the mini cards.
+ *
+ * A period keeps one colour in both looks and both themes' variants: teal for
+ * the 5-hour window, blue for the week, violet for the month. Colours never
+ * change with the reading; a low number is amber, and it is always written.
+ */
+:root {
+  --period-session: #0f8f75;
+  --period-daily: #c4406e;
+  --period-weekly: #2f6fd6;
+  --period-monthly: #8a4fd8;
+  --period-custom: var(--muted);
+}
+
+:root[data-theme="dark"] {
+  --period-session: #3fd0b0;
+  --period-daily: #ff8fb1;
+  --period-weekly: #5b9dff;
+  --period-monthly: #c58aff;
+}
+
+.period-session {
+  --period: var(--period-session);
+}
+
+.period-daily {
+  --period: var(--period-daily);
+}
+
+.period-weekly {
+  --period: var(--period-weekly);
+}
+
+.period-monthly {
+  --period: var(--period-monthly);
+}
+
+.period-custom {
+  --period: var(--period-custom);
+}
+
+/* The window is transparent, so only the rounded widget is drawn. */
+:root.widget-window,
+:root.widget-window body {
+  background: transparent;
+  overflow: hidden;
+}
+
+:root.widget-window #root {
+  height: auto;
+}
+
+.widget {
+  width: 316px;
+  user-select: none;
+  cursor: default;
+}
+
+.widget-strip,
+.widget-cards,
+.widget-empty {
+  position: relative;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface);
+  color: var(--text);
+  overflow: hidden;
+}
+
+.widget button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.widget button:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+
+/* Ring strip */
+
+.widget-strip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.widget-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px;
+}
+
+.widget-tile {
+  width: 56px;
+  height: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.widget-tile.pointing {
+  background: var(--surface-3);
+}
+
+.widget-tile-rings {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+}
+
+.widget-tile-rings .widget-rings {
+  position: absolute;
+  inset: 0;
+}
+
+.widget-tile-rings .provider-icon {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.widget-tile-rings.logo-1 .provider-icon {
+  width: 22px;
+  height: 22px;
+  font-size: 18px;
+}
+
+.widget-tile-rings.logo-2 .provider-icon {
+  width: 17px;
+  height: 17px;
+  font-size: 14px;
+}
+
+.widget-tile-rings.logo-3 .provider-icon {
+  width: 13px;
+  height: 13px;
+  font-size: 11px;
+}
+
+.widget-tile-rings .provider-icon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.widget-ring-track {
+  fill: none;
+  stroke: var(--track);
+}
+
+.widget-ring-arc {
+  fill: none;
+  stroke: var(--period);
+  stroke-linecap: round;
+}
+
+.widget-ring-money {
+  fill: none;
+  stroke: var(--subtle);
+  stroke-dasharray: 2 3;
+}
+
+.widget-headline {
+  display: flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 56px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget-tag {
+  font-size: 10px;
+  color: var(--subtle);
+}
+
+.widget-value {
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.widget-value.low {
+  color: var(--warn);
+}
+
+.widget-key {
+  height: 14px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 10px;
+  color: var(--subtle);
+}
+
+.widget-key > span {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.widget-key-ring {
+  width: 9px;
+  height: 9px;
+  border: 2px solid var(--period);
+  border-radius: 50%;
+}
+
+.widget-breakdown {
+  width: 100%;
+  display: grid;
+  grid-auto-rows: 13px;
+  align-content: start;
+  gap: 3px;
+  padding: 6px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+
+.widget-breakdown.overlay {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  width: auto;
+  box-shadow: var(--shadow);
+}
+
+.widget-breakdown-name {
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 13px;
+}
+
+.widget-breakdown-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: 7px;
+  font-size: 11px;
+  line-height: 13px;
+}
+
+.widget-breakdown-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.widget-breakdown-reset {
+  font-size: 10px;
+  color: var(--subtle);
+  white-space: nowrap;
+}
+
+.widget-breakdown-row .widget-value {
+  min-width: 32px;
+  text-align: right;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+.widget-ring-map circle {
+  fill: none;
+  stroke: var(--line);
+  stroke-width: 1.4;
+}
+
+.widget-ring-map circle.lit {
+  stroke: var(--period);
+}
+
+/* Mini cards */
+
+.widget-cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: 86px;
+  gap: 6px;
+}
+
+.widget-card {
+  display: grid;
+  grid-template-rows: 16px repeat(3, 14px);
+  row-gap: 4px;
+  align-content: start;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  text-align: left;
+}
+
+.widget-card.wide {
+  grid-column: 1 / -1;
+}
+
+.widget-card-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.widget-card-title .provider-icon {
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--surface-3);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.widget-card-title .provider-icon svg {
+  width: 11px;
+  height: 11px;
+}
+
+.widget-card-name {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.widget-card-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 5px;
+  height: 14px;
+}
+
+.widget-card-row .widget-tag {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.widget-card-row .widget-value {
+  font-size: 10px;
+  text-align: right;
+}
+
+.widget-card-row .widget-value.amount {
+  grid-column: 2 / 4;
+}
+
+.widget-bar {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--track);
+  overflow: hidden;
+}
+
+.widget-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--period);
+}
+
+/* No accounts yet */
+
+.widget-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 14px 8px;
+  font-size: 12px;
+}
+
+.widget-empty span {
+  color: var(--muted);
+}

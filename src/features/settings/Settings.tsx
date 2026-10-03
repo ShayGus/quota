@@ -49,6 +49,7 @@ export interface SettingsActions {
   readonly savePollingPreferences: (policy: ProviderPollingPolicy) => void;
   readonly savePreferences: (next: Preferences) => void;
   readonly setAlwaysOnTop: (alwaysOnTop: boolean) => void;
+  readonly setWidgetVisible: (visible: boolean) => void;
   readonly setOverviewMode: (mode: Preferences["overview_mode"]) => void;
   readonly setAccountEnabled: (accountId: AccountId, enabled: boolean) => void;
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;

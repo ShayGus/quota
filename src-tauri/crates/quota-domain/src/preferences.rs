@@ -210,6 +210,12 @@ pub struct PresentationPreferences {
     pub privacy_alias_mode: PrivacyAliasMode,
     /// Whether animations are suppressed.
     pub reduce_motion: bool,
+    /// Whether the mini widget is on screen.
+    ///
+    /// Off by default, and a preference file written before the widget existed
+    /// reads as off, so only an explicit choice ever shows it.
+    #[serde(default)]
+    pub show_widget: bool,
 }
 
 impl Default for PresentationPreferences {
@@ -224,6 +230,7 @@ impl Default for PresentationPreferences {
             launch_behavior: LaunchBehavior::default(),
             privacy_alias_mode: PrivacyAliasMode::default(),
             reduce_motion: false,
+            show_widget: false,
         }
     }
 }
@@ -249,6 +256,14 @@ mod tests {
         let restored: PresentationPreferences = serde_json::from_str(&json).unwrap();
         assert!(!restored.always_on_top);
         assert_eq!(restored, defaults);
+    }
+
+    #[test]
+    fn a_file_from_before_the_widget_reads_with_the_widget_off() {
+        let mut json = serde_json::to_value(PresentationPreferences::default()).unwrap();
+        json.as_object_mut().unwrap().remove("show_widget");
+        let restored: PresentationPreferences = serde_json::from_value(json).unwrap();
+        assert!(!restored.show_widget);
     }
 
     #[test]

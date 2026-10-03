@@ -329,6 +329,8 @@ async fn install_managed_state(
     controller.set_always_on_top(confirmed_topmost);
     controller.set_visible(visible);
     let saved_mode = state.preferences_state.read().await.overview_mode;
+    let show_widget = state.preferences_state.read().await.show_widget;
+    crate::platform::widget::restore(app, show_widget);
     // The saved mode's chrome needs no tray geometry, so it applies now. The
     // anchor reads the tray icon's rectangle from the system; if the icon is
     // not placed yet, the next tray event completes it.

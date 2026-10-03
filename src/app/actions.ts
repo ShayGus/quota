@@ -142,6 +142,13 @@ export const actions = {
     await reportAsync(commands.setOverviewAlwaysOnTop(alwaysOnTop));
   },
   /**
+   * Shows or hides the mini widget. The host confirms the window before it
+   * saves the choice, and the tray's check mark follows.
+   */
+  async setWidgetVisible(visible: boolean): Promise<void> {
+    await reportAsync(commands.setWidgetVisible(visible));
+  },
+  /**
    * Asks the host to fit the popover's height to its content. The host decides
    * the height and position inside the work area; a refusal is reported.
    */

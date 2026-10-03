@@ -2,7 +2,8 @@
 //!
 //! The tray exists in Rust so it survives renderer closure. Closing a window
 //! hides it to the tray; a left click on the icon always opens the app, and the
-//! menu offers Settings, Show App, and Exit. Only Exit ends the process.
+//! menu offers Settings, Show App, the mini widget, and Exit. Only Exit ends
+//! the process.
 
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::provider::ProviderId;
@@ -10,7 +11,7 @@ use quota_domain::quota::QuotaCategory;
 use quota_domain::ranking::{AccountOrder, UnrankedReason};
 use quota_domain::snapshot::{AccountSnapshot, AppSnapshot, MonitoringState};
 
-use tauri::menu::{IconMenuItem, Menu, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
@@ -31,9 +32,12 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     };
     let settings = item("settings", "Settings", MenuIcon::Settings)?;
     let show = item("show", "Show App", MenuIcon::Donut)?;
+    // Checked while the widget is on screen; the saved choice checks it at launch.
+    let widget = CheckMenuItem::with_id(app, "widget", "Mini widget", true, false, None::<&str>)?;
+    app.manage(super::widget::WidgetMenuItem(widget.clone()));
     let exit = item("exit", "Exit", MenuIcon::Power)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&settings, &show, &separator, &exit])?;
+    let menu = Menu::with_items(app, &[&settings, &show, &widget, &separator, &exit])?;
     TrayIconBuilder::with_id("quota")
         .icon(tray_image(false, system_is_dark(app)))
         .tooltip("Quota")
@@ -345,6 +349,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             }
         }
         "show" => activate_from_tray(app),
+        "widget" => super::widget::toggle_from_tray(app),
         "exit" => app.exit(0),
         _ => {}
     }

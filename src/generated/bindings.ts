@@ -90,6 +90,13 @@ export const commands = {
 	 */
 	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
 	/**
+	 *  Shows or hides the mini widget and saves the choice.
+	 * 
+	 *  The native window is confirmed first, so a widget the system refused to
+	 *  show is never saved as on. The tray item follows the same confirmed state.
+	 */
+	setWidgetVisible: (visible: boolean) => typedError<Preferences, CommandError>(__TAURI_INVOKE("set_widget_visible", { visible })),
+	/**
 	 *  Opens one allowlisted provider usage page in the external browser.
 	 * 
 	 *  The renderer cannot supply a URL. It names a provider, and the host owns the
@@ -803,6 +810,8 @@ export type Preferences = {
 	launch_behavior: LaunchBehavior,
 	/**  Whether animations are suppressed. */
 	reduce_motion: boolean,
+	/**  Whether the mini widget is on screen. Off by default. */
+	show_widget: boolean,
 	/**  Notification behaviour. */
 	notifications: NotificationPolicy,
 	/**  Retention and export behaviour. */

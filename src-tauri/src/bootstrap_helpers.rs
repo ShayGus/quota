@@ -27,6 +27,7 @@ pub fn to_presentation(preferences: &Preferences) -> PresentationPreferences {
         launch_behavior: preferences.launch_behavior,
         privacy_alias_mode: preferences.privacy.alias_mode,
         reduce_motion: preferences.reduce_motion,
+        show_widget: preferences.show_widget,
     }
 }
 
@@ -59,6 +60,7 @@ pub fn from_persisted(
         always_on_top: presentation.always_on_top,
         launch_behavior: presentation.launch_behavior,
         reduce_motion: presentation.reduce_motion,
+        show_widget: presentation.show_widget,
         notifications: operational.notifications,
         privacy: quota_contracts::preferences::PrivacyPolicy {
             alias_mode: presentation.privacy_alias_mode,

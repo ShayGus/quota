@@ -9,6 +9,7 @@ pub mod popover_height;
 pub mod settings_window;
 pub mod tray;
 pub mod tray_anchor;
+pub mod widget;
 pub mod window;
 pub mod window_events;
 mod window_transition;
