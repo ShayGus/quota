@@ -19,6 +19,9 @@ use quota_domain::ids::ConnectionId;
 /// `service` is the application identifier the build runs with. A development
 /// build files its entries under its own identifier, so it never reads or
 /// removes the ones the production build owns.
+///
+/// On Linux, call this outside an async runtime; async callers should use
+/// [`system_off_the_runtime`].
 #[must_use]
 pub fn system(service: &str) -> Arc<dyn SecretStore> {
     match SystemSecretStore::open(service) {
@@ -32,10 +35,11 @@ pub fn system(service: &str) -> Arc<dyn SecretStore> {
 /// The Linux Secret Service store connects through a blocking API that drives
 /// a Tokio runtime of its own, so opening it on an async worker panics with
 /// "Cannot start a runtime from within a runtime" and takes the whole backend
-/// down with it. This runs the same open off the caller's runtime. A system
-/// with no store, no session bus, or a locked keyring still comes back as the
-/// store that reports every operation unavailable, and so does a worker that
-/// cannot be joined.
+/// down with it. This runs the same open off the caller's runtime. If opening
+/// fails, for example because there is no store or session bus, it returns a
+/// store that reports every operation unavailable, as does a worker that
+/// cannot be joined. Credential reads, writes, and deletes remain synchronous;
+/// async callers must also run those operations on blocking workers.
 ///
 /// `service` is the application identifier the build runs with, exactly as in
 /// [`system`].
@@ -110,6 +114,11 @@ impl SystemSecretStore {
 #[cfg(target_os = "linux")]
 impl Drop for SystemSecretStore {
     fn drop(&mut self) {
+        // Secret Service destruction can drive its own runtime. Release this
+        // owner's store reference on a thread without a Tokio context, including
+        // startup-error cleanup before managed state retains the registry. The
+        // scope waits for that release; the regression test is
+        // `startup_failure_drops_both_registries_outside_the_runtime`.
         if tokio::runtime::Handle::try_current().is_ok() {
             std::thread::scope(|scope| {
                 scope.spawn(|| drop(self.store.take()));

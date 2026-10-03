@@ -12,6 +12,7 @@ Everything outside these places is the same on every operating system:
 | ---------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | [`src-tauri/src/platform/`](../src-tauri/src/platform/)                                                                                        | Tray, popover window, login item, tray placement, height fit                  |
 | [`src-tauri/crates/quota-providers/src/platform_paths.rs`](../src-tauri/crates/quota-providers/src/platform_paths.rs)                          | The user profile and application-data directories credentials are found under |
+| [`src-tauri/crates/quota-providers/src/secrets.rs`](../src-tauri/crates/quota-providers/src/secrets.rs)                                        | System credential-store selection and Linux destruction outside Tokio         |
 | [`src-tauri/build.rs`](../src-tauri/build.rs), [`src-tauri/crates/quota-persistence/build.rs`](../src-tauri/crates/quota-persistence/build.rs) | The Windows application manifest, on Windows only                             |
 | [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `bundle`                                                                           | Installer formats and icons                                                   |
 
