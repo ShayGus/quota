@@ -15,6 +15,7 @@ pub mod bootstrap;
 pub mod bootstrap_helpers;
 pub mod ipc;
 pub mod platform;
+pub mod provider_catalog;
 pub mod state;
 
 pub use bootstrap::start;

@@ -421,6 +421,56 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.getByRole("alert").textContent).toContain("connection was refused");
     expect(screen.queryByRole("heading", VERIFY)).toBeNull();
   });
+
+  it("signs OpenRouter in with a pasted key, sent once and then forgotten", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^OpenRouter/ }));
+    const connectButton = screen.getByRole("button", { name: "Connect" });
+    const key = screen.getByLabelText("API key");
+    expect(key).toHaveProperty("type", "password");
+    // Nothing to send yet.
+    expect(connectButton).toHaveProperty("disabled", true);
+    fireEvent.change(key, { target: { value: "  sk-or-v1-abc  " } });
+    expect(connectButton).toHaveProperty("disabled", false);
+    await act(() => fireEvent.click(connectButton));
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "openrouter", credential: "sk-or-v1-abc" }),
+    );
+    // The host has the key now, so the field no longer holds it.
+    expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
+  });
+
+  it("never sends a key for a provider read through its own sign-in", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Codex");
+    expect(screen.queryByLabelText("API key")).toBeNull();
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "codex", credential: null }),
+    );
+  });
+
+  it("says how to fix a key OpenRouter refused", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^OpenRouter/ }));
+    fireEvent.change(screen.getByLabelText("API key"), {
+      target: { value: "sk-or-v1-x" },
+    });
+    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 2,
+        progress: {
+          kind: "failed",
+          context: { error: { kind: "reconnect_required" } },
+        },
+      });
+    });
+    expect(screen.getByRole("alert").textContent).toContain("did not accept this key");
+  });
 });
 
 describe("the settings connection route", () => {

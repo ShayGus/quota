@@ -14,7 +14,7 @@ use quota_contracts::RegisteredProvider;
 use quota_contracts::commands::{AccountSelection, RefreshReason, SnapshotResponse};
 use quota_contracts::refs::AccountRef;
 use quota_core::clock::Clock;
-use quota_domain::account::FetchState;
+use quota_domain::account::{CredentialOwnership, FetchState};
 use quota_domain::ids::AccountId;
 use quota_domain::provider::ProviderId;
 use quota_domain::snapshot::{AppSnapshot, PersistenceStatus};
@@ -223,6 +223,15 @@ pub async fn disconnect_account(
     account_ref: AccountRef,
 ) -> Result<(), CommandError> {
     let account_id = account_ref.into_id();
+    // A credential Quota owns for this account goes with it.
+    let owned_credential = state
+        .registry
+        .read()
+        .await
+        .get(&account_id)
+        .map(|entry| &entry.stored.connection)
+        .filter(|connection| connection.credential_ownership == CredentialOwnership::AppOwned)
+        .map(|connection| connection.id.clone());
     {
         let _commit = state.monitor.commit().await;
         state
@@ -239,6 +248,9 @@ pub async fn disconnect_account(
             .remove(&account_id)
             .map(|_| ())
             .map_err(map_core_error)?;
+    }
+    if let Some(connection) = owned_credential {
+        crate::monitoring::credentials::forget(state.monitor.secrets(), connection).await;
     }
     // Removing the last account leaves no worker to publish, so the change is
     // published here or the row stays on screen until the next refresh.

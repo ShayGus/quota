@@ -80,6 +80,24 @@ locally issued identity and must be labelled as unverified. A release may claim 
 support only after one production-approved monthly connector passes acceptance; a fixture
 demonstrates the renderer and proves nothing about integration.
 
+## OpenRouter
+
+| Property                  | Value                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Access method             | `GET https://openrouter.ai/api/v1/key` and `GET https://openrouter.ai/api/v1/credits`, each with `Authorization: Bearer <key>`. Both are documented in OpenRouter's API reference.                                                                                                                                                                                                                                                                       |
+| Identity source           | The key's own `label`, which OpenRouter writes as a masked form of the key, and `is_free_tier` as the plan. The response names no account, so each key is its own connection.                                                                                                                                                                                                                                                                            |
+| Credential path and owner | Quota owns it. The person pastes an API key from openrouter.ai/settings/keys on the add-account page. It is held in memory while the account is verified, written to the system credential store (Windows Credential Manager, the Secret Service, or the macOS Keychain, service `app.quota.monitor`, entry named for the connection) only when the account is added, and deleted on disconnect. It never reaches SQLite, the Store, logs, or snapshots. |
+| Response fields           | `data.limit`, `data.limit_remaining` and `data.limit_reset` (`daily`, `weekly`, `monthly` or `null`) become the key's spend cap; a `null` limit is unlimited. `data.total_credits` less `data.total_usage` is the credit balance. Amounts are US dollars, rounded to the cent.                                                                                                                                                                           |
+| Polling cadence           | 300 s                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
+| Multi-account support     | Yes: each pasted key is an independent connection.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Live verification         | The sign-in flow, the credential store, and a refused key were checked in the running app on Windows; a reading with a real key is listed in the pull request.                                                                                                                                                                                                                                                                                           |
+| Undocumented-schema risk  | Low. Both endpoints are documented. OpenRouter documents the credits endpoint for management keys, so an ordinary key that is refused there still connects, with its key limit only.                                                                                                                                                                                                                                                                     |
+
+OpenRouter is pay as you go, so neither window is included quota: the balance is a credit
+balance and the key limit is a spend cap. An account with no included allowance draws its
+balance and caps on its card, balance first, and they never take part in the
+least-remaining ranking.
+
 ## Fixture
 
 | Property                  | Value                                                                            |
@@ -99,7 +117,7 @@ a default feature set, and `cargo xtask check-release` fails the same way, so a 
 artifact cannot serve fixture data. Automated tests use sanitized recorded schemas and a
 bounded local fake transport; they never require a live paid account.
 
-## Decoder rules common to all four
+## Decoder rules common to every provider
 
 A decoder maps provider fields into domain types and nothing else. It does not decide
 display text, and it does not invent a value. Specifically:

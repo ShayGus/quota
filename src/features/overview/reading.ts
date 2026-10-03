@@ -49,9 +49,16 @@ const MAX_RINGS = 3;
  */
 export function windowLabel(window: QuotaWindow): string {
   const period = periodLabel(window);
-  return isModelAllowance(window)
-    ? `${window.scope.label} ${period.toLowerCase()}`
-    : period;
+  if (isModelAllowance(window)) {
+    return `${window.scope.label} ${period.toLowerCase()}`;
+  }
+  // A balance or a spend cap is never shown under a bare period, which would
+  // read as included quota.
+  const named =
+    window.metric_role !== "included_allowance" &&
+    window.category !== "custom" &&
+    window.scope.label !== "";
+  return named ? `${period} · ${window.scope.label}` : period;
 }
 
 /** Whether a window is an included allowance for one model, such as Fable's. */
@@ -99,6 +106,10 @@ export const ACCOUNT_RESOURCE = "account";
  * model's own allowance (named for its model) while there is room for three.
  * Every other window, such as an extra-spend cap, is an independent limit that
  * the card lists under its own scope name.
+ *
+ * A pay-as-you-go account has no included allowance at all. Its card draws
+ * its balance and spend limits instead, balance first, so it shows what the
+ * account has rather than an empty card.
  */
 export function cardWindows(account: AccountSnapshot): {
   readonly main: readonly QuotaWindow[];
@@ -127,6 +138,13 @@ export function cardWindows(account: AccountSnapshot): {
         main.push(window);
       }
     }
+  }
+  if (included.length === 0) {
+    const ordered = [
+      ...account.windows.filter((window) => window.metric_role === "credit_balance"),
+      ...account.windows.filter((window) => window.metric_role === "extra_spend_cap"),
+    ];
+    main.push(...ordered.slice(0, MAX_RINGS));
   }
   const extra = account.windows.filter((window) => !main.includes(window));
   return { main, extra };

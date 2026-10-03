@@ -243,6 +243,12 @@ export type BeginConnectionRequest = {
 	profile_label: string | null,
 	/**  The user's chosen display name. Presentation only. */
 	nickname: string,
+	/**
+	 *  A credential the person pasted, for a provider Quota signs in to
+	 *  itself. It is held in memory until the account is added, then kept only
+	 *  in the system credential store.
+	 */
+	credential?: PastedCredential | null,
 };
 
 /**  A reported time at which the window's allowance changes. */
@@ -700,6 +706,13 @@ export type OverviewWindowStateChangedPayload = {
 };
 
 /**
+ *  A credential the person pasted, such as an API key.
+ * 
+ *  It never prints its value, so a logged request cannot leak it.
+ */
+export type PastedCredential = string;
+
+/**
  *  A finite percentage of an allowance.
  * 
  *  The stored value is never rounded, clamped, or re-polaritised. Display
@@ -835,6 +848,8 @@ export type ProviderId =
 "claude" | 
 /**  `OpenCode` `Go`, the provider reached through a local `OpenCode` Go agent. */
 "open_code_go" | 
+/**  `OpenRouter` credits and API key spend limits, signed in with an API key. */
+"openrouter" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

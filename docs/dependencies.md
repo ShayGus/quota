@@ -28,6 +28,14 @@ bootstrap. `tauri-plugin-autostart` 2.7.0 and its renderer package
 `@tauri-apps/plugin-autostart` 2.7.0 were added on 2 October 2026 for launch at login; the
 two are pinned to the same release.
 
+`keyring-core` 1.0.0 and one store crate per system were added on 3 October 2026 for the
+credentials Quota owns itself, such as a pasted OpenRouter key:
+`windows-native-keyring-store` 1.1.0 (Credential Manager),
+`zbus-secret-service-keyring-store` 1.0.1 with `rt-tokio-crypto-rust` (the Secret Service,
+pure Rust, no `libdbus`), and `apple-native-keyring-store` 1.0.2 with `keychain`. Each is
+a target-specific dependency of `quota-providers`, so a system compiles only its own
+store.
+
 `libsqlite3-sys` is transitive through `sqlx-sqlite`; the linked engine version must be
 recorded from the shipping artifact at release (spec 13.6), rather than inferred from the
 crate version.

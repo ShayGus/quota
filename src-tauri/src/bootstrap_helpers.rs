@@ -79,6 +79,7 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::Codex => Some("https://chatgpt.com/codex/settings/usage"),
         ProviderId::Claude => Some("https://claude.ai/settings/usage"),
         ProviderId::OpenCodeGo => Some("https://opencode.ai/zen"),
+        ProviderId::Openrouter => Some("https://openrouter.ai/settings/credits"),
         ProviderId::Fixture => None,
     }
 }

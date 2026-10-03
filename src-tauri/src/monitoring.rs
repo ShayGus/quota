@@ -40,6 +40,7 @@ struct AttemptHandle {
 
 mod confirm;
 mod connection;
+pub(crate) mod credentials;
 mod policy;
 mod queue;
 mod read_path;
@@ -235,6 +236,7 @@ impl MonitoringRuntime {
             .ok_or(quota_contracts::CommandError::UnsupportedProvider {
                 provider_id: request.provider_id,
             })?;
+        credentials::supplied(&adapter, &request)?;
         let attempt_id = ConnectionAttemptId::generate();
         let (cancel, cancel_receiver) = watch::channel(false);
         let reporter = Arc::new(AttemptReporter::new());
@@ -346,6 +348,12 @@ impl MonitoringRuntime {
             });
         }
         confirm::commit_pending(self, attempt_id, nickname).await
+    }
+
+    /// Where the credentials Quota owns itself are kept.
+    #[must_use]
+    pub fn secrets(&self) -> &Arc<dyn quota_core::ports::SecretStore> {
+        self.state.providers.secrets()
     }
 
     /// Takes the one boundary every durable account change shares.

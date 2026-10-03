@@ -58,6 +58,39 @@ pub struct BeginConnectionRequest {
     pub profile_label: Option<String>,
     /// The user's chosen display name. Presentation only.
     pub nickname: String,
+    /// A credential the person pasted, for a provider Quota signs in to
+    /// itself. It is held in memory until the account is added, then kept only
+    /// in the system credential store.
+    #[serde(default)]
+    pub credential: Option<PastedCredential>,
+}
+
+/// A credential the person pasted, such as an API key.
+///
+/// It never prints its value, so a logged request cannot leak it.
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(transparent)]
+pub struct PastedCredential(String);
+
+impl PastedCredential {
+    /// Wraps a pasted value.
+    #[must_use]
+    pub const fn new(value: String) -> Self {
+        Self(value)
+    }
+
+    /// The value, trimmed of the spaces a paste brings along, for the one
+    /// place that stores or sends it.
+    #[must_use]
+    pub fn expose(&self) -> &str {
+        self.0.trim()
+    }
+}
+
+impl std::fmt::Debug for PastedCredential {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("PastedCredential(<redacted>)")
+    }
 }
 
 /// Arguments for enabling or disabling one account.

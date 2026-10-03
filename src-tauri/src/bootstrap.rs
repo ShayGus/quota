@@ -11,7 +11,6 @@ use quota_core::ports::{
     OperationalPreferencesRepository, PreferenceRepository,
 };
 use quota_domain::ids::AppInstanceId;
-use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use tauri::Manager;
 use tauri_plugin_store::StoreExt;
 
@@ -19,46 +18,7 @@ use crate::bootstrap_helpers::PREFERENCES_SCHEMA_VERSION;
 use crate::ipc::bindings;
 use crate::state::AppState;
 
-/// Declared capability data for one provider identifier.
-///
-/// A declaration does not claim that a live account was verified.
-#[must_use]
-pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
-    match provider_id {
-        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo => {
-            ProviderCapabilities {
-                provider_id,
-                cardinality: quota_domain::account::AccountCardinality::SingleProfile,
-                supports_app_owned_authorization: false,
-                supports_external_profile: true,
-                // A plan whose only allowance covers a month reports one
-                // window. Claude's account-wide allowances never do.
-                reports_monthly_window: !matches!(provider_id, ProviderId::Claude),
-                minimum_interval_seconds: 300,
-            }
-        }
-        ProviderId::Fixture => ProviderCapabilities {
-            provider_id,
-            cardinality: quota_domain::account::AccountCardinality::SingleProfile,
-            supports_app_owned_authorization: false,
-            supports_external_profile: false,
-            reports_monthly_window: false,
-            minimum_interval_seconds: 300,
-        },
-    }
-}
-
-/// Whether the production build contains an adapter for this provider.
-#[must_use]
-pub const fn is_compiled(provider_id: ProviderId) -> bool {
-    if cfg!(feature = "sample-data") && matches!(provider_id, ProviderId::Fixture) {
-        return true;
-    }
-    matches!(
-        provider_id,
-        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo
-    )
-}
+pub use crate::provider_catalog::{capabilities_of, is_compiled};
 
 /// Whether this build seeds the ten sample accounts instead of reading real ones.
 #[must_use]
@@ -208,10 +168,11 @@ fn store_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 /// have an adapter to read through. The production build compiles neither the
 /// fixture module nor this branch.
 fn build_registry() -> Result<quota_providers::ProviderRegistry, String> {
+    let secrets = quota_providers::secrets::system();
     #[cfg(feature = "sample-data")]
-    let registry = quota_providers::ProviderRegistry::with_fixture();
+    let registry = quota_providers::ProviderRegistry::with_fixture(secrets);
     #[cfg(not(feature = "sample-data"))]
-    let registry = quota_providers::ProviderRegistry::production();
+    let registry = quota_providers::ProviderRegistry::production(secrets);
     registry.map_err(|error| format!("provider_registry:{}", error.diagnostic_code()))
 }
 

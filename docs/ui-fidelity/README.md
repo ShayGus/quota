@@ -60,10 +60,15 @@ does, in the same place and at the same length.
   card with the verified account, its workspace and plan, and each reading, the nickname,
   and **Add <provider> account** or **Not this account**, which discards it and says how
   to switch the provider's own sign-in. Cancel, closing the settings window, or restarting
-  the app discards the candidate.
-- **The Codex mark.** The wireframe draws Codex as the text `>_`. By the owner's direction
+  the app discards the candidate. A provider with no tool of its own on the computer, such
+  as OpenRouter, asks for an API key on Connect instead, and the badge reads API KEY.
+- **Pay-as-you-go cards.** An account with no included allowance, such as OpenRouter's,
+  draws its credit balance and spend limits as its rings, since the wireframe has no such
+  account and an empty card would hide what the account has.
+- **Provider marks.** The wireframe draws Codex as the text `>_`. By the owner's direction
   the tile shows Codex's own mark, the rounded blossom around a `>_` prompt that the Codex
-  app uses, in the tile's text colour. The other providers keep their glyphs.
+  app uses, in the tile's text colour. OpenRouter, which the wireframe does not have,
+  shows its route mark the same way. The other providers keep their glyphs.
 - **Launch at login** registers a login item through the autostart plugin. A launch at
   sign-in starts quietly in the tray, and the switch shows what the system reports.
 - **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus

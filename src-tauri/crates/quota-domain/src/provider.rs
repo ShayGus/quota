@@ -21,6 +21,8 @@ pub enum ProviderId {
     Claude,
     /// `OpenCode` `Go`, the provider reached through a local `OpenCode` Go agent.
     OpenCodeGo,
+    /// `OpenRouter` credits and API key spend limits, signed in with an API key.
+    Openrouter,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -31,7 +33,13 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 4] = [Self::Codex, Self::Claude, Self::OpenCodeGo, Self::Fixture];
+    pub const ALL: [Self; 5] = [
+        Self::Codex,
+        Self::Claude,
+        Self::OpenCodeGo,
+        Self::Openrouter,
+        Self::Fixture,
+    ];
 
     /// Parses a persisted provider name.
     ///
@@ -51,6 +59,7 @@ impl ProviderId {
             Self::Codex => "codex",
             Self::Claude => "claude",
             Self::OpenCodeGo => "opencode_go",
+            Self::Openrouter => "openrouter",
             Self::Fixture => "fixture",
         }
     }

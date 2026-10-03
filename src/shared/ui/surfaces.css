@@ -315,3 +315,8 @@
   background: var(--warn-bg);
   color: var(--warn);
 }
+
+/* The API key a provider without a local tool is signed in with. */
+.connection-box .api-key {
+  margin-top: 12px;
+}
