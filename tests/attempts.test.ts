@@ -54,7 +54,7 @@ describe("connection attempt revisions", () => {
     acceptAttempt({
       attemptId: ATTEMPT,
       revision: 2,
-      progress: { kind: "awaiting_user" },
+      progress: { kind: "awaiting_user", context: { sign_in: null } },
     });
 
     expect(getRendererState().attempts).toHaveLength(1);

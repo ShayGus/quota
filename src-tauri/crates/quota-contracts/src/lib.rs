@@ -22,7 +22,7 @@ pub use commands::{
 };
 pub use errors::CommandError;
 pub use events::{
-    ConnectionProgressChangedPayload, MonitoringStateChangedPayload,
+    BrowserSignIn, ConnectionProgressChangedPayload, MonitoringStateChangedPayload,
     OverviewWindowStateChangedPayload, PersistenceStatusChangedPayload, PreferencesChangedPayload,
     SnapshotUpdatedPayload,
 };

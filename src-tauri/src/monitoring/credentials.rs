@@ -27,6 +27,17 @@ pub(super) fn supplied(
         .as_ref()
         .map(|credential| credential.expose().to_owned())
         .filter(|value| !value.is_empty());
+    if request.browser_sign_in {
+        // The browser grants the credential; none may be pasted alongside.
+        return if credential.is_some() || !capabilities.supports_app_owned_authorization {
+            Err(CommandError::ValidationFailed {
+                field: "credential".into(),
+                reason: "a browser sign-in takes no pasted credential".into(),
+            })
+        } else {
+            Ok(None)
+        };
+    }
     match credential {
         Some(_) if !capabilities.supports_app_owned_authorization => {
             Err(CommandError::ValidationFailed {
@@ -72,12 +83,11 @@ pub(crate) async fn forget(secrets: &Arc<dyn SecretStore>, connection: Connectio
 }
 
 fn store_error(error: SecretStoreError) -> CommandError {
-    CommandError::Internal {
-        code: match error {
-            SecretStoreError::Unavailable => "credential_store_unavailable",
-            SecretStoreError::Refused => "credential_store_refused",
-        }
-        .into(),
+    match error {
+        SecretStoreError::Unavailable => CommandError::SecureStoreUnavailable,
+        SecretStoreError::Refused => CommandError::Internal {
+            code: "credential_store_refused".into(),
+        },
     }
 }
 
@@ -155,6 +165,7 @@ mod tests {
             profile_label: None,
             nickname: "Work".into(),
             credential: credential.map(|value| PastedCredential::new(value.to_owned())),
+            browser_sign_in: false,
         }
     }
 

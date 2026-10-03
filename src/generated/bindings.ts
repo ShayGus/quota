@@ -249,6 +249,12 @@ export type BeginConnectionRequest = {
 	 *  in the system credential store.
 	 */
 	credential?: PastedCredential | null,
+	/**
+	 *  Whether to sign in through the provider's page in the browser, for a
+	 *  provider Quota signs in to that way. The token it grants is then held
+	 *  and stored like a pasted credential.
+	 */
+	browser_sign_in?: boolean,
 };
 
 /**  A reported time at which the window's allowance changes. */
@@ -279,6 +285,17 @@ export type BoundaryKind =
 "billing_boundary" | 
 /**  The source reported a time without saying what it means. */
 "unknown";
+
+/**
+ *  A browser sign-in waiting for the person: the page Quota opened, and the
+ *  code to enter there.
+ */
+export type BrowserSignIn = {
+	/**  The code to enter. */
+	user_code: string,
+	/**  The provider's sign-in page. */
+	verification_uri: string,
+};
 
 /**
  *  A command failure with structured, non-prose context.
@@ -375,7 +392,13 @@ export type ConnectionProgress =
 /**  The attempt is running. */
 { kind: "started" } | 
 /**  The provider asked the user to do something. */
-{ kind: "awaiting_user" } | 
+{ kind: "awaiting_user"; context: {
+	/**
+	 *  The code to enter on the provider's sign-in page, when the person
+	 *  is signing in through the browser.
+	 */
+	sign_in: BrowserSignIn | null,
+} } | 
 /**
  *  The attempt verified an identity and is waiting for a decision.
  * 
@@ -856,6 +879,10 @@ export type ProviderId =
 "minimax" | 
 /**  Kimi for Coding, signed in with an API key or the Kimi CLI's sign-in. */
 "kimi" | 
+/**  `SuperGrok`, signed in through the browser or the Grok CLI. */
+"grok" | 
+/**  Meta's Muse Code, signed in through the browser or the Muse CLI. */
+"muse_code" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

@@ -13,7 +13,7 @@ use quota_domain::provider::ProviderId;
 use quota_domain::quota::window::QuotaWindow;
 
 use crate::decode::{self, DecodedUsage};
-use crate::{claude, codex, kimi, minimax, opencode_go, openrouter, zai};
+use crate::{claude, codex, grok, kimi, minimax, muse, opencode_go, openrouter, zai};
 
 /// A decoded payload, before an identity is attached.
 #[derive(Clone, Debug, PartialEq)]
@@ -132,6 +132,15 @@ pub fn decode_offline(
         ProviderId::Kimi => {
             let envelope = offline_shape::<kimi::wire::UsageEnvelope>(document, "Kimi usage")?;
             kimi::mapping::decode(&envelope, &pool, received_at)?
+        }
+        ProviderId::Grok => {
+            let envelope = offline_shape::<grok::wire::BillingEnvelope>(document, "Grok billing")?;
+            grok::mapping::decode(envelope.config.as_ref(), None, &pool, received_at)?
+        }
+        ProviderId::MuseCode => {
+            let answer =
+                offline_shape::<muse::wire::SubscriptionAnswer>(document, "Muse Code usage")?;
+            muse::mapping::decode(&answer, &pool, received_at)?
         }
         ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {

@@ -16,6 +16,8 @@ export const PROVIDERS = [
   "zai",
   "minimax",
   "kimi",
+  "grok",
+  "muse_code",
 ] as const;
 
 export type OfferedProvider = (typeof PROVIDERS)[number];
@@ -34,6 +36,13 @@ export type SignIn =
        * a key: the key is then optional.
        */
       readonly cli?: { readonly name: string; readonly signIn: string };
+    }
+  | {
+      readonly kind: "browser";
+      /** The account the person signs in to, as the provider names it. */
+      readonly account: string;
+      /** The provider's own command-line tool, whose sign-in may be used instead. */
+      readonly cli: { readonly name: string; readonly signIn: string };
     };
 
 export const SIGN_IN: Record<OfferedProvider, SignIn> = {
@@ -61,6 +70,16 @@ export const SIGN_IN: Record<OfferedProvider, SignIn> = {
     placeholder: "Your Kimi Code API key",
     cli: { name: "Kimi CLI", signIn: "kimi, then /login" },
   },
+  grok: {
+    kind: "browser",
+    account: "xAI",
+    cli: { name: "Grok CLI", signIn: "grok login" },
+  },
+  muse_code: {
+    kind: "browser",
+    account: "Meta",
+    cli: { name: "Muse CLI", signIn: "muse login" },
+  },
 };
 
 /** What each provider reports, as the picker lists it. */
@@ -72,6 +91,8 @@ export const PROVIDER_WINDOWS: Record<OfferedProvider, string> = {
   zai: "5-hour · Weekly · Web tools",
   minimax: "5-hour · Weekly",
   kimi: "5-hour · Weekly · Monthly",
+  grok: "Weekly · Monthly · On-demand",
+  muse_code: "5-hour · Weekly",
 };
 
 /** What to do when the provider refuses the sign-in. */
@@ -88,6 +109,9 @@ export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
   minimax:
     "MiniMax did not accept this key. A Coding Plan key starts with sk-cp-: copy it from platform.minimax.io, paste it, then press Connect.",
   kimi: "Kimi needs a sign-in. Paste a key from kimi.com/code/console, or sign in with the Kimi CLI (kimi, then /login), then press Connect again.",
+  grok: "Grok needs a sign-in. Sign in with the browser, or sign in with the Grok CLI (grok login) and use its sign-in.",
+  muse_code:
+    "Muse Code needs a sign-in to an account with an active subscription. Sign in with the browser, or with the Muse CLI (muse login) and use its sign-in.",
 };
 
 /** How to add a different account of each provider. */
@@ -104,6 +128,9 @@ export const SWITCH_ACCOUNT: Record<OfferedProvider, string> = {
   minimax:
     "To add a different MiniMax account, paste an API key from it, then press Connect again.",
   kimi: "To add a different Kimi account, paste an API key from it, or sign in to it with the Kimi CLI, then press Connect again.",
+  grok: "To add a different xAI account, sign in with the browser and choose that account on xAI's page.",
+  muse_code:
+    "To add a different Meta account, sign in with the browser and choose that account on Meta's page.",
 };
 
 /** The system credential store's own name, as this computer calls it. */

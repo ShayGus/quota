@@ -55,6 +55,26 @@ impl KeyedSource {
             .ok_or(ProviderError::Authentication)
     }
 
+    /// Replaces the credential stored for one connection, as when Quota has
+    /// refreshed a token it owns.
+    pub(crate) async fn replace(
+        &self,
+        binding: &ConnectionBinding,
+        secret: Secret,
+    ) -> Result<(), ProviderError> {
+        let secrets = Arc::clone(&self.secrets);
+        let connection = binding.connection_id.clone();
+        tokio::task::spawn_blocking(move || secrets.write(&connection, &secret))
+            .await
+            .map_err(|_| unavailable())?
+            .map_err(|_| unavailable())
+    }
+
+    /// The transport, for requests other than a plain GET.
+    pub(crate) const fn http(&self) -> &ProviderHttp {
+        &self.http
+    }
+
     /// One GET with the given headers, refused on any non-success status.
     pub(crate) async fn get(
         &self,

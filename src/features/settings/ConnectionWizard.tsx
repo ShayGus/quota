@@ -11,7 +11,7 @@
  */
 import { useEffect, useId, useRef, useState, type JSX } from "react";
 
-import type { AttemptRef, QuotaWindow } from "../../generated/bindings";
+import type { AttemptRef, BrowserSignIn, QuotaWindow } from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
 import { formatRemaining } from "../../shared/format/allowance";
 import { providerLabel } from "../../shared/format/provider";
@@ -75,6 +75,7 @@ export function ConnectionWizard({
   const takesKey = signIn?.kind === "api_key";
   // A provider whose own CLI can sign it in takes a key, but does not need one.
   const needsKey = takesKey && signIn.cli === undefined;
+  const browser = signIn?.kind === "browser" ? signIn : null;
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -138,7 +139,8 @@ export function ConnectionWizard({
     if (verified) finish();
   });
 
-  const connect = async (): Promise<void> => {
+  /** Starts the attempt; `viaBrowser` signs in on the provider's own page. */
+  const connect = async (viaBrowser = false): Promise<void> => {
     if (provider === null || busy || (needsKey && apiKey.trim() === "")) return;
     setStarting(true);
     setNotice(null);
@@ -150,6 +152,7 @@ export function ConnectionWizard({
         nickname: nickname.trim() || DEFAULT_NICKNAME,
         profile_label: null,
         credential: takesKey && apiKey.trim() !== "" ? apiKey.trim() : null,
+        browser_sign_in: viaBrowser,
       });
       if (!mounted.current) {
         if (accepted !== null) await actions.cancelConnection(accepted);
@@ -220,8 +223,9 @@ export function ConnectionWizard({
         ))}
         <div className="note">
           Codex, Claude and OpenCode Go use the sign-in their own tools keep on this
-          computer. The others take an API key, which Quota keeps in{" "}
-          {credentialStoreName()}. Quota never asks for a password.
+          computer. Grok and Muse Code sign in on their own page in your browser, and the
+          others take an API key. Quota keeps what it is given in {credentialStoreName()}{" "}
+          and never asks for a password.
         </div>
       </>
     );
@@ -305,7 +309,9 @@ export function ConnectionWizard({
         <p className="intro">
           {signIn?.kind === "api_key"
             ? `Paste an API key from ${signIn.keyPage}. Quota checks it with ${providerLabel(provider)} before anything is saved.`
-            : "Quota uses this provider's existing local sign-in to read your quota."}
+            : signIn?.kind === "browser"
+              ? `Sign in to your ${signIn.account} account in your browser. Quota checks the account before anything is saved.`
+              : "Quota uses this provider's existing local sign-in to read your quota."}
         </p>
         <div className="connection-box">
           <div className="identity">
@@ -313,7 +319,11 @@ export function ConnectionWizard({
             <span className="provider-copy">
               <span className="provider-name">{providerLabel(provider)}</span>
               <span className="provider-meta">
-                {takesKey ? "API key" : "Existing local sign-in"}
+                {takesKey
+                  ? "API key"
+                  : browser
+                    ? "Browser sign-in"
+                    : "Existing local sign-in"}
               </span>
             </span>
           </div>
@@ -326,6 +336,14 @@ export function ConnectionWizard({
               disabled={busy}
               onChange={setApiKey}
             />
+          ) : browser ? (
+            <BrowserSignInBox
+              account={browser.account}
+              cli={browser.cli}
+              signIn={
+                progress?.kind === "awaiting_user" ? progress.context.sign_in : null
+              }
+            />
           ) : (
             <>
               <h3>Quota-only connection</h3>
@@ -336,7 +354,7 @@ export function ConnectionWizard({
             </>
           )}
         </div>
-        {progress?.kind === "awaiting_user" ? (
+        {progress?.kind === "awaiting_user" && progress.context.sign_in === null ? (
           <div className="note" role="status">
             Finish signing in with the provider's own tool.
           </div>
@@ -381,16 +399,34 @@ export function ConnectionWizard({
           >
             Back
           </button>
+          {browser === null ? null : (
+            <button
+              type="button"
+              className="button"
+              disabled={busy}
+              onClick={() => {
+                launch(connect(false));
+              }}
+            >
+              Use the {browser.cli.name} sign-in
+            </button>
+          )}
           <button
             type="button"
             className="button primary"
             disabled={busy || (needsKey && apiKey.trim() === "")}
             onClick={() => {
-              launch(connect());
+              launch(connect(browser !== null));
             }}
           >
             <Icon name={busy ? "clock" : "arrow-right"} />
-            {busy ? "Verifying…" : "Connect"}
+            {busy
+              ? progress?.kind === "awaiting_user" && progress.context.sign_in !== null
+                ? "Waiting for the browser…"
+                : "Verifying…"
+              : browser
+                ? "Sign in with browser"
+                : "Connect"}
           </button>
         </div>
       </>
@@ -419,7 +455,9 @@ export function ConnectionWizard({
           <Icon name="arrow-left" />
           Cancel
         </button>
-        <span className="badge">{takesKey ? "API KEY" : "LOCAL SIGN-IN"}</span>
+        <span className="badge">
+          {takesKey ? "API KEY" : browser ? "BROWSER SIGN-IN" : "LOCAL SIGN-IN"}
+        </span>
       </div>
       <div className="wizard">
         {steps}
@@ -496,6 +534,40 @@ function ApiKeyField({
         Quota keeps a key in {credentialStoreName()} and sends it only to {providerName},
         to read your quota. It never submits a request to a model.
       </div>
+    </div>
+  );
+}
+
+/** What a browser sign-in shows: how it works, then the code to enter. */
+function BrowserSignInBox({
+  account,
+  cli,
+  signIn,
+}: {
+  readonly account: string;
+  readonly cli: { readonly name: string; readonly signIn: string };
+  readonly signIn: BrowserSignIn | null;
+}): JSX.Element {
+  if (signIn === null) {
+    return (
+      <>
+        <h3>Sign in on {account}&apos;s page</h3>
+        <p>
+          Quota opens {account}&apos;s sign-in page in your browser and shows a code to
+          enter there. It never sees your password, and it sends nothing to a model. Or
+          use the sign-in the {cli.name} keeps on this computer ({cli.signIn}).
+        </p>
+      </>
+    );
+  }
+  return (
+    <div className="sign-in-code" role="status">
+      <span className="field-label">Enter this code on {account}&apos;s page</span>
+      <strong>{signIn.user_code}</strong>
+      <span className="form-hint">
+        Quota opened {signIn.verification_uri} in your browser. If it did not open, go
+        there yourself.
+      </span>
     </div>
   );
 }

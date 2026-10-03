@@ -70,6 +70,7 @@ describe("pending connection acceptance", () => {
       nickname: "Personal",
       profile_label: null,
       credential: null,
+      browser_sign_in: false,
     });
 
     await act(async () => {
@@ -89,7 +90,7 @@ describe("pending connection acceptance", () => {
             {
               attemptId: "attempt",
               revision: 1,
-              progress: { kind: "awaiting_user" },
+              progress: { kind: "awaiting_user", context: { sign_in: null } },
             },
           ],
         }}

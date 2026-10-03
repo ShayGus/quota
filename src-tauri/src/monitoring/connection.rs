@@ -60,7 +60,7 @@ impl AttemptReporter {
         let revision = (*next_revision)?;
         *next_revision = match progress {
             ConnectionProgress::Started
-            | ConnectionProgress::AwaitingUser
+            | ConnectionProgress::AwaitingUser { .. }
             | ConnectionProgress::AwaitingConfirmation { .. } => Some(revision + 1),
             _ => None,
         };
@@ -76,6 +76,18 @@ pub(super) async fn run_connection_attempt(
     mut cancelled: watch::Receiver<bool>,
     reporter: Arc<AttemptReporter>,
 ) -> Result<(), CommandError> {
+    let Some(request) = super::device::sign_in(
+        &runtime,
+        &adapter,
+        request,
+        &attempt_id,
+        &mut cancelled,
+        &reporter,
+    )
+    .await?
+    else {
+        return Ok(());
+    };
     let secret = super::credentials::supplied(&adapter, &request)?;
     let Some(candidates) = discover_connection_candidates(
         &runtime,
@@ -290,7 +302,7 @@ mod tests {
         );
         for progress in [
             ConnectionProgress::Started,
-            ConnectionProgress::AwaitingUser,
+            ConnectionProgress::AwaitingUser { sign_in: None },
             awaiting_confirmation(),
             ConnectionProgress::Verified {
                 state: ConnectionState::Connected,
@@ -321,7 +333,7 @@ mod tests {
             );
             assert_eq!(
                 reporter
-                    .next_revision(&ConnectionProgress::AwaitingUser)
+                    .next_revision(&ConnectionProgress::AwaitingUser { sign_in: None })
                     .await,
                 Some(2)
             );

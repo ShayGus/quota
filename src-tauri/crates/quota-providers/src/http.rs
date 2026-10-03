@@ -84,43 +84,76 @@ impl ProviderHttp {
 
     /// Performs one bounded GET and decodes the JSON body.
     pub(crate) async fn get(&self, request: GetRequest<'_>) -> Result<HttpReply, ProviderError> {
-        let mut builder = self.client.get(request.url);
-        if let Some(remaining) = remaining_timeout(request.deadline) {
-            builder = builder.timeout(remaining);
-        }
-        for (name, value) in request.headers {
-            builder = builder.header(*name, *value);
-        }
-        let response = builder
-            .send()
-            .await
-            .map_err(|error| transport_error(&error))?;
-        let status = response.status();
-        let retry_after = retry_after(&response);
-        if let Some(error) = classify_status(status, retry_after.as_ref().ok().copied().flatten()) {
+        let builder = self.client.get(request.url);
+        send(builder, request.headers, request.deadline, Answers::Success).await
+    }
+
+    /// The pooled client, for the other request shapes.
+    pub(crate) const fn client(&self) -> &reqwest::Client {
+        &self.client
+    }
+}
+
+/// Which answers a request accepts.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Answers {
+    /// Only a success; any other status becomes its typed failure.
+    Success,
+    /// Any JSON answer, including a refusal's, for a protocol such as OAuth
+    /// that explains a refusal in the body. Only a server fault or a rate
+    /// limit still becomes a failure.
+    AnyJson,
+}
+
+/// Sends one built request within its deadline and decodes the JSON body.
+pub(crate) async fn send(
+    mut builder: reqwest::RequestBuilder,
+    headers: &[(&str, &str)],
+    deadline: Option<DateTime<Utc>>,
+    answers: Answers,
+) -> Result<HttpReply, ProviderError> {
+    if let Some(remaining) = remaining_timeout(deadline) {
+        builder = builder.timeout(remaining);
+    }
+    for (name, value) in headers {
+        builder = builder.header(*name, *value);
+    }
+    let response = builder
+        .send()
+        .await
+        .map_err(|error| transport_error(&error))?;
+    let status = response.status();
+    let retry_after = retry_after(&response);
+    if let Some(error) = classify_status(status, retry_after.as_ref().ok().copied().flatten()) {
+        let explained = answers == Answers::AnyJson
+            && !matches!(
+                error,
+                ProviderError::Transient { .. } | ProviderError::RateLimited { .. }
+            );
+        if !explained {
             return Err(error);
         }
-        let retry_after = retry_after?;
-        let body = read_body(response).await?;
-        let text = String::from_utf8(body).map_err(|_| ProviderError::InvalidData {
-            detail: "the provider body was not text".to_owned(),
-        })?;
-        let trimmed = text.trim_start_matches('\u{feff}').trim_start();
-        if !trimmed.starts_with('{') {
-            // An HTML error page, a plain-text refusal, or a truncated body.
-            return Err(ProviderError::InvalidData {
-                detail: "the provider body was not a JSON object".to_owned(),
-            });
-        }
-        let body = serde_json::from_str(trimmed).map_err(|_| ProviderError::InvalidData {
-            detail: "the provider body was not valid JSON".to_owned(),
-        })?;
-        Ok(HttpReply {
-            status,
-            retry_after,
-            body,
-        })
     }
+    let retry_after = retry_after?;
+    let body = read_body(response).await?;
+    let text = String::from_utf8(body).map_err(|_| ProviderError::InvalidData {
+        detail: "the provider body was not text".to_owned(),
+    })?;
+    let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if !trimmed.starts_with('{') {
+        // An HTML error page, a plain-text refusal, or a truncated body.
+        return Err(ProviderError::InvalidData {
+            detail: "the provider body was not a JSON object".to_owned(),
+        });
+    }
+    let body = serde_json::from_str(trimmed).map_err(|_| ProviderError::InvalidData {
+        detail: "the provider body was not valid JSON".to_owned(),
+    })?;
+    Ok(HttpReply {
+        status,
+        retry_after,
+        body,
+    })
 }
 
 /// Installs the process-wide rustls crypto provider once, on first use.

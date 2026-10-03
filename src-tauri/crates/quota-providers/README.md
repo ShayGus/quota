@@ -24,6 +24,8 @@ an automated test proves from what only a real login can prove:
 | Z.ai        | ASSUMED            | ASSUMED         | Not performed           |
 | MiniMax     | ASSUMED            | ASSUMED         | Not performed           |
 | Kimi        | ASSUMED            | ASSUMED         | Not performed           |
+| Grok        | ASSUMED            | ASSUMED         | Not performed           |
+| Muse Code   | ASSUMED            | ASSUMED         | Not performed           |
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -198,6 +200,18 @@ also read the Kimi CLI's own sign-in (`kimi::cli`), which it never refreshes; it
 connection carries the profile `kimi-cli`. Endpoints, fields and window mapping are in
 [the provider reference](../../../docs/providers.md#zai-glm-coding-plan).
 
+## Grok and Muse Code
+
+Signed in through the browser with the OAuth device grant (`device::DeviceClient`), using
+each provider's CLI's public client by the owner's decision, or with the CLI's own sign-in
+(`grok::cli`, `muse::cli`), which Quota only reads. A granted token is kept as a
+`device::StoredToken` in the system credential store; Grok's is refreshed by Quota when it
+is about to expire and written back, Muse's does not expire. POST requests, which the
+device grant and Muse's usage need, go through `post::PostRequest` at the same bounded
+boundary as every GET, and a sign-in poll reads the OAuth refusal body
+(`http::Answers::AnyJson`). Endpoints and fields are in
+[the provider reference](../../../docs/providers.md#grok-supergrok).
+
 ## Fixture
 
 A deterministic local provider for tests and developer runs. It performs no I/O at all:
@@ -220,7 +234,7 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production(secrets)` holds the seven real adapters and the credential
+`ProviderRegistry::production(secrets)` holds the nine real adapters and the credential
 store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
 that refuses every operation when there is none);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
