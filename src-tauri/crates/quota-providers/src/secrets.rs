@@ -27,6 +27,27 @@ pub fn system(service: &str) -> Arc<dyn SecretStore> {
     }
 }
 
+/// This system's credential store, opened on a blocking worker.
+///
+/// The Linux Secret Service store connects through a blocking API that drives
+/// a Tokio runtime of its own, so opening it on an async worker panics with
+/// "Cannot start a runtime from within a runtime" and takes the whole backend
+/// down with it. This runs the same open off the caller's runtime. A system
+/// with no store, no session bus, or a locked keyring still comes back as the
+/// store that reports every operation unavailable, and so does a worker that
+/// cannot be joined.
+///
+/// `service` is the application identifier the build runs with, exactly as in
+/// [`system`].
+#[must_use]
+pub async fn system_off_the_runtime(service: &str) -> Arc<dyn SecretStore> {
+    let service = service.to_owned();
+    match tokio::task::spawn_blocking(move || system(&service)).await {
+        Ok(store) => store,
+        Err(_) => unavailable(),
+    }
+}
+
 /// A store that refuses every operation as unavailable.
 #[must_use]
 pub fn unavailable() -> Arc<dyn SecretStore> {
@@ -234,5 +255,40 @@ mod tests {
         assert_eq!(read.expose(), "round-trip");
         store.delete(&connection).expect("delete");
         assert!(store.read(&connection).expect("read").is_none());
+    }
+}
+
+/// This system's real Linux store, opened the way `initialize_backend` opens
+/// it: from inside the running Tokio runtime the desktop host spawns.
+#[cfg(test)]
+mod linux_system_store {
+    #[cfg(target_os = "linux")]
+    use super::*;
+
+    /// Opening the real store from inside a running Tokio runtime never panics.
+    ///
+    /// The Linux Secret Service store drives a Tokio runtime of its own, so
+    /// this used to panic with "Cannot start a runtime from within a runtime",
+    /// before any window was shown. A machine with an unlocked keyring reads a
+    /// generated connection as no entry. A session with no Secret Service
+    /// behind it, with a session bus or without one, reports the store as
+    /// unavailable. Both are stores the application starts on; anything else is
+    /// a store this did not expect.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_system_store_opens_inside_a_running_tokio_runtime() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+
+        runtime.block_on(async {
+            // The development identifier, so this never reaches a production entry.
+            let store = system_off_the_runtime("app.quota.monitor.dev").await;
+            let read = store.read(&ConnectionId::generate());
+            assert!(
+                matches!(&read, Ok(None) | Err(SecretStoreError::Unavailable)),
+                "the store neither worked nor reported itself unavailable: {read:?}"
+            );
+        });
     }
 }

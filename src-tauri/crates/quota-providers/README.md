@@ -251,9 +251,11 @@ only native units with no denominator, and an account with an unlimited window.
 ## Registry
 
 `ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
-store Quota's own sign-ins live in (`secrets::system(identifier)` opens this system's and
-files every entry under the given application identifier, so a development build keeps its
-own entries, or returns a store that refuses every operation when there is none);
+store Quota's own sign-ins live in (`secrets::system_off_the_runtime(identifier)` opens
+this system's store on a blocking worker and files every entry under the given application
+identifier, so a development build keeps its own entries, or returns a store that refuses
+every operation when there is none; the store is opened off the caller's runtime because
+the Linux Secret Service connection drives a runtime of its own);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
 `provider(id)` returns `None` for any provider this build does not contain, so the
 application reports an explicit unsupported-provider state. There is no dynamic adapter
@@ -292,4 +294,7 @@ backend; `http::ProviderHttp` installs that crypto provider once on first use.
 
 The suite never makes a live network call, never reads a real credential file, and never
 needs one. Fixtures are sanitized payloads written for this crate, using obviously
-synthetic values and example.invalid addresses.
+synthetic values and example.invalid addresses. The one exception is the Linux test that
+opens this system's own credential store to prove it opens from inside a running runtime:
+it reads a generated connection and writes nothing, so a session with no Secret Service
+behind it simply reports the store as unavailable.

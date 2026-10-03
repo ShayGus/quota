@@ -31,7 +31,7 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
     let sqlite = open_database(&app).await?;
     let repositories = backend_repositories(&app, &sqlite)?;
     let restored = restore_durable_state(&repositories).await?;
-    let providers = Arc::new(build_registry(&app)?);
+    let providers = Arc::new(build_registry(&app).await?);
     let (policies, confirmed_operational) =
         resolve_effective_policies(&providers, restored.operational_preferences);
     install_managed_state(
@@ -177,8 +177,16 @@ fn store_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 /// `sample-data` adds the deterministic fixture adapter, so the seeded accounts
 /// have an adapter to read through. The production build compiles neither the
 /// fixture module nor this branch.
-fn build_registry(app: &tauri::AppHandle) -> Result<quota_providers::ProviderRegistry, String> {
-    let secrets = quota_providers::secrets::system(crate::app_identity::credential_service(app));
+async fn build_registry(
+    app: &tauri::AppHandle,
+) -> Result<quota_providers::ProviderRegistry, String> {
+    // The store is opened on a blocking worker: the Linux one connects through
+    // a blocking API that drives a runtime, which cannot start inside the one
+    // this backend task is already running on.
+    let secrets = quota_providers::secrets::system_off_the_runtime(
+        crate::app_identity::credential_service(app),
+    )
+    .await;
     #[cfg(feature = "sample-data")]
     let registry = quota_providers::ProviderRegistry::with_fixture(secrets);
     #[cfg(not(feature = "sample-data"))]
