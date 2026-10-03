@@ -70,8 +70,8 @@ does, in the same place and at the same length.
 - **Provider marks.** The wireframe draws Codex as the text `>_`. By the owner's direction
   the tile shows Codex's own mark, the rounded blossom around a `>_` prompt that the Codex
   app uses, in the tile's text colour. Providers the wireframe does not have show their
-  own marks the same way: OpenRouter, Z.ai, MiniMax, Kimi, Grok, and Meta's for Muse Code.
-  Claude and OpenCode Go keep their glyphs.
+  own marks the same way: Cursor, OpenRouter, Z.ai, MiniMax, Kimi, Grok, and Meta's for
+  Muse Code. Claude and OpenCode Go keep their glyphs.
 - **Launch at login** registers a login item through the autostart plugin. A launch at
   sign-in starts quietly in the tray, and the switch shows what the system reports.
 - **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus

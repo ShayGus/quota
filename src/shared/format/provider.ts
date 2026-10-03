@@ -19,6 +19,7 @@ const LABELS: Record<ProviderId, string> = {
   kimi: "Kimi",
   grok: "Grok",
   muse_code: "Muse Code",
+  cursor: "Cursor",
   fixture: "Fixture",
 };
 

@@ -10,6 +10,7 @@
 //! and percentages, and [`identity`] derives identities and safe labels.
 
 mod identity;
+pub(crate) mod jwt;
 mod values;
 
 use chrono::{DateTime, Duration, Utc};

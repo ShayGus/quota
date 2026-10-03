@@ -13,6 +13,7 @@ use quota_domain::provider::ProviderId;
 
 use crate::claude::ClaudeAdapter;
 use crate::codex::CodexAdapter;
+use crate::cursor::CursorAdapter;
 use crate::grok::GrokAdapter;
 use crate::kimi::KimiAdapter;
 use crate::minimax::MinimaxAdapter;
@@ -48,6 +49,7 @@ impl ProviderRegistry {
                 Arc::new(KimiAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(GrokAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(MuseAdapter::new(Arc::clone(&secrets))?),
+                Arc::new(CursorAdapter::new()?),
             ],
             secrets,
         })
@@ -124,6 +126,7 @@ mod tests {
             ProviderId::Kimi,
             ProviderId::Grok,
             ProviderId::MuseCode,
+            ProviderId::Cursor,
         ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);

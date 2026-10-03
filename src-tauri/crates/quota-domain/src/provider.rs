@@ -33,6 +33,8 @@ pub enum ProviderId {
     Grok,
     /// Meta's Muse Code, signed in through the browser or the Muse CLI.
     MuseCode,
+    /// Cursor, read with the sign-in the Cursor app keeps.
+    Cursor,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -43,7 +45,7 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 10] = [
+    pub const ALL: [Self; 11] = [
         Self::Codex,
         Self::Claude,
         Self::OpenCodeGo,
@@ -53,6 +55,7 @@ impl ProviderId {
         Self::Kimi,
         Self::Grok,
         Self::MuseCode,
+        Self::Cursor,
         Self::Fixture,
     ];
 
@@ -80,6 +83,7 @@ impl ProviderId {
             Self::Kimi => "kimi",
             Self::Grok => "grok",
             Self::MuseCode => "muse_code",
+            Self::Cursor => "cursor",
             Self::Fixture => "fixture",
         }
     }

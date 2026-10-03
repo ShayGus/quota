@@ -883,6 +883,8 @@ export type ProviderId =
 "grok" | 
 /**  Meta's Muse Code, signed in through the browser or the Muse CLI. */
 "muse_code" | 
+/**  Cursor, read with the sign-in the Cursor app keeps. */
+"cursor" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

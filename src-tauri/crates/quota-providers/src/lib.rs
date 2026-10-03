@@ -49,6 +49,7 @@ pub mod secrets;
 
 pub(crate) mod claude;
 pub(crate) mod codex;
+pub(crate) mod cursor;
 pub(crate) mod kimi;
 pub(crate) mod minimax;
 pub(crate) mod muse;
