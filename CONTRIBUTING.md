@@ -60,6 +60,7 @@ From the repository root:
 
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
+bun run test:ui                        # interface tests, see section 7
 ```
 
 CI runs exactly these commands. If a command passes locally and fails in CI, the
@@ -228,3 +229,40 @@ Include the compatibility and migration effect, and the tests that cover it, in 
 change. A new enum variant breaks every handwritten exhaustive match by design; that is
 the point of the typed contracts. Record any new exception in `docs/exceptions.md` with an
 owner, a rationale, a scope, a review date, and a removal condition.
+
+## 7. Interface tests
+
+`bun run test:ui` loads the real built renderer (`bun run build`, served by
+`vite preview`) in headless Chromium and drives it with Playwright. Only the Rust host is
+replaced: a small faked backend, `tests/ui/fake-backend.ts`, answers the typed commands
+and publishes the host's events, on top of Tauri's own `@tauri-apps/api/mocks`. It is
+bundled into the page by `tests/ui/global-setup.ts` and never into `dist`, so nothing from
+it can reach a release build.
+
+The suite covers the popover with seven accounts in the states the interface has (healthy,
+low, rate limited, offline, check failed, reconnect, monitoring off), the attention
+filter, the account detail, the first-launch screen, a host that cannot be reached, every
+settings panel, the add-account wizard through Provider, Connect and Verify, the privacy
+aliases, the light and dark theme, the 440-pixel popover width, and the mini widget. It
+does not start the native shell, so it cannot see window placement, the tray, the
+single-instance lock, or anything the Rust host does; the faked host is only as faithful
+as `tests/ui/fake-backend.ts`.
+
+```bash
+bun install --frozen-lockfile
+bunx playwright install chromium        # once; add --with-deps on a clean Linux machine
+bun run test:ui                         # about 15 s
+bunx playwright show-report             # after a CI-style run, to browse the report
+```
+
+Screenshots of every state are written to `test-results/screenshots/`, and CI uploads them
+with the traces of any failure as the `interface-test-results` artifact. A test fails if
+the page logs an error or the renderer asks the faked host for a command it does not know,
+so a new command needs an answer in `fake-backend.ts`.
+
+### How this gates a release
+
+The interface job is part of `.github/workflows/ci.yml`, not a workflow of its own. The
+release workflow accepts a commit only when that file's CI run completed successfully, so
+a release needs the unit tests, the interface tests and every other CI job green on the
+exact commit. Keep new test layers inside `ci.yml` for the same reason.
