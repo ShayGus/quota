@@ -170,22 +170,28 @@ bun tauri build        # release bundles
 
 ### Development identity
 
-`src-tauri/tauri.dev.conf.json` is an overlay the development commands merge over
-`src-tauri/tauri.conf.json`. It gives a development build the identifier
-`app.quota.monitor.dev` and the product name `Quota Dev`, so it runs beside an installed
-production build without touching it. The identifier is the only source of the separation:
-it names the data directory, the window-state file, the credential service name, the
-autostart entry, and the single-instance lock. The overlay repeats the three window
-definitions because the merge replaces arrays, and `tests/dev-identity.test.ts` fails when
-a production window has no development twin.
+Every debug build, including plain `bun tauri dev`, `bun tauri build --debug`, and
+`cargo build`, applies the identity from `src-tauri/tauri.dev.conf.json` to the Tauri
+context before plugins and storage initialize. Its identifier is `app.quota.monitor.dev`,
+its product and autostart name is `Quota Dev`, and all three window titles identify it as
+development. The runtime identifier names the data directories, window-state file,
+credential service, and single-instance lock. Window geometry, development server URLs,
+and capability overrides remain as configured.
+
+For development packages, the Tauri CLI also merges that overlay over
+`src-tauri/tauri.conf.json`, giving bundles the distinct executable name `quota-dev`.
+The overlay repeats the three window definitions because the merge replaces arrays,
+and `tests/dev-identity.test.ts` checks that every production window has a development
+twin. Native identity tests exercise both build modes through Tauri's path resolver and
+the credential service resolver.
 
 ```bash
-bun run dev:native     # tauri dev with the overlay merged in
-bun run build:dev      # tauri build with the overlay merged in
+bun run dev:native     # tauri dev; debug identity is automatic
+bun run build:dev      # development packages with the quota-dev executable
 ```
 
-`bun tauri dev` without the overlay runs under the production identifier and writes to the
-production data directory. Use `bun run dev:native` instead.
+Release builds without the overlay retain the production identity and executable name.
+`bun run build:dev` uses the development identity even though it compiles in release mode.
 
 ## 7. Rules that the gates enforce
 

@@ -1,6 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Quota Dev",
+  "mainBinaryName": "quota-dev",
   "identifier": "app.quota.monitor.dev",
   "app": {
     "windows": [

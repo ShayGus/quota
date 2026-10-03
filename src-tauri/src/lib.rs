@@ -11,6 +11,7 @@
 #![doc = include_str!("../README.md")]
 pub mod monitoring;
 
+mod app_identity;
 pub mod bootstrap;
 pub mod bootstrap_helpers;
 pub mod ipc;

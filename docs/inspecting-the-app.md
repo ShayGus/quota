@@ -54,7 +54,7 @@ bun run inspect
 That script is exactly this, and nothing else:
 
 ```bash
-bun tauri dev --features agent-inspection --config src-tauri/tauri.dev.conf.json --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}}}'
+bun tauri dev --features agent-inspection --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","widget-capability","agent-inspection-capability"]}}}'
 ```
 
 Both halves matter.
@@ -65,20 +65,19 @@ Both halves matter.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
   a capability file the allowlist does not name, so without this guest listeners stay
   disabled and console forwarding is denied. The allowlist in `src-tauri/tauri.conf.json`
-  deliberately keeps the shipping two capabilities only, because the plugin's permissions
+  deliberately keeps the shipping three capabilities only, because the plugin's permissions
   do not exist in a build that does not compile it.
 
-- `--config src-tauri/tauri.dev.conf.json` is the
-  [development identity](../CONTRIBUTING.md#development-identity), so an inspected build
-  writes its own data and credentials instead of the installed production build's.
+Debug builds automatically apply the
+[development identity](../CONTRIBUTING.md#development-identity), so an inspected build
+writes its own data and credentials instead of the installed production build's.
 
 The renderer needs the Vite dev server on port 1420. If that port is taken, move both
 ends:
 
 ```bash
 bun tauri dev --features agent-inspection \
-  --config src-tauri/tauri.dev.conf.json \
-  --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
+  --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","widget-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
 ```
 
 A launch opens only `overview`. The `settings` window is created hidden and opens when a

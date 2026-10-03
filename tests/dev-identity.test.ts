@@ -68,11 +68,12 @@ test("the production identity is the one that was always shipped", () => {
   });
 });
 
-test("a development build runs under its own identifier", () => {
+test("a development package has its own identity and executable name", () => {
   const dev = development();
   expect(dev.identifier).not.toBe(production.identifier);
   expect(dev.productName).not.toBe(production.productName);
-  expect(dev.mainBinaryName).toBeUndefined();
+  expect(dev.mainBinaryName).toBe("quota-dev");
+  expect(dev.mainBinaryName).not.toBe(production.mainBinaryName);
 });
 
 test("the development overlay covers every production window", () => {
@@ -85,12 +86,4 @@ test("every development window says which build it is", () => {
   const devTitles = development().app.windows.map((window) => window.title);
   expect(devTitles).toEqual(["Quota Dev", "Quota Dev settings", "Quota Dev widget"]);
   expect(devTitles).not.toEqual(productionTitles);
-});
-
-test("the credential service name is the identifier, and it differs", () => {
-  // `bootstrap.rs` files every credential Quota owns under `config().identifier`.
-  const credentialService = (config: Config): string => config.identifier;
-  expect(credentialService(production)).toBe("app.quota.monitor");
-  expect(credentialService(development())).toBe("app.quota.monitor.dev");
-  expect(credentialService(development())).not.toBe(credentialService(production));
 });
