@@ -113,9 +113,10 @@ export function formatRemaining(measurement: Measurement): string {
     return withAmount("100%");
   }
   // From 99 up one decimal shows, rounded down, so a near-full allowance never
-  // reads as a false 100%: 99.97 is "99.9%".
+  // reads as a false 100%: 99.97 is "99.9%". A decimal of zero is dropped, as it
+  // is at 100: exactly 99 is "99%".
   return withAmount(
-    `${percent < 99 ? percent.toFixed(0) : (Math.floor(percent * 10) / 10).toFixed(1)}%`,
+    `${percent < 99 ? percent.toFixed(0) : String(Math.floor(percent * 10) / 10)}%`,
   );
 }
 
