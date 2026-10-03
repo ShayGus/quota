@@ -10,7 +10,7 @@ use quota_domain::provider::{ProviderCapabilities, ProviderId};
 #[must_use]
 pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
     match provider_id {
-        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo => {
+        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo | ProviderId::Cursor => {
             ProviderCapabilities {
                 provider_id,
                 cardinality: AccountCardinality::SingleProfile,
@@ -81,5 +81,6 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
             | ProviderId::Kimi
             | ProviderId::Grok
             | ProviderId::MuseCode
+            | ProviderId::Cursor
     )
 }

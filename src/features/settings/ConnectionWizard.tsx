@@ -222,10 +222,10 @@ export function ConnectionWizard({
           </button>
         ))}
         <div className="note">
-          Codex, Claude and OpenCode Go use the sign-in their own tools keep on this
-          computer. Grok and Muse Code sign in on their own page in your browser, and the
-          others take an API key. Quota keeps what it is given in {credentialStoreName()}{" "}
-          and never asks for a password.
+          Codex, Claude, OpenCode Go and Cursor use the sign-in their own apps keep on
+          this computer. Grok and Muse Code sign in on their own page in your browser, and
+          the others take an API key. Quota keeps what it is given in{" "}
+          {credentialStoreName()} and never asks for a password.
         </div>
       </>
     );

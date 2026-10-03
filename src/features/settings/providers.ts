@@ -12,6 +12,7 @@ export const PROVIDERS = [
   "codex",
   "claude",
   "open_code_go",
+  "cursor",
   "openrouter",
   "zai",
   "minimax",
@@ -49,6 +50,7 @@ export const SIGN_IN: Record<OfferedProvider, SignIn> = {
   codex: { kind: "local" },
   claude: { kind: "local" },
   open_code_go: { kind: "local" },
+  cursor: { kind: "local" },
   openrouter: {
     kind: "api_key",
     keyPage: "openrouter.ai/settings/keys",
@@ -87,6 +89,7 @@ export const PROVIDER_WINDOWS: Record<OfferedProvider, string> = {
   codex: "5-hour · Weekly",
   claude: "5-hour · Weekly · Model-specific",
   open_code_go: "5-hour · Weekly · Monthly",
+  cursor: "Monthly · On-demand",
   openrouter: "Credit balance · API key limit",
   zai: "5-hour · Weekly · Web tools",
   minimax: "5-hour · Weekly",
@@ -103,6 +106,8 @@ export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
     "Claude Code sign-in is required. Run claude in a terminal, sign in, then press Connect again.",
   open_code_go:
     "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
+  cursor:
+    "Cursor sign-in is required. Open the Cursor app and sign in, then press Connect again.",
   openrouter:
     "OpenRouter did not accept this key. Copy it again from openrouter.ai/settings/keys, paste it, then press Connect.",
   zai: "Z.ai did not accept this key. Copy it again from z.ai/manage-apikey/apikey-list, paste it, then press Connect.",
@@ -122,6 +127,8 @@ export const SWITCH_ACCOUNT: Record<OfferedProvider, string> = {
     "To add a different Claude account, sign in to it in Claude Code (/login), then press Connect again.",
   open_code_go:
     "To add a different OpenCode Go account, sign in to it with OpenCode, then press Connect again.",
+  cursor:
+    "To add a different Cursor account, sign in to it in the Cursor app, then press Connect again.",
   openrouter:
     "To add a different OpenRouter account, paste an API key from it, then press Connect again.",
   zai: "To add a different Z.ai account, paste an API key from it, then press Connect again.",

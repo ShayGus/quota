@@ -20,6 +20,8 @@ quota-domain = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+# Reads the Cursor app's sign-in from its SQLite state store, read-only.
+sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "rt", "sync", "time"] }
 tracing = { workspace = true }

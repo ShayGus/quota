@@ -504,6 +504,20 @@ describe("Provider → Connect → Verify", () => {
     );
   });
 
+  it("reads Cursor through the Cursor app's own sign-in, with no key", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    await connect("Cursor");
+    expect(screen.queryByLabelText("API key")).toBeNull();
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_id: "cursor",
+        credential: null,
+        browser_sign_in: false,
+      }),
+    );
+  });
+
   it("needs a key for Z.ai, which has no tool of its own", () => {
     render(<Wizard actions={settingsActions()} onDone={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: /^Z\.ai/ }));

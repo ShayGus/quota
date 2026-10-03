@@ -85,6 +85,7 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::Kimi => Some("https://www.kimi.com/code/console"),
         ProviderId::Grok => Some("https://grok.com/?_s=usage"),
         ProviderId::MuseCode => Some("https://www.meta.ai/muse-code"),
+        ProviderId::Cursor => Some("https://cursor.com/dashboard?tab=usage"),
         ProviderId::Fixture => None,
     }
 }

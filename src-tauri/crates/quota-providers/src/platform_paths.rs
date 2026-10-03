@@ -43,6 +43,28 @@ pub(crate) fn user_profile(lookup: Lookup<'_>) -> Option<PathBuf> {
     }
 }
 
+/// The directory desktop applications keep their settings and state in, or
+/// `None` when nothing declares one.
+///
+/// On Windows this is the roaming `APPDATA`; on macOS
+/// `Library/Application Support` in the profile; elsewhere `XDG_CONFIG_HOME`,
+/// otherwise `.config` in the profile. The Cursor app keeps its sign-in there.
+pub(crate) fn application_data(lookup: Lookup<'_>) -> Option<PathBuf> {
+    #[cfg(windows)]
+    {
+        variable(lookup, "APPDATA")
+    }
+    #[cfg(target_os = "macos")]
+    {
+        user_profile(lookup).map(|home| home.join("Library").join("Application Support"))
+    }
+    #[cfg(not(any(windows, target_os = "macos")))]
+    {
+        variable(lookup, "XDG_CONFIG_HOME")
+            .or_else(|| user_profile(lookup).map(|home| home.join(".config")))
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;

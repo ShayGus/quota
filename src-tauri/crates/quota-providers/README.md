@@ -26,6 +26,7 @@ an automated test proves from what only a real login can prove:
 | Kimi        | ASSUMED            | ASSUMED         | Not performed           |
 | Grok        | ASSUMED            | ASSUMED         | Not performed           |
 | Muse Code   | ASSUMED            | ASSUMED         | Not performed           |
+| Cursor      | ASSUMED            | ASSUMED         | Not performed           |
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -200,6 +201,13 @@ also read the Kimi CLI's own sign-in (`kimi::cli`), which it never refreshes; it
 connection carries the profile `kimi-cli`. Endpoints, fields and window mapping are in
 [the provider reference](../../../docs/providers.md#zai-glm-coding-plan).
 
+## Cursor
+
+Reads the plan's usage over the billing cycle with the sign-in the Cursor app keeps in its
+SQLite state store (`cursor::app`), opened read-only on every read and never written; the
+token is never refreshed. The account is the token's subject (`decode::jwt`). Endpoints
+and fields are in [the provider reference](../../../docs/providers.md#cursor).
+
 ## Grok and Muse Code
 
 Signed in through the browser with the OAuth device grant (`device::DeviceClient`), using
@@ -234,7 +242,7 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production(secrets)` holds the nine real adapters and the credential
+`ProviderRegistry::production(secrets)` holds the ten real adapters and the credential
 store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
 that refuses every operation when there is none);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
