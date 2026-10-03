@@ -206,6 +206,34 @@ export const START = [
   { wait: 3000 },
 ];
 
+/**
+ * Shows one settings route in the overview webview at the settings window's
+ * size, then puts the overview back. The settings window has no DOM tools by
+ * design, so its routes are measured this way. `steps` run once it is shown.
+ */
+function settingsRoute(route, ...steps) {
+  return {
+    setup: [
+      {
+        tool: "manage_window",
+        args: { action: "set_size", window_label: "overview", width: 780, height: 600 },
+      },
+      `(() => { location.hash = "#/settings/${route}"; location.reload(); return true; })()`,
+      { wait: 3500 },
+      ...steps,
+      ...(steps.length > 0 ? [{ wait: 600 }] : []),
+    ],
+    teardown: [
+      `(() => { location.hash = ""; location.reload(); return true; })()`,
+      { wait: 3500 },
+      {
+        tool: "manage_window",
+        args: { action: "set_size", window_label: "overview", width: 440, height: 400 },
+      },
+    ],
+  };
+}
+
 /** Every case. The app is expected to start on the overview, dark theme. */
 export const CASES = [
   {
@@ -234,12 +262,12 @@ export const CASES = [
     name: "wizard-provider",
     selectors: WIZARD,
     wireframe: { query: "theme=dark", clicks: [".app-footer [data-action=add-account]"] },
-    app: { setup: [click(".app-footer .text-btn")], teardown: [click(".back-button")] },
-    scope: ".popover",
-    ignore: ["text", "w"],
-    // The chevron is pushed right by an automatic margin, which grows with the
-    // width ignored above: the native window draws the wireframe's 1px border.
-    ignoreAt: { ".provider-pick > .icon": ["margin"] },
+    // The wizard is on the settings window's add-account page, by the owner's
+    // direction, where the wireframe draws it in the popover; it is measured at
+    // the settings window's size, so sizes and margins are not compared.
+    app: settingsRoute("connect/parity"),
+    scope: "",
+    ignore: ["text", "w", "h", "margin"],
   },
   {
     name: "wizard-connect",
@@ -248,16 +276,13 @@ export const CASES = [
       query: "theme=dark",
       clicks: [".app-footer [data-action=add-account]", "[data-provider=claude]"],
     },
-    app: {
-      setup: [
-        click(".app-footer .text-btn"),
-        `(() => { const b = [...document.querySelectorAll(".provider-pick")].find((n) => n.textContent.includes("Claude")); b?.click(); return b !== undefined; })()`,
-      ],
-      teardown: [click(".back-button")],
-    },
-    scope: ".popover",
+    app: settingsRoute(
+      "connect/parity",
+      `(() => { const b = [...document.querySelectorAll(".provider-pick")].find((n) => n.textContent.includes("Claude")); b?.click(); return b !== undefined; })()`,
+    ),
+    scope: "",
     // The intro sentence is product wording, not the prototype's, so its height differs.
-    ignore: ["text", "w", "h"],
+    ignore: ["text", "w", "h", "margin"],
   },
   ...["general", "accounts", "appearance", "notifications", "privacy", "diagnostics"].map(
     (section) => ({
@@ -267,36 +292,7 @@ export const CASES = [
         query: "theme=dark",
         clicks: ["[data-action=settings]", `[data-tab=${section}]`],
       },
-      app: {
-        // The settings window has no DOM tools by design, so its route is shown in
-        // the overview webview at the settings window's size, then put back.
-        setup: [
-          {
-            tool: "manage_window",
-            args: {
-              action: "set_size",
-              window_label: "overview",
-              width: 780,
-              height: 600,
-            },
-          },
-          `(() => { location.hash = "#/settings/${section}/parity"; location.reload(); return true; })()`,
-          { wait: 3500 },
-        ],
-        teardown: [
-          `(() => { location.hash = ""; location.reload(); return true; })()`,
-          { wait: 3500 },
-          {
-            tool: "manage_window",
-            args: {
-              action: "set_size",
-              window_label: "overview",
-              width: 440,
-              height: 400,
-            },
-          },
-        ],
-      },
+      app: settingsRoute(`${section}/parity`),
       scope: ".settings-window",
       ignore: ["text", "w", "h", "margin"],
     }),

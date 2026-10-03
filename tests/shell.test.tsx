@@ -66,16 +66,13 @@ import { App } from "../src/app/App";
 import { FeatureBoundary } from "../src/app/ErrorBoundary";
 import {
   acceptMonitoring,
-  acceptNativeWindow,
   acceptPreferences,
-  acceptAttempt,
   acceptSnapshot,
   setFailure,
 } from "../src/shared/state/store";
 import type { PollingStrategy, ProviderPollingPolicy } from "../src/generated/bindings";
 import {
   account,
-  candidate,
   percent,
   preferences,
   snapshot,
@@ -257,11 +254,8 @@ describe("approved control actions", () => {
       fireEvent.click(screen.getByRole("button", { name: "Hide popover" }));
       fireEvent.click(screen.getByRole("button", { name: "Add account" }));
     });
-    // The wizard opens in the popover itself, not in the settings window.
-    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
-    act(() => {
-      fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
-    });
+    // Adding an account happens in the settings window, on its add-account page.
+    expect(screen.queryByRole("heading", { name: "Add a subscription" })).toBeNull();
     act(() => {
       fireEvent.click(screen.getByRole("button", { name: "Details for Codex a1" }));
     });
@@ -276,19 +270,22 @@ describe("approved control actions", () => {
       providerId: "codex",
     });
     expect(commandsMatching("open_settings_window").map((call) => call.args)).toEqual([
+      { destination: "connect" },
       { destination: "accounts" },
       { destination: "general" },
     ]);
   });
 
-  it("opens the same wizard from first launch", async () => {
+  it("opens settings on its add-account page from first launch", async () => {
     acceptSnapshot(snapshot("instance-1", 1, []));
     render(<App />);
     await act(() =>
       fireEvent.click(screen.getByRole("button", { name: "Add your first account" })),
     );
-    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
-    expect(commandsMatching("open_settings_window")).toHaveLength(0);
+    expect(screen.queryByRole("heading", { name: "Add a subscription" })).toBeNull();
+    expect(commandsMatching("open_settings_window").map((call) => call.args)).toEqual([
+      { destination: "connect" },
+    ]);
   });
 
   it("returns to the overview on Escape and hides the popover from the overview", () => {
@@ -750,126 +747,5 @@ describe("toasts", () => {
       );
     });
     expect(commandsMatching("refresh_accounts")).toHaveLength(1);
-  });
-});
-
-describe("leaving the add-account wizard", () => {
-  it.each([
-    [
-      "Escape",
-      (): void => {
-        fireEvent.keyDown(window, { key: "Escape" });
-      },
-    ],
-    [
-      "a fresh Add account",
-      (): void => {
-        const footer = document.querySelector<HTMLElement>(".app-footer .text-btn");
-        if (footer === null) throw new Error("the footer Add account is missing");
-        fireEvent.click(footer);
-      },
-    ],
-  ] as const)(
-    "discards a held candidate on %s instead of leaving it saved",
-    async (_route, leave) => {
-      acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-      acceptPreferences(preferences());
-      render(<App />);
-      fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-      fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-      await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-      act(() => {
-        acceptAttempt({
-          attemptId: "attempt-1",
-          revision: 2,
-          progress: {
-            kind: "awaiting_confirmation",
-            context: { candidate: candidate("codex") },
-          },
-        });
-      });
-      expect(
-        screen.getByRole("heading", { name: "Is this the right account?" }),
-      ).toBeTruthy();
-      act(leave);
-      await waitFor(() => {
-        expect(commandsMatching("cancel_connection")).toHaveLength(1);
-      });
-      expect(commandsMatching("cancel_connection")[0]?.args).toEqual({
-        attemptRef: { id: "attempt-1" },
-      });
-      expect(commandsMatching("confirm_connection")).toHaveLength(0);
-      expect(commandsMatching("disconnect_account")).toHaveLength(0);
-    },
-  );
-
-  /** The host reporting the popover hidden, as its close or focus loss does. */
-  const reportHidden = (): void => {
-    act(() => {
-      acceptNativeWindow({
-        kind: "confirmed",
-        value: {
-          mode: "tray",
-          always_on_top: false,
-          visible: false,
-          geometry_revision: 3,
-        },
-      });
-    });
-  };
-
-  /** Opens the wizard and lets the host hold a verified candidate. */
-  const holdCandidate = async (attemptId: string): Promise<void> => {
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    fireEvent.click(screen.getByRole("button", { name: /^Codex/ }));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
-    act(() => {
-      acceptAttempt({
-        attemptId,
-        revision: 2,
-        progress: {
-          kind: "awaiting_confirmation",
-          context: { candidate: candidate("codex") },
-        },
-      });
-    });
-    expect(
-      screen.getByRole("heading", { name: "Is this the right account?" }),
-    ).toBeTruthy();
-  };
-
-  it("discards a held candidate when the popover is hidden, and reopens fresh", async () => {
-    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-    acceptPreferences(preferences());
-    render(<App />);
-    await holdCandidate("attempt-1");
-    reportHidden();
-    await waitFor(() => {
-      expect(commandsMatching("cancel_connection")).toHaveLength(1);
-    });
-    expect(commandsMatching("cancel_connection")[0]?.args).toEqual({
-      attemptRef: { id: "attempt-1" },
-    });
-    expect(
-      screen.queryByRole("heading", { name: "Is this the right account?" }),
-    ).toBeNull();
-    expect(commandsMatching("confirm_connection")).toHaveLength(0);
-  });
-
-  it("discards again when hidden a second time without being reported shown", async () => {
-    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
-    acceptPreferences(preferences());
-    render(<App />);
-    await holdCandidate("attempt-1");
-    reportHidden();
-    await waitFor(() => {
-      expect(commandsMatching("cancel_connection")).toHaveLength(1);
-    });
-    // Shown again by a path that reports nothing, then hidden again.
-    await holdCandidate("attempt-1");
-    reportHidden();
-    await waitFor(() => {
-      expect(commandsMatching("cancel_connection")).toHaveLength(2);
-    });
   });
 });

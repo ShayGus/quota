@@ -246,6 +246,21 @@
   border-radius: 9px;
 }
 
+/* Verify: the account and its readings are one card, so the readings drop
+   the list's own frame, and a reading's name gets the room it needs. */
+.verified-account .detail-list {
+  margin-top: 12px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: none;
+  padding: 2px 0 0;
+}
+
+.verified-account .detail-list > div {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .connection-box h3 {
   font-size: 12px;
   margin-top: 15px;

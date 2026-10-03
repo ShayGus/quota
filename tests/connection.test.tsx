@@ -52,7 +52,6 @@ function settingsActions(): SettingsActions {
     exportDiagnostics: vi.fn(() =>
       Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
     ),
-    showAddAccount: vi.fn(),
     showOverview: vi.fn(),
     showAccountDetail: vi.fn(),
     launchAtLogin: vi.fn(() => Promise.resolve(false)),
@@ -104,7 +103,10 @@ async function connect(provider: string): Promise<void> {
   await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
 }
 
-const VERIFY = { name: "Is this the right account?" };
+const VERIFY = { name: "Add this account?" };
+
+/** The Verify step's primary action, which names the provider. */
+const ADD = { name: /^Add .+ account$/ };
 
 beforeEach(() => {
   window.location.hash = "";
@@ -124,19 +126,24 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.queryByRole("heading", VERIFY)).toBeNull();
     hold("attempt-1", "codex");
     expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
-    const facts = document.querySelector(".detail-list")?.textContent ?? "";
+    const facts = document.querySelector(".verified-account")?.textContent ?? "";
     expect(facts).toContain("new@example.test");
     // The reading being approved, not just a count of windows.
     expect(facts).toContain("5-hour · Subscription");
     expect(facts).toContain("72% remaining");
     // Nothing is saved yet: the account list is unchanged.
     expect(getRendererState().snapshot?.accounts).toHaveLength(1);
-    const add = screen.getByRole("button", { name: "Add account" });
+    // One decision, no checkbox: the button names what it adds, and only an
+    // empty nickname holds it back.
+    const add = screen.getByRole("button", ADD);
+    expect(add).toHaveProperty("disabled", false);
+    fireEvent.change(screen.getByLabelText("Account nickname"), {
+      target: { value: "  " },
+    });
     expect(add).toHaveProperty("disabled", true);
     fireEvent.change(screen.getByLabelText("Account nickname"), {
       target: { value: "  Work  " },
     });
-    fireEvent.click(screen.getByRole("checkbox"));
     await act(() => fireEvent.click(add));
     expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Work");
     expect(onDone).toHaveBeenCalledWith(true);
@@ -154,8 +161,7 @@ describe("Provider → Connect → Verify", () => {
     render(<Wizard actions={actions} onDone={onDone} />);
     await connect("Claude");
     hold("attempt-1", "claude");
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    await act(() => fireEvent.click(screen.getByRole("button", ADD)));
     expect(onDone).not.toHaveBeenCalled();
     act(() => {
       acceptAttempt({
@@ -174,8 +180,7 @@ describe("Provider → Connect → Verify", () => {
     render(<Wizard actions={actions} onDone={onDone} />);
     await connect("Claude");
     hold("attempt-1", "claude");
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    await act(() => fireEvent.click(screen.getByRole("button", ADD)));
     act(() => {
       acceptAttempt({
         attemptId: "attempt-1",
@@ -195,22 +200,25 @@ describe("Provider → Connect → Verify", () => {
     render(<Wizard actions={actions} onDone={onDone} />);
     await connect("Claude");
     hold("attempt-1", "claude");
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    await act(() => fireEvent.click(screen.getByRole("button", ADD)));
     expect(actions.confirmConnection).toHaveBeenCalledTimes(1);
     expect(onDone).not.toHaveBeenCalled();
     expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
   });
 
-  it("discards the candidate on Back and on Cancel, deleting nothing", async () => {
+  it("discards the candidate on Not this account and on Cancel, deleting nothing", async () => {
     const actions = settingsActions();
     const onDone = vi.fn();
     render(<Wizard actions={actions} onDone={onDone} />);
     await connect("Codex");
     hold("attempt-1", "codex");
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Back" })));
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Not this account" })),
+    );
     expect(actions.cancelConnection).toHaveBeenCalledWith({ id: "attempt-1" });
     expect(screen.getByRole("heading", { name: "Connect Codex" })).toBeTruthy();
+    // It says how to put the right account into Codex before trying again.
+    expect(screen.getByRole("status").textContent).toContain("run codex login");
     vi.mocked(actions.beginConnection).mockResolvedValueOnce({ id: "attempt-2" });
     await act(() => fireEvent.click(screen.getByRole("button", { name: "Connect" })));
     hold("attempt-2", "codex");
@@ -241,8 +249,7 @@ describe("Provider → Connect → Verify", () => {
     const view = render(<Wizard actions={actions} onDone={vi.fn()} />);
     await connect("Codex");
     hold("attempt-1", "codex");
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    fireEvent.click(screen.getByRole("button", ADD));
     view.unmount();
     await act(async () => {
       confirmed.resolve(true);
@@ -295,7 +302,7 @@ describe("Provider → Connect → Verify", () => {
         }),
       );
     });
-    const facts = document.querySelector(".detail-list")?.textContent ?? "";
+    const facts = document.querySelector(".verified-account")?.textContent ?? "";
     expect(facts).toContain("Account 0");
     expect(facts).toContain("Workspace hidden");
     expect(facts).not.toContain("new@example.test");
@@ -329,8 +336,7 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.getByText("Hidden while Hide account labels is on.")).toBeTruthy();
     // Typing still works, and the typed nickname is what is saved.
     fireEvent.change(field, { target: { value: "Secret" } });
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    await act(() => fireEvent.click(screen.getByRole("button", ADD)));
     expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Secret");
     aliases("off");
   });
@@ -439,8 +445,7 @@ describe("the settings connection route", () => {
     render(<SettingsHarness actions={actions} />);
     await connect("Claude");
     hold("attempt-1", "claude");
-    fireEvent.click(screen.getByRole("checkbox"));
-    await act(() => fireEvent.click(screen.getByRole("button", { name: "Add account" })));
+    await act(() => fireEvent.click(screen.getByRole("button", ADD)));
     expect(window.location.hash).toMatch(/^#\/settings\/accounts\//);
   });
 
@@ -479,8 +484,7 @@ describe("the settings connection route", () => {
     render(<SettingsHarness actions={actions} />);
     await connect("Claude");
     hold("attempt-1", "claude");
-    fireEvent.click(screen.getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    fireEvent.click(screen.getByRole("button", ADD));
     act(() => {
       window.location.hash = "#/settings/connect/request-2";
       fireEvent(window, new HashChangeEvent("hashchange"));

@@ -1,10 +1,10 @@
 /**
  * Navigation between the two windows.
  *
- * The popover owns the overview, quota detail, and add-account surfaces; the
- * settings window owns settings. When a settings control leads to a popover
- * surface, as Add account and Details do in the wireframe, the settings window
- * asks the popover to show it and steps aside.
+ * The popover owns the overview and quota detail; the settings window owns
+ * settings, including adding an account. When a settings control leads to a
+ * popover surface, as Details does, the settings window asks the popover to
+ * show it and steps aside.
  *
  * This is one of the audited integration wrappers allowed to use the raw event
  * API: the event is window-to-window presentation routing, carries no
@@ -22,7 +22,6 @@ const NAVIGATE_EVENT = "quota-popover-navigate";
 /** A popover surface another window may ask for. */
 export type PopoverTarget =
   | { readonly view: "overview" }
-  | { readonly view: "connect" }
   | {
       readonly view: "detail";
       readonly accountId: AccountId;

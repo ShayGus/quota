@@ -446,7 +446,7 @@ pub fn start() -> Result<(), String> {
         registry.mount_events(app);
         let handle = app.handle().clone();
         crate::platform::tray::install(&handle)?;
-        crate::platform::window::install_close_handlers(&handle);
+        crate::platform::window_events::install_close_handlers(&handle);
         // The overview is the only window a launch opens. The settings
         // window was created hidden and waits for a person to ask for it. A
         // launch at login starts quietly in the tray instead.

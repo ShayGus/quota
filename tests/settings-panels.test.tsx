@@ -54,7 +54,6 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       exportDiagnostics: vi.fn(() =>
         Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
       ),
-      showAddAccount: vi.fn(),
       showOverview: vi.fn(),
       showAccountDetail: vi.fn(),
       launchAtLogin: vi.fn(() => Promise.resolve(false)),
@@ -311,7 +310,12 @@ describe("account management identities", () => {
     ];
     const base = preferences();
     const panel = (confirmed: Preferences) => (
-      <AccountsPanel accounts={accounts} preferences={confirmed} actions={actions} />
+      <AccountsPanel
+        accounts={accounts}
+        preferences={confirmed}
+        actions={actions}
+        onAddAccount={vi.fn()}
+      />
     );
     const { rerender } = render(panel(base));
     const cards = screen.getAllByRole("article", { name: "Manage Claude Work" });
@@ -355,21 +359,36 @@ describe("account management identities", () => {
       },
     });
     const { rerender } = render(
-      <AccountsPanel accounts={accounts} preferences={aliased} actions={actions} />,
+      <AccountsPanel
+        accounts={accounts}
+        preferences={aliased}
+        actions={actions}
+        onAddAccount={vi.fn()}
+      />,
     );
     expect(
       screen.getByRole<HTMLButtonElement>("button", { name: "Rename" }).disabled,
     ).toBe(true);
 
     rerender(
-      <AccountsPanel accounts={accounts} preferences={preferences()} actions={actions} />,
+      <AccountsPanel
+        accounts={accounts}
+        preferences={preferences()}
+        actions={actions}
+        onAddAccount={vi.fn()}
+      />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
     const rename = screen.getByRole("dialog", { name: "Rename account" });
     const field = within(rename).getByLabelText<HTMLInputElement>("Account nickname");
     expect(field.classList.contains("masked")).toBe(false);
     rerender(
-      <AccountsPanel accounts={accounts} preferences={aliased} actions={actions} />,
+      <AccountsPanel
+        accounts={accounts}
+        preferences={aliased}
+        actions={actions}
+        onAddAccount={vi.fn()}
+      />,
     );
     expect(field.classList.contains("masked")).toBe(true);
     expect(
@@ -384,7 +403,12 @@ describe("account management identities", () => {
       account("a2", "claude", 2, [], { nickname: "Home" }),
     ];
     render(
-      <AccountsPanel accounts={accounts} preferences={preferences()} actions={actions} />,
+      <AccountsPanel
+        accounts={accounts}
+        preferences={preferences()}
+        actions={actions}
+        onAddAccount={vi.fn()}
+      />,
     );
     const card = screen.getByRole("article", { name: "Manage Claude Home" });
 
@@ -418,17 +442,19 @@ describe("account management identities", () => {
 
   it("monitors and adds accounts, and states that order cannot be changed", () => {
     const { actions } = settingsActions();
+    const onAddAccount = vi.fn();
     render(
       <AccountsPanel
         accounts={[account("a1", "codex", 1, [])]}
         preferences={preferences()}
         actions={actions}
+        onAddAccount={onAddAccount}
       />,
     );
     fireEvent.click(screen.getByRole("switch", { name: "Monitor Codex a1" }));
     expect(actions.setAccountEnabled).toHaveBeenCalledWith("a1", false);
     fireEvent.click(screen.getByRole("button", { name: "Add account" }));
-    expect(actions.showAddAccount).toHaveBeenCalledTimes(1);
+    expect(onAddAccount).toHaveBeenCalledTimes(1);
     for (const name of ["Move Codex a1 up", "Move Codex a1 down"])
       expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
   });

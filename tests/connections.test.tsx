@@ -35,7 +35,6 @@ function settingsActions(): SettingsActions {
     exportDiagnostics: vi.fn(() =>
       Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
     ),
-    showAddAccount: vi.fn(),
     showOverview: vi.fn(),
     showAccountDetail: vi.fn(),
     launchAtLogin: vi.fn(() => Promise.resolve(false)),
@@ -113,15 +112,8 @@ describe("pending connection acceptance", () => {
       />,
     );
     expect(screen.queryByRole("button", { name: "Verifying…" })).toBeNull();
-    expect(
-      screen.getByRole("heading", { name: "Is this the right account?" }),
-    ).toBeDefined();
-    expect(screen.getByRole("button", { name: "Add account" })).toHaveProperty(
-      "disabled",
-      true,
-    );
-    fireEvent.click(screen.getByRole("checkbox"));
-    expect(screen.getByRole("button", { name: "Add account" })).toHaveProperty(
+    expect(screen.getByRole("heading", { name: "Add this account?" })).toBeDefined();
+    expect(screen.getByRole("button", { name: "Add Codex account" })).toHaveProperty(
       "disabled",
       false,
     );
@@ -153,17 +145,23 @@ describe("pending connection acceptance", () => {
 });
 
 describe("settings connection session", () => {
-  it("asks the popover for the wizard from Accounts", () => {
+  it("opens its own add-account page from Accounts", () => {
     window.history.replaceState(null, "", "#/settings/accounts");
     const actions = settingsActions();
     const state = { ...initialRendererState, preferences: preferences() };
-    render(<Settings state={state} actions={actions} />);
-    // Both the title action and the empty state's action open the same wizard.
+    const view = render(<Settings state={state} actions={actions} />);
+    // Both the title action and the empty state's action open the add-account page.
     const adds = screen.getAllByRole("button", { name: "Add account" });
     expect(adds).toHaveLength(2);
-    for (const add of adds) fireEvent.click(add);
-    expect(actions.showAddAccount).toHaveBeenCalledTimes(2);
-    expect(window.location.hash).toBe("#/settings/accounts");
+    const [add] = adds;
+    if (add === undefined) throw new Error("Add account is missing");
+    act(() => {
+      fireEvent.click(add);
+      fireEvent(window, new HashChangeEvent("hashchange"));
+    });
+    expect(window.location.hash).toMatch(/^#\/settings\/connect\//);
+    view.rerender(<Settings state={state} actions={actions} />);
+    expect(screen.getByRole("heading", { name: "Add a subscription" })).toBeTruthy();
   });
 
   it("keeps acceptance and provider recovery on the host's connection route", async () => {
