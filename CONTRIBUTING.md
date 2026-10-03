@@ -61,6 +61,7 @@ From the repository root:
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
 bun run test:ui                        # interface tests, see section 7
+bun run build:e2e && xvfb-run -a bun run test:e2e   # real-app tests, Linux, see section 8
 ```
 
 CI runs exactly these commands. If a command passes locally and fails in CI, the
@@ -266,3 +267,53 @@ The interface job is part of `.github/workflows/ci.yml`, not a workflow of its o
 release workflow accepts a commit only when that file's CI run completed successfully, so
 a release needs the unit tests, the interface tests and every other CI job green on the
 exact commit. Keep new test layers inside `ci.yml` for the same reason.
+
+## 8. Real-app tests (Linux)
+
+The interface tests fake the Rust host. The real-app suite does not: `bun run build:e2e`
+builds the actual desktop application in debug mode (twice: once as is, once with the
+`sample-data` feature that seeds ten fixture accounts), and `bun run test:e2e` starts it
+under a display and drives it through `tauri-driver`, Tauri's official WebDriver server,
+which launches WebKitGTK's `WebKitWebDriver`. The client is a small W3C WebDriver client
+in `tests/e2e/webdriver.ts`; Vitest is the runner (`vitest.e2e.config.ts`), so the suite
+adds no dependency.
+
+Every journey gets its own sandbox (`tests/e2e/sandbox.ts`): a temporary folder used as
+`HOME` and as every `XDG_*` folder, and a private D-Bus session bus. The application can
+neither read nor write the real user's data, the keyring, or another journey's
+single-instance lock. The folder is deleted afterwards.
+
+The journeys are: first launch with an empty profile; the main popover at 440 px; settings
+opening from the popover and a preference surviving a restart through the tray's Quit; the
+privacy aliases on the sample accounts; a second launch not starting a second app and
+bringing the first forward; quitting from the tray menu (chosen over D-Bus, the way a
+panel would) leaving no process and no lock behind; and the development identity: a debug
+build uses `app.quota.monitor.dev`, writes only under that folder name, and never creates
+the production one.
+
+Not covered: adding an account against a fake local provider. The app has no seam for it:
+every adapter calls its provider's real HTTPS address, and the address is a constant, so a
+fake provider would need production code. The journey is listed as skipped in the output.
+Also not covered: Windows, macOS, installed packages (these tests run the unpackaged debug
+binary), and the tray icon's picture, which needs a panel.
+
+To run it locally on Linux you need a display, `dbus-daemon`, `busctl`, `tauri-driver` and
+`WebKitWebDriver`:
+
+```bash
+sudo apt install xvfb webkit2gtk-driver      # the package is webkitgtk-webdriver on newer Ubuntu
+cargo install tauri-driver --version 2.1.0 --locked
+bun run build:e2e                            # about 2 min cold, builds both binaries
+xvfb-run -a bun run test:e2e                 # about 15 s
+```
+
+With a desktop session you can run `bun run test:e2e` directly and watch the windows;
+`QUOTA_E2E_APP` and `QUOTA_E2E_SAMPLE_APP` point the suite at other binaries. Screenshots
+and the logs of every journey are written to `test-results/e2e/`, and CI uploads them as
+`real-app-results`.
+
+### How this gates a release
+
+Like the interface job, this job is in `.github/workflows/ci.yml`. The release workflow
+accepts a commit only when that file's CI run succeeded, so a release needs the unit
+tests, the interface tests and the real-app suite all green on that commit.
