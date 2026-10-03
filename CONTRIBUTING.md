@@ -10,15 +10,22 @@ Prerequisites: `rustup`, and [Bun](https://bun.sh) for the frontend.
 ```bash
 git clone https://github.com/ShayGus/quota.git
 cd quota
-rustup show active-toolchain          # installs the pinned compiler on first use
 bun install --frozen-lockfile          # the repository root is the frontend package
+cd src-tauri                           # the Cargo workspace: every Rust package
+rustup show active-toolchain          # installs the pinned compiler on first use
 cargo build --workspace --locked
 ```
 
-`rust-toolchain.toml` owns the compiler pin and the required components. Do not edit the
-version in a workflow file; it lives in that one file, so it cannot drift.
+The repository root is the frontend; everything Rust lives in the Cargo workspace under
+`src-tauri`: the host, `src-tauri/crates/`, `src-tauri/xtask/`, the lockfile, and the
+Cargo and lint configuration. Run `cargo` from `src-tauri` and `bun` from the root.
+
+`src-tauri/rust-toolchain.toml` owns the compiler pin and the required components. Do not
+edit the version in a workflow file; it lives in that one file, so it cannot drift.
 
 ## 2. Verify the versions
+
+From `src-tauri`:
 
 ```bash
 rustc --version                       # must match rust-toolchain.toml
@@ -30,14 +37,14 @@ cargo update --workspace --dry-run    # what could move inside existing ranges
 `docs/dependencies.md` points to the version owners and explains the declared minimum Rust
 version and the two compatibility holds: the Specta release candidate and SQLx 0.8.
 
-For the frontend, read `the repository root/bun.lock` after
+For the frontend, read `bun.lock` at the repository root after
 `bun install --frozen-lockfile`. Do not upgrade a dependency as a side effect of another
 change: dependency moves are their own pull request, because they change the lockfile, the
 advisory report, and sometimes the licence set.
 
 ## 3. Run the checks
 
-From the repository root:
+From `src-tauri`:
 
 ```bash
 cargo fmt --all -- --check
@@ -49,7 +56,7 @@ cargo xtask check-release
 cargo xtask bindings --check
 ```
 
-From `the repository root`:
+From the repository root:
 
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
@@ -60,11 +67,11 @@ difference is the environment, not the command.
 
 The same commands run on Windows and Linux, and are meant to run unchanged on macOS (see
 [Platforms](docs/platforms.md)). On Windows, stop a running development app first, because
-it holds `target\debug\quota.exe` open. Tauri needs the version 6 common controls, which
-only the Windows application manifest selects, so `src-tauri/build.rs` and
-`crates/quota-persistence/build.rs` hand `src-tauri/windows-app-manifest.xml` to the
-linker for every binary they link, tests included. A crate whose tests start linking Tauri
-needs the same build script; without it its test binary exits with
+it holds `src-tauri\target\debug\quota.exe` open. Tauri needs the version 6 common
+controls, which only the Windows application manifest selects, so `src-tauri/build.rs` and
+`src-tauri/crates/quota-persistence/build.rs` hand `src-tauri/windows-app-manifest.xml` to
+the linker for every binary they link, tests included. A crate whose tests start linking
+Tauri needs the same build script; without it its test binary exits with
 `STATUS_ENTRYPOINT_NOT_FOUND` before any test runs.
 
 The inspection checks are described in
@@ -92,7 +99,7 @@ The cold desktop build compiles 645 units and is bound by its dependency tree, n
 linking: the final link alone is 6.1 s of the 79.6 s. Installing `lld` or `mold` would
 therefore buy about 5 s and was deliberately not done.
 
-Two profile settings carry the weight, in the root `Cargo.toml`:
+Two profile settings carry the weight, in the workspace manifest, `src-tauri/Cargo.toml`:
 
 - `[profile.dev] debug = "line-tables-only"` and
   `[profile.dev.package."*"] debug = false`. Before, a cold desktop build wrote 5.7 GB of
@@ -142,6 +149,8 @@ Provider work is tested against fixtures, never against a live paid account.
 - A decoder test exercises decoding and normalisation together, not a mocked normalised
   snapshot.
 
+From `src-tauri`:
+
 ```bash
 cargo test -p quota-domain --locked
 cargo test -p quota-providers --locked --features test-fixtures
@@ -173,11 +182,12 @@ bun tauri build        # release bundles
 - Every `uses:` in `.github/workflows/` is pinned to a full 40-character commit SHA. A tag
   or a branch fails `cargo xtask check-release`, and a `run:` step must not interpolate
   event text such as a pull-request title or a branch name.
-- [The workspace lint tables](Cargo.toml) own Rust and Clippy lint levels;
-  [clippy.toml](clippy.toml) owns thresholds and test-context allowances. CI runs Clippy
-  with `-D warnings`, so a warn-level lint fails the build. Rewrite the site first; an
-  `#[expect(..., reason = "...")]` is for the case where the rewrite is genuinely worse,
-  and that reason belongs in [the exception register](docs/exceptions.md).
+- [The workspace lint tables](src-tauri/Cargo.toml) own Rust and Clippy lint levels;
+  [clippy.toml](src-tauri/clippy.toml) owns thresholds and test-context allowances. CI
+  runs Clippy with `-D warnings`, so a warn-level lint fails the build. Rewrite the site
+  first; an `#[expect(..., reason = "...")]` is for the case where the rewrite is
+  genuinely worse, and that reason belongs in
+  [the exception register](docs/exceptions.md).
 - An `#[expect(...)]` that stops firing is a warning, because
   `unfulfilled_lint_expectations = "warn"`. Do not add a blanket `#[allow(...)]`.
 

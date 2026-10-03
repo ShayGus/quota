@@ -24,7 +24,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     outcome.note(format!("{BINDINGS} regenerated from the Rust IPC layer"));
 
     let result = Command::new(cargo())
-        .current_dir(root)
+        .current_dir(root.join(crate::scan::WORKSPACE))
         .args([
             "test",
             "--locked",

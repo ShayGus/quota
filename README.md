@@ -124,25 +124,28 @@ sudo apt-get install --no-install-recommends -y \
 git clone https://github.com/ShayGus/quota.git
 cd quota
 
-# 1. The pinned compiler, with rustfmt and clippy. rustup reads
-#    rust-toolchain.toml and installs the exact version listed there.
-rustup show active-toolchain
-
-# 2. The frontend toolchain. The repository root is the frontend package, so
+# 1. The frontend toolchain. The repository root is the frontend package, so
 #    the lockfile and the install are both here.
 bun install --frozen-lockfile
+
+# 2. The pinned compiler, with rustfmt and clippy. Everything Rust lives in the
+#    Cargo workspace under src-tauri; rustup reads its rust-toolchain.toml and
+#    installs the exact version listed there.
+cd src-tauri
+rustup show active-toolchain
 
 # 3. The Rust build.
 cargo build --workspace --locked
 ```
 
-`rust-toolchain.toml` owns the compiler pin; `Cargo.toml` owns the declared minimum Rust
-version. [Dependency record](docs/dependencies.md) explains how to inspect the resolved
-versions and compatibility constraints.
+`src-tauri/rust-toolchain.toml` owns the compiler pin; `src-tauri/Cargo.toml` owns the
+declared minimum Rust version. [Dependency record](docs/dependencies.md) explains how to
+inspect the resolved versions and compatibility constraints.
 
 ## Commands
 
-Run every check from the repository root.
+Run every `cargo` check from `src-tauri`, and every `bun` command from the repository
+root.
 
 | Command                                                               | What it checks                                                                                                                |
 | --------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
@@ -169,22 +172,25 @@ and exits non-zero.
 
 ```text
 quota/
-├── Cargo.toml              # Virtual workspace, resolver 3
-├── Cargo.lock              # The one committed Rust lockfile
-├── rust-toolchain.toml     # Pinned compiler
-├── rustfmt.toml, clippy.toml
-├── deny.toml               # cargo-deny policy
+├── package.json, src/      # The React 19 renderer, at the repository root
+├── tests/                  # Renderer tests
 ├── .github/workflows/      # ci.yml, dependencies.yml
-├── crates/
-│   ├── quota-domain/       # Validated values, quota windows, ranking
-│   ├── quota-core/         # Accounts, snapshots, scheduler, alerts, ports
-│   ├── quota-contracts/    # Serde + Specta IPC transport DTOs
-│   ├── quota-providers/    # Provider clients, decoders, strategies
-│   └── quota-persistence/  # Typed Store and SQLite repositories
-├── the repository root/           # React 19 renderer and the Tauri host
-├── xtask/                  # Repository gates
-└── docs/                   # Dependency record, acceptance map, architecture,
-                            # exceptions, providers
+├── docs/                   # Dependency record, acceptance map, architecture,
+│                           # exceptions, providers
+└── src-tauri/              # Everything Rust: the Cargo workspace
+    ├── Cargo.toml          # The workspace (resolver 3) and the Tauri host
+    ├── Cargo.lock          # The one committed Rust lockfile
+    ├── rust-toolchain.toml # Pinned compiler
+    ├── rustfmt.toml, clippy.toml
+    ├── deny.toml           # cargo-deny policy
+    ├── src/                # The Tauri host
+    ├── crates/
+    │   ├── quota-domain/       # Validated values, quota windows, ranking
+    │   ├── quota-core/         # Accounts, snapshots, scheduler, alerts, ports
+    │   ├── quota-contracts/    # Serde + Specta IPC transport DTOs
+    │   ├── quota-providers/    # Provider clients, decoders, strategies
+    │   └── quota-persistence/  # Typed Store and SQLite repositories
+    └── xtask/              # Repository gates
 ```
 
 `docs/architecture.md` has the dependency graph, the allowed dependency directions, and

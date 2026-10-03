@@ -11,8 +11,8 @@ fn main() {
     if !(windows && msvc) {
         return;
     }
-    let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../src-tauri/windows-app-manifest.xml");
+    let manifest =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../windows-app-manifest.xml");
     println!("cargo:rerun-if-changed={}", manifest.display());
     println!("cargo:rustc-link-arg=/MANIFEST:EMBED");
     println!("cargo:rustc-link-arg=/MANIFESTINPUT:{}", manifest.display());

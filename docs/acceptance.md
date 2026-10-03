@@ -5,9 +5,10 @@ Which layer implements each specified acceptance case, and where its evidence li
 not prove native runtime behaviour. This file records evidence; it does not claim that
 every case passes.
 
-Layers named below: `domain` (`crates/quota-domain`), `core` (`crates/quota-core`),
-`providers` (`crates/quota-providers`), `persistence` (`crates/quota-persistence`),
-`contracts` (`crates/quota-contracts`), `host` (`src-tauri`), `ui` (`src`).
+Layers named below: `domain` (`src-tauri/crates/quota-domain`), `core`
+(`src-tauri/crates/quota-core`), `providers` (`src-tauri/crates/quota-providers`),
+`persistence` (`src-tauri/crates/quota-persistence`), `contracts`
+(`src-tauri/crates/quota-contracts`), `host` (`src-tauri`), `ui` (`src`).
 
 The recorded local evidence covers compilation, strict linting, tests, and a WSLg launch
 on 2026-10-01 showing ten fictional sample accounts with 19 readings. The Tauri native
@@ -26,22 +27,22 @@ is a development build, not a packaged installer.
 
 ## AC-01 to AC-14: normalisation and presentation
 
-| ID    | Layer      | Evidence                                                                                      | Status                                                                |
-| ----- | ---------- | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| AC-01 | domain     | `percent::Percent::from_used_percent`; unit tests in `crates/quota-domain/src/percent.rs`     | implemented                                                           |
-| AC-02 | domain     | `quota::window` window semantics; independent windows carry independent measurements          | implemented                                                           |
-| AC-03 | domain     | `quota::window::QuotaCategory`; a missing category is absent, never synthesised               | implemented                                                           |
-| AC-04 | domain     | `quota::measurement::UnavailableReason`; a missing field becomes an unavailable measurement   | implemented                                                           |
-| AC-05 | domain     | `quota::money::MoneyMeasurement`; extra spend is a distinct role, not an included allowance   | implemented                                                           |
-| AC-06 | domain     | `quota::measurement::QuantityMeasurement`; a bare amount has no denominator and no percentage | implemented                                                           |
-| AC-07 | domain     | `quota::window::Enforcement`; unlimited is its own state                                      | implemented                                                           |
-| AC-08 | domain     | `Percent::is_just_above_zero`                                                                 | implemented                                                           |
-| AC-09 | domain     | `quota::window` not-entitled state; no division by a zero limit                               | implemented                                                           |
-| AC-10 | domain     | `Percent` keeps the original evidence; `arc_fraction` clamps only the drawn arc               | implemented                                                           |
-| AC-11 | core, host | Shared supervised polling with bounded concurrency; core tests and host worker source         | source and local launch exist; sustained native scheduling unverified |
-| AC-12 | domain     | one window per scope, so one limit can replenish alone                                        | implemented                                                           |
-| AC-13 | domain     | `quota::window::BoundaryKind` distinguishes a partial replenishment from a reset              | implemented                                                           |
-| AC-14 | providers  | Codex, Claude, and OpenCode Go decoder mappings and provider tests                            | implemented                                                           |
+| ID    | Layer      | Evidence                                                                                            | Status                                                                |
+| ----- | ---------- | --------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| AC-01 | domain     | `percent::Percent::from_used_percent`; unit tests in `src-tauri/crates/quota-domain/src/percent.rs` | implemented                                                           |
+| AC-02 | domain     | `quota::window` window semantics; independent windows carry independent measurements                | implemented                                                           |
+| AC-03 | domain     | `quota::window::QuotaCategory`; a missing category is absent, never synthesised                     | implemented                                                           |
+| AC-04 | domain     | `quota::measurement::UnavailableReason`; a missing field becomes an unavailable measurement         | implemented                                                           |
+| AC-05 | domain     | `quota::money::MoneyMeasurement`; extra spend is a distinct role, not an included allowance         | implemented                                                           |
+| AC-06 | domain     | `quota::measurement::QuantityMeasurement`; a bare amount has no denominator and no percentage       | implemented                                                           |
+| AC-07 | domain     | `quota::window::Enforcement`; unlimited is its own state                                            | implemented                                                           |
+| AC-08 | domain     | `Percent::is_just_above_zero`                                                                       | implemented                                                           |
+| AC-09 | domain     | `quota::window` not-entitled state; no division by a zero limit                                     | implemented                                                           |
+| AC-10 | domain     | `Percent` keeps the original evidence; `arc_fraction` clamps only the drawn arc                     | implemented                                                           |
+| AC-11 | core, host | Shared supervised polling with bounded concurrency; core tests and host worker source               | source and local launch exist; sustained native scheduling unverified |
+| AC-12 | domain     | one window per scope, so one limit can replenish alone                                              | implemented                                                           |
+| AC-13 | domain     | `quota::window::BoundaryKind` distinguishes a partial replenishment from a reset                    | implemented                                                           |
+| AC-14 | providers  | Codex, Claude, and OpenCode Go decoder mappings and provider tests                                  | implemented                                                           |
 
 ## AC-45 to AC-61: UI and windowing
 
@@ -104,7 +105,7 @@ is a development build, not a packaged installer.
 | AC-133, AC-134   | persistence     | crash, checkpoint, and backup recovery                                                    | partially: Store recovery tests exist; SQLite crash recovery is unverified |
 | AC-135           | core, host      | reconciled non-idempotent mutation and connection-generation checks                       | source and core tests exist; native runtime unverified                     |
 | AC-136, AC-137   | host, CI        | native WebDriver lane and shipping-artifact inspection                                    | not implemented: neither the driver lane nor the artifact exists           |
-| AC-138           | domain          | property tests in `crates/quota-domain/tests/ranking.rs` reject shared globals            | implemented                                                                |
+| AC-138           | domain          | property tests in `src-tauri/crates/quota-domain/tests/ranking.rs` reject shared globals  | implemented                                                                |
 | AC-139           | persistence     | SQLx offline metadata drift                                                               | not implemented: no query metadata yet                                     |
 | AC-140           | docs            | `CONTRIBUTING.md` documents one clean-checkout path and the exact commands                | implemented                                                                |
 | AC-141           | CI              | `.github/workflows/` pins every action to a commit SHA and asks for read-only permissions | implemented                                                                |

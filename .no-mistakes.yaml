@@ -4,21 +4,24 @@ commands:
   prepare: bun install --frozen-lockfile
 
   # The static gates. No command is dropped, replaced, or made advisory.
+  # Cargo commands run in the Cargo workspace, src-tauri; bun runs at the root.
   lint: >-
+    (cd src-tauri &&
     cargo fmt --all -- --check &&
     cargo clippy --workspace --all-targets --locked -- -D warnings &&
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked &&
     cargo xtask check-architecture &&
     cargo xtask check-release &&
-    cargo xtask bindings --check &&
+    cargo xtask bindings --check) &&
     bun run typecheck &&
     bun run lint &&
     bun run format:check
 
   # The gates that execute code.
   test: >-
+    (cd src-tauri &&
     cargo build --locked -p quota-desktop &&
-    cargo test --workspace --locked &&
+    cargo test --workspace --locked) &&
     bun run test &&
     bun run build
 
@@ -32,8 +35,8 @@ test:
 
     Repository-local dependency preparation is allowed through commands.prepare.
     Cold Cargo compilation is allowed when this worktree has no build cache.
-    Prefer existing target/ and node_modules caches. Never run cargo clean,
-    delete target/, or point CARGO_TARGET_DIR somewhere new. Never install
+    Prefer existing src-tauri/target/ and node_modules caches. Never run cargo clean,
+    delete src-tauri/target/, or point CARGO_TARGET_DIR somewhere new. Never install
     anything outside the repository, use sudo, or install system packages.
 
     Report the available command results with their exit codes and wall-clock

@@ -4,6 +4,10 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Directory names the walk never descends into.
+/// The Cargo workspace, relative to the repository root. Every Rust package,
+/// the lockfile, and the Cargo configuration live under it.
+pub(crate) const WORKSPACE: &str = "src-tauri";
+
 const SKIPPED_DIRECTORIES: [&str; 4] = ["target", "node_modules", ".git", "dist"];
 
 /// Reads a file as UTF-8 text, reporting a short reason on failure.

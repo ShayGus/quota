@@ -20,16 +20,16 @@ const PIN: &str = "c7d271a06469bdf4744bfdeadca7458a1f3d02e5";
 /// What one gate call reports.
 type Outcome = Result<(), String>;
 
-/// The workspace manifest a compliant tree carries.
+/// The workspace half of the manifest a compliant tree carries.
 fn workspace_manifest() -> String {
     format!(
-        "[workspace]\nmembers = [\"src-tauri\"]\n\n\
+        "[workspace]\nmembers = [\"crates/*\"]\n\n\
          [workspace.dependencies]\n\
          tauri-plugin-mcp = {{ git = \"https://github.com/P3GLEG/tauri-plugin-mcp\", rev = \"{PIN}\" }}\n"
     )
 }
 
-/// The desktop manifest a compliant tree carries.
+/// The desktop half of the manifest a compliant tree carries.
 fn member_manifest() -> String {
     "[package]\nname = \"quota-desktop\"\n\n\
      [features]\nagent-inspection = [\"dep:tauri-plugin-mcp\"]\n\n\
@@ -37,18 +37,21 @@ fn member_manifest() -> String {
         .to_string()
 }
 
-/// Writes the smallest tree the gate reads: two manifests, `deny.toml`, one
-/// workflow with a pinned action, and a `tauri.conf.json`.
+/// Writes the smallest tree the gate reads: the workspace manifest, which is
+/// also the desktop host's, `deny.toml`, one workflow with a pinned action, and
+/// a `tauri.conf.json`, all where the repository keeps them.
 fn tree(root: &Path, workspace: &str, member: &str) -> Result<(), String> {
     let write = |path: PathBuf, body: &str| -> Result<(), String> {
         fs::write(&path, body).map_err(|error| format!("{}: {error}", path.display()))
     };
     fs::create_dir_all(root.join("src-tauri")).map_err(|e| e.to_string())?;
     fs::create_dir_all(root.join(".github/workflows")).map_err(|e| e.to_string())?;
-    write(root.join("Cargo.toml"), workspace)?;
-    write(root.join("src-tauri/Cargo.toml"), member)?;
     write(
-        root.join("deny.toml"),
+        root.join("src-tauri/Cargo.toml"),
+        &format!("{member}\n{workspace}"),
+    )?;
+    write(
+        root.join("src-tauri/deny.toml"),
         "[licenses]\nallow = [\"MIT\", \"Apache-2.0\", \"Unicode-3.0\", \"BSD-3-Clause\"]\n",
     )?;
     write(
@@ -131,7 +134,7 @@ fn a_branch_instead_of_a_commit_fails() -> Result<(), String> {
     let root = directory.path();
     tree(
         root,
-        "[workspace]\nmembers = [\"src-tauri\"]\n\n\
+        "[workspace]\nmembers = [\"crates/*\"]\n\n\
          [workspace.dependencies]\n\
          tauri-plugin-mcp = { git = \"https://github.com/P3GLEG/tauri-plugin-mcp\", branch = \"main\" }\n",
         &member_manifest(),
@@ -144,12 +147,12 @@ fn a_dependent_selecting_the_feature_fails() -> Result<(), String> {
     let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
     let root = directory.path();
     tree(root, &workspace_manifest(), &member_manifest())?;
-    fs::create_dir_all(root.join("crates/probe")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(root.join("src-tauri/crates/probe")).map_err(|e| e.to_string())?;
     fs::write(
-        root.join("crates/probe/Cargo.toml"),
+        root.join("src-tauri/crates/probe/Cargo.toml"),
         "[package]\nname = \"probe\"\n\n\
          [dependencies]\n\
-         quota-desktop = { path = \"../../src-tauri\", features = [\"agent-inspection\"] }\n",
+         quota-desktop = { path = \"../..\", features = [\"agent-inspection\"] }\n",
     )
     .map_err(|e| e.to_string())?;
     fails_with(root, "a release build must never select it")
@@ -271,18 +274,18 @@ fn a_renamed_member_source_is_not_a_workspace_inheritance() -> Outcome {
 #[test]
 fn dependent_aliases_are_resolved_across_dependency_representations() -> Outcome {
     let declarations = [
-        "[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
-        "[dependencies.desktop]\npackage = 'quota-desktop'\npath = '../../src-tauri'\nfeatures = [\n 'inspect',\n]\n",
-        "[build-dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
-        "[dev-dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
-        "[target.'cfg(unix)'.dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', features = ['inspect'] }\n",
+        "[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', features = ['inspect'] }\n",
+        "[dependencies.desktop]\npackage = 'quota-desktop'\npath = '../..'\nfeatures = [\n 'inspect',\n]\n",
+        "[build-dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', features = ['inspect'] }\n",
+        "[dev-dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', features = ['inspect'] }\n",
+        "[target.'cfg(unix)'.dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', features = ['inspect'] }\n",
         "[dependencies]\ndesktop = { workspace = true }\n",
     ];
     for declaration in declarations {
         let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
         let workspace = if declaration == "[dependencies]\ndesktop = { workspace = true }\n" {
             format!(
-                "{}desktop = {{ package = 'quota-desktop', path = 'src-tauri', features = ['inspect'] }}\n",
+                "{}desktop = {{ package = 'quota-desktop', path = '.', features = ['inspect'] }}\n",
                 workspace_manifest()
             )
         } else {
@@ -293,10 +296,10 @@ fn dependent_aliases_are_resolved_across_dependency_representations() -> Outcome
             "[features]\ninspect = ['nested']\nnested = ['agent-inspection']\n",
         );
         tree(directory.path(), &workspace, &member)?;
-        fs::create_dir_all(directory.path().join("crates/probe"))
+        fs::create_dir_all(directory.path().join("src-tauri/crates/probe"))
             .map_err(|error| error.to_string())?;
         fs::write(
-            directory.path().join("crates/probe/Cargo.toml"),
+            directory.path().join("src-tauri/crates/probe/Cargo.toml"),
             format!("[package]\nname = 'probe'\n{declaration}"),
         )
         .map_err(|error| error.to_string())?;
@@ -316,9 +319,10 @@ fn default_features_follow_forwarded_dependency_aliases() -> Outcome {
         "[features]\ninspect = ['agent-inspection']\n",
     );
     tree(directory.path(), &workspace_manifest(), &member)?;
-    fs::create_dir_all(directory.path().join("crates/probe")).map_err(|error| error.to_string())?;
-    fs::write(directory.path().join("crates/probe/Cargo.toml"),
-        "[package]\nname = 'probe'\n[features]\ndefault = ['indirect']\nindirect = ['desktop/inspect']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true }\n"
+    fs::create_dir_all(directory.path().join("src-tauri/crates/probe"))
+        .map_err(|error| error.to_string())?;
+    fs::write(directory.path().join("src-tauri/crates/probe/Cargo.toml"),
+        "[package]\nname = 'probe'\n[features]\ndefault = ['indirect']\nindirect = ['desktop/inspect']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true }\n"
     ).map_err(|error| error.to_string())?;
     fails_with(directory.path(), "in a default feature set")
 }
@@ -327,7 +331,7 @@ fn default_features_follow_forwarded_dependency_aliases() -> Outcome {
 fn equivalent_toml_and_unselected_aliases_remain_compliant() -> Outcome {
     let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
     let workspace = format!(
-        "[workspace]\nmembers = ['src-tauri']\n[workspace.dependencies.inspection]\npackage = 'tauri-plugin-mcp'\ngit = 'https://github.com/P3GLEG/tauri-plugin-mcp'\nrev = '{PIN}' # branch = 'main'\n"
+        "[workspace]\nmembers = ['crates/*']\n[workspace.dependencies.inspection]\npackage = 'tauri-plugin-mcp'\ngit = 'https://github.com/P3GLEG/tauri-plugin-mcp'\nrev = '{PIN}' # branch = 'main'\n"
     );
     let member = "[package]\nname = 'quota-desktop'\n[features]\ndefault = ['safe', 'inspection?/screenshot']\nsafe = ['cycle']\ncycle = ['safe']\ninspect = ['agent-inspection']\nagent-inspection = [\n 'dep:inspection',\n]\n[dependencies.inspection]\nworkspace = true\noptional = true # optional = false\n";
     tree(directory.path(), &workspace, member)?;
@@ -368,10 +372,14 @@ fn weak_forwarding_only_enables_inspection_when_the_dependency_is_active() -> Ou
         "[features]\ninspect = ['agent-inspection']\n",
     );
     tree(directory.path(), &workspace_manifest(), &member)?;
-    fs::create_dir_all(directory.path().join("crates/probe")).map_err(|error| error.to_string())?;
-    let probe = "[package]\nname = 'probe'\n[features]\ndefault = ['desktop?/inspect']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n";
-    fs::write(directory.path().join("crates/probe/Cargo.toml"), probe)
+    fs::create_dir_all(directory.path().join("src-tauri/crates/probe"))
         .map_err(|error| error.to_string())?;
+    let probe = "[package]\nname = 'probe'\n[features]\ndefault = ['desktop?/inspect']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false }\n";
+    fs::write(
+        directory.path().join("src-tauri/crates/probe/Cargo.toml"),
+        probe,
+    )
+    .map_err(|error| error.to_string())?;
     let (passed, report) = gate(directory.path())?;
     if !passed {
         return Err(format!(
@@ -379,7 +387,7 @@ fn weak_forwarding_only_enables_inspection_when_the_dependency_is_active() -> Ou
         ));
     }
     fs::write(
-        directory.path().join("crates/probe/Cargo.toml"),
+        directory.path().join("src-tauri/crates/probe/Cargo.toml"),
         probe.replace(
             "['desktop?/inspect']",
             "['dep:desktop', 'desktop?/inspect']",
@@ -393,7 +401,7 @@ fn weak_forwarding_only_enables_inspection_when_the_dependency_is_active() -> Ou
 fn workspace_and_member_feature_selections_are_additive() -> Outcome {
     let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
     let workspace = format!(
-        "{}desktop = {{ package = 'quota-desktop', path = 'src-tauri', default-features = false, features = ['inspect'] }}\n",
+        "{}desktop = {{ package = 'quota-desktop', path = '.', default-features = false, features = ['inspect'] }}\n",
         workspace_manifest()
     );
     let member = member_manifest().replace(
@@ -401,8 +409,9 @@ fn workspace_and_member_feature_selections_are_additive() -> Outcome {
         "[features]\ninspect = ['agent-inspection']\n",
     );
     tree(directory.path(), &workspace, &member)?;
-    fs::create_dir_all(directory.path().join("crates/probe")).map_err(|error| error.to_string())?;
-    fs::write(directory.path().join("crates/probe/Cargo.toml"),
+    fs::create_dir_all(directory.path().join("src-tauri/crates/probe"))
+        .map_err(|error| error.to_string())?;
+    fs::write(directory.path().join("src-tauri/crates/probe/Cargo.toml"),
         "[package]\nname = 'probe'\n[dependencies]\ndesktop = { workspace = true, default-features = false, features = [] }\n")
         .map_err(|error| error.to_string())?;
     fails_with(
@@ -421,9 +430,9 @@ fn inspection_dependency_ownership_covers_target_and_build_tables() -> Outcome {
     ] {
         let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
         tree(directory.path(), &workspace_manifest(), &member_manifest())?;
-        fs::create_dir_all(directory.path().join("crates/probe"))
+        fs::create_dir_all(directory.path().join("src-tauri/crates/probe"))
             .map_err(|error| error.to_string())?;
-        fs::write(directory.path().join("crates/probe/Cargo.toml"),
+        fs::write(directory.path().join("src-tauri/crates/probe/Cargo.toml"),
             format!("[package]\nname = 'probe'\n[{kind}.inspection]\npackage = 'tauri-plugin-mcp'\nversion = '0.3.1'\noptional = true\n"))
             .map_err(|error| error.to_string())?;
         fails_with(directory.path(), "may only be declared by")?;
@@ -442,7 +451,7 @@ fn workspace_pins_are_parsed_as_sources_and_commit_values() -> Outcome {
     ] {
         let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
         let workspace = format!(
-            "[workspace]\nmembers = ['src-tauri']\n[workspace.dependencies]\ntauri-plugin-mcp = {{ {source} }}\n"
+            "[workspace]\nmembers = ['crates/*']\n[workspace.dependencies]\ntauri-plugin-mcp = {{ {source} }}\n"
         );
         tree(directory.path(), &workspace, &member_manifest())?;
         fails_with(directory.path(), "40-character commit SHA")?;
@@ -451,7 +460,7 @@ fn workspace_pins_are_parsed_as_sources_and_commit_values() -> Outcome {
 }
 
 fn write_manifest(root: &Path, name: &str, body: &str) -> Outcome {
-    let directory = root.join("crates").join(name);
+    let directory = root.join("src-tauri/crates").join(name);
     fs::create_dir_all(&directory).map_err(|error| error.to_string())?;
     fs::write(directory.join("Cargo.toml"), body).map_err(|error| error.to_string())
 }
@@ -464,7 +473,7 @@ fn incoming_features_are_unified_before_weak_forwarding() -> Outcome {
     write_manifest(
         root,
         "bridge",
-        "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
+        "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false }\n",
     )?;
     write_manifest(
         root,
@@ -493,7 +502,7 @@ fn optional_dependencies_without_default_features_still_receive_features() -> Ou
         write_manifest(
             root,
             "bridge",
-            "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
+            "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false }\n",
         )?;
         write_manifest(
             root,
@@ -515,7 +524,7 @@ fn unselected_optional_dependency_features_do_not_activate_inspection() -> Outco
     write_manifest(
         root,
         "probe",
-        "[package]\nname = 'probe'\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false, features = ['agent-inspection'] }\n",
+        "[package]\nname = 'probe'\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false, features = ['agent-inspection'] }\n",
     )?;
     let (passed, report) = gate(root)?;
     if !passed {
@@ -531,7 +540,7 @@ fn identically_named_packages_from_different_paths_do_not_unify() -> Outcome {
     let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
     let root = directory.path();
     tree(root, &workspace_manifest(), &member_manifest())?;
-    let bridge = "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n";
+    let bridge = "[package]\nname = 'bridge'\n[features]\nactivate = ['dep:desktop']\ninspect = ['desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false }\n";
     write_manifest(
         root,
         "bridge-left",
@@ -699,7 +708,7 @@ fn strong_optional_forwarding_activates_same_named_parent_feature() -> Outcome {
             root,
             "bridge",
             &format!(
-                "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[{table}]\ndesktop = {{ package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }}\n"
+                "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[{table}]\ndesktop = {{ package = 'quota-desktop', path = '../..', optional = true, default-features = false }}\n"
             ),
         )?;
         fails_with(root, "a release build must never select it")?;
@@ -715,7 +724,7 @@ fn strong_optional_forwarding_activates_implicit_parent_feature() -> Outcome {
     write_manifest(
         root,
         "bridge",
-        "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }\n",
+        "[package]\nname = 'bridge'\n[features]\ndefault = ['desktop/custom-protocol', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = { package = 'quota-desktop', path = '../..', optional = true, default-features = false }\n",
     )?;
     fails_with(root, "a release build must never select it")
 }
@@ -730,7 +739,7 @@ fn weak_optional_forwarding_does_not_activate_same_named_parent_feature() -> Out
             root,
             "bridge",
             &format!(
-                "[package]\nname = 'bridge'\n[features]\ndefault = ['{selection}']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = {{ package = 'quota-desktop', path = '../../src-tauri', optional = true, default-features = false }}\n"
+                "[package]\nname = 'bridge'\n[features]\ndefault = ['{selection}']\ndesktop = ['dep:desktop', 'desktop?/agent-inspection']\n[dependencies]\ndesktop = {{ package = 'quota-desktop', path = '../..', optional = true, default-features = false }}\n"
             ),
         )?;
         let (passed, report) = gate(root)?;

@@ -85,10 +85,12 @@ fn gate(name: &str, outcome: &outcome::Outcome) -> u8 {
     if outcome.is_clean() { OK } else { FAILED }
 }
 
-/// The repository root, taken from this package's manifest directory.
+/// The repository root, taken from this package's manifest directory: this
+/// package sits in the Cargo workspace, which sits in the repository.
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
+        .ancestors()
+        .nth(2)
         .map_or_else(|| PathBuf::from("."), PathBuf::from)
 }
 

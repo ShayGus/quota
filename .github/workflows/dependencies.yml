@@ -3,7 +3,7 @@
 # This workflow changes nothing. It reports, so a reviewer can decide. Every
 # `uses:` is pinned to a full 40-character commit SHA; see ci.yml for why.
 #
-# `cargo deny` reads deny.toml, which holds the approved licence set, the
+# `cargo deny` reads src-tauri/deny.toml, which holds the approved licence set, the
 # allowed registry, and the duplicate-version policy. `cargo audit` reads the
 # RustSec advisory database directly and reports the crates that need action.
 #
@@ -33,13 +33,17 @@ jobs:
     name: Advisories and licences
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    defaults:
+      run:
+        # The Cargo workspace, with its lockfile and deny.toml, is src-tauri.
+        working-directory: src-tauri
     steps:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
 
-      # rust-toolchain.toml pins the compiler; rustup installs it on first use.
+      # src-tauri/rust-toolchain.toml pins the compiler; rustup installs it on first use.
       - name: Install the pinned toolchain
         run: rustup show active-toolchain
 
@@ -48,6 +52,7 @@ jobs:
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25
         with:
           command: check
+          manifest-path: src-tauri/Cargo.toml
           # `--locked` refuses to change Cargo.lock, so the gate reports on the
           # committed graph rather than an opportunistic update.
           arguments: --locked

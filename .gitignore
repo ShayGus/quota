@@ -1,8 +1,11 @@
 # Build output and local tool state. Nothing here is ever committed.
 
 # Rust
-/target/
+/src-tauri/target/
 **/*.rs.bk
+# Where Cargo built before the workspace moved under src-tauri. A checkout that
+# built then still has it; ignoring it keeps Prettier and ESLint off it.
+/target/
 
 # Tauri build output. `tauri-build` regenerates these on every compile.
 /src-tauri/gen/

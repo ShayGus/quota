@@ -8,12 +8,12 @@ not rewriting anything.
 
 Everything outside these places is the same on every operating system:
 
-| Place                                                                                                                      | What differs                                                 |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| [`src-tauri/src/platform/`](../src-tauri/src/platform/)                                                                    | Tray, popover window, login item, tray placement, height fit |
-| [`crates/quota-providers/src/platform_paths.rs`](../crates/quota-providers/src/platform_paths.rs)                          | The user profile directory credentials are found under       |
-| [`src-tauri/build.rs`](../src-tauri/build.rs), [`crates/quota-persistence/build.rs`](../crates/quota-persistence/build.rs) | The Windows application manifest, on Windows only            |
-| [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `bundle`                                                       | Installer formats and icons                                  |
+| Place                                                                                                                                          | What differs                                                 |
+| ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| [`src-tauri/src/platform/`](../src-tauri/src/platform/)                                                                                        | Tray, popover window, login item, tray placement, height fit |
+| [`src-tauri/crates/quota-providers/src/platform_paths.rs`](../src-tauri/crates/quota-providers/src/platform_paths.rs)                          | The user profile directory credentials are found under       |
+| [`src-tauri/build.rs`](../src-tauri/build.rs), [`src-tauri/crates/quota-persistence/build.rs`](../src-tauri/crates/quota-persistence/build.rs) | The Windows application manifest, on Windows only            |
+| [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `bundle`                                                                           | Installer formats and icons                                  |
 
 Two rules keep it that way:
 
@@ -68,10 +68,10 @@ built Quota.
    coloured attention dot, so the dot needs a monochrome design.
 3. **Read Claude Code's credentials from the Keychain.** On macOS, Claude Code keeps its
    sign-in in the login Keychain instead of `~/.claude/.credentials.json`. The reader
-   belongs in [`credentials.rs`](../crates/quota-providers/src/credentials.rs) beside the
-   file reader, behind the same function. It needs a Keychain dependency, which is a
-   separate pull request (see [CONTRIBUTING](../CONTRIBUTING.md)); confirm the Keychain
-   item's service name on a Mac first.
+   belongs in [`credentials.rs`](../src-tauri/crates/quota-providers/src/credentials.rs)
+   beside the file reader, behind the same function. It needs a Keychain dependency, which
+   is a separate pull request (see [CONTRIBUTING](../CONTRIBUTING.md)); confirm the
+   Keychain item's service name on a Mac first.
 4. **Sign and notarise the bundle.** `"targets": "all"` already produces an `.app` and a
    `.dmg`; distribution outside the App Store needs a Developer ID signing identity and
    notarisation in the release workflow.
