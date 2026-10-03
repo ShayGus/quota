@@ -1,9 +1,9 @@
-// Tests run in jsdom under Vitest. A separate project, so no Node global leaks into the renderer.
+// Tests run in jsdom under Vitest; the Playwright interface tests and their config also live here, because they need DOM and Node types together. A separate project, so no Node global leaks into the renderer.
 {
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "types": ["node", "vite/client"],
     "noEmit": true
   },
-  "include": ["src", "tests", "vitest.config.ts"]
+  "include": ["src", "tests", "vitest.config.ts", "playwright.config.ts"]
 }
