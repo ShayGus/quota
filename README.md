@@ -55,6 +55,11 @@ App, and Exit. Exit, or Ctrl-C in the terminal, stops the application. Settings 
 → Launch at login registers Quota with the system so it starts quietly in the tray when
 you sign in; turning it off removes the login item.
 
+Every debug build automatically runs under its own identity, `app.quota.monitor.dev`, so
+it keeps its data directory, its saved sign-ins, its login item and its single-instance
+lock away from an installed production build. See
+[the development identity](CONTRIBUTING.md#development-identity).
+
 The native host logs warnings for failed close-time hiding, tray anchoring, second-launch
 focusing, and refused initial or periodic refresh requests.
 

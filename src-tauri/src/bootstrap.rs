@@ -31,7 +31,7 @@ async fn initialize_backend(app: tauri::AppHandle) -> Result<(), String> {
     let sqlite = open_database(&app).await?;
     let repositories = backend_repositories(&app, &sqlite)?;
     let restored = restore_durable_state(&repositories).await?;
-    let providers = Arc::new(build_registry()?);
+    let providers = Arc::new(build_registry(&app)?);
     let (policies, confirmed_operational) =
         resolve_effective_policies(&providers, restored.operational_preferences);
     install_managed_state(
@@ -177,8 +177,8 @@ fn store_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 /// `sample-data` adds the deterministic fixture adapter, so the seeded accounts
 /// have an adapter to read through. The production build compiles neither the
 /// fixture module nor this branch.
-fn build_registry() -> Result<quota_providers::ProviderRegistry, String> {
-    let secrets = quota_providers::secrets::system();
+fn build_registry(app: &tauri::AppHandle) -> Result<quota_providers::ProviderRegistry, String> {
+    let secrets = quota_providers::secrets::system(crate::app_identity::credential_service(app));
     #[cfg(feature = "sample-data")]
     let registry = quota_providers::ProviderRegistry::with_fixture(secrets);
     #[cfg(not(feature = "sample-data"))]
@@ -375,6 +375,8 @@ async fn install_managed_state(
 /// Returns the backend message when the Tauri host cannot start.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn start() -> Result<(), String> {
+    let context =
+        crate::app_identity::for_build(tauri::generate_context!(), cfg!(debug_assertions))?;
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -442,7 +444,7 @@ pub fn start() -> Result<(), String> {
         });
         Ok(())
     })
-    .run(tauri::generate_context!())
+    .run(context)
     .map_err(|error| format!("desktop_host_start_failed:{error}"))
 }
 

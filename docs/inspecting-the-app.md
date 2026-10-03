@@ -54,7 +54,7 @@ bun run inspect
 That script is exactly this, and nothing else:
 
 ```bash
-bun tauri dev --features agent-inspection --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}}}'
+bun tauri dev --features agent-inspection --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","widget-capability","agent-inspection-capability"]}}}'
 ```
 
 Both halves matter.
@@ -65,15 +65,19 @@ Both halves matter.
 - `--config` adds `agent-inspection-capability` to the capability allowlist. Tauri ignores
   a capability file the allowlist does not name, so without this guest listeners stay
   disabled and console forwarding is denied. The allowlist in `src-tauri/tauri.conf.json`
-  deliberately keeps the shipping two capabilities only, because the plugin's permissions
-  do not exist in a build that does not compile it.
+  deliberately keeps the shipping three capabilities only, because the plugin's
+  permissions do not exist in a build that does not compile it.
+
+Debug builds automatically apply the
+[development identity](../CONTRIBUTING.md#development-identity), so an inspected build
+writes its own data and credentials instead of the installed production build's.
 
 The renderer needs the Vite dev server on port 1420. If that port is taken, move both
 ends:
 
 ```bash
 bun tauri dev --features agent-inspection \
-  --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
+  --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","widget-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
 ```
 
 A launch opens only `overview`. The `settings` window is created hidden and opens when a
@@ -149,17 +153,17 @@ Run on 2026-10-02 under WSL2 with WSLg, `bun run inspect`, first with the Vite p
 to 1433 because a sibling checkout held 1420, then on port 1420 with `GDK_BACKEND=x11` for
 the screenshot:
 
-| Check                                                                              | Result                                                                                           |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                                              |
-| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                                              |
-| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                                              |
-| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                                              |
-| `tools/list`                                                                       | 19 tools                                                                                         |
-| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                                  |
-| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                                          |
-| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window                 |
-| `take_screenshot`                                                                  | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
+| Check                                                      | Result                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `bun run inspect` starts and the overview window renders   | yes                                                                                              |
+| `/tmp/tauri-mcp.sock` exists, mode `0600`                  | yes                                                                                              |
+| `/tmp/tauri-mcp.sock.token` exists, mode `0600`            | yes                                                                                              |
+| `bun x tauri-mcp-server` reaches the socket with the token | yes                                                                                              |
+| `tools/list`                                               | 19 tools                                                                                         |
+| `query_page` `mode: "map"`                                 | the real element tree with refs                                                                  |
+| `query_page` `mode: "html"`                                | about 27 KB of real DOM                                                                          |
+| `query_logs`                                               | real `console.*` output from overview and the pre-created hidden settings window                 |
+| `take_screenshot`                                          | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
 
 This capture predates the overview-only inspection scope; current sessions forward webview
 console logs only from overview. The console output proves the original capability grant
@@ -190,7 +194,7 @@ Wayland fallback asks the XDG desktop portal, and WSLg runs no portal. Publishin
 stands in for the window manager:
 
 ```bash
-xwininfo -root -tree | grep '"Quota"'
+xwininfo -root -tree | grep -E '"Quota Dev( settings)?"'
 docs/publish-x11-client-list.py 0x600010
 ```
 
@@ -201,8 +205,8 @@ change every launch.
 
 Pass the window ids to capture; both can be published together. The inspection plugin
 disables application-name matching and resolves the requested window label to its distinct
-title: `Quota` for `overview`, and `Quota settings` for `settings`. Show the requested
-window before capturing it.
+title: `Quota Dev` for `overview`, and `Quota Dev settings` for `settings`. Show the
+requested window before capturing it.
 
 To check window selection, show settings and publish both window ids. Request one
 `take_screenshot` with `window_label: "overview"` and another with

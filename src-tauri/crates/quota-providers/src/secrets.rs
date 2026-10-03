@@ -12,15 +12,16 @@ use keyring_core::{CredentialStore, Error};
 use quota_core::ports::{Secret, SecretStore, SecretStoreError};
 use quota_domain::ids::ConnectionId;
 
-/// The service every Quota entry is filed under.
-const SERVICE: &str = "app.quota.monitor";
-
 /// This system's credential store, or, when it has none, a store that
 /// refuses every operation, so the providers that need one say so instead of
 /// stopping the application.
+///
+/// `service` is the application identifier the build runs with. A development
+/// build files its entries under its own identifier, so it never reads or
+/// removes the ones the production build owns.
 #[must_use]
-pub fn system() -> Arc<dyn SecretStore> {
-    match SystemSecretStore::open() {
+pub fn system(service: &str) -> Arc<dyn SecretStore> {
+    match SystemSecretStore::open(service) {
         Ok(store) => Arc::new(store),
         Err(_) => unavailable(),
     }
@@ -52,6 +53,8 @@ impl SecretStore for Unavailable {
 
 /// The credential store this system provides.
 pub struct SystemSecretStore {
+    /// The application identifier every entry is filed under.
+    service: String,
     store: Arc<CredentialStore>,
 }
 
@@ -61,19 +64,22 @@ impl SystemSecretStore {
     /// # Errors
     /// Returns [`SecretStoreError::Unavailable`] when the system has none, for
     /// example a Linux session without a Secret Service.
-    pub fn open() -> Result<Self, SecretStoreError> {
-        Ok(Self::over(platform_store()?))
+    pub fn open(service: &str) -> Result<Self, SecretStoreError> {
+        Ok(Self::over(platform_store()?, service))
     }
 
     /// Wraps one credential store, so tests can use an in-memory one.
     #[must_use]
-    pub fn over(store: Arc<CredentialStore>) -> Self {
-        Self { store }
+    pub fn over(store: Arc<CredentialStore>, service: &str) -> Self {
+        Self {
+            store,
+            service: service.to_owned(),
+        }
     }
 
     fn entry(&self, connection: &ConnectionId) -> Result<keyring_core::Entry, SecretStoreError> {
         self.store
-            .build(SERVICE, connection.as_str(), None)
+            .build(&self.service, connection.as_str(), None)
             .map_err(|error| classify(&error))
     }
 }
@@ -146,10 +152,17 @@ fn platform_store() -> Result<Arc<CredentialStore>, SecretStoreError> {
 mod tests {
     use super::*;
 
+    /// The identifier `src-tauri/tauri.conf.json` gives a production build and
+    /// the one its development overlay gives a development build.
+    const PRODUCTION: &str = "app.quota.monitor";
+    const DEVELOPMENT: &str = "app.quota.monitor.dev";
+
+    fn memory() -> Arc<CredentialStore> {
+        keyring_core::mock::Store::new().expect("the in-memory store opens")
+    }
+
     fn store() -> SystemSecretStore {
-        let memory: Arc<CredentialStore> =
-            keyring_core::mock::Store::new().expect("the in-memory store opens");
-        SystemSecretStore::over(memory)
+        SystemSecretStore::over(memory(), PRODUCTION)
     }
 
     fn connection(id: &str) -> ConnectionId {
@@ -183,13 +196,36 @@ mod tests {
         store.delete(&connection("c1")).expect("a second delete");
     }
 
+    #[test]
+    fn a_development_build_never_reaches_a_production_entry() {
+        let system = memory();
+        let development = SystemSecretStore::over(system.clone(), DEVELOPMENT);
+        let production = SystemSecretStore::over(system, PRODUCTION);
+        let connection = connection("c1");
+
+        development
+            .write(&connection, &Secret::new("development".to_owned()))
+            .expect("write");
+
+        assert!(
+            production.read(&connection).expect("read").is_none(),
+            "the production identifier read a development entry"
+        );
+        production.delete(&connection).expect("delete");
+        assert!(
+            development.read(&connection).expect("read").is_some(),
+            "the production identifier removed a development entry"
+        );
+    }
+
     /// Writes, reads and removes one throwaway entry in this system's real
     /// store. It touches the person's credential store, so it runs only when
     /// asked for: `cargo test -p quota-providers -- --ignored system_store`.
     #[test]
     #[ignore = "uses the real system credential store"]
     fn the_system_store_keeps_and_removes_an_entry() {
-        let store = SystemSecretStore::open().expect("this system has a credential store");
+        let store =
+            SystemSecretStore::open(PRODUCTION).expect("this system has a credential store");
         let connection = ConnectionId::generate();
         store
             .write(&connection, &Secret::new("round-trip".to_owned()))
