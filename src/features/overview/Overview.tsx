@@ -257,8 +257,8 @@ function FirstLaunch({
         Add your first account
       </button>
       <small>
-        Quota connects through each provider's existing local sign-in and never asks for a
-        password.
+        Use the sign-in your AI apps already have, sign in in your browser, or paste an
+        API key. Quota never asks for your password.
       </small>
     </div>
   );

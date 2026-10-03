@@ -334,7 +334,7 @@ describe("Provider → Connect → Verify", () => {
     aliases("stable_aliases");
     expect(field.classList.contains("masked")).toBe(true);
     expect(field.getAttribute("placeholder")).toBeNull();
-    expect(screen.getByText("Hidden while Hide account labels is on.")).toBeTruthy();
+    expect(screen.getByText("Hidden while Hide account names is on.")).toBeTruthy();
     // Typing still works, and the typed nickname is what is saved.
     fireEvent.change(field, { target: { value: "Secret" } });
     await act(() => fireEvent.click(screen.getByRole("button", ADD)));

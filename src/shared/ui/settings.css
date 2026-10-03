@@ -198,6 +198,43 @@
   height: 13px;
 }
 
+/* What Quota sends and keeps: three short statements, each with a check. */
+.privacy-facts {
+  list-style: none;
+  margin: 21px 0 6px;
+  padding: 4px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+}
+
+.privacy-facts li {
+  display: flex;
+  gap: 11px;
+  padding: 11px 0;
+}
+
+.privacy-facts li + li {
+  border-top: 1px solid var(--line);
+}
+
+.privacy-facts .icon {
+  color: var(--accent);
+  margin-top: 1px;
+}
+
+.privacy-facts strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.privacy-facts p {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
 .privacy-card {
   border: 1px solid var(--line);
   border-radius: 10px;

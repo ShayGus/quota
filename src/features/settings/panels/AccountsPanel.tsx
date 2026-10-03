@@ -90,7 +90,7 @@ function ManagedAccount({
           type="button"
           className="text-btn"
           disabled={alias !== ""}
-          title={alias === "" ? undefined : "Show account labels to rename"}
+          title={alias === "" ? undefined : "Show account names to rename"}
           onClick={() => {
             onPending({ kind: "rename", account });
           }}
@@ -192,8 +192,8 @@ function PendingDialog({
           onClose={onClose}
         >
           <p>
-            Quota checks this account again through the provider's existing local sign-in.
-            No sign-in opens here and no credentials enter this window.
+            Quota checks this account again with the sign-in it already uses. There is
+            nothing to type here.
           </p>
           <p>
             <strong>

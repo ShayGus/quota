@@ -1,34 +1,44 @@
 /**
  * Privacy settings.
  *
- * Aliases replace account labels on screen; they are stable and distinguishable,
- * never one repeated word (AC-72). Local history is a separate choice.
+ * The panel first says, in plain words, what Quota sends and keeps, so a
+ * person can trust it without reading the code: it asks each provider only for
+ * usage, keeps keys and browser sign-ins in the system's credential store,
+ * reads other apps' sign-ins without changing them, and never reads
+ * conversations. Every statement here is true of the host today.
+ *
+ * Then the choices: hiding account names on screen, which uses stable,
+ * distinguishable aliases rather than one repeated word (AC-72), and whether
+ * past readings are kept on this device.
  */
 import { useState, type JSX } from "react";
 
 import type { AccountSnapshot, Preferences } from "../../../generated/bindings";
 import { Dialog } from "../../../shared/ui/Dialog";
 import { Icon } from "../../../shared/ui/Icon";
-import { SettingRow, SettingsTitle, Select, Switch } from "../Primitives";
+import { SettingRow, SettingsTitle, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
 import { withAliasMode, withRetainHistory } from "../preferences";
+import { credentialStoreName } from "../providers";
 
-/**
- * The retention periods, and which of them this build can actually apply.
- *
- * The host has no retention sweep, so only Disabled and keeping indefinitely are
- * real choices; the two durations the wireframe offers are shown but refused.
- */
-const RETENTION: readonly (readonly [
-  "0" | "7" | "30" | "indefinite",
-  string,
-  boolean?,
-])[] = [
-  ["0", "Disabled"],
-  ["7", "7 days", true],
-  ["30", "30 days", true],
-  ["indefinite", "Keep indefinitely"],
-];
+/** What Quota does with data, each as a short heading and one sentence. */
+function facts(): readonly (readonly [string, string])[] {
+  return [
+    [
+      "No Quota server, no tracking",
+      "Quota has no server or account of its own and collects nothing. Everything it keeps stays on this computer.",
+    ],
+    [
+      "It only talks to your AI providers",
+      "To see how much of your plan is left, Quota asks each provider you added, such as Anthropic or OpenAI, the same way their own apps do. It contacts no one else.",
+    ],
+    [
+      "Your sign-ins stay protected",
+      `API keys and browser sign-ins are kept in ${credentialStoreName()}. Sign-ins from apps you already use, such as Codex, Claude Code or Cursor, are only read, never changed, and removing an account here does not sign you out of them.`,
+    ],
+    ["Your work stays yours", "Quota never reads your conversations, prompts, or files."],
+  ];
+}
 
 /** The privacy settings panel. */
 export function PrivacyPanel({
@@ -45,26 +55,26 @@ export function PrivacyPanel({
     <>
       <SettingsTitle
         title="Privacy"
-        intro="A local view of your allowances, not your conversations."
+        intro="Quota runs on this computer. Here is exactly what it does with your data."
       />
-      <div className="privacy-card">
-        <Icon name="shield" />
-        <div>
-          <strong>No credentials reach this window</strong>
-          <p>
-            Quota's host reads each provider's existing local sign-in and sends it only to
-            that provider, to check quota. This window receives sanitized quota snapshots
-            only, never the sign-in itself.
-          </p>
-        </div>
-      </div>
+      <ul className="privacy-facts">
+        {facts().map(([heading, text]) => (
+          <li key={heading}>
+            <Icon name="check" />
+            <div>
+              <strong>{heading}</strong>
+              <p>{text}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
       <SettingRow
-        label="Hide account labels"
-        description="Replace nicknames, email identities, and workspaces on screen."
+        label="Hide account names"
+        description="Show “Account 1”, “Account 2” instead of names and emails. Handy when you share your screen."
         control={
           <Switch
             checked={preferences.privacy.alias_mode === "stable_aliases"}
-            label="Hide account labels"
+            label="Hide account names"
             onChange={(hide) => {
               actions.savePreferences(
                 withAliasMode(preferences, hide ? "stable_aliases" : "off"),
@@ -74,43 +84,38 @@ export function PrivacyPanel({
         }
       />
       <SettingRow
-        label="Local history retention"
-        description="Keeps normalized quota history on this device. Timed periods are not available yet."
+        label="Keep reading history"
+        description="Saves past readings on this device, for trends in a later version. Turning it off stops saving new ones."
         control={
-          <Select
-            label="Local history retention"
-            value={preferences.privacy.retain_history ? "indefinite" : "0"}
-            options={RETENTION}
-            onChange={(value) => {
-              actions.savePreferences(withRetainHistory(preferences, value !== "0"));
+          <Switch
+            checked={preferences.privacy.retain_history}
+            label="Keep reading history"
+            onChange={(keep) => {
+              actions.savePreferences(withRetainHistory(preferences, keep));
             }}
           />
         }
       />
       <SettingRow
-        label="Clear local history"
-        description="Remove stored quota history for every account. Current readings stay."
+        label="Clear reading history"
+        description="Deletes the saved past readings. Your accounts and current readings stay."
         control={
           <button
             type="button"
-            className="button danger"
+            className="button"
             disabled={accounts.length === 0}
             onClick={() => {
               setConfirming(true);
             }}
           >
-            Clear history
+            Clear…
           </button>
         }
       />
-      <div className="note">
-        Monitoring never reads conversation content or session titles, and Quota does not
-        read or modify provider command-line sessions.
-      </div>
       {confirming ? (
         <Dialog
-          title="Clear local history?"
-          confirmLabel="Clear history"
+          title="Clear reading history?"
+          confirmLabel="Clear"
           onConfirm={() => {
             for (const account of accounts) {
               actions.clearHistory(account.account_id);
@@ -121,8 +126,8 @@ export function PrivacyPanel({
           }}
         >
           <p>
-            This removes stored quota history for all accounts on this device. Accounts,
-            connections, and current readings are not affected.
+            This deletes the saved past readings for every account on this device. Your
+            accounts and their current readings stay.
           </p>
         </Dialog>
       ) : null}

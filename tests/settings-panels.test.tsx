@@ -193,7 +193,22 @@ describe("the notification preview", () => {
 });
 
 describe("privacy", () => {
-  it("offers the approved retention selector and refuses the periods this build cannot apply", () => {
+  it("says plainly what Quota sends and keeps, without claims that are no longer true", () => {
+    const { actions } = settingsActions();
+    render(<PrivacyPanel preferences={preferences()} accounts={[]} actions={actions} />);
+    for (const heading of [
+      "No Quota server, no tracking",
+      "It only talks to your AI providers",
+      "Your sign-ins stay protected",
+      "Your work stays yours",
+    ]) {
+      expect(screen.getByText(heading)).toBeTruthy();
+    }
+    // Keys are pasted into settings, so the panel must not say none reach it.
+    expect(screen.queryByText(/No credentials reach this window/)).toBeNull();
+  });
+
+  it("keeps or stops keeping reading history from a switch", () => {
     const { actions, saved } = settingsActions();
     render(
       <PrivacyPanel
@@ -204,32 +219,16 @@ describe("privacy", () => {
         actions={actions}
       />,
     );
-
-    const select = screen.getByLabelText("Local history retention");
-    const options = [...(select as HTMLSelectElement).options];
-    expect(options.map((option) => option.textContent)).toEqual([
-      "Disabled",
-      "7 days",
-      "30 days",
-      "Keep indefinitely",
-    ]);
-    expect(options.find((option) => option.textContent === "7 days")?.disabled).toBe(
-      true,
-    );
-    expect(options.find((option) => option.textContent === "30 days")?.disabled).toBe(
-      true,
-    );
-    expect((select as HTMLSelectElement).value).toBe("indefinite");
-
-    fireEvent.change(select, { target: { value: "0" } });
-
+    const keep = screen.getByRole("switch", { name: "Keep reading history" });
+    expect(keep.getAttribute("aria-checked")).toBe("true");
+    fireEvent.click(keep);
     expect(saved.at(-1)?.privacy.retain_history).toBe(false);
   });
 
-  it("hides account labels with stable aliases from a switch", () => {
+  it("hides account names with stable aliases from a switch", () => {
     const { actions, saved } = settingsActions();
     render(<PrivacyPanel preferences={preferences()} accounts={[]} actions={actions} />);
-    const hide = screen.getByRole("switch", { name: "Hide account labels" });
+    const hide = screen.getByRole("switch", { name: "Hide account names" });
     expect(hide.getAttribute("aria-checked")).toBe("false");
     fireEvent.click(hide);
     expect(saved.at(-1)?.privacy.alias_mode).toBe("stable_aliases");
@@ -244,14 +243,14 @@ describe("privacy", () => {
         actions={actions}
       />,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Clear history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear…" }));
     expect(actions.clearHistory).not.toHaveBeenCalled();
-    const dialog = screen.getByRole("dialog", { name: "Clear local history?" });
+    const dialog = screen.getByRole("dialog", { name: "Clear reading history?" });
     fireEvent.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(actions.clearHistory).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Clear history" }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear…" }));
     fireEvent.click(
-      within(screen.getByRole("dialog")).getByRole("button", { name: "Clear history" }),
+      within(screen.getByRole("dialog")).getByRole("button", { name: "Clear" }),
     );
     expect(vi.mocked(actions.clearHistory).mock.calls).toEqual([["a1"], ["a2"]]);
   });
@@ -393,7 +392,7 @@ describe("account management identities", () => {
     );
     expect(field.classList.contains("masked")).toBe(true);
     expect(
-      within(rename).getByText("Hidden while Hide account labels is on."),
+      within(rename).getByText("Hidden while Hide account names is on."),
     ).toBeTruthy();
   });
 
