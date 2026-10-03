@@ -65,6 +65,19 @@ test("the production identity is the one that was always shipped", () => {
       "icons/icon.icns",
       "icons/icon.ico",
     ],
+    windows: {
+      nsis: {
+        installMode: "currentUser",
+      },
+    },
+    linux: {
+      deb: {
+        depends: ["libwebkit2gtk-4.1-0", "libayatana-appindicator3-1", "libssl3"],
+      },
+      rpm: {
+        depends: ["webkit2gtk4.1", "libappindicator-gtk3", "openssl-libs"],
+      },
+    },
   });
 });
 

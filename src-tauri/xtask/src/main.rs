@@ -13,6 +13,7 @@ mod inspection_renderer;
 mod outcome;
 mod scan;
 mod toml;
+mod version;
 
 use std::env;
 use std::path::PathBuf;
@@ -104,8 +105,9 @@ commands:
   check-architecture   fail when a package, dependency, file size, raw IPC call,
                        duplicated IPC model, or provider feature violates policy.
   check-release        fail when the release surface is not audited: test
-                       features, licence allow list, workflow action pins, and
-                       the Tauri devtools/content-security settings.
+                       features, licence allow list, workflow action pins, the
+                       Tauri devtools/content-security settings, and a version
+                       the manifests do not agree on.
   bindings --check     compare src/generated/bindings.ts with the
                        Rust IPC layer.
 
