@@ -31,7 +31,7 @@ fn workspace_manifest() -> String {
 
 /// The desktop half of the manifest a compliant tree carries.
 fn member_manifest() -> String {
-    "[package]\nname = \"quota-desktop\"\n\n\
+    "[package]\nname = \"quota-desktop\"\nversion = \"0.1.0\"\n\n\
      [features]\nagent-inspection = [\"dep:tauri-plugin-mcp\"]\n\n\
      [dependencies]\ntauri-plugin-mcp = { workspace = true, optional = true }\n"
         .to_string()
@@ -59,8 +59,12 @@ fn tree(root: &Path, workspace: &str, member: &str) -> Result<(), String> {
         &format!("jobs:\n  build:\n    steps:\n      - uses: actions/checkout@{PIN}\n"),
     )?;
     write(
+        root.join("package.json"),
+        "{\"name\": \"@quota/desktop\", \"version\": \"0.1.0\"}\n",
+    )?;
+    write(
         root.join("src-tauri/tauri.conf.json"),
-        "{\"app\": {\"security\": {\"csp\": \"default-src 'self'\"}}}\n",
+        "{\"version\": \"0.1.0\", \"app\": {\"security\": {\"csp\": \"default-src 'self'\"}}}\n",
     )
 }
 
@@ -333,7 +337,7 @@ fn equivalent_toml_and_unselected_aliases_remain_compliant() -> Outcome {
     let workspace = format!(
         "[workspace]\nmembers = ['crates/*']\n[workspace.dependencies.inspection]\npackage = 'tauri-plugin-mcp'\ngit = 'https://github.com/P3GLEG/tauri-plugin-mcp'\nrev = '{PIN}' # branch = 'main'\n"
     );
-    let member = "[package]\nname = 'quota-desktop'\n[features]\ndefault = ['safe', 'inspection?/screenshot']\nsafe = ['cycle']\ncycle = ['safe']\ninspect = ['agent-inspection']\nagent-inspection = [\n 'dep:inspection',\n]\n[dependencies.inspection]\nworkspace = true\noptional = true # optional = false\n";
+    let member = "[package]\nname = 'quota-desktop'\nversion = '0.1.0'\n[features]\ndefault = ['safe', 'inspection?/screenshot']\nsafe = ['cycle']\ncycle = ['safe']\ninspect = ['agent-inspection']\nagent-inspection = [\n 'dep:inspection',\n]\n[dependencies.inspection]\nworkspace = true\noptional = true # optional = false\n";
     tree(directory.path(), &workspace, member)?;
     let (passed, report) = gate(directory.path())?;
     if !passed {
@@ -804,7 +808,7 @@ fn inspection_scope_is_checked_in_toml_and_inline_capabilities() -> Outcome {
     fs::remove_file(grant).map_err(|error| error.to_string())?;
     for name in ["tauri.conf.json", "tauri.linux.conf.json"] {
         fs::write(directory.path().join("src-tauri").join(name),
-            r#"{"app":{"security":{"csp":"default-src 'self'","capabilities":[{"identifier":"inspection","windows":["settings"],"permissions":["mcp:default"]}]}}}"#)
+            r#"{"version":"0.1.0","app":{"security":{"csp":"default-src 'self'","capabilities":[{"identifier":"inspection","windows":["settings"],"permissions":["mcp:allow-push-ipc"]}]}}}"#)
             .map_err(|error| error.to_string())?;
         fails_with(
             directory.path(),
@@ -848,4 +852,47 @@ fn overview_inspection_leaves_settings_capabilities_independent() -> Outcome {
         ));
     }
     Ok(())
+}
+
+/// The version a compliant tree declares in all three files.
+const VERSION: &str = "0.1.0";
+
+#[test]
+fn a_drifted_package_manifest_version_fails() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+    tree(directory.path(), &workspace_manifest(), &member_manifest())?;
+    fs::write(
+        directory.path().join("package.json"),
+        "{\"version\": \"9.9.9\"}\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(directory.path(), "does not match src-tauri/tauri.conf.json")
+}
+
+#[test]
+fn a_drifted_desktop_manifest_version_fails() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+    let member = member_manifest().replace(VERSION, "9.9.9");
+    tree(directory.path(), &workspace_manifest(), &member)?;
+    fails_with(directory.path(), "does not match src-tauri/tauri.conf.json")
+}
+
+#[test]
+fn a_mirror_without_a_version_fails() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+    tree(directory.path(), &workspace_manifest(), &member_manifest())?;
+    fs::remove_file(directory.path().join("package.json")).map_err(|error| error.to_string())?;
+    fails_with(directory.path(), "cannot be read")
+}
+
+#[test]
+fn an_authority_without_a_version_fails() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+    tree(directory.path(), &workspace_manifest(), &member_manifest())?;
+    fs::write(
+        directory.path().join("src-tauri/tauri.conf.json"),
+        "{\"app\": {\"security\": {\"csp\": \"default-src 'self'\"}}}\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(directory.path(), "declares no `version`")
 }

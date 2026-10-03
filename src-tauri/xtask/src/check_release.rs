@@ -9,6 +9,7 @@ use crate::cargo_manifest;
 use crate::outcome::Outcome;
 use crate::scan;
 use crate::toml::{self, Document};
+use crate::version;
 
 /// Licences the dependency record requires to be allowed.
 const REQUIRED_LICENCES: [&str; 4] = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3-Clause"];
@@ -32,6 +33,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     check_inspection_capabilities(&workspace, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
+    version::check(root, &mut outcome);
     outcome
 }
 
