@@ -17,15 +17,19 @@ const REQUIRED_LICENCES: [&str; 4] = ["MIT", "Apache-2.0", "Unicode-3.0", "BSD-3
 const USES_KEY: &str = "uses:";
 
 /// Runs the gate against the repository at `root`.
+///
+/// The Cargo checks read the workspace under it, and name files relative to
+/// that workspace, where the Cargo commands run.
 #[must_use]
 pub(crate) fn run(root: &Path) -> Outcome {
     let mut outcome = Outcome::default();
-    cargo_manifest::check_release_features(root, &mut outcome);
-    cargo_manifest::check_dependency_feature_selection(root, &mut outcome);
-    check_deny_config(root, &mut outcome);
-    check_agent_inspection(root, &mut outcome);
+    let workspace = root.join(scan::WORKSPACE);
+    cargo_manifest::check_release_features(&workspace, &mut outcome);
+    cargo_manifest::check_dependency_feature_selection(&workspace, &mut outcome);
+    check_deny_config(&workspace, &mut outcome);
+    check_agent_inspection(&workspace, &mut outcome);
     crate::inspection_renderer::check(root, &mut outcome);
-    check_inspection_capabilities(root, &mut outcome);
+    check_inspection_capabilities(&workspace, &mut outcome);
     check_workflow_pins(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
     outcome
@@ -73,8 +77,9 @@ fn check_deny_config(root: &Path, outcome: &mut Outcome) {
 const INSPECTION_CRATE: &str = "tauri-plugin-mcp";
 const INSPECTION_FEATURE: &str = "agent-inspection";
 
-/// The only manifest allowed to declare either name.
-const INSPECTION_OWNER: &str = "src-tauri/Cargo.toml";
+/// The only manifest allowed to declare either name: the workspace manifest,
+/// which is also the desktop host's.
+const INSPECTION_OWNER: &str = "Cargo.toml";
 
 /// Reports anything that could put the inspection plugin in a release build.
 ///
@@ -553,7 +558,7 @@ fn check_inspection_overrides(file: &str, document: &Value, outcome: &mut Outcom
 }
 
 fn check_inspection_capabilities(root: &Path, outcome: &mut Outcome) {
-    let directory = root.join("src-tauri");
+    let directory = root.to_path_buf();
     let capabilities = directory.join("capabilities");
     for extension in ["json", "toml"] {
         for path in scan::files_with_extension(&directory, extension) {

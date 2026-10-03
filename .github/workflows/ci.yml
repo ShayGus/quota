@@ -31,6 +31,11 @@ jobs:
     name: Rust
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    defaults:
+      run:
+        # Every Rust package, the lockfile, and the Cargo configuration live in
+        # the Cargo workspace under src-tauri.
+        working-directory: src-tauri
     steps:
       # actions/checkout v7.0.1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -59,7 +64,7 @@ jobs:
             wget
           pkg-config --exists webkit2gtk-4.1
 
-      # rust-toolchain.toml pins the compiler, and rustup installs it and the
+      # src-tauri/rust-toolchain.toml pins the compiler, and rustup installs it and the
       # listed components on first use. No CI step repeats the version, so the
       # toolchain cannot drift between the file and this workflow.
       - name: Install the pinned toolchain
@@ -67,6 +72,8 @@ jobs:
 
       # Swatinem/rust-cache v2.9.2
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: src-tauri
 
       # Named on its own so a failure says which package broke. `cargo clippy`
       # and `cargo test` below also cover it, but only after every other package

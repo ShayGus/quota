@@ -19,7 +19,10 @@ const RAW_IPC: [&str; 8] = [
 const IPC_EXEMPT_PREFIXES: [&str; 2] = ["src/generated/", "src/shared/ipc/"];
 
 /// Trees that must not carry a second copy of the IPC model.
-const IPC_OWNER_TREES: [&str; 2] = ["crates/quota-contracts/src/", "crates/quota-domain/src/"];
+const IPC_OWNER_TREES: [&str; 2] = [
+    "src-tauri/crates/quota-contracts/src/",
+    "src-tauri/crates/quota-domain/src/",
+];
 
 /// Markers that identify a hand-written command or event union.
 const UNION_MARKERS: [&str; 6] = [

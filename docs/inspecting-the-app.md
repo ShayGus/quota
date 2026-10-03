@@ -302,8 +302,9 @@ requires the desktop dependency to inherit the root workspace's full-commit git 
 rejects inspection source overrides through `[patch]` or `[replace]`, including renamed
 entries. It also rejects inspection capability grants outside overview and guest imports
 outside an `import.meta.env.DEV` guard. These checks have regressions in
-[`xtask/tests/check_release.rs`](../xtask/tests/check_release.rs); the host's debug
-registration guard lives in [`src-tauri/src/bootstrap.rs`](../src-tauri/src/bootstrap.rs).
+[`src-tauri/xtask/tests/check_release.rs`](../src-tauri/xtask/tests/check_release.rs); the
+host's debug registration guard lives in
+[`src-tauri/src/bootstrap.rs`](../src-tauri/src/bootstrap.rs).
 
 The frontend CI job runs `bun run check:release:renderer`, which runs `bun run build`. The
 Vite build check rejects inspection modules or imports remaining in emitted chunks,

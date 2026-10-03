@@ -7,10 +7,11 @@ versions come from the npm registry and are committed in
 
 ## Toolchain
 
-[`rust-toolchain.toml`](../rust-toolchain.toml) owns the compiler pin and required
-components. [`Cargo.toml`](../Cargo.toml) owns the declared minimum Rust version and
-resolver. Workspace members inherit that minimum; inheritance alone does not demonstrate
-that the complete dependency graph builds with it. CI uses the pinned compiler.
+[`rust-toolchain.toml`](../src-tauri/rust-toolchain.toml) owns the compiler pin and
+required components. [`Cargo.toml`](../src-tauri/Cargo.toml) owns the declared minimum
+Rust version and resolver. Workspace members inherit that minimum; inheritance alone does
+not demonstrate that the complete dependency graph builds with it. CI uses the pinned
+compiler.
 
 [`.bun-version`](../.bun-version) owns the Bun version used by CI. Bun produced the
 frontend lockfile and replaces Node.js as the script runner. The package-manager decision
@@ -19,19 +20,20 @@ is recorded in
 
 ## Rust dependencies
 
-The committed [`Cargo.lock`](../Cargo.lock) owns resolved versions; workspace and package
-manifests own requirements and enabled features. Inspect the desktop dependency graph with
-`cargo tree -p quota-desktop --locked`. This includes the window-state, single-instance,
-and autostart plugins, which the host registers during bootstrap. `tauri-plugin-autostart`
-2.7.0 and its renderer package `@tauri-apps/plugin-autostart` 2.7.0 were added on 2
-October 2026 for launch at login; the two are pinned to the same release.
+The committed [`Cargo.lock`](../src-tauri/Cargo.lock) owns resolved versions; workspace
+and package manifests own requirements and enabled features. Inspect the desktop
+dependency graph with `cargo tree -p quota-desktop --locked`. This includes the
+window-state, single-instance, and autostart plugins, which the host registers during
+bootstrap. `tauri-plugin-autostart` 2.7.0 and its renderer package
+`@tauri-apps/plugin-autostart` 2.7.0 were added on 2 October 2026 for launch at login; the
+two are pinned to the same release.
 
 `libsqlite3-sys` is transitive through `sqlx-sqlite`; the linked engine version must be
 recorded from the shipping artifact at release (spec 13.6), rather than inferred from the
 crate version.
 
 `cargo deny check advisories licenses sources` runs weekly against this set. See
-`deny.toml` for the approved licence list and the allowed registry.
+`src-tauri/deny.toml` for the approved licence list and the allowed registry.
 
 ## npm dependencies
 
@@ -84,7 +86,7 @@ preference.
 ## Development-only agent inspection
 
 [`tauri-plugin-mcp`](https://github.com/P3GLEG/tauri-plugin-mcp) is a git dependency;
-[`Cargo.toml`](../Cargo.toml) owns its audited revision. The
+[`Cargo.toml`](../src-tauri/Cargo.toml) owns its audited revision. The
 [inspection guide](inspecting-the-app.md) owns tool behavior, startup, Linux native
 prerequisites, and release exclusion rules.
 

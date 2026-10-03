@@ -25,7 +25,7 @@ Operating-system differences are confined to the platform modules and a few name
 [Platforms](platforms.md) lists them and what adding macOS takes.
 
 `xtask` is a build tool, and nothing in the application depends on it.
-[`xtask/Cargo.toml`](../xtask/Cargo.toml) owns its dependencies.
+[`src-tauri/xtask/Cargo.toml`](../src-tauri/xtask/Cargo.toml) owns its dependencies.
 
 ## Allowed dependency directions
 
@@ -70,9 +70,9 @@ not in the Store. The Store plugin writes a JSON file; it is not a transaction l
 enabling autosave does not make it one.
 
 The schema is owned by the embedded migrations in
-[`crates/quota-persistence/migrations/`](../crates/quota-persistence/migrations/), ordered
-by `sqlite::MIGRATIONS`. Presentation preferences and native geometry are not duplicated
-into those tables.
+[`src-tauri/crates/quota-persistence/migrations/`](../src-tauri/crates/quota-persistence/migrations/),
+ordered by `sqlite::MIGRATIONS`. Presentation preferences and native geometry are not
+duplicated into those tables.
 
 ## Trust boundaries
 
@@ -95,8 +95,9 @@ boundary is documented in
 
 Small records, kept here rather than in separate files:
 
-- **Workspace graph.** One root Cargo workspace, resolver 3, one `Cargo.lock`, one
-  frontend lockfile. Members inherit edition, Rust version, publish flag, and lint levels;
+- **Workspace graph.** One Cargo workspace, rooted at `src-tauri` with every Rust package
+  beneath it, resolver 3, one `Cargo.lock`, and one frontend lockfile at the repository
+  root. Members inherit edition, Rust version, publish flag, and lint levels;
   `cargo xtask check-architecture` fails a member that does not.
 - **Persistence ownership.** The table above owns the durable-state boundaries.
 - **IPC trust model.** Rust-owned DTOs, generated bindings, no generic

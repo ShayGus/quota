@@ -153,10 +153,14 @@ pub(crate) fn check_release_features(root: &Path, outcome: &mut Outcome) {
 
 /// Reports a `test-fixtures` feature that is not explicitly non-default.
 fn check_provider_features(root: &Path, outcome: &mut Outcome) {
-    let manifest = root.join("crates/quota-providers/Cargo.toml");
+    let manifest = root
+        .join(scan::WORKSPACE)
+        .join("crates/quota-providers/Cargo.toml");
     if !manifest.is_file() {
-        outcome
-            .note("crates/quota-providers/Cargo.toml is absent; feature check skipped".to_string());
+        outcome.note(
+            "src-tauri/crates/quota-providers/Cargo.toml is absent; feature check skipped"
+                .to_string(),
+        );
         return;
     }
     let Ok(text) = scan::read(&manifest) else {
