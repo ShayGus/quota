@@ -54,7 +54,7 @@ bun run inspect
 That script is exactly this, and nothing else:
 
 ```bash
-bun tauri dev --features agent-inspection --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}}}'
+bun tauri dev --features agent-inspection --config src-tauri/tauri.dev.conf.json --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}}}'
 ```
 
 Both halves matter.
@@ -68,11 +68,16 @@ Both halves matter.
   deliberately keeps the shipping two capabilities only, because the plugin's permissions
   do not exist in a build that does not compile it.
 
+- `--config src-tauri/tauri.dev.conf.json` is the
+  [development identity](../CONTRIBUTING.md#development-identity), so an inspected build
+  writes its own data and credentials instead of the installed production build's.
+
 The renderer needs the Vite dev server on port 1420. If that port is taken, move both
 ends:
 
 ```bash
 bun tauri dev --features agent-inspection \
+  --config src-tauri/tauri.dev.conf.json \
   --config '{"app":{"security":{"capabilities":["overview-capability","settings-capability","agent-inspection-capability"]}},"build":{"devUrl":"http://localhost:1433","beforeDevCommand":"bun run dev --port 1433"}}'
 ```
 
@@ -149,17 +154,17 @@ Run on 2026-10-02 under WSL2 with WSLg, `bun run inspect`, first with the Vite p
 to 1433 because a sibling checkout held 1420, then on port 1420 with `GDK_BACKEND=x11` for
 the screenshot:
 
-| Check                                                                              | Result                                                                                           |
-| ---------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
-| `bun tauri dev --features agent-inspection` starts and the overview window renders | yes                                                                                              |
-| `/tmp/tauri-mcp.sock` exists, mode `0600`                                          | yes                                                                                              |
-| `/tmp/tauri-mcp.sock.token` exists, mode `0600`                                    | yes                                                                                              |
-| `bun x tauri-mcp-server` reaches the socket with the token                         | yes                                                                                              |
-| `tools/list`                                                                       | 19 tools                                                                                         |
-| `query_page` `mode: "map"`                                                         | the real element tree with refs                                                                  |
-| `query_page` `mode: "html"`                                                        | about 27 KB of real DOM                                                                          |
-| `query_logs`                                                                       | real `console.*` output from overview and the pre-created hidden settings window                 |
-| `take_screenshot`                                                                  | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
+| Check                                                      | Result                                                                                           |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `bun run inspect` starts and the overview window renders   | yes                                                                                              |
+| `/tmp/tauri-mcp.sock` exists, mode `0600`                  | yes                                                                                              |
+| `/tmp/tauri-mcp.sock.token` exists, mode `0600`            | yes                                                                                              |
+| `bun x tauri-mcp-server` reaches the socket with the token | yes                                                                                              |
+| `tools/list`                                               | 19 tools                                                                                         |
+| `query_page` `mode: "map"`                                 | the real element tree with refs                                                                  |
+| `query_page` `mode: "html"`                                | about 27 KB of real DOM                                                                          |
+| `query_logs`                                               | real `console.*` output from overview and the pre-created hidden settings window                 |
+| `take_screenshot`                                          | a JPEG of the overview window (recorded at the former 810x720 size), in `docs/inspection-proof/` |
 
 This capture predates the overview-only inspection scope; current sessions forward webview
 console logs only from overview. The console output proves the original capability grant

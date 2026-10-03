@@ -1,0 +1,54 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Quota Dev",
+  "identifier": "app.quota.monitor.dev",
+  "app": {
+    "windows": [
+      {
+        "label": "overview",
+        "title": "Quota Dev",
+        "url": "index.html",
+        "width": 440,
+        "height": 640,
+        "minWidth": 400,
+        "minHeight": 320,
+        "resizable": true,
+        "decorations": false,
+        "alwaysOnTop": false,
+        "visible": false,
+        "skipTaskbar": false,
+        "dragDropEnabled": false
+      },
+      {
+        "label": "settings",
+        "title": "Quota Dev settings",
+        "parent": "overview",
+        "url": "index.html#/settings",
+        "width": 780,
+        "height": 600,
+        "decorations": false,
+        "visible": false,
+        "skipTaskbar": true,
+        "dragDropEnabled": false
+      },
+      {
+        "label": "widget",
+        "title": "Quota Dev widget",
+        "url": "index.html#/widget",
+        "width": 316,
+        "height": 172,
+        "resizable": false,
+        "maximizable": false,
+        "minimizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "visible": false,
+        "focus": false,
+        "skipTaskbar": true,
+        "dragDropEnabled": false
+      }
+    ]
+  }
+}

@@ -251,8 +251,9 @@ only native units with no denominator, and an account with an unlimited window.
 ## Registry
 
 `ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
-store Quota's own sign-ins live in (`secrets::system()` opens this system's, or a store
-that refuses every operation when there is none);
+store Quota's own sign-ins live in (`secrets::system(identifier)` opens this system's and
+files every entry under the given application identifier, so a development build keeps its
+own entries, or returns a store that refuses every operation when there is none);
 `ProviderRegistry::with_fixture(secrets)` adds the fixture when the feature is on.
 `provider(id)` returns `None` for any provider this build does not contain, so the
 application reports an explicit unsupported-provider state. There is no dynamic adapter

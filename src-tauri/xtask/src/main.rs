@@ -1,7 +1,7 @@
 //! Repository automation. Run through `cargo xtask <command>`.
 //! Architecture and release checks inspect repository files. The bindings
 //! check delegates to the desktop exporter test; see [`bindings`]. Application
-//! launch belongs to the Tauri CLI through `bun tauri dev`.
+//! launch belongs to the Tauri CLI through `bun run dev:native`.
 
 #![forbid(unsafe_code)]
 

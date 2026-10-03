@@ -163,10 +163,29 @@ repository gates and never starts the app.
 
 ```bash
 bun install            # once, from the repository root
-bun tauri dev          # Vite on 1420, then the native host
+bun run dev:native     # Vite on 1420, then the native host
 bun run dev            # Vite alone, no native shell
 bun tauri build        # release bundles
 ```
+
+### Development identity
+
+`src-tauri/tauri.dev.conf.json` is an overlay the development commands merge over
+`src-tauri/tauri.conf.json`. It gives a development build the identifier
+`app.quota.monitor.dev` and the product name `Quota Dev`, so it runs beside an installed
+production build without touching it. The identifier is the only source of the separation:
+it names the data directory, the window-state file, the credential service name, the
+autostart entry, and the single-instance lock. The overlay repeats the three window
+definitions because the merge replaces arrays, and `tests/dev-identity.test.ts` fails when
+a production window has no development twin.
+
+```bash
+bun run dev:native     # tauri dev with the overlay merged in
+bun run build:dev      # tauri build with the overlay merged in
+```
+
+`bun tauri dev` without the overlay runs under the production identifier and writes to the
+production data directory. Use `bun run dev:native` instead.
 
 ## 7. Rules that the gates enforce
 
