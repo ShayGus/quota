@@ -76,7 +76,7 @@ impl SecretStore for Unavailable {
 pub struct SystemSecretStore {
     /// The application identifier every entry is filed under.
     service: String,
-    store: Arc<CredentialStore>,
+    store: Option<Arc<CredentialStore>>,
 }
 
 impl SystemSecretStore {
@@ -93,15 +93,28 @@ impl SystemSecretStore {
     #[must_use]
     pub fn over(store: Arc<CredentialStore>, service: &str) -> Self {
         Self {
-            store,
+            store: Some(store),
             service: service.to_owned(),
         }
     }
 
     fn entry(&self, connection: &ConnectionId) -> Result<keyring_core::Entry, SecretStoreError> {
         self.store
+            .as_ref()
+            .ok_or(SecretStoreError::Unavailable)?
             .build(&self.service, connection.as_str(), None)
             .map_err(|error| classify(&error))
+    }
+}
+
+#[cfg(target_os = "linux")]
+impl Drop for SystemSecretStore {
+    fn drop(&mut self) {
+        if tokio::runtime::Handle::try_current().is_ok() {
+            std::thread::scope(|scope| {
+                scope.spawn(|| drop(self.store.take()));
+            });
+        }
     }
 }
 
@@ -188,6 +201,99 @@ mod tests {
 
     fn connection(id: &str) -> ConnectionId {
         ConnectionId::new(id).expect("a connection id")
+    }
+
+    #[cfg(target_os = "linux")]
+    #[derive(Debug)]
+    struct DropReportingStore {
+        inner: Arc<CredentialStore>,
+        dropped: std::sync::mpsc::Sender<bool>,
+    }
+
+    #[cfg(target_os = "linux")]
+    impl keyring_core::api::CredentialStoreApi for DropReportingStore {
+        fn vendor(&self) -> String {
+            self.inner.vendor()
+        }
+
+        fn id(&self) -> String {
+            self.inner.id()
+        }
+
+        fn build(
+            &self,
+            service: &str,
+            user: &str,
+            modifiers: Option<&std::collections::HashMap<&str, &str>>,
+        ) -> keyring_core::Result<keyring_core::Entry> {
+            self.inner.build(service, user, modifiers)
+        }
+
+        fn as_any(&self) -> &dyn std::any::Any {
+            self
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    impl Drop for DropReportingStore {
+        fn drop(&mut self) {
+            self.dropped
+                .send(tokio::runtime::Handle::try_current().is_ok())
+                .expect("the drop observer is still listening");
+        }
+    }
+
+    #[cfg(all(target_os = "linux", feature = "test-fixtures"))]
+    #[test]
+    fn startup_failure_drops_both_registries_outside_the_runtime() {
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .expect("a runtime");
+
+        for with_fixture in [false, true] {
+            let (dropped, observer) = std::sync::mpsc::channel();
+            let store = SystemSecretStore::over(
+                Arc::new(DropReportingStore {
+                    inner: memory(),
+                    dropped,
+                }),
+                DEVELOPMENT,
+            );
+            let result = runtime.block_on(async move {
+                let secrets: Arc<dyn SecretStore> = Arc::new(store);
+                let providers = if with_fixture {
+                    crate::ProviderRegistry::with_fixture(secrets)
+                } else {
+                    crate::ProviderRegistry::production(secrets)
+                }
+                .expect("the registry builds");
+                let connection = connection("startup-cleanup");
+                let secrets = providers.secrets();
+                secrets
+                    .write(&connection, &Secret::new("test-key".to_owned()))
+                    .expect("write");
+                assert_eq!(
+                    secrets
+                        .read(&connection)
+                        .expect("read")
+                        .expect("a secret")
+                        .expose(),
+                    "test-key"
+                );
+                secrets.delete(&connection).expect("delete");
+                assert!(secrets.read(&connection).expect("read").is_none());
+                std::future::ready(Err::<(), &str>("sample_persist:test")).await?;
+                Ok::<(), &str>(())
+            });
+
+            assert_eq!(result, Err("sample_persist:test"));
+            assert!(
+                !observer
+                    .recv_timeout(std::time::Duration::from_secs(5))
+                    .expect("the credential store was destroyed"),
+                "credential store destruction entered the async runtime"
+            );
+        }
     }
 
     #[test]
