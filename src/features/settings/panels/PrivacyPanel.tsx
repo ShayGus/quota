@@ -25,8 +25,12 @@ import { credentialStoreName } from "../providers";
 function facts(): readonly (readonly [string, string])[] {
   return [
     [
-      "It only checks your usage",
-      "Quota asks each provider how much of your plan is left, using your own sign-in. Nothing goes anywhere else: no analytics, no tracking, no Quota account.",
+      "No Quota server, no tracking",
+      "Quota has no server or account of its own and collects nothing. Everything it keeps stays on this computer.",
+    ],
+    [
+      "It only talks to your AI providers",
+      "To see how much of your plan is left, Quota asks each provider you added, such as Anthropic or OpenAI, the same way their own apps do. It contacts no one else.",
     ],
     [
       "Your sign-ins stay protected",
@@ -51,7 +55,7 @@ export function PrivacyPanel({
     <>
       <SettingsTitle
         title="Privacy"
-        intro="Quota runs on this computer. Here is what it sends and what it keeps."
+        intro="Quota runs on this computer. Here is exactly what it does with your data."
       />
       <ul className="privacy-facts">
         {facts().map(([heading, text]) => (

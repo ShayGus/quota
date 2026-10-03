@@ -197,7 +197,8 @@ describe("privacy", () => {
     const { actions } = settingsActions();
     render(<PrivacyPanel preferences={preferences()} accounts={[]} actions={actions} />);
     for (const heading of [
-      "It only checks your usage",
+      "No Quota server, no tracking",
+      "It only talks to your AI providers",
       "Your sign-ins stay protected",
       "Your work stays yours",
     ]) {
