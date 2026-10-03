@@ -322,6 +322,10 @@ async fn install_managed_state(
     if confirmed_topmost != always_on_top {
         return Err("window_topmost_confirmation_failed".to_owned());
     }
+    // The saved view opens now that the preferences are read.
+    crate::platform::app_view::restore_saved(&state)
+        .await
+        .map_err(|error| format!("view_restore_failed:{}", error.diagnostic_code()))?;
     let visible = native
         .is_visible()
         .map_err(|_| "window_visibility_read_failed")?;
@@ -329,8 +333,6 @@ async fn install_managed_state(
     controller.set_always_on_top(confirmed_topmost);
     controller.set_visible(visible);
     let saved_mode = state.preferences_state.read().await.overview_mode;
-    let show_widget = state.preferences_state.read().await.show_widget;
-    crate::platform::widget::restore(app, show_widget);
     // The saved mode's chrome needs no tray geometry, so it applies now. The
     // anchor reads the tray icon's rectangle from the system; if the icon is
     // not placed yet, the next tray event completes it.
@@ -375,14 +377,19 @@ pub fn start() -> Result<(), String> {
     // The window-state plugin writes into the app config directory. The sample
     // build keeps its copy under the same `sample` child as its database.
     let state_flags = crate::platform::window::restored_state_flags();
+    // The widget's position is saved in the preferences whenever it moves, so
+    // the plugin, which saves only at a clean exit, leaves that window alone.
+    let unmanaged = [crate::platform::widget::LABEL];
     #[cfg(feature = "sample-data")]
     let window_state = tauri_plugin_window_state::Builder::default()
         .with_filename("sample/.window-state.json")
         .with_state_flags(state_flags)
+        .with_denylist(&unmanaged)
         .build();
     #[cfg(not(feature = "sample-data"))]
     let window_state = tauri_plugin_window_state::Builder::default()
         .with_state_flags(state_flags)
+        .with_denylist(&unmanaged)
         .build();
     with_agent_inspection(
         tauri::Builder::default()
@@ -391,10 +398,8 @@ pub fn start() -> Result<(), String> {
                 // overview forward; it never opens the settings window, which
                 // stays as the person left it. A login-item launch that finds Quota
                 // already running changes nothing.
-                if !crate::platform::autostart::launched_at_login(argv.into_iter())
-                    && let Err(error) = crate::platform::window::activate_overview(app)
-                {
-                    tracing::warn!(%error, "second launch could not focus the overview");
+                if !crate::platform::autostart::launched_at_login(argv.into_iter()) {
+                    crate::platform::app_view::activate(app);
                 }
             }))
             .plugin(crate::platform::autostart::plugin())
@@ -410,15 +415,19 @@ pub fn start() -> Result<(), String> {
         let handle = app.handle().clone();
         crate::platform::tray::install(&handle)?;
         crate::platform::window_events::install_close_handlers(&handle);
-        // The overview is the only window a launch opens. The settings
-        // window was created hidden and waits for a person to ask for it. A
-        // launch at login starts quietly in the tray instead.
-        if !crate::platform::autostart::launched_at_login(std::env::args()) {
-            crate::platform::window::activate_overview(&handle)?;
-        }
+        // The saved view, the overview or the widget, is the only window a
+        // launch opens, once the backend has read which one it is. The
+        // settings window was created hidden and waits for a person to ask for
+        // it. A backend that cannot start still opens the overview, which
+        // explains the failure, unless this is a quiet launch at login.
         tauri::async_runtime::spawn(async move {
-            if let Err(error) = initialize_backend(handle).await {
+            if let Err(error) = initialize_backend(handle.clone()).await {
                 tracing::error!(target: "quota::bootstrap", code = %error, "backend initialization failed");
+                if !crate::platform::autostart::launched_at_login(std::env::args())
+                    && let Err(error) = crate::platform::window::activate_overview(&handle)
+                {
+                    tracing::warn!(%error, "the overview could not be shown");
+                }
             }
         });
         Ok(())

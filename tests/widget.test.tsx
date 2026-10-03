@@ -5,7 +5,8 @@
  * period with the shortest outside, so a lone ring is the outer one; the
  * number under the rings named after its ring; money as money, never a
  * share; mini cards in pairs with an odd last card across the width; and a
- * click that opens the account in the overview without closing the widget.
+ * corner button that switches back to the full window. Clicking an account
+ * never opens the full window beside the widget.
  */
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -28,7 +29,6 @@ import {
 const ipc = vi.hoisted(() => ({
   fitWidget: vi.fn(() => Promise.resolve()),
   dragWidget: vi.fn(() => Promise.resolve()),
-  showInOverview: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../src/shared/ipc/widget", () => ipc);
 
@@ -200,24 +200,19 @@ describe("the widget's model", () => {
 describe("the mini cards", () => {
   it("pair the cards, with an odd last card across the width", () => {
     const { container, rerender } = render(
-      <MiniCards accounts={accountsOf(kimi, claude, cursor)} onOpen={vi.fn()} />,
+      <MiniCards accounts={accountsOf(kimi, claude, cursor)} />,
     );
     const wide = (): string[] =>
       [...container.querySelectorAll(".widget-card")].map((card) =>
         card.classList.contains("wide") ? "wide" : "half",
       );
     expect(wide()).toEqual(["half", "half", "wide"]);
-    rerender(
-      <MiniCards
-        accounts={accountsOf(kimi, claude, cursor, openrouter)}
-        onOpen={vi.fn()}
-      />,
-    );
+    rerender(<MiniCards accounts={accountsOf(kimi, claude, cursor, openrouter)} />);
     expect(wide()).toEqual(["half", "half", "half", "half"]);
   });
 
   it("show money in a card as an amount", () => {
-    render(<MiniCards accounts={accountsOf(openrouter)} onOpen={vi.fn()} />);
+    render(<MiniCards accounts={accountsOf(openrouter)} />);
     expect(screen.getByText("$17.54 left")).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
@@ -236,22 +231,20 @@ describe("the ring strip", () => {
         },
       ),
     );
-    const { container } = render(
-      <RingStrip accounts={accountsOf(...nine)} onOpen={vi.fn()} />,
-    );
+    const { container } = render(<RingStrip accounts={accountsOf(...nine)} />);
     const tiles = container.querySelector<HTMLElement>(".widget-tiles");
     expect(tiles?.style.width).toBe("296px");
   });
 
   it("names every ring colour in its key", () => {
-    render(<RingStrip accounts={accountsOf(kimi)} onOpen={vi.fn()} />);
+    render(<RingStrip accounts={accountsOf(kimi)} />);
     for (const name of ["5-hour", "Weekly", "Monthly"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
   });
 
   it("breaks an account down when it is pointed at", () => {
-    render(<RingStrip accounts={accountsOf(kimi, claude)} onOpen={vi.fn()} />);
+    render(<RingStrip accounts={accountsOf(kimi, claude)} />);
     fireEvent.pointerEnter(screen.getByRole("button", { name: /^Claude/ }));
     const breakdown = screen.getByRole("tooltip");
     expect(breakdown.textContent).toContain("Fable weekly");
@@ -260,23 +253,36 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
-  it("opens a clicked account in the overview and keeps its own size fitted", () => {
+  function renderWidget(onExpand: () => void): void {
     globalThis.ResizeObserver = class {
       observe(): void {}
       unobserve(): void {}
       disconnect(): void {}
     };
     const state = {
-      snapshot: snapshot("instance", 1, [kimi]),
-      preferences: preferences({ indicator_style: "bar" }),
+      snapshot: snapshot("instance", 1, [kimi, claude]),
+      preferences: preferences({ view: "widget" }),
     } as unknown as RendererState;
-    render(<Widget state={state} />);
+    render(<Widget state={state} onExpand={onExpand} />);
+  }
+
+  it("keeps its own size fitted to its accounts", () => {
+    renderWidget(vi.fn());
     expect(ipc.fitWidget).toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: /^Kimi/ }));
-    expect(ipc.showInOverview).toHaveBeenCalledWith({
-      view: "detail",
-      accountId: "kimi",
-      windowId: null,
-    });
+  });
+
+  it("switches back to the full window from its corner button", () => {
+    const onExpand = vi.fn();
+    renderWidget(onExpand);
+    fireEvent.click(screen.getByRole("button", { name: "Open the full window" }));
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("opens the breakdown when an account is clicked, not the full window", () => {
+    const onExpand = vi.fn();
+    renderWidget(onExpand);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    expect(screen.getByRole("tooltip").textContent).toContain("Fable weekly");
+    expect(onExpand).not.toHaveBeenCalled();
   });
 });

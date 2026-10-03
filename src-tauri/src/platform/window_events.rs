@@ -2,7 +2,9 @@
 //!
 //! No window is ever destroyed: closing hides it, so the tray can bring it
 //! back. Closing settings on its add-account page also leaves that page, and a
-//! tray popover that loses focus hides, as a popover does.
+//! tray popover that loses focus hides, as a popover does. The widget is never
+//! hidden by closing: while it is the view it stays on screen, and wherever it
+//! is moved is saved.
 
 use quota_domain::preferences::OverviewMode;
 use tauri::{AppHandle, Manager, WebviewWindow};
@@ -29,16 +31,18 @@ pub fn install_close_handlers(app: &AppHandle) {
             tauri::WindowEvent::Focused(false) if label == "overview" => {
                 overview_lost_focus(&app);
             }
+            tauri::WindowEvent::Moved(position) if label == super::widget::LABEL => {
+                super::widget::remember(&app, *position);
+            }
             _ => {}
         });
     }
 }
 
-/// Hides a window instead of closing it. A closed widget is also saved off,
-/// so it stays closed at the next launch.
+/// Hides a window instead of closing it. The widget ignores a close: only
+/// choosing the full window puts it away.
 fn close(app: &AppHandle, native: &WebviewWindow, label: &'static str) {
     if label == super::widget::LABEL {
-        super::widget::closed(app);
         return;
     }
     if let Err(error) = native.hide() {

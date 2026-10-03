@@ -8,6 +8,7 @@
 import {
   commands,
   type AccountId,
+  type AppView,
   type AttemptRef,
   type BeginConnectionRequest,
   type ConnectionAttemptAccepted,
@@ -142,11 +143,12 @@ export const actions = {
     await reportAsync(commands.setOverviewAlwaysOnTop(alwaysOnTop));
   },
   /**
-   * Shows or hides the mini widget. The host confirms the window before it
-   * saves the choice, and the tray's check mark follows.
+   * Switches between the full window and the mini widget. The host shows the
+   * chosen view before it puts the other away, then saves the choice; the
+   * tray's check mark follows.
    */
-  async setWidgetVisible(visible: boolean): Promise<void> {
-    await reportAsync(commands.setWidgetVisible(visible));
+  async setAppView(view: AppView): Promise<void> {
+    await reportAsync(commands.setAppView(view));
   },
   /**
    * Asks the host to fit the popover's height to its content. The host decides

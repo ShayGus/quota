@@ -8,7 +8,6 @@
  */
 import type { JSX } from "react";
 
-import type { AccountId } from "../../generated/bindings";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import type { WidgetAccount, WidgetRow } from "./model";
 import { periodClass } from "./Rings";
@@ -19,23 +18,17 @@ const ROWS_PER_CARD = 3;
 /** The mini cards. */
 export function MiniCards({
   accounts,
-  onOpen,
 }: {
   readonly accounts: readonly WidgetAccount[];
-  readonly onOpen: (accountId: AccountId) => void;
 }): JSX.Element {
   const odd = accounts.length % 2 === 1;
   return (
     <section className="widget-cards" aria-label="Quota">
       {accounts.map((account, index) => (
-        <button
+        <article
           key={account.id}
-          type="button"
           className={`widget-card${odd && index === accounts.length - 1 ? " wide" : ""}`}
           aria-label={account.description}
-          onClick={() => {
-            onOpen(account.id);
-          }}
         >
           <span className="widget-card-title">
             <ProviderMark providerId={account.providerId} />
@@ -54,7 +47,7 @@ export function MiniCards({
               </span>
             </span>
           ) : null}
-        </button>
+        </article>
       ))}
     </section>
   );

@@ -44,6 +44,30 @@ pub enum OverviewMode {
     Tray,
 }
 
+/// How Quota presents itself: the full window, or the mini widget instead.
+///
+/// The two never show together. The widget is another way to present the app,
+/// not a companion to the full window.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AppView {
+    /// The full window: the overview, docked to the tray or floating.
+    #[default]
+    Overview,
+    /// The mini widget, always on top and always on screen.
+    Widget,
+}
+
+/// Where the mini widget was last left: its top-left corner in physical
+/// screen pixels, which is what the system reports and accepts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct WidgetPosition {
+    /// Pixels from the left of the virtual desktop.
+    pub x: i32,
+    /// Pixels from the top of the virtual desktop.
+    pub y: i32,
+}
+
 /// What happens at login.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -210,12 +234,14 @@ pub struct PresentationPreferences {
     pub privacy_alias_mode: PrivacyAliasMode,
     /// Whether animations are suppressed.
     pub reduce_motion: bool,
-    /// Whether the mini widget is on screen.
-    ///
-    /// Off by default, and a preference file written before the widget existed
-    /// reads as off, so only an explicit choice ever shows it.
+    /// Which view presents the app. A preference file written before the
+    /// widget existed reads as the full window.
     #[serde(default)]
-    pub show_widget: bool,
+    pub view: AppView,
+    /// Where the widget was last left, saved whenever it is moved, so it comes
+    /// back to the same place after a restart or an update.
+    #[serde(default)]
+    pub widget_position: Option<WidgetPosition>,
 }
 
 impl Default for PresentationPreferences {
@@ -230,7 +256,8 @@ impl Default for PresentationPreferences {
             launch_behavior: LaunchBehavior::default(),
             privacy_alias_mode: PrivacyAliasMode::default(),
             reduce_motion: false,
-            show_widget: false,
+            view: AppView::default(),
+            widget_position: None,
         }
     }
 }
@@ -259,11 +286,27 @@ mod tests {
     }
 
     #[test]
-    fn a_file_from_before_the_widget_reads_with_the_widget_off() {
+    fn a_file_from_before_the_widget_reads_as_the_full_window() {
         let mut json = serde_json::to_value(PresentationPreferences::default()).unwrap();
-        json.as_object_mut().unwrap().remove("show_widget");
+        let object = json.as_object_mut().unwrap();
+        object.remove("view");
+        object.remove("widget_position");
         let restored: PresentationPreferences = serde_json::from_value(json).unwrap();
-        assert!(!restored.show_widget);
+        assert_eq!(restored.view, AppView::Overview);
+        assert_eq!(restored.widget_position, None);
+    }
+
+    #[test]
+    fn the_view_and_the_widget_position_survive_a_round_trip() {
+        let saved = PresentationPreferences {
+            view: AppView::Widget,
+            widget_position: Some(WidgetPosition { x: -1600, y: 240 }),
+            ..PresentationPreferences::default()
+        };
+        let json = serde_json::to_string(&saved).unwrap();
+        assert!(json.contains("\"view\":\"widget\""));
+        let restored: PresentationPreferences = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, saved);
     }
 
     #[test]

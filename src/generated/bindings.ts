@@ -90,12 +90,12 @@ export const commands = {
 	 */
 	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
 	/**
-	 *  Shows or hides the mini widget and saves the choice.
+	 *  Switches between the full window and the mini widget, and saves the view.
 	 * 
-	 *  The native window is confirmed first, so a widget the system refused to
-	 *  show is never saved as on. The tray item follows the same confirmed state.
+	 *  The chosen view is shown before the other is put away, so the app never
+	 *  disappears, and a view the system refused to show is never saved.
 	 */
-	setWidgetVisible: (visible: boolean) => typedError<Preferences, CommandError>(__TAURI_INVOKE("set_widget_visible", { visible })),
+	setAppView: (view: AppView) => typedError<Preferences, CommandError>(__TAURI_INVOKE("set_app_view", { view })),
 	/**
 	 *  Opens one allowlisted provider usage page in the external browser.
 	 * 
@@ -231,6 +231,18 @@ export type AppSnapshot = {
 	/**  The canonical account order, in presentation sections. */
 	order: OrderEntry[],
 };
+
+/**
+ *  How Quota presents itself: the full window, or the mini widget instead.
+ * 
+ *  The two never show together. The widget is another way to present the app,
+ *  not a companion to the full window.
+ */
+export type AppView = 
+/**  The full window: the overview, docked to the tray or floating. */
+"overview" | 
+/**  The mini widget, always on top and always on screen. */
+"widget";
 
 /**  One connection attempt. */
 export type AttemptRef = {
@@ -810,8 +822,13 @@ export type Preferences = {
 	launch_behavior: LaunchBehavior,
 	/**  Whether animations are suppressed. */
 	reduce_motion: boolean,
-	/**  Whether the mini widget is on screen. Off by default. */
-	show_widget: boolean,
+	/**  Which view presents the app: the full window or the mini widget. */
+	view: AppView,
+	/**
+	 *  Where the widget was last left. The host saves it when the widget moves;
+	 *  the renderer carries it through a save unchanged.
+	 */
+	widget_position: WidgetPosition | null,
 	/**  Notification behaviour. */
 	notifications: NotificationPolicy,
 	/**  Retention and export behaviour. */
@@ -1250,6 +1267,17 @@ export type VerifiedIdentity = {
 	plan_label: string | null,
 	/**  Where the identity was verified. */
 	source: SourceKind,
+};
+
+/**
+ *  Where the mini widget was last left: its top-left corner in physical
+ *  screen pixels, which is what the system reports and accepts.
+ */
+export type WidgetPosition = {
+	/**  Pixels from the left of the virtual desktop. */
+	x: number,
+	/**  Pixels from the top of the virtual desktop. */
+	y: number,
 };
 
 /**  A confirmed overview mode change, or the state that was actually reached. */

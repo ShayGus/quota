@@ -38,7 +38,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_window::set_overview_mode,
             commands_window::set_overview_always_on_top,
             commands_window::fit_overview_height,
-            commands_window::set_widget_visible,
+            commands_window::set_app_view,
             commands_window::open_provider_usage_page,
             commands_window::open_settings_window,
         ])

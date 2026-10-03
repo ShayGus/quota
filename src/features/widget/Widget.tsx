@@ -4,16 +4,17 @@
  *
  * It has two looks, picked with the same ring-or-bar choice as the overview:
  * a strip of rings, one ring per period, or mini cards with a bar per limit.
+ * It is another way to present the app, never shown beside the full window.
  * The window always fits its accounts exactly, so nothing is ever scrolled or
- * cut off, and it moves wherever it is dragged. Clicking an account opens it
- * in the overview; the widget itself stays where it is.
+ * cut off, and it moves wherever it is dragged. The button in its corner, the
+ * tray menu, and Settings switch back to the full window.
  */
 import { useEffect, useMemo, useRef, type JSX, type PointerEvent } from "react";
 
-import type { AccountId } from "../../generated/bindings";
 import { launch } from "../../shared/ipc/report";
-import { dragWidget, fitWidget, showInOverview } from "../../shared/ipc/widget";
+import { dragWidget, fitWidget } from "../../shared/ipc/widget";
 import type { RendererState } from "../../shared/state/types";
+import { Icon } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { MiniCards } from "./MiniCards";
 import { widgetAccounts } from "./model";
@@ -23,7 +24,14 @@ import { RingStrip } from "./RingStrip";
 const DRAG_DISTANCE = 4;
 
 /** The widget window's content. */
-export function Widget({ state }: { readonly state: RendererState }): JSX.Element {
+export function Widget({
+  state,
+  onExpand,
+}: {
+  readonly state: RendererState;
+  /** Switches back to the full window. */
+  readonly onExpand: () => void;
+}): JSX.Element {
   const now = useNow();
   const accounts = useMemo(
     () => widgetAccounts(state.snapshot?.accounts ?? [], state.preferences, now),
@@ -33,11 +41,10 @@ export function Widget({ state }: { readonly state: RendererState }): JSX.Elemen
   useFitWindow(root);
   useTransparentPage();
   const drag = useDragToMove();
-  const open = (accountId: AccountId): void => {
-    if (drag.consumeDrag()) {
-      return;
+  const expand = (): void => {
+    if (!drag.consumeDrag()) {
+      onExpand();
     }
-    launch(showInOverview({ view: "detail", accountId, windowId: null }));
   };
   return (
     <div
@@ -47,23 +54,24 @@ export function Widget({ state }: { readonly state: RendererState }): JSX.Elemen
       onPointerMove={drag.onPointerMove}
     >
       {accounts.length === 0 ? (
-        <button
-          type="button"
-          className="widget-empty"
-          onClick={() => {
-            if (!drag.consumeDrag()) {
-              launch(showInOverview({ view: "overview" }));
-            }
-          }}
-        >
+        <button type="button" className="widget-empty" onClick={expand}>
           <strong>No accounts to show</strong>
-          <span>Open Quota to add one</span>
+          <span>Open the full window to add one</span>
         </button>
       ) : state.preferences?.indicator_style === "bar" ? (
-        <MiniCards accounts={accounts} onOpen={open} />
+        <MiniCards accounts={accounts} />
       ) : (
-        <RingStrip accounts={accounts} onOpen={open} />
+        <RingStrip accounts={accounts} />
       )}
+      <button
+        type="button"
+        className="widget-expand"
+        aria-label="Open the full window"
+        title="Open the full window"
+        onClick={expand}
+      >
+        <Icon name="expand" />
+      </button>
     </div>
   );
 }

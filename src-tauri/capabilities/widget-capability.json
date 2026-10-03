@@ -1,13 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "widget-capability",
-  "description": "The mini widget. It reads the snapshot and its events, moves by being dragged, sizes itself to its accounts, and asks the overview to show an account. It saves nothing and changes no account, so no preference, monitoring, connection, store, SQL, filesystem, shell or HTTP permission is granted here.",
+  "description": "The mini widget, the compact view of the app. It reads the snapshot and its events, moves by being dragged, sizes itself to its accounts, and can switch back to the full window. It changes no account and saves no other preference, so no monitoring, connection, store, SQL, filesystem, shell or HTTP permission is granted here.",
   "windows": ["widget"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
     "core:window:allow-set-size",
     "core:event:default",
-    "allow-get-snapshot"
+    "allow-get-snapshot",
+    "allow-set-app-view"
   ]
 }

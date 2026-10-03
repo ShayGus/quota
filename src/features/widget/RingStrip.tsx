@@ -4,14 +4,13 @@
  *
  * Under each tile's rings is the tightest allowance, named ("5h 41%") so the
  * number and its ring read together. A key under the tiles names the colours.
- * Pointing at a tile, or focusing it, opens a breakdown of every limit, outside
+ * Pointing at a tile, clicking it, or focusing it, opens a breakdown of every limit, outside
  * in, each with a small copy of the rings that lights the one it belongs to.
  * With two rows or more the breakdown covers the rows other than the tile's
  * own; with one row it opens under the tiles and the window grows to fit it.
  */
 import { useEffect, useState, type CSSProperties, type JSX } from "react";
 
-import type { AccountId } from "../../generated/bindings";
 import { ProviderMark } from "../../shared/ui/ProviderMark";
 import type { Period, WidgetAccount } from "./model";
 import { periodClass, RADII, Rings } from "./Rings";
@@ -38,10 +37,8 @@ const PERIOD_NAMES: Record<Period, string> = {
 /** The ring strip. */
 export function RingStrip({
   accounts,
-  onOpen,
 }: {
   readonly accounts: readonly WidgetAccount[];
-  readonly onOpen: (accountId: AccountId) => void;
 }): JSX.Element {
   const [pointing, setPointing] = useState<number | null>(null);
   useClearWhenLeft(setPointing);
@@ -75,7 +72,8 @@ export function RingStrip({
               setPointing(null);
             }}
             onClick={() => {
-              onOpen(account.id);
+              // A tap or a click opens the breakdown, as pointing does.
+              setPointing(index);
             }}
           >
             <span

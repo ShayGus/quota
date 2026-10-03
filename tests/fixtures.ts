@@ -171,7 +171,8 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
     indicator_style: "ring",
     overview_mode: "floating",
     always_on_top: false,
-    show_widget: false,
+    view: "overview",
+    widget_position: null,
     launch_behavior: "quiet_in_tray",
     reduce_motion: false,
     notifications: {

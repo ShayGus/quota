@@ -27,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "set_overview_mode",
         "set_overview_always_on_top",
         "fit_overview_height",
-        "set_widget_visible",
+        "set_app_view",
         "open_provider_usage_page",
         "open_settings_window",
         "clear_local_history",

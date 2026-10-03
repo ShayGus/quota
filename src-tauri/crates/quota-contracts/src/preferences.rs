@@ -9,7 +9,7 @@ use specta::Type;
 
 use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::{
-    IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
+    AppView, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme, WidgetPosition,
 };
 pub use quota_domain::preferences::{
     NotificationAlerts, NotificationPolicy, NotificationThresholds, QuietHours,
@@ -57,8 +57,11 @@ pub struct Preferences {
     pub launch_behavior: LaunchBehavior,
     /// Whether animations are suppressed.
     pub reduce_motion: bool,
-    /// Whether the mini widget is on screen. Off by default.
-    pub show_widget: bool,
+    /// Which view presents the app: the full window or the mini widget.
+    pub view: AppView,
+    /// Where the widget was last left. The host saves it when the widget moves;
+    /// the renderer carries it through a save unchanged.
+    pub widget_position: Option<WidgetPosition>,
     /// Notification behaviour.
     pub notifications: NotificationPolicy,
     /// Retention and export behaviour.
