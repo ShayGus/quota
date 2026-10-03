@@ -1,8 +1,9 @@
 /**
  * The window headers.
  *
- * The popover header carries refresh, the pin, settings, and hide, as the
- * wireframe draws them. Pinning turns the tray popover into a floating window
+ * The popover header carries refresh, the pin, the switch to the mini widget,
+ * settings, and hide. Refresh, the pin, settings and hide are as the wireframe
+ * draws them. Pinning turns the tray popover into a floating window
  * that stays open and moves by its header; keeping it on top is a separate
  * setting, so pinning never changes topmost (spec 4.4). The pin's state is
  * also stated in words, so `aria-pressed` is never the only signal.
@@ -94,6 +95,17 @@ export function AppHeader({
           }}
         >
           <Icon name="pin" />
+        </button>
+        <button
+          type="button"
+          className="icon-btn"
+          aria-label="Switch to the mini widget"
+          title="Switch to the mini widget"
+          onClick={() => {
+            launch(actions.setAppView("widget"));
+          }}
+        >
+          <Icon name="shrink" />
         </button>
         <button
           type="button"

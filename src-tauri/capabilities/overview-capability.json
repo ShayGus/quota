@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "overview-capability",
-  "description": "The overview window. It reads snapshots and events and issues only the commands the overview needs. It may ask the host to show the settings window, run the add-account wizard (begin, confirm, and cancel a connection attempt), save indicator-style and overview mode/topmost preferences, and move the overview window and fit its height to its content. Full preference writes and history clearing are not granted. No store, SQL, filesystem, shell, or HTTP permission is granted here.",
+  "description": "The overview window. It reads snapshots and events and issues only the commands the overview needs. It may ask the host to show the settings window, run the add-account wizard (begin, confirm, and cancel a connection attempt), save indicator-style and overview mode/topmost preferences, switch to the mini widget, and move the overview window and fit its height to its content. Full preference writes and history clearing are not granted. No store, SQL, filesystem, shell, or HTTP permission is granted here.",
   "windows": ["overview"],
   "permissions": [
     "core:default",
@@ -29,6 +29,7 @@
     "allow-set-indicator-style",
     "allow-set-overview-mode",
     "allow-set-overview-always-on-top",
+    "allow-set-app-view",
     "allow-fit-overview-height",
     "allow-export-sanitized-diagnostics",
     "allow-reconnect-account",

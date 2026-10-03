@@ -169,6 +169,30 @@ describe("the pin and always-on-top controls", () => {
     });
     expect(mutatingCommands()).toEqual(["set_overview_always_on_top"]);
   });
+
+  it("switches to the mini widget from the header, sending only the view", async () => {
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences());
+    render(<App />);
+
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Switch to the mini widget" })),
+    );
+    expect(commandsMatching("set_app_view")[0]?.args).toEqual({ view: "widget" });
+    expect(mutatingCommands()).toEqual(["set_app_view"]);
+  });
+
+  it("switches between the full window and the widget from settings", async () => {
+    window.location.hash = "#/settings/general";
+    acceptSnapshot(snapshot("instance-1", 1, oneAccount()));
+    acceptPreferences(preferences({ view: "widget" }));
+    render(<App />);
+
+    const widget = screen.getByRole("switch", { name: "Mini widget" });
+    expect(widget.getAttribute("aria-checked")).toBe("true");
+    await act(() => fireEvent.click(widget));
+    expect(commandsMatching("set_app_view")[0]?.args).toEqual({ view: "overview" });
+  });
 });
 
 describe("a render failure", () => {

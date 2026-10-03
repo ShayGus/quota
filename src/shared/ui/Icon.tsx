@@ -20,6 +20,7 @@ export type IconName =
   | "close"
   | "donut"
   | "download"
+  | "expand"
   | "external"
   | "layers"
   | "list"
@@ -36,6 +37,7 @@ export type IconName =
   | "search"
   | "settings"
   | "shield"
+  | "shrink"
   | "sun"
   | "terminal"
   | "user"
@@ -65,6 +67,7 @@ const PATHS: Record<IconName, JSX.Element> = {
     </>
   ),
   download: <path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4" />,
+  expand: <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />,
   external: (
     <>
       <path d="M14 3h7v7m0-7-11 11" />
@@ -116,6 +119,7 @@ const PATHS: Record<IconName, JSX.Element> = {
       <path d="m8 12 3 3 5-6" />
     </>
   ),
+  shrink: <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />,
   sun: (
     <>
       <circle cx="12" cy="12" r="4" />

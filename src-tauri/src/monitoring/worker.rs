@@ -112,5 +112,8 @@ pub(super) async fn publish_snapshot(state: &RuntimeState) -> Result<(), String>
     event
         .emit_to(&state.app, "settings")
         .map_err(|_| "settings_snapshot_event_failed".to_owned())?;
+    event
+        .emit_to(&state.app, crate::platform::widget::LABEL)
+        .map_err(|_| "widget_snapshot_event_failed".to_owned())?;
     Ok(())
 }

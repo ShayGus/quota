@@ -138,6 +138,19 @@ pub async fn fit_overview_height(
     Ok(window_state_response(confirmed))
 }
 
+/// Switches between the full window and the mini widget, and saves the view.
+///
+/// The chosen view is shown before the other is put away, so the app never
+/// disappears, and a view the system refused to show is never saved.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_app_view(
+    state: State<'_, AppState>,
+    view: quota_domain::preferences::AppView,
+) -> Result<quota_contracts::preferences::Preferences, CommandError> {
+    crate::platform::app_view::switch(&state, view).await
+}
+
 /// Opens one allowlisted provider usage page in the external browser.
 ///
 /// The renderer cannot supply a URL. It names a provider, and the host owns the

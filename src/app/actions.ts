@@ -8,6 +8,7 @@
 import {
   commands,
   type AccountId,
+  type AppView,
   type AttemptRef,
   type BeginConnectionRequest,
   type ConnectionAttemptAccepted,
@@ -140,6 +141,14 @@ export const actions = {
   /** Sets the independent always-on-top preference. It changes nothing else. */
   async setAlwaysOnTop(alwaysOnTop: boolean): Promise<void> {
     await reportAsync(commands.setOverviewAlwaysOnTop(alwaysOnTop));
+  },
+  /**
+   * Switches between the full window and the mini widget. The host shows the
+   * chosen view before it puts the other away, then saves the choice; the
+   * tray's check mark follows.
+   */
+  async setAppView(view: AppView): Promise<void> {
+    await reportAsync(commands.setAppView(view));
   },
   /**
    * Asks the host to fit the popover's height to its content. The host decides

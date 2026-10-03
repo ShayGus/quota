@@ -1,8 +1,9 @@
 //! The tray controller.
 //!
 //! The tray exists in Rust so it survives renderer closure. Closing a window
-//! hides it to the tray; a left click on the icon always opens the app, and the
-//! menu offers Settings, Show App, and Exit. Only Exit ends the process.
+//! hides it to the tray; a left click on the icon always opens the app in its
+//! chosen view, and the menu offers Settings, Show App, the switch between the
+//! full window and the mini widget, and Exit. Only Exit ends the process.
 
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::provider::ProviderId;
@@ -10,7 +11,7 @@ use quota_domain::quota::QuotaCategory;
 use quota_domain::ranking::{AccountOrder, UnrankedReason};
 use quota_domain::snapshot::{AccountSnapshot, AppSnapshot, MonitoringState};
 
-use tauri::menu::{IconMenuItem, Menu, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
@@ -31,9 +32,12 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     };
     let settings = item("settings", "Settings", MenuIcon::Settings)?;
     let show = item("show", "Show App", MenuIcon::Donut)?;
+    // Checked while the widget is the view; the saved view checks it at launch.
+    let widget = CheckMenuItem::with_id(app, "widget", "Mini widget", true, false, None::<&str>)?;
+    app.manage(super::widget::WidgetMenuItem(widget.clone()));
     let exit = item("exit", "Exit", MenuIcon::Power)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&settings, &show, &separator, &exit])?;
+    let menu = Menu::with_items(app, &[&settings, &show, &widget, &separator, &exit])?;
     TrayIconBuilder::with_id("quota")
         .icon(tray_image(false, system_is_dark(app)))
         .tooltip("Quota")
@@ -311,26 +315,9 @@ fn warn_on_failure(result: tauri::Result<()>, part: &'static str) {
     }
 }
 
-/// Opens the app: shows the overview, or brings it forward when it is already open.
+/// Opens the app in its chosen view: the overview, or the widget.
 fn activate_from_tray(app: &AppHandle) {
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let Some(state) = app.try_state::<crate::state::AppState>() else {
-            if let Err(error) = window::set_visible(&app, "overview", true, true) {
-                tracing::warn!(
-                    code = error.diagnostic_code(),
-                    "overview could not be shown from the tray"
-                );
-            }
-            return;
-        };
-        let state = state.inner().clone();
-        let mut controller = state.window.lock().await;
-        if let Ok(confirmed) = window::set_visible(&app, "overview", true, true) {
-            let confirmed = controller.set_visible(confirmed);
-            window::publish_state(&app, &state.app_instance_id, confirmed);
-        }
-    });
+    super::app_view::activate(app);
 }
 
 fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
@@ -345,6 +332,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
             }
         }
         "show" => activate_from_tray(app),
+        "widget" => super::app_view::toggle_from_tray(app),
         "exit" => app.exit(0),
         _ => {}
     }

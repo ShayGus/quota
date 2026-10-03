@@ -1,5 +1,6 @@
 /**
- * General settings: when Quota runs and how the popover behaves.
+ * General settings: when Quota runs, how the popover behaves, and whether Quota
+ * shows as the full window or as the mini widget.
  *
  * Floating or docking lives on the popover header. Always on top is an
  * independent preference that applies in both modes: changing it changes
@@ -119,6 +120,19 @@ export function WindowPanel({
             label="Always on top"
             onChange={(next) => {
               actions.setAlwaysOnTop(next);
+            }}
+          />
+        }
+      />
+      <SettingRow
+        label="Mini widget"
+        description="Show Quota as a small window with every account at a glance, instead of the full window. It stays on top and where you put it."
+        control={
+          <Switch
+            checked={preferences.view === "widget"}
+            label="Mini widget"
+            onChange={(next) => {
+              actions.setAppView(next ? "widget" : "overview");
             }}
           />
         }

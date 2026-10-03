@@ -159,6 +159,23 @@ function nativeAmount(measurement: Measurement): string {
 }
 
 /**
+ * The money left in a money reading, as an amount and never a share: `$17.54`
+ * for dollars, `17.54 EUR` for any other currency. `null` for any other kind
+ * of reading, or when the provider did not report what is left.
+ */
+export function moneyLeft(measurement: Measurement): string | null {
+  if (measurement.kind !== "money") {
+    return null;
+  }
+  const { currency, scale, remaining_minor_units: remaining } = measurement.value;
+  if (remaining === null) {
+    return null;
+  }
+  const amount = formatMoney(remaining, scale);
+  return currency === "USD" ? `$${amount}` : `${amount} ${currency}`;
+}
+
+/**
  * A money amount from its minor units.
  *
  * Minor units are exact, so the amount is shown at the scale the provider gave
@@ -180,7 +197,11 @@ function formatMoney(minor: number, scale: number): string {
 function formatNumber(value: number, precision: number): string {
   const places =
     Number.isInteger(precision) && precision >= 0 ? Math.min(precision, 9) : 0;
-  return value.toFixed(places);
+  // Grouped, so a large count reads at a glance: 62,500 rather than 62500.
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  });
 }
 
 /**

@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "inspect": "tauri dev --features agent-inspection --config '{\"app\":{\"security\":{\"capabilities\":[\"overview-capability\",\"settings-capability\",\"agent-inspection-capability\"]}}}'"
+    "inspect": "tauri dev --features agent-inspection --config '{\"app\":{\"security\":{\"capabilities\":[\"overview-capability\",\"settings-capability\",\"widget-capability\",\"agent-inspection-capability\"]}}}'"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.1",

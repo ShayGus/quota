@@ -14,6 +14,7 @@ import "./shared/ui/components.css";
 import "./shared/ui/overview.css";
 import "./shared/ui/surfaces.css";
 import "./shared/ui/settings.css";
+import "./shared/ui/widget.css";
 
 // Development-only overview listeners. `manage_ipc` records only calls an
 // agent issues through the plugin's tools; ordinary frontend invokes are not

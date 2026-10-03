@@ -41,6 +41,7 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       setMonitoring: vi.fn(),
       savePollingPreferences: vi.fn(),
       setAlwaysOnTop: vi.fn(),
+      setAppView: vi.fn(),
       setOverviewMode: vi.fn(),
       setAccountEnabled: vi.fn(),
       renameAccount: vi.fn(),
