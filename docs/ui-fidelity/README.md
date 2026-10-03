@@ -57,6 +57,9 @@ does, in the same place and at the same length.
   candidate's account, workspace, and reading, asks for the nickname and the confirmation
   check the wireframe draws, and saves it under that nickname. Back, Cancel, closing the
   popover, or restarting the app discards the candidate.
+- **The Codex mark.** The wireframe draws Codex as the text `>_`. By the owner's direction
+  the tile shows Codex's own mark, the rounded blossom around a `>_` prompt that the Codex
+  app uses, in the tile's text colour. The other providers keep their glyphs.
 - **Launch at login** registers a login item through the autostart plugin. A launch at
   sign-in starts quietly in the tray, and the switch shows what the system reports.
 - **Local history retention** offers the wireframe's Disabled, 7 days, and 30 days, plus

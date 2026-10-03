@@ -219,6 +219,11 @@ input[type="time"] {
   flex-shrink: 0;
 }
 
+.provider-icon svg {
+  width: 76%;
+  height: 76%;
+}
+
 .provider-icon.claude {
   font-size: 21px;
   line-height: 1;
