@@ -85,7 +85,7 @@ pub(crate) struct OpenCodeGoCredential {
 }
 
 /// The process environment, with a blank value treated as an absent one.
-fn process_lookup(name: &str) -> Option<String> {
+pub(crate) fn process_lookup(name: &str) -> Option<String> {
     std::env::var(name)
         .ok()
         .filter(|value| !value.trim().is_empty())
@@ -199,7 +199,7 @@ fn opencode_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderE
 }
 
 /// The user profile every default credential path is built from.
-fn profile_directory(lookup: Lookup<'_>) -> Result<PathBuf, ProviderError> {
+pub(crate) fn profile_directory(lookup: Lookup<'_>) -> Result<PathBuf, ProviderError> {
     platform_paths::user_profile(lookup).ok_or(ProviderError::Authentication)
 }
 
@@ -207,7 +207,7 @@ fn profile_directory(lookup: Lookup<'_>) -> Result<PathBuf, ProviderError> {
 ///
 /// A missing or unreadable file is an authentication state: the user fixes it in
 /// the owning client. A file that is not JSON at all is invalid data.
-async fn read_json(path: &Path) -> Result<Value, ProviderError> {
+pub(crate) async fn read_json(path: &Path) -> Result<Value, ProviderError> {
     let metadata = tokio::fs::metadata(path)
         .await
         .map_err(|_| ProviderError::Authentication)?;
@@ -223,7 +223,7 @@ async fn read_json(path: &Path) -> Result<Value, ProviderError> {
 }
 
 /// The first non-empty string found at one of the given key paths.
-fn string_at(document: &Value, paths: &[&[&str]]) -> Option<String> {
+pub(crate) fn string_at(document: &Value, paths: &[&[&str]]) -> Option<String> {
     paths.iter().find_map(|keys| {
         let mut cursor = document;
         for key in *keys {

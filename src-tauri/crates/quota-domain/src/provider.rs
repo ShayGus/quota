@@ -23,6 +23,12 @@ pub enum ProviderId {
     OpenCodeGo,
     /// `OpenRouter` credits and API key spend limits, signed in with an API key.
     Openrouter,
+    /// The Z.ai GLM Coding Plan, signed in with an API key.
+    Zai,
+    /// The `MiniMax` Coding (token) Plan, signed in with an API key.
+    Minimax,
+    /// Kimi for Coding, signed in with an API key or the Kimi CLI's sign-in.
+    Kimi,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -33,11 +39,14 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 5] = [
+    pub const ALL: [Self; 8] = [
         Self::Codex,
         Self::Claude,
         Self::OpenCodeGo,
         Self::Openrouter,
+        Self::Zai,
+        Self::Minimax,
+        Self::Kimi,
         Self::Fixture,
     ];
 
@@ -60,6 +69,9 @@ impl ProviderId {
             Self::Claude => "claude",
             Self::OpenCodeGo => "opencode_go",
             Self::Openrouter => "openrouter",
+            Self::Zai => "zai",
+            Self::Minimax => "minimax",
+            Self::Kimi => "kimi",
             Self::Fixture => "fixture",
         }
     }

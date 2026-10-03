@@ -104,6 +104,12 @@ impl DecimalPrecision {
     /// The largest provider precision this build understands.
     pub const MAX: u8 = 9;
 
+    /// No decimal places, for a whole-number value.
+    pub const WHOLE: Self = Self(0);
+
+    /// One decimal place, for a percentage derived from counts.
+    pub const ONE_PLACE: Self = Self(1);
+
     /// Validates a decimal-place count.
     ///
     /// # Errors

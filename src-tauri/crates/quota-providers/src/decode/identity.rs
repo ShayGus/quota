@@ -100,6 +100,15 @@ fn bounded(text: &str, max: usize) -> String {
     format!("{head}-{:016x}", fnv1a(text))
 }
 
+/// A stable fingerprint of a credential Quota owns.
+///
+/// It tells two pasted keys apart, and lets a read check that the stored key is
+/// still the one the person confirmed, without keeping any of the key's text:
+/// it names the connection's profile and seeds its pool.
+pub(crate) fn fingerprint(credential: &str) -> String {
+    format!("key-{:016x}", fnv1a(credential.trim()))
+}
+
 /// A stable 64-bit FNV-1a hash of the text.
 fn fnv1a(text: &str) -> u64 {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;

@@ -31,6 +31,15 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
             reports_monthly_window: true,
             minimum_interval_seconds: 300,
         },
+        // Signed in with a pasted key; Kimi can also read its CLI's sign-in.
+        ProviderId::Zai | ProviderId::Minimax | ProviderId::Kimi => ProviderCapabilities {
+            provider_id,
+            cardinality: AccountCardinality::Independent,
+            supports_app_owned_authorization: true,
+            supports_external_profile: matches!(provider_id, ProviderId::Kimi),
+            reports_monthly_window: !matches!(provider_id, ProviderId::Minimax),
+            minimum_interval_seconds: 300,
+        },
         ProviderId::Fixture => ProviderCapabilities {
             provider_id,
             cardinality: AccountCardinality::SingleProfile,
@@ -50,6 +59,12 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
     }
     matches!(
         provider_id,
-        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo | ProviderId::Openrouter
+        ProviderId::Codex
+            | ProviderId::Claude
+            | ProviderId::OpenCodeGo
+            | ProviderId::Openrouter
+            | ProviderId::Zai
+            | ProviderId::Minimax
+            | ProviderId::Kimi
     )
 }

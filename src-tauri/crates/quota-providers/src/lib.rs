@@ -40,15 +40,19 @@
 pub mod credentials;
 pub(crate) mod decode;
 pub(crate) mod http;
+pub(crate) mod keyed;
 pub mod offline;
 pub mod registry;
 pub mod secrets;
 
 pub(crate) mod claude;
 pub(crate) mod codex;
+pub(crate) mod kimi;
+pub(crate) mod minimax;
 pub(crate) mod opencode_go;
 pub(crate) mod openrouter;
 pub(crate) mod platform_paths;
+pub(crate) mod zai;
 
 #[cfg(feature = "test-fixtures")]
 pub mod fixture;

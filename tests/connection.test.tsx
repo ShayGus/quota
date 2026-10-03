@@ -441,6 +441,31 @@ describe("Provider → Connect → Verify", () => {
     expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
   });
 
+  it("lets Kimi connect through its CLI's sign-in when no key is pasted", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Kimi/ }));
+    expect(
+      screen.getByText(/leave it empty to use the sign-in the Kimi CLI/),
+    ).toBeTruthy();
+    const connectButton = screen.getByRole("button", { name: "Connect" });
+    expect(connectButton).toHaveProperty("disabled", false);
+    await act(() => fireEvent.click(connectButton));
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "kimi", credential: null }),
+    );
+  });
+
+  it("needs a key for Z.ai, which has no tool of its own", () => {
+    render(<Wizard actions={settingsActions()} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Z\.ai/ }));
+    expect(screen.getByRole("button", { name: "Connect" })).toHaveProperty(
+      "disabled",
+      true,
+    );
+    expect(screen.queryByText(/leave it empty/)).toBeNull();
+  });
+
   it("never sends a key for a provider read through its own sign-in", async () => {
     const actions = settingsActions();
     render(<Wizard actions={actions} onDone={vi.fn()} />);
