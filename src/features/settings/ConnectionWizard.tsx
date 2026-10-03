@@ -45,9 +45,9 @@ const AUTHENTICATION_RECOVERY = {
  * so two windows of one period stay distinct.
  */
 function verifiedWindowName(window: QuotaWindow): string {
-  const period = windowLabel(window);
+  const name = windowLabel(window);
   const scope = window.scope.label;
-  return scope === "" || scope === period ? period : `${period} · ${scope}`;
+  return scope === "" || name.includes(scope) ? name : `${name} · ${scope}`;
 }
 
 /** The reading being approved, in the words the overview uses. */

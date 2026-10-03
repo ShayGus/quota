@@ -39,8 +39,33 @@ const MAIN_CATEGORIES: readonly QuotaWindow["category"][] = [
  */
 export type WindowView = "current" | "stale" | "pending" | "unavailable";
 
-/** The label of one window: its period, or the provider's own name for it. */
+/** The most rings a card draws; further limits are listed under it. */
+const MAX_RINGS = 3;
+
+/**
+ * The label of one window: its period, named after the model when the allowance
+ * covers one model rather than the account ("Fable weekly"), or the provider's
+ * own name for a custom window.
+ */
 export function windowLabel(window: QuotaWindow): string {
+  const period = periodLabel(window);
+  return isModelAllowance(window)
+    ? `${window.scope.label} ${period.toLowerCase()}`
+    : period;
+}
+
+/** Whether a window is an included allowance for one model, such as Fable's. */
+function isModelAllowance(window: QuotaWindow): boolean {
+  return (
+    window.metric_role === "included_allowance" &&
+    window.category !== "custom" &&
+    window.scope.resource !== ACCOUNT_RESOURCE &&
+    window.scope.label !== ""
+  );
+}
+
+/** The period one window covers, or the provider's own name for a custom one. */
+function periodLabel(window: QuotaWindow): string {
   switch (window.category) {
     case "session":
       return "5-hour";
@@ -70,9 +95,10 @@ export const ACCOUNT_RESOURCE = "account";
  * The windows a card draws as rings, and the ones it lists below them.
  *
  * The rings are the account-wide included allowance of each standard period,
- * read from the scope the provider reported, never guessed. Every other
- * window, such as a model-specific weekly allowance or an extra-spend cap, is
- * an independent limit that the card lists under its own scope name.
+ * read from the scope the provider reported, never guessed, followed by each
+ * model's own allowance (named for its model) while there is room for three.
+ * Every other window, such as an extra-spend cap, is an independent limit that
+ * the card lists under its own scope name.
  */
 export function cardWindows(account: AccountSnapshot): {
   readonly main: readonly QuotaWindow[];
@@ -89,6 +115,17 @@ export function cardWindows(account: AccountSnapshot): {
     );
     if (window !== undefined) {
       main.push(window);
+    }
+  }
+  // A model's own allowance, such as Fable's weekly limit, is a ring of its own
+  // after the account's, named for the model, while there is room.
+  for (const category of MAIN_CATEGORIES) {
+    for (const window of included.filter(
+      (candidate) => candidate.category === category && isModelAllowance(candidate),
+    )) {
+      if (main.length < MAX_RINGS) {
+        main.push(window);
+      }
     }
   }
   const extra = account.windows.filter((window) => !main.includes(window));

@@ -672,3 +672,42 @@ fn fixed_counterparts() -> [FixedCounterpart; 7] {
         ),
     ]
 }
+
+/// Claude reports Fable's weekly limit with a display name and no model id; it
+/// is its own window, never folded into the all-models weekly one.
+#[test]
+fn a_model_limit_named_without_an_id_keeps_its_own_window() {
+    let reading = decode_offline(
+        ProviderId::Claude,
+        &fixture("claude_fable_scoped.json"),
+        "claude-local",
+        received_at(),
+    )
+    .unwrap();
+    let fable = reading
+        .windows
+        .iter()
+        .find(|window| window.scope.label() == "Fable")
+        .expect("the Fable weekly limit is its own window");
+    assert_eq!(fable.category, QuotaCategory::Weekly);
+    assert_eq!(fable.scope.resource().as_str(), "fable");
+    assert_eq!(
+        fable
+            .measurement
+            .remaining_percent()
+            .map(|p| p.value().round()),
+        Some(42.0)
+    );
+    let account_weekly = reading
+        .windows
+        .iter()
+        .filter(|window| {
+            window.category == QuotaCategory::Weekly
+                && window.scope.resource().as_str() == "account"
+        })
+        .count();
+    assert_eq!(
+        account_weekly, 1,
+        "the all-models weekly window stays single"
+    );
+}

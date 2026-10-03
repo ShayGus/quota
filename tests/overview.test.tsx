@@ -156,7 +156,7 @@ describe("the account card", () => {
     ).toBeTruthy();
   });
 
-  it("draws the account-wide allowance as the ring and lists a narrower one", () => {
+  it("draws a model's own limit as a ring named for the model, beside the account's", () => {
     acceptSnapshot(
       snapshot("instance-1", 1, [
         account(
@@ -165,8 +165,8 @@ describe("the account card", () => {
           1,
           [
             quotaWindow("model-weekly", "weekly", percent(43), {
-              label: "Model-specific weekly",
-              resource: "one-model",
+              label: "Fable",
+              resource: "fable",
             }),
             quotaWindow("session", "session", percent(18), { resource: "account" }),
             quotaWindow("weekly", "weekly", percent(64), { resource: "account" }),
@@ -176,10 +176,15 @@ describe("the account card", () => {
       ]),
     );
     render(<Harness />);
+    // The generic Weekly ring is the account's; Fable's limit is its own ring.
     expect(
       screen.getByRole("button", { name: /^Claude a1, Weekly: 64% remaining/ }),
     ).toBeTruthy();
-    expect(screen.getByRole("button", { name: /1 model limit/ })).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: /^Claude a1, Fable weekly: 43% remaining/ }),
+    ).toBeTruthy();
+    expect(ringsOf("a1")).toHaveLength(3);
+    expect(screen.queryByRole("button", { name: /model limit/ })).toBeNull();
   });
 
   it("lists other independent limits on request", () => {
@@ -188,6 +193,10 @@ describe("the account card", () => {
         account("a1", "claude", 1, [
           quotaWindow("session-window", "session", percent(72)),
           quotaWindow("weekly-window", "weekly", percent(64)),
+          quotaWindow("fable-window", "weekly", percent(55), {
+            label: "Fable",
+            resource: "fable",
+          }),
           quotaWindow("model-window", "weekly", percent(43), {
             label: "Model-specific weekly",
             resource: "model-family",
@@ -196,7 +205,8 @@ describe("the account card", () => {
       ]),
     );
     render(<Harness />);
-    expect(ringsOf("a1")).toHaveLength(2);
+    // Three rings fit; the fourth limit is listed under them.
+    expect(ringsOf("a1")).toHaveLength(3);
     expect(screen.queryByText("Model-specific weekly")).toBeNull();
 
     const toggle = screen.getByRole("button", { name: /1 model limit/ });
@@ -206,7 +216,7 @@ describe("the account card", () => {
     expect(screen.getByText("43% remaining")).toBeTruthy();
   });
 
-  it("draws only account-wide allowances as rings, whatever their number", () => {
+  it("never puts a model's limit under a generic period name, whatever their number", () => {
     // Two model-specific weekly allowances outnumber the account-wide one, and
     // the account has no account-wide 5-hour window at all.
     acceptSnapshot(
@@ -231,9 +241,17 @@ describe("the account card", () => {
       ]),
     );
     render(<Harness />);
-    // One ring: the account-wide weekly. No model window takes a period ring.
-    expect(ringsOf("a1")).toHaveLength(1);
-    expect(screen.getByRole("button", { name: /3 model limits/ })).toBeTruthy();
+    // The plain Weekly ring is the account's; the account has no 5-hour window,
+    // so no ring is called "5-hour". Model rings carry their model's name.
+    expect(
+      screen.getByRole("button", { name: /^Claude a1, Weekly: 64% remaining/ }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: /^Claude a1, 5-hour:/ })).toBeNull();
+    expect(
+      screen.getByRole("button", { name: /^Claude a1, Opus 5-hour: 30% remaining/ }),
+    ).toBeTruthy();
+    expect(ringsOf("a1")).toHaveLength(3);
+    expect(screen.getByRole("button", { name: /1 model limit/ })).toBeTruthy();
   });
 
   it("offers Enable for a monitoring-off account and Reconnect for an expired one", () => {
