@@ -7,11 +7,11 @@
  * the test if the page threw, logged an error, or asked the faked host for a
  * command it does not know, so a silent regression cannot pass.
  */
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import process from "node:process";
 
-import { expect, test as base, type Page } from "@playwright/test";
+import { expect, test as base, type Locator, type Page } from "@playwright/test";
 
 import type { RecordedCall, FakeConfig } from "./fake-backend";
 import { FAKE_BACKEND_DIRECTORY, FAKE_BACKEND_FILE } from "./paths";
@@ -38,12 +38,27 @@ export interface Host {
     snapshot: FakeConfig["snapshot"];
     preferences: FakeConfig["preferences"];
   }>;
-  /** Saves a screenshot as a test attachment, which CI uploads. */
-  screenshot: (name: string) => Promise<void>;
+  /**
+   * Saves a screenshot under `test-results/screenshots/<name>.png`, which CI
+   * uploads. `name` may contain folders. With a locator, only that element.
+   */
+  screenshot: (name: string, element?: Locator) => Promise<void>;
+}
+
+interface Opener {
+  /**
+   * Loads one window of the application. A second window of the same test goes
+   * in `target`, a page of the same browser context.
+   */
+  open: (config: FakeConfig, hash?: string, target?: Page) => Promise<Host>;
+  /** A second page in the test's browser context, for a second window. */
+  secondWindow: () => Promise<Page>;
 }
 
 interface Fixtures {
-  open: (config: FakeConfig, hash?: string) => Promise<Host>;
+  windows: Opener;
+  open: Opener["open"];
+  secondWindow: Opener["secondWindow"];
 }
 
 /** Where screenshots are kept for CI to upload. */
@@ -53,59 +68,76 @@ const fakeBackendScript = (): string =>
   readFileSync(join(FAKE_BACKEND_DIRECTORY, FAKE_BACKEND_FILE), "utf8");
 
 export const test = base.extend<Fixtures>({
-  open: async ({ page }, provide, testInfo) => {
+  open: async ({ windows }, provide) => {
+    await provide(windows.open);
+  },
+  secondWindow: async ({ windows }, provide) => {
+    await provide(windows.secondWindow);
+  },
+  windows: async ({ page, context }, provide) => {
     const problems: string[] = [];
-    page.on("pageerror", (error) => {
-      problems.push(`page error: ${error.message}`);
-    });
-    page.on("console", (message) => {
-      if (message.type() === "error") {
-        problems.push(`console error: ${message.text()}`);
-      }
-    });
+    const opened: Page[] = [];
+    const watch = (target: Page): void => {
+      target.on("pageerror", (error) => {
+        problems.push(`page error: ${error.message}`);
+      });
+      target.on("console", (message) => {
+        if (message.type() === "error") {
+          problems.push(`console error: ${message.text()}`);
+        }
+      });
+    };
+    watch(page);
 
-    const session = { opened: false };
-    await provide(async (config, hash = "") => {
-      session.opened = true;
-      await page.setViewportSize(WINDOW_SIZE[config.window]);
-      await page.clock.setFixedTime(NOW);
-      await page.addInitScript({ content: fakeBackendScript() });
-      await page.addInitScript((installed) => {
+    const open = async (config: FakeConfig, hash = "", target = page): Promise<Host> => {
+      opened.push(target);
+      await target.setViewportSize(WINDOW_SIZE[config.window]);
+      await target.clock.setFixedTime(NOW);
+      await target.addInitScript({ content: fakeBackendScript() });
+      await target.addInitScript((installed) => {
         window.__installQuotaFake?.(installed);
       }, config);
-      await page.goto(`/index.html${hash}`);
-      const host: Host = {
-        page,
-        calls: () => page.evaluate(() => [...(window.__quotaFake?.calls ?? [])]),
+      await target.goto(`/index.html${hash}`);
+      return {
+        page: target,
+        calls: () => target.evaluate(() => [...(window.__quotaFake?.calls ?? [])]),
         callsTo: (command) =>
-          page.evaluate(
+          target.evaluate(
             (name) => (window.__quotaFake?.calls ?? []).filter((c) => c.command === name),
             command,
           ),
         emit: (event, payload) =>
-          page.evaluate(([name, body]) => window.__quotaFake?.emit(name, body), [
+          target.evaluate(([name, body]) => window.__quotaFake?.emit(name, body), [
             event,
             payload,
           ] as const),
         hostState: () =>
-          page.evaluate(() => {
+          target.evaluate(() => {
             const state = window.__quotaFake?.state();
             if (state === undefined) throw new Error("the faked host is not installed");
             return state;
           }),
-        screenshot: async (name) => {
-          // Written beside the traces, outside Playwright's per-test output
-          // folder, which is emptied for a passing test. CI uploads the folder.
+        screenshot: async (name, element) => {
+          // Written outside Playwright's per-test output folder, which is
+          // emptied for a passing test. CI uploads the folder.
           const path = join(SCREENSHOT_DIRECTORY, `${name}.png`);
-          await page.screenshot({ path });
-          await testInfo.attach(name, { path, contentType: "image/png" });
+          mkdirSync(dirname(path), { recursive: true });
+          await (element ?? target).screenshot({ path });
         },
       };
-      return host;
+    };
+
+    await provide({
+      open,
+      secondWindow: async () => {
+        const next = await context.newPage();
+        watch(next);
+        return next;
+      },
     });
 
-    if (session.opened) {
-      const unhandled = await page.evaluate(() => window.__quotaFake?.unhandled ?? []);
+    for (const target of opened) {
+      const unhandled = await target.evaluate(() => window.__quotaFake?.unhandled ?? []);
       expect(unhandled, "commands the faked host does not know").toEqual([]);
     }
     expect(problems, "errors the page reported").toEqual([]);

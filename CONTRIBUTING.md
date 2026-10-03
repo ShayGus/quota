@@ -260,6 +260,45 @@ with the traces of any failure as the `interface-test-results` artifact. A test 
 the page logs an error or the renderer asks the faked host for a command it does not know,
 so a new command needs an answer in `fake-backend.ts`.
 
+### Display modes covered
+
+What is on screen is decided by three confirmed preferences: `view` (full window or mini
+widget; never both), `overview_mode` (the full window docked to the tray or floating), and
+`indicator_style` (rings or bars). In the widget the indicator style picks the look: rings
+give the ring strip, bars give the mini cards. There is no third widget variant, and the
+widget ignores `overview_mode`. `tests/ui/matrix.ts` states this, and
+`tests/ui/modes.spec.ts` runs every combination that exists. The names the owner uses map
+to the code like this:
+
+| Owner's name   | In the code                                     | Test surface                                                                 |
+| -------------- | ----------------------------------------------- | ---------------------------------------------------------------------------- |
+| Full window    | `view: overview`, docked (`tray`) or `floating` | `full-tray-ring`, `full-tray-bar`, `full-floating-ring`, `full-floating-bar` |
+| Floating bar   | `view: widget` with rings: the ring strip       | `widget-strip`                                                               |
+| Floating cards | `view: widget` with bars: the mini cards        | `widget-cards`                                                               |
+
+Every surface is run against each of these (all of them for both themes; 257 interface
+tests in total, about 250 screenshots):
+
+| Axis            | Values                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account count   | 0, 1, 2, 3 (odd: the last mini card is full width), 7; for the strip, rows of at most four, as even as they can be                           |
+| Account state   | healthy, low, rate limited, offline, check failed, reconnect needed                                                                          |
+| Theme           | light, dark                                                                                                                                  |
+| Privacy aliases | off, on (no account name anywhere in the page, accessible names included)                                                                    |
+| Long names      | two accounts of one provider with 100-character nicknames: nothing is wider than the window                                                  |
+| Widget size     | always 316 px wide; its height is exactly what it asks the host for, from 0 to 12 accounts. The code sets no minimum or maximum height       |
+| Switching       | full window to widget and back, Expand from the widget, the Settings "Mini widget" switch, the pin (docked and floating), the layout buttons |
+
+Counts by theme by aliases are 6 surfaces x 5 x 2 x 2 = 120 tests, states by theme are 6 x
+6 x 2 = 72, long names 12, sizes 3, switching 5. `test-results/screenshots/index.html` is
+a contact sheet of every screenshot, grouped by folder.
+
+What the screenshots show about the mini widget, as the code stands: the mini cards draw
+readings and not statuses, so a rate-limited, offline or check-failed account looks normal
+there (only an account with no reading at all says "Reconnect"); and in the ring strip
+with four tiles in a row, "Rate limited" and "Check failed" are cut to "Rate limit…" and
+"Check fail…". These tests pin the behaviour as it is; they do not call it wrong.
+
 ### How this gates a release
 
 The interface job is part of `.github/workflows/ci.yml`, not a workflow of its own. The

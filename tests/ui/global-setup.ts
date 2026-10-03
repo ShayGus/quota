@@ -6,11 +6,20 @@
  * It is written under `node_modules/.cache`, which Git and the formatters
  * already ignore, and never into `dist`, so it cannot reach a release build.
  */
+import { rmSync } from "node:fs";
+import { join } from "node:path";
+import process from "node:process";
+
 import { build } from "vite";
 
 import { FAKE_BACKEND_DIRECTORY, FAKE_BACKEND_FILE } from "./paths";
 
 export default async function globalSetup(): Promise<void> {
+  // A screenshot from an earlier run must never pass for one from this run.
+  rmSync(join(process.cwd(), "test-results", "screenshots"), {
+    recursive: true,
+    force: true,
+  });
   await build({
     configFile: false,
     logLevel: "error",

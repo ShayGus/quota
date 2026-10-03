@@ -14,6 +14,7 @@ export default defineConfig({
   testDir: "tests/ui",
   testMatch: "**/*.spec.ts",
   globalSetup: "./tests/ui/global-setup.ts",
+  globalTeardown: "./tests/ui/global-teardown.ts",
   fullyParallel: true,
   forbidOnly: ci,
   // A retry would hide a flaky interface test; a failure is a failure.
