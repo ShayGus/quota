@@ -122,6 +122,26 @@ A copy updates with the kind of package it was installed from, so each has its o
 in the list: the Windows installer and the MSI, the AppImage, the deb and the rpm, and the
 Mac archive for each processor.
 
+### Replacing an AppImage by hand
+
+An AppImage is a squashfs image that its runtime mounts with FUSE while Quota runs.
+Writing over that image in place while a copy is running breaks it: the WebKit helper
+processes die with `SIGBUS` the first time they read a page that changed under them. That
+is [issue 38](https://github.com/ShayGus/quota/issues/38). Quota's own updater never does
+this, because it moves the running image aside under a temporary name first, then writes
+the new version to the original path, so the running copy keeps reading the image it
+started from.
+
+To replace an AppImage by hand, do one of these:
+
+- Write the new file to another name, then `mv` it over the old one. The running copy
+  keeps the image it started from.
+- Quit Quota first, then replace the file.
+
+A plain in-place overwrite is what breaks the running copy.
+`curl -o ~/.local/bin/Quota.AppImage` and `cp ~/.local/bin/Quota.AppImage` write into the
+same file, so use `curl -o /tmp/Quota.AppImage` and `mv` it into place instead.
+
 ## Which tests a release needs
 
 The release workflow refuses to start unless **every run of the normal CI workflow
@@ -284,9 +304,10 @@ else is a failure, and you should stop and report what you saw instead.
    and your accounts and preferences are all still there. No pop-up appears this time.
 9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and
    macOS (Apple Silicon and Intel). On Windows the installer runs in a passive window and
-   Quota comes back by itself; the AppImage replaces itself in place; a deb or rpm install
-   should ask for administrator rights through the system's prompt; a Mac copy updates
-   itself without the **Open Anyway** step.
+   Quota comes back by itself; the AppImage replaces itself, and the copy that was running
+   when it did is not disturbed; a deb or rpm install should ask for administrator rights
+   through the system's prompt; a Mac copy updates itself without the **Open Anyway**
+   step.
 
 If the pop-up never appears when it should, the cause is almost always one of these: the
 release is still a draft, the installed copy is a development build, the version in
