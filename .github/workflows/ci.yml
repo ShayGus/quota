@@ -248,3 +248,85 @@ jobs:
             playwright-report
           if-no-files-found: warn
           retention-days: 14
+
+  # The real-app suite builds the actual desktop application, starts it under a
+  # virtual display, and drives it through Tauri's official WebDriver server
+  # (see CONTRIBUTING.md, "Real-app tests"). It is Linux only. Like the
+  # interface job it lives in this workflow so that a release cannot be cut from
+  # a commit on which it failed.
+  real-app:
+    name: Real app (Linux)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # The Tauri build dependencies are the Rust job's, plus a virtual display
+      # (xvfb) and WebKitGTK's WebDriver, which tauri-driver launches.
+      - name: Install the system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            libdbus-1-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            pkg-config \
+            wget \
+            webkit2gtk-driver \
+            xauth \
+            xvfb
+          pkg-config --exists webkit2gtk-4.1
+          command -v WebKitWebDriver
+
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain
+        working-directory: src-tauri
+
+      # Swatinem/rust-cache v2.9.2. Also caches ~/.cargo/bin, so the driver
+      # below is compiled only on a cache miss.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: src-tauri
+          key: real-app
+
+      # oven-sh/setup-bun v2. The version is read from .bun-version.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # The Tauri project's own WebDriver server. The version is pinned and
+      # `--locked` uses the crate's own lockfile.
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --version 2.1.0 --locked
+        working-directory: src-tauri
+
+      - name: Build the debug applications
+        run: bun run build:e2e
+
+      # `xvfb-run -a` picks a free display number. Every journey makes its own
+      # private session bus and throwaway HOME, so nothing here needs a desktop.
+      - name: Real-app tests
+        run: xvfb-run -a bun run test:e2e
+
+      # actions/upload-artifact v7.0.1. Logs include the application's own
+      # output, which is what explains a failed start.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ !cancelled() }}
+        with:
+          name: real-app-results
+          path: test-results/e2e
+          if-no-files-found: warn
+          retention-days: 14

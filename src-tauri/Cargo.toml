@@ -17,6 +17,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 name = "quota"
 path = "src/main.rs"
 
+# The real-app test launcher; see the file. Absent from every build that does
+# not select `sample-data`.
+[[example]]
+name = "quota_e2e"
+path = "examples/quota_e2e.rs"
+required-features = ["sample-data"]
+
 [build-dependencies]
 tauri-build = { workspace = true }
 
