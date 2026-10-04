@@ -194,14 +194,25 @@ describe("the real application", () => {
     const world = await begin("single-instance");
     const app = await startOverview(world, APP);
     expect(world.applicationProcesses(APP)).toHaveLength(1);
+    if (process.platform === "win32") {
+      expect(world.applicationWindowVisible(APP)).toBe(true);
+    }
 
-    // Put the popover away, so that being brought forward is observable.
+    // Put the popover away, so that bringing it forward is observable.
     await (await app.session.find('[aria-label="Hide popover"]')).click();
-    await waitFor("the overview to hide", async () =>
-      (await app.session.evaluate<string>("return document.visibilityState")) === "hidden"
-        ? true
-        : null,
-    );
+    if (process.platform === "win32") {
+      // WebView2 keeps document.visibilityState visible when Tauri hides its window.
+      await waitFor("the overview to hide", () =>
+        Promise.resolve(!world.applicationWindowVisible(APP)),
+      );
+    } else {
+      await waitFor("the overview to hide", async () =>
+        (await app.session.evaluate<string>("return document.visibilityState")) ===
+        "hidden"
+          ? true
+          : null,
+      );
+    }
 
     const second = world.launchDirect(APP);
     const exit = await new Promise<number | null>((resolve) => {
@@ -211,7 +222,13 @@ describe("the real application", () => {
     });
     expect(exit).toBe(0);
     expect(world.applicationProcesses(APP)).toHaveLength(1);
-    await waitUntilVisible(app.session, "the overview after the second launch");
+    if (process.platform === "win32") {
+      await waitFor("the overview after the second launch", () =>
+        Promise.resolve(world.applicationWindowVisible(APP)),
+      );
+    } else {
+      await waitUntilVisible(app.session, "the overview after the second launch");
+    }
     await app.stop();
   });
 

@@ -365,6 +365,21 @@ export class Sandbox {
       .map(Number);
   }
 
+  public applicationWindowVisible(binary: string): boolean {
+    if (process.platform !== "win32") {
+      throw new Error("application window visibility is only available on Windows");
+    }
+    const [pid] = this.applicationProcesses(binary);
+    if (pid === undefined) return false;
+    const script = `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class NativeWindow { [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd); }'; $handle = (Get-Process -Id ${String(pid)}).MainWindowHandle; if ($handle -eq [IntPtr]::Zero) { 'false' } else { $visible = [NativeWindow]::IsWindowVisible($handle); $visible.ToString().ToLowerInvariant() }`;
+    const output = execFileSync(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-Command", script],
+      { encoding: "utf8", windowsHide: true },
+    );
+    return output.trim() === "true";
+  }
+
   /** The ids of every process, whatever its program, that has this sandbox's HOME. */
   private sandboxPids(): number[] {
     const marker = `HOME=${this.home}`;
