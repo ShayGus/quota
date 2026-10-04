@@ -340,10 +340,9 @@ quitting from the tray menu and leaving no process or lock behind; using the dev
 identity without creating the production identity; and adding an account against a fake
 provider; and a development or test build never checking for updates, using a fake update
 server that offers a far newer version and asserting it receives no request. On Windows,
-the settings journey ends its WebDriver session before restarting.
-Windows runs the eight journeys that WebDriver can drive. It marks the tray-menu quit
-journey as skipped because the native Windows tray menu is outside the WebDriver
-interface.
+the settings journey ends its WebDriver session before restarting. Windows runs the eight
+journeys that WebDriver can drive. It marks the tray-menu quit journey as skipped because
+the native Windows tray menu is outside the WebDriver interface.
 
 Adding an account works against a fake provider, through the transport seam the provider
 crate offers to test builds. `bun run build:e2e` also builds
