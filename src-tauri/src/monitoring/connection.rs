@@ -43,6 +43,12 @@ impl AttemptReporter {
         let Some(revision) = self.next_revision(&progress).await else {
             return;
         };
+        let progress = match progress {
+            ConnectionProgress::Failed { error } => ConnectionProgress::Failed {
+                error: report_attempt_failure(error, &crate::file_log::location(&state.app)),
+            },
+            other => other,
+        };
         let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
         let event =
             crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
@@ -182,7 +188,7 @@ async fn discover_connection_candidates(
                 .map_err(|_| CommandError::Internal {
                     code: "connection_discovery_timeout".into(),
                 })?
-                .map_err(|error| attempt_error(&runtime.state, &error))?
+                .map_err(attempt_error)?
         }
     };
     let candidates: Vec<_> = discovered
@@ -236,7 +242,7 @@ async fn read_candidate_quota(
             .map_err(|_| CommandError::Internal {
                 code: "connection_read_timeout".into(),
             })?
-            .map_err(|error| attempt_error(&runtime.state, &error))?,
+            .map_err(attempt_error)?,
     };
     let completed_at = runtime.state.clock.now();
     drop(permit);
@@ -260,11 +266,8 @@ async fn read_candidate_quota(
 /// Nothing has been added, so nothing can be reconnected: reporting the
 /// provider's refusal as [`CommandError::ReconnectRequired`] would send the
 /// person back to the sign-in they just attempted, and as a window-permission
-/// error the words would have nothing to do with what happened. Every reason
-/// names the log, because this is the moment someone needs the detail behind a
-/// message they can no longer reproduce.
-pub(super) fn attempt_error(state: &RuntimeState, error: &ProviderError) -> CommandError {
-    let log = crate::file_log::location(&state.app);
+/// error the words would have nothing to do with what happened.
+pub(super) fn attempt_error(error: ProviderError) -> CommandError {
     let detail = match error {
         ProviderError::Cancelled => return CommandError::Cancelled,
         ProviderError::Authentication => {
@@ -285,9 +288,30 @@ pub(super) fn attempt_error(state: &RuntimeState, error: &ProviderError) -> Comm
             "The provider is asking for less traffic, so nothing was added. Try again shortly"
         }
     };
-    tracing::warn!(reason = detail, "provider connection failed");
     CommandError::ProviderRefused {
-        reason: format!("{detail}. The log is at {log}"),
+        reason: detail.into(),
+    }
+}
+
+fn report_attempt_failure(error: CommandError, log: &str) -> CommandError {
+    let detail = match error {
+        CommandError::Internal { code } => match code.as_str() {
+            "browser_sign_in_timeout" => "The provider did not answer the sign-in in time. Try again.",
+            "browser_sign_in_declined" => "The sign-in was declined on the provider's page. Nothing was added.",
+            "browser_sign_in_expired" => "The sign-in code expired before it was entered. Start again for a new code.",
+            "connection_discovery_timeout" => "The provider did not finish discovering the account in time. Nothing was added. Try again.",
+            "connection_read_timeout" => "The provider did not finish verifying the quota in time. Nothing was added. Try again.",
+            "unsupported_schema" => "The provider answered in a format this version of Quota cannot read yet.",
+            "invalid_data" => "The provider's answer was incomplete or inconsistent, so no reading was taken.",
+            "credential_store_refused" => "The operating system key store refused to keep the credential.",
+            _ => "Quota hit an internal problem.",
+        }.to_owned(),
+        CommandError::ProviderRefused { reason } => format!("{reason}."),
+        other => return other,
+    };
+    tracing::warn!(reason = detail, "connection attempt failed");
+    CommandError::ProviderRefused {
+        reason: format!("{detail} The log is at {log}"),
     }
 }
 
@@ -311,6 +335,77 @@ mod tests {
     use quota_domain::quota::window::SourceKind;
 
     use super::*;
+
+    #[test]
+    fn terminal_failures_report_and_log_a_sanitized_reason() {
+        let path =
+            std::env::temp_dir().join(format!("quota-attempt-failures-{}.log", std::process::id()));
+        let file = std::fs::File::create(&path).expect("a log can be created");
+        let log = path.to_string_lossy().into_owned();
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(move || file.try_clone().expect("the log can be shared"))
+            .finish();
+        let mut details = Vec::new();
+        tracing::subscriber::with_default(subscriber, || {
+            for code in [
+                "browser_sign_in_timeout",
+                "browser_sign_in_declined",
+                "browser_sign_in_expired",
+                "connection_discovery_timeout",
+                "connection_read_timeout",
+            ] {
+                let reported =
+                    report_attempt_failure(CommandError::Internal { code: code.into() }, &log);
+                let serialized = serde_json::to_string(&reported).expect("a wire error");
+                let received: CommandError =
+                    serde_json::from_str(&serialized).expect("a wire error");
+                assert!(matches!(&received, CommandError::ProviderRefused { .. }));
+                if let CommandError::ProviderRefused { reason } = received {
+                    let detail = reason
+                        .strip_suffix(&format!(" The log is at {log}"))
+                        .expect("the failure must name its log")
+                        .to_owned();
+                    assert!(!detail.is_empty());
+                    assert_ne!(detail, "Quota hit an internal problem.");
+                    details.push(detail);
+                }
+            }
+            let reported = report_attempt_failure(
+                attempt_error(ProviderError::InvalidData {
+                    detail: "https://auth.example.test/device?code=PRIVATE-CODE".into(),
+                }),
+                &log,
+            );
+            assert!(matches!(&reported, CommandError::ProviderRefused { .. }));
+            if let CommandError::ProviderRefused { reason } = reported {
+                assert!(reason.ends_with(&format!("The log is at {log}")));
+                assert!(!reason.contains("PRIVATE-CODE"));
+            }
+        });
+        let logged = std::fs::read_to_string(&path).expect("the failures were logged");
+        for detail in details {
+            assert_eq!(logged.matches(&detail).count(), 1);
+        }
+        assert!(logged.contains("The provider's answer was incomplete or inconsistent"));
+        assert!(!logged.contains("https://"));
+        assert!(!logged.contains("PRIVATE-CODE"));
+        std::fs::remove_file(path).expect("the log can be removed");
+    }
+
+    #[test]
+    fn reporting_preserves_typed_recovery_and_cancellation() {
+        for error in [
+            CommandError::Cancelled,
+            CommandError::ReconnectRequired,
+            CommandError::PersistenceUnavailable {
+                owner: "sqlite".into(),
+            },
+        ] {
+            assert_eq!(report_attempt_failure(error.clone(), "quota.log"), error);
+        }
+    }
 
     /// The progress an attempt reports once it has verified one identity.
     fn awaiting_confirmation() -> ConnectionProgress {

@@ -80,12 +80,6 @@ export function describeCommandError(error: CommandError): string {
           return "The provider answered in a format this version of Quota cannot read yet.";
         case "invalid_data":
           return "The provider's answer was incomplete or inconsistent, so no reading was taken.";
-        case "browser_sign_in_declined":
-          return "The sign-in was declined on the provider's page. Nothing was added.";
-        case "browser_sign_in_expired":
-          return "The sign-in code expired before it was entered. Start again for a new code.";
-        case "browser_sign_in_timeout":
-          return "The provider did not answer the sign-in in time. Try again.";
         case "credential_store_refused":
           return "The operating system key store refused to keep the credential.";
         default:

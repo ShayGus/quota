@@ -55,7 +55,7 @@ pub(super) async fn sign_in(
         _ = cancelled.changed() => return Ok(None),
         started = tokio::time::timeout(REMOTE_TIMEOUT, adapter.begin_device_sign_in()) => started
             .map_err(|_| timed_out())?
-            .map_err(|error| attempt_error(&runtime.state, &error))?,
+            .map_err(attempt_error)?,
     };
     let page = authorization
         .verification_uri_complete
@@ -91,7 +91,7 @@ pub(super) async fn sign_in(
             )
             .await;
     }
-    let Some(granted) = wait(runtime, adapter, &authorization, cancelled).await? else {
+    let Some(granted) = wait(adapter, &authorization, cancelled).await? else {
         return Ok(None);
     };
     request.credential = Some(PastedCredential::new(granted));
@@ -155,7 +155,6 @@ fn refused(url: &str, user_code: &str, detail: &str, log: &str) -> CommandError 
 
 /// Polls until the person finishes, at the pace the provider asks for.
 async fn wait(
-    runtime: &MonitoringRuntime,
     adapter: &Arc<dyn ProviderAdapter>,
     authorization: &DeviceAuthorization,
     cancelled: &mut watch::Receiver<bool>,
@@ -173,7 +172,7 @@ async fn wait(
                 adapter.poll_device_sign_in(authorization),
             ) => polled
                 .map_err(|_| timed_out())?
-                .map_err(|error| attempt_error(&runtime.state, &error))?,
+                .map_err(attempt_error)?,
         };
         match polled {
             DevicePoll::Pending => {}

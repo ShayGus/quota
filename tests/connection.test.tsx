@@ -576,6 +576,39 @@ describe("Provider → Connect → Verify", () => {
     },
   );
 
+  it.each([
+    "authorization request timeout",
+    "poll timeout",
+    "sign-in denial",
+    "sign-in expiration",
+    "discovery timeout",
+    "verification timeout",
+  ])("shows the host reason and log for a terminal %s", async (failure) => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Muse Code/ }));
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with browser" })),
+    );
+    const reason = `${failure}. The log is at C:\\Quota\\logs\\quota.log`;
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: {
+          kind: "failed",
+          context: { error: { kind: "provider_refused", context: { reason } } },
+        },
+      });
+    });
+    expect(screen.getByRole("alert").textContent).toBe(reason);
+    expect(screen.getByRole("button", { name: "Sign in with browser" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
   it("can use the Grok CLI's sign-in instead of the browser", async () => {
     const actions = settingsActions();
     render(<Wizard actions={actions} onDone={vi.fn()} />);
