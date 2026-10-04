@@ -273,16 +273,16 @@ backend; `http::ProviderHttp` installs that crypto provider once on first use.
 
 ## Tests
 
-| File                             | What it proves                                                                                                          |
-| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `src/**` unit tests              | transport classification, credential shape and path rules, identity derivation, fixture profiles, offline decoding      |
-| `tests/codex_mapping.rs`         | Codex decoding: durations, categories, overspend, missing windows, unusable numbers                                     |
-| `tests/claude_mapping.rs`        | Claude decoding: fixed windows, named limits, model scope, the extra-spend cap, boundaries                              |
-| `tests/opencode_go_mapping.rs`   | `OpenCode` Go decoding, including the monthly window                                                                    |
-| `tests/fixture_isolation.rs`     | multi-account isolation through the compiled fixture adapter                                                            |
-| `tests/platform_contract.rs`     | profile and application-data paths for all four platforms, and refusal to open a foreign platform's store               |
-| `tests/secret_store_contract.rs` | async read/write/delete and connection isolation; optional host-store identifier isolation                              |
-| `tests/transport_contract.rs`    | client identity on production-registry GET, JSON POST, and form POST through the public retarget API                    |
+| File                             | What it proves                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `src/**` unit tests              | transport classification, credential shape and path rules, identity derivation, fixture profiles, offline decoding |
+| `tests/codex_mapping.rs`         | Codex decoding: durations, categories, overspend, missing windows, unusable numbers                                |
+| `tests/claude_mapping.rs`        | Claude decoding: fixed windows, named limits, model scope, the extra-spend cap, boundaries                         |
+| `tests/opencode_go_mapping.rs`   | `OpenCode` Go decoding, including the monthly window                                                               |
+| `tests/fixture_isolation.rs`     | multi-account isolation through the compiled fixture adapter                                                       |
+| `tests/platform_contract.rs`     | profile and application-data paths for all four platforms, and refusal to open a foreign platform's store          |
+| `tests/secret_store_contract.rs` | async read/write/delete and connection isolation; optional host-store identifier isolation                         |
+| `tests/transport_contract.rs`    | client identity on production-registry GET, JSON POST, and form POST through the public retarget API               |
 
 The suite makes no network call to a live provider and reads no real provider credential
 file. Fixtures are sanitized payloads written for this crate, using obviously synthetic
