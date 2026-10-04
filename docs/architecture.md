@@ -52,28 +52,27 @@ dependency sits behind the `tauri-plugins` feature, which is off by default.
 
 Provider operating-system decisions live in one module,
 [`src-tauri/crates/quota-providers/src/platform/`](../src-tauri/crates/quota-providers/src/platform/).
-It holds four implementations — `windows.rs`, `linux.rs`, `macos.rs`, and
-`unsupported.rs` — and one `cfg` selects the one the build runs on.
+It holds four implementations — `windows.rs`, `linux.rs`, `macos.rs`, and `unsupported.rs`
+— and one `cfg` selects the one the build runs on.
 
-All four files compile on every host. A Linux CI runner therefore typechecks the
-Windows and macOS path logic, and
+All four files compile on every host. A Linux CI runner therefore typechecks the Windows
+and macOS path logic, and
 [`platform_contract.rs`](../src-tauri/crates/quota-providers/tests/platform_contract.rs)
-asserts every platform's paths on every runner. The suite builds each
-implementation directly, so no case is skipped.
+asserts every platform's paths on every runner. The suite builds each implementation
+directly, so no case is skipped.
 
-The only system-specific code left is each implementation's
-`open_credential_store`. On a host that is not the platform under test it returns
-`SecretStoreError::Unavailable`, which is what stops a store crate for a foreign
-system from ever being called. Everything else the platform decides is a path
-rule: the profile variable, the user profile directory, and the application-data
-directory.
+The only system-specific code left is each implementation's `open_credential_store`. On a
+host that is not the platform under test it returns `SecretStoreError::Unavailable`, which
+is what stops a store crate for a foreign system from ever being called. Everything else
+the platform decides is a path rule: the profile variable, the user profile directory, and
+the application-data directory.
 
-`src-tauri/src/platform/` is a different thing. It holds Tauri window, tray, and
-autostart code, and this seam does not touch it.
+`src-tauri/src/platform/` is a different thing. It holds Tauri window, tray, and autostart
+code, and this seam does not touch it.
 
 Callers await the async `SecretStore` port directly. The
-[port contract](../src-tauri/crates/quota-core/src/ports/secrets.rs) owns the
-requirement that implementations handle blocking work; the
+[port contract](../src-tauri/crates/quota-core/src/ports/secrets.rs) owns the requirement
+that implementations handle blocking work; the
 [system adapter](../src-tauri/crates/quota-providers/src/secrets.rs) documents its
 credential-store lifecycle constraints.
 
