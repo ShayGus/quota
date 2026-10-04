@@ -133,8 +133,8 @@ and reproduction is not yet confirmed.
 Quota's updater avoids overwriting the mounted image: the pinned
 [`tauri-plugin-updater` 2.13.1 implementation](https://github.com/tauri-apps/plugins-workspace/blob/updater-v2.13.1/plugins/updater/src/updater.rs#L1069-L1134)
 renames the old image to a temporary path on the same filesystem, then writes the new
-version to the original path and preserves its permissions. The running copy keeps
-reading the image it started from until Quota restarts.
+version to the original path and preserves its permissions. The running copy keeps reading
+the image it started from until Quota restarts.
 
 To replace an AppImage by hand, do one of these:
 
@@ -143,9 +143,10 @@ To replace an AppImage by hand, do one of these:
 - Quit Quota first, then replace the file and run `chmod +x ~/.local/bin/Quota.AppImage`
   before launching it again.
 
-Avoid an in-place overwrite while Quota runs: `curl -o ~/.local/bin/Quota.AppImage
-"$APPIMAGE_URL"` and `cp new.AppImage ~/.local/bin/Quota.AppImage` write into the existing
-file. Instead, set `APPIMAGE_URL` to the release's AppImage download URL and run:
+Avoid an in-place overwrite while Quota runs:
+`curl -o ~/.local/bin/Quota.AppImage "$APPIMAGE_URL"` and
+`cp new.AppImage ~/.local/bin/Quota.AppImage` write into the existing file. Instead, set
+`APPIMAGE_URL` to the release's AppImage download URL and run:
 
 ```bash
 curl -fL -o ~/.local/bin/Quota.AppImage.new "$APPIMAGE_URL" &&
@@ -316,9 +317,9 @@ else is a failure, and you should stop and report what you saw instead.
 9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and
    macOS (Apple Silicon and Intel). On Windows the installer runs in a passive window and
    Quota comes back by itself; the AppImage updater uses
-   [the replacement behavior described above](#replacing-an-appimage-by-hand) before
-   Quota restarts; a deb or rpm install should ask for administrator rights through the
-   system's prompt; a Mac copy updates itself without the **Open Anyway** step.
+   [the replacement behavior described above](#replacing-an-appimage-by-hand) before Quota
+   restarts; a deb or rpm install should ask for administrator rights through the system's
+   prompt; a Mac copy updates itself without the **Open Anyway** step.
 
 If the pop-up never appears when it should, the cause is almost always one of these: the
 release is still a draft, the installed copy is a development build, the version in
