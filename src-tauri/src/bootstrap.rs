@@ -180,13 +180,8 @@ fn store_path(app: &tauri::AppHandle) -> Result<std::path::PathBuf, String> {
 async fn build_registry(
     app: &tauri::AppHandle,
 ) -> Result<quota_providers::ProviderRegistry, String> {
-    // The store is opened on a blocking worker: the Linux one connects through
-    // a blocking API that drives a runtime, which cannot start inside the one
-    // this backend task is already running on.
-    let secrets = quota_providers::secrets::system_off_the_runtime(
-        crate::app_identity::credential_service(app),
-    )
-    .await;
+    let secrets =
+        quota_providers::secrets::system(crate::app_identity::credential_service(app)).await;
     #[cfg(feature = "sample-data")]
     let registry = quota_providers::ProviderRegistry::with_fixture(secrets);
     #[cfg(not(feature = "sample-data"))]

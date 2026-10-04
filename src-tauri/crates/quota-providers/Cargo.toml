@@ -17,6 +17,7 @@ test-fixtures = []
 [dependencies]
 quota-core = { workspace = true }
 quota-domain = { workspace = true }
+async-trait = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

@@ -8,7 +8,7 @@
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
 
-use crate::http::{Answers, HttpReply, ProviderHttp, send};
+use crate::http::{Answers, HttpReply, ProviderHttp, endpoint, send};
 
 /// A request body.
 #[derive(Clone, Copy)]
@@ -51,7 +51,7 @@ impl ProviderHttp {
         };
         let builder = self
             .client()
-            .post(request.url)
+            .post(endpoint(request.url))
             .header("Content-Type", content_type)
             .body(bytes);
         send(builder, request.headers, request.deadline, request.answers).await

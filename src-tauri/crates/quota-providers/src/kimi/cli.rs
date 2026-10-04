@@ -11,7 +11,7 @@ use quota_core::ports::{ProviderError, Secret};
 
 use crate::credentials::{process_lookup, profile_directory, read_json, string_at};
 use crate::decode::Numberish;
-use crate::platform_paths::Lookup;
+use crate::platform::Lookup;
 
 /// The profile label a connection that reads the CLI's sign-in carries.
 pub(crate) const PROFILE: &str = "kimi-cli";
@@ -21,7 +21,7 @@ pub(crate) async fn token() -> Result<Secret, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
     let directory = match lookup("KIMI_SHARE_DIR") {
         Some(directory) => std::path::PathBuf::from(directory),
-        None => profile_directory(lookup)?.join(".kimi"),
+        None => profile_directory(crate::platform::system(), lookup)?.join(".kimi"),
     };
     let document = read_json(&directory.join("credentials").join("kimi-code.json")).await?;
     let token = string_at(&document, &[&["access_token"], &["accessToken"]])

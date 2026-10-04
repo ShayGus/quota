@@ -38,14 +38,17 @@ fn member_manifest() -> String {
 }
 
 /// Writes the smallest tree the gate reads: the workspace manifest, which is
-/// also the desktop host's, `deny.toml`, one workflow with a pinned action, and
-/// a `tauri.conf.json`, all where the repository keeps them.
+/// also the desktop host's, `deny.toml`, one workflow with a pinned action,
+/// a `tauri.conf.json`, and a minimal provider transport module, all where
+/// the repository keeps them.
 fn tree(root: &Path, workspace: &str, member: &str) -> Result<(), String> {
     let write = |path: PathBuf, body: &str| -> Result<(), String> {
         fs::write(&path, body).map_err(|error| format!("{}: {error}", path.display()))
     };
     fs::create_dir_all(root.join("src-tauri")).map_err(|e| e.to_string())?;
     fs::create_dir_all(root.join(".github/workflows")).map_err(|e| e.to_string())?;
+    fs::create_dir_all(root.join("src-tauri/crates/quota-providers/src"))
+        .map_err(|e| e.to_string())?;
     write(
         root.join("src-tauri/Cargo.toml"),
         &format!("{member}\n{workspace}"),
@@ -61,6 +64,20 @@ fn tree(root: &Path, workspace: &str, member: &str) -> Result<(), String> {
     write(
         root.join("src-tauri/tauri.conf.json"),
         "{\"app\": {\"security\": {\"csp\": \"default-src 'self'\"}}}\n",
+    )?;
+    write(
+        root.join("src-tauri/crates/quota-providers/src/http.rs"),
+        "//! Minimal provider transport fixture for the release gate.\n\
+         //! The gate reads this file as text; it is never compiled.\n\
+         #[cfg(not(feature = \"test-fixtures\"))]\n\
+         pub(crate) fn endpoint(fixed: &str) -> &str {\n\
+         fixed\n\
+         }\n\
+         \n\
+         #[cfg(feature = \"test-fixtures\")]\n\
+         pub(crate) fn retarget(base: &str) {\n\
+         let _ = base;\n\
+         }\n",
     )
 }
 

@@ -17,7 +17,7 @@ use sqlx::sqlite::SqliteConnectOptions;
 
 use crate::credentials::process_lookup;
 use crate::decode::jwt;
-use crate::platform_paths::{self, Lookup};
+use crate::platform::{self, Lookup};
 
 /// The profile label a Cursor connection carries.
 pub(crate) const PROFILE: &str = "cursor-app";
@@ -65,7 +65,8 @@ pub(crate) async fn sign_in() -> Result<AppSignIn, ProviderError> {
 /// Where the Cursor app keeps its state store.
 fn store_path(lookup: Lookup<'_>) -> Option<PathBuf> {
     Some(
-        platform_paths::application_data(lookup)?
+        platform::system()
+            .application_data(lookup)?
             .join("Cursor")
             .join("User")
             .join("globalStorage")

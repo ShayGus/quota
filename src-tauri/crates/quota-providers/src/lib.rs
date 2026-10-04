@@ -56,7 +56,7 @@ pub(crate) mod muse;
 pub(crate) mod ollama;
 pub(crate) mod opencode_go;
 pub(crate) mod openrouter;
-pub(crate) mod platform_paths;
+pub mod platform;
 pub(crate) mod post;
 pub(crate) mod zai;
 

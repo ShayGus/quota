@@ -8,7 +8,7 @@
 use quota_core::ports::{ProviderError, Secret};
 
 use crate::credentials::{process_lookup, profile_directory, read_json, string_at};
-use crate::platform_paths::Lookup;
+use crate::platform::Lookup;
 
 /// The profile label a connection that reads the CLI's sign-in carries.
 pub(crate) const PROFILE: &str = "muse-cli";
@@ -18,7 +18,7 @@ pub(crate) async fn token() -> Result<Secret, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
     let path = match lookup("MUSE_AUTH_PATH") {
         Some(path) => std::path::PathBuf::from(path),
-        None => profile_directory(lookup)?
+        None => profile_directory(crate::platform::system(), lookup)?
             .join(".config")
             .join("muse")
             .join("auth.json"),

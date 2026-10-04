@@ -11,7 +11,7 @@ use quota_core::ports::{ProviderError, Secret};
 use serde_json::Value;
 
 use crate::credentials::{process_lookup, profile_directory, read_json};
-use crate::platform_paths::Lookup;
+use crate::platform::Lookup;
 
 /// The profile label a connection that reads the CLI's sign-in carries.
 pub(crate) const PROFILE: &str = "grok-cli";
@@ -24,7 +24,7 @@ pub(crate) async fn token() -> Result<Secret, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
     let directory = match lookup("GROK_HOME") {
         Some(directory) => std::path::PathBuf::from(directory),
-        None => profile_directory(lookup)?.join(".grok"),
+        None => profile_directory(crate::platform::system(), lookup)?.join(".grok"),
     };
     let document = read_json(&directory.join("auth.json")).await?;
     let entry = entry(&document).ok_or(ProviderError::Authentication)?;

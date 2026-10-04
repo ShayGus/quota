@@ -11,6 +11,7 @@
 
 use std::fmt::{self, Debug, Formatter};
 
+use async_trait::async_trait;
 use quota_domain::ids::ConnectionId;
 
 /// A secret value that never reveals itself through `Debug`.
@@ -53,26 +54,32 @@ pub enum SecretStoreError {
 
 /// The operating system's credential store.
 ///
-/// Every call may block on the system, so an async caller runs it on a
-/// blocking thread.
+/// Every call may block on the system, so each implementation runs its own work
+/// on a blocking thread and a caller only awaits the result. An async caller
+/// never has to leave the runtime itself.
+#[async_trait]
 pub trait SecretStore: Debug + Send + Sync {
     /// The secret saved for one connection, or `None` when there is none.
     ///
     /// # Errors
     /// Returns [`SecretStoreError`] when the store cannot be read.
-    fn read(&self, connection: &ConnectionId) -> Result<Option<Secret>, SecretStoreError>;
+    async fn read(&self, connection: &ConnectionId) -> Result<Option<Secret>, SecretStoreError>;
 
     /// Saves the secret for one connection, replacing any earlier one.
     ///
     /// # Errors
     /// Returns [`SecretStoreError`] when the store refuses the write.
-    fn write(&self, connection: &ConnectionId, secret: &Secret) -> Result<(), SecretStoreError>;
+    async fn write(
+        &self,
+        connection: &ConnectionId,
+        secret: &Secret,
+    ) -> Result<(), SecretStoreError>;
 
     /// Removes the secret for one connection. Removing a missing entry succeeds.
     ///
     /// # Errors
     /// Returns [`SecretStoreError`] when the store refuses the removal.
-    fn delete(&self, connection: &ConnectionId) -> Result<(), SecretStoreError>;
+    async fn delete(&self, connection: &ConnectionId) -> Result<(), SecretStoreError>;
 }
 
 #[cfg(test)]

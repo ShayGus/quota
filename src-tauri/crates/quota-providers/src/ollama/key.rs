@@ -14,7 +14,7 @@ use ring::signature::Ed25519KeyPair;
 
 use crate::credentials::{process_lookup, profile_directory};
 use crate::decode::base64;
-use crate::platform_paths::Lookup;
+use crate::platform::Lookup;
 
 /// The profile label a connection that uses Ollama's own sign-in carries.
 pub(crate) const PROFILE: &str = "ollama-key";
@@ -52,7 +52,7 @@ impl std::fmt::Debug for SigningKey {
 /// Reads Ollama's key, when Ollama is installed.
 pub(crate) async fn load() -> Result<SigningKey, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
-    let path = profile_directory(lookup)?
+    let path = profile_directory(crate::platform::system(), lookup)?
         .join(".ollama")
         .join("id_ed25519");
     let metadata = tokio::fs::metadata(&path)
