@@ -9,10 +9,12 @@ mod bindings;
 mod cargo_manifest;
 mod check_architecture;
 mod check_release;
+mod check_updater;
 mod inspection_renderer;
 mod outcome;
 mod scan;
 mod toml;
+mod update_manifest;
 mod version;
 
 use std::env;
@@ -45,6 +47,7 @@ fn run(arguments: &[String]) -> u8 {
     match command {
         Some("check-architecture") => gate("check-architecture", &check_architecture::run(&root)),
         Some("check-release") => gate("check-release", &check_release::run(&root)),
+        Some("update-manifest") => update_manifest_command(rest, &root),
         Some("bindings") => {
             if rest.first().map(String::as_str) == Some("--check") {
                 gate("bindings --check", &bindings::run(&root))
@@ -63,6 +66,38 @@ fn run(arguments: &[String]) -> u8 {
             FAILED
         }
         None => {
+            usage();
+            FAILED
+        }
+    }
+}
+
+/// Runs `update-manifest assemble|verify --dir <release directory>`.
+fn update_manifest_command(rest: &[String], root: &std::path::Path) -> u8 {
+    let option = |name: &str| {
+        rest.iter()
+            .position(|argument| argument == name)
+            .and_then(|position| rest.get(position + 1))
+            .map(String::as_str)
+    };
+    let Some(directory) = option("--dir") else {
+        println!("`update-manifest` needs `--dir <release directory>`");
+        usage();
+        return FAILED;
+    };
+    let request = update_manifest::Request {
+        root,
+        directory: std::path::Path::new(directory),
+        version: option("--version"),
+        date: option("--date"),
+    };
+    match rest.first().map(String::as_str) {
+        Some("assemble") => gate(
+            "update-manifest assemble",
+            &update_manifest::assemble(&request),
+        ),
+        Some("verify") => gate("update-manifest verify", &update_manifest::verify(&request)),
+        _ => {
             usage();
             FAILED
         }
@@ -108,6 +143,14 @@ commands:
                        features, licence allow list, workflow action pins, the
                        Tauri devtools/content-security settings, and a version
                        the manifests do not agree on.
+  update-manifest assemble --dir <directory> [--version <v>] [--date <rfc3339>]
+                       write latest.json from the packages and signatures in
+                       <directory>, for the release workflow's last job.
+  update-manifest verify --dir <directory> [--version <v>]
+                       fail unless latest.json lists every platform, each
+                       signature verifies its package under the public key in
+                       tauri.conf.json, each address is an asset of the same
+                       release, and the version is tauri.conf.json's.
   bindings --check     compare src/generated/bindings.ts with the
                        Rust IPC layer.
 

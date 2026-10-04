@@ -116,7 +116,7 @@ fn package_rename(value: &str) -> Option<String> {
 }
 
 /// Features that must never reach a release artifact.
-const TEST_FEATURES: [&str; 1] = ["test-fixtures"];
+const TEST_FEATURES: [&str; 2] = ["test-fixtures", "sample-data"];
 
 /// Reports every default feature set that selects a test-only feature.
 pub(crate) fn check_release_features(root: &Path, outcome: &mut Outcome) {
