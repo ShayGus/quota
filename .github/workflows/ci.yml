@@ -249,11 +249,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-  # The real-app suite builds the actual desktop application, starts it under a
-  # virtual display, and drives it through Tauri's official WebDriver server
-  # (see CONTRIBUTING.md, "Real-app tests"). It is Linux only. Like the
-  # interface job it lives in this workflow so that a release cannot be cut from
-  # a commit on which it failed.
+  # The Linux real-app job builds the actual desktop application, starts it
+  # under a virtual display, and drives it through Tauri's official WebDriver
+  # server. The Windows job below drives the same suite through Edge WebDriver.
+  # Both jobs stay in this workflow so a failure blocks a release.
+
   real-app:
     name: Real app (Linux)
     runs-on: ubuntu-24.04
@@ -327,6 +327,73 @@ jobs:
         if: ${{ !cancelled() }}
         with:
           name: real-app-results
+          path: test-results/e2e
+          if-no-files-found: warn
+          retention-days: 14
+
+  real-app-windows:
+    name: Real app (Windows)
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # src-tauri/rust-toolchain.toml pins the compiler and components.
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain
+        working-directory: src-tauri
+
+      # Swatinem/rust-cache v2.9.2.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: src-tauri
+          key: real-app-windows
+
+      # oven-sh/setup-bun v2. The version is read from .bun-version.
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
+        with:
+          bun-version-file: .bun-version
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      # This pinned installer matches WebDriver to WebView2, not to Edge.
+      - name: Install matching WebView2 driver
+        shell: pwsh
+        run: |
+          cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
+          & "$env:USERPROFILE\.cargo\bin\msedgedriver-tool.exe"
+          if (-not (Test-Path .\msedgedriver.exe)) {
+            throw "Microsoft Edge WebDriver was not downloaded"
+          }
+          & .\msedgedriver.exe --version
+          if ($LASTEXITCODE -ne 0) {
+            throw "Microsoft Edge WebDriver did not start"
+          }
+          $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        working-directory: src-tauri
+
+      # The Tauri project's WebDriver server. The version is pinned and
+      # `--locked` uses the crate's own lockfile.
+      - name: Install tauri-driver
+        run: cargo install tauri-driver --version 2.1.0 --locked
+        working-directory: src-tauri
+
+      - name: Build the debug applications
+        run: bun run build:e2e
+
+      - name: Real-app tests
+        run: bun run test:e2e
+
+      # actions/upload-artifact v7.0.1. Keep Windows logs and screenshots too.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ !cancelled() }}
+        with:
+          name: real-app-windows-results
           path: test-results/e2e
           if-no-files-found: warn
           retention-days: 14

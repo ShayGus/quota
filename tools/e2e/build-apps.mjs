@@ -7,8 +7,9 @@ import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdirSync } from "node:fs";
 
 const OUT = "src-tauri/target/e2e";
-const BUILT = "src-tauri/target/debug/quota";
-const LAUNCHER = "src-tauri/target/debug/examples/quota_e2e";
+const EXE = process.platform === "win32" ? ".exe" : "";
+const BUILT = `src-tauri/target/debug/quota${EXE}`;
+const LAUNCHER = `src-tauri/target/debug/examples/quota_e2e${EXE}`;
 
 function run(command, args) {
   const result = spawnSync(command, args, { stdio: "inherit" });
@@ -19,7 +20,7 @@ mkdirSync(OUT, { recursive: true });
 
 // The ordinary debug build, exactly as `bun tauri build --debug` makes it.
 run("bun", ["tauri", "build", "--debug", "--no-bundle"]);
-copyFileSync(BUILT, `${OUT}/quota`);
+copyFileSync(BUILT, `${OUT}/quota${EXE}`);
 
 // The test launcher: the same app with `sample-data` (ten seeded fixture
 // accounts) behind `src-tauri/examples/quota_e2e.rs`, which can point the
@@ -34,4 +35,4 @@ run("cargo", [
   "--features",
   "sample-data,custom-protocol",
 ]);
-copyFileSync(LAUNCHER, `${OUT}/quota-sample`);
+copyFileSync(LAUNCHER, `${OUT}/quota-sample${EXE}`);
