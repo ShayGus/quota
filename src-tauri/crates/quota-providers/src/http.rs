@@ -130,20 +130,11 @@ fn rewrite(base: Option<&str>, fixed: &str) -> String {
 /// There is deliberately no environment variable and no settings file: a
 /// build that did not compile this function cannot be redirected at all.
 #[expect(
-    dead_code,
-    reason = "nothing in this crate calls retarget: the test seam uses the pure rewrite rule instead, and the release gate requires the declaration to stay"
-)]
-#[cfg(feature = "test-fixtures")]
-pub(crate) fn retarget(base: &str) {
-    set_test_base(base);
-}
-
-#[expect(
     clippy::expect_used,
     reason = "a poisoned test base means a test already panicked; failing here keeps the failure visible"
 )]
 #[cfg(feature = "test-fixtures")]
-pub(crate) fn set_test_base(base: &str) {
+pub(crate) fn retarget(base: &str) {
     *TEST_BASE
         .write()
         .expect("the transport base lock is not poisoned") = Some(base.to_owned());

@@ -81,5 +81,5 @@ pub use fixture::{FixtureAdapter, FixtureProfile};
 /// process, using synthetic credentials. There is no reset operation.
 #[cfg(feature = "test-fixtures")]
 pub fn retarget(base: &str) {
-    http::set_test_base(base);
+    http::retarget(base);
 }
