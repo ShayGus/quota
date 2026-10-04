@@ -106,9 +106,7 @@ const LAUNCHERS: &[&str] = &["xdg-open", "gio", "gnome-open", "kde-open"];
 
 /// A launcher that records how it was invoked and exits at once.
 ///
-/// The record path is baked in rather than passed through the environment,
-/// because the point of the test is what the launcher received and not what
-/// it inherited. `printf %s` keeps the address as data, so an address that
+/// `printf %s` keeps the address as data, so an address that
 /// contains `%` cannot be reinterpreted by the shell that runs this.
 #[cfg(target_os = "linux")]
 const STUB_LAUNCHER: &str = r#"#!/bin/sh
@@ -121,18 +119,17 @@ const STUB_LAUNCHER: &str = r#"#!/bin/sh
     printf 'arg%s=%s\n' "$i" "$a"
   done
   printf 'complete\n'
-} >> "@@"
+} >> "$QUOTA_BROWSER_LAUNCH_PROBE/record.txt"
 exit 0
 "#;
 
 #[cfg(target_os = "linux")]
-fn write_stub_launchers(dir: &Path, record: &Path) {
+fn write_stub_launchers(dir: &Path) {
     use std::os::unix::fs::PermissionsExt as _;
 
-    let script = STUB_LAUNCHER.replace("@@", &record.display().to_string());
     for name in LAUNCHERS {
         let path = dir.join(name);
-        fs::write(&path, script.as_bytes()).expect("a stub launcher can be written");
+        fs::write(&path, STUB_LAUNCHER.as_bytes()).expect("a stub launcher can be written");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
             .expect("a stub launcher can be made executable");
     }
@@ -176,9 +173,9 @@ fn the_sign_in_address_reaches_the_platform_launcher_intact() {
         return;
     }
 
-    let sandbox = scratch("arrives");
+    let sandbox = scratch("arrives-$literal-O'Brien");
     let record = sandbox.join("record.txt");
-    write_stub_launchers(&sandbox, &record);
+    write_stub_launchers(&sandbox);
 
     let probe = run_as_probe(
         "the_sign_in_address_reaches_the_platform_launcher_intact",
@@ -267,8 +264,63 @@ fn reg(args: &[&str]) -> std::process::ExitStatus {
 }
 
 #[cfg(windows)]
-fn handler_already_installed() -> bool {
-    reg(&["query", r"HKCU\Software\Classes\https"]).success()
+#[derive(serde::Deserialize)]
+struct HttpsAssociation {
+    command: String,
+    has_registration: bool,
+    has_user_choice: bool,
+}
+
+#[cfg(windows)]
+fn https_association() -> Result<HttpsAssociation, String> {
+    let script = r#"
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class HttpsAssociation {
+    [DllImport("shlwapi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern int AssocQueryStringW(uint flags, uint kind,
+        string association, string verb, StringBuilder output, ref uint length);
+    public static string Command() {
+        uint length = 0;
+        int result = AssocQueryStringW(0x1000, 1, "https", "open", null, ref length);
+        if (result != 1 || length == 0) {
+            throw new InvalidOperationException("HTTPS command query failed: " + result);
+        }
+        StringBuilder output = new StringBuilder(checked((int)length));
+        result = AssocQueryStringW(0x1000, 1, "https", "open", output, ref length);
+        if (result != 0) {
+            throw new InvalidOperationException("HTTPS command query failed: " + result);
+        }
+        return output.ToString();
+    }
+}
+'@
+$registration = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Classes\https')
+$choice = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Software\Microsoft\Windows\Shell\Associations\UrlAssociations\https\UserChoice')
+@{
+    command = [HttpsAssociation]::Command()
+    has_registration = $null -ne $registration
+    has_user_choice = $null -ne $choice
+} | ConvertTo-Json -Compress
+"#;
+    let output = std::process::Command::new("powershell.exe")
+        .args(["-NoProfile", "-NonInteractive", "-Command", script])
+        .output()
+        .map_err(|error| {
+            format!("the effective HTTPS association could not be queried: {error}")
+        })?;
+    if !output.status.success() {
+        return Err(format!(
+            "the effective HTTPS association query failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+    serde_json::from_slice(&output.stdout)
+        .map_err(|error| format!("the effective HTTPS association query was unreadable: {error}"))
 }
 
 /// Points the per-user `https` handler at a PowerShell script that records the
@@ -277,15 +329,19 @@ fn handler_already_installed() -> bool {
 /// The script is reached with `-File`, so the address arrives as one literal
 /// argument and no intermediate shell can reinterpret an `&` or a `%` in it.
 #[cfg(windows)]
-fn install_handler(script: &Path, record: &Path) {
+fn write_windows_recorder(script: &Path, record: &Path) {
     let source = format!(
-        "Add-Content -LiteralPath '{record}' -Value ('argc=' + $args.Count)\n\
+        "\u{feff}Add-Content -LiteralPath '{record}' -Value ('argc=' + $args.Count)\n\
          Add-Content -LiteralPath '{record}' -Value ('arg1=' + $args[0])\n\
          Add-Content -LiteralPath '{record}' -Value 'complete'\n",
-        record = record.display()
+        record = record.to_string_lossy().replace('\'', "''")
     );
     fs::write(script, source).expect("the recorder can be written");
+}
 
+#[cfg(windows)]
+fn install_handler(script: &Path, record: &Path) -> String {
+    write_windows_recorder(script, record);
     let command = format!(
         "powershell.exe -NoProfile -ExecutionPolicy Bypass -File \"{}\" \"%1\"",
         script.display()
@@ -331,23 +387,83 @@ fn install_handler(script: &Path, record: &Path) {
             "the throwaway handler must be registered: {args:?}"
         );
     }
+    command
+}
+
+#[cfg(windows)]
+#[test]
+fn the_windows_recorder_preserves_literal_paths() {
+    let sandbox = scratch("windows-$literal-O'Brien-é");
+    let record = sandbox.join("record.txt");
+    let script = sandbox.join("record.ps1");
+    write_windows_recorder(&script, &record);
+    let recorded = std::process::Command::new("powershell.exe")
+        .args([
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+        ])
+        .arg(&script)
+        .arg(SIGN_IN_URL)
+        .output()
+        .expect("the recorder can be started");
+    assert!(
+        recorded.status.success(),
+        "the recorder must succeed: {}",
+        String::from_utf8_lossy(&recorded.stderr)
+    );
+    let recorded = wait_for_record(&record);
+    assert_eq!(
+        recorded.lines().collect::<Vec<_>>(),
+        ["argc=1", &format!("arg1={SIGN_IN_URL}"), "complete"]
+    );
+    fs::remove_dir_all(sandbox).expect("the sandbox can be removed");
 }
 
 #[cfg(windows)]
 #[test]
 fn the_sign_in_address_reaches_the_windows_browser_handler_intact() {
-    if handler_already_installed() {
-        println!("skipped: this machine already has a per-user https handler");
-        return;
+    match https_association() {
+        Ok(association) if association.has_registration || association.has_user_choice => {
+            println!(
+                "skipped: this machine already has a per-user HTTPS registration or UserChoice; effective command: {}",
+                association.command
+            );
+            return;
+        }
+        Err(reason) => {
+            println!("skipped: {reason}");
+            return;
+        }
+        Ok(_) => {}
     }
 
-    let sandbox = scratch("windows");
+    let sandbox = scratch("windows-O'Brien");
     let record = sandbox.join("record.txt");
     let script = sandbox.join("record.ps1");
     let _installed = InstalledHandler;
-    install_handler(&script, &record);
+    let command = install_handler(&script, &record);
 
     let host = opener_host();
+    match https_association() {
+        Ok(association)
+            if association.has_registration
+                && !association.has_user_choice
+                && association.command == command => {}
+        Ok(association) => {
+            println!(
+                "skipped: the recorder is not the effective HTTPS handler; effective command: {}",
+                association.command
+            );
+            return;
+        }
+        Err(reason) => {
+            println!("skipped: {reason}");
+            return;
+        }
+    }
     let outcome = open_external(host.handle(), SIGN_IN_URL);
     assert!(
         outcome.is_ok(),

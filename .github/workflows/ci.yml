@@ -393,7 +393,7 @@ jobs:
       # whose Windows-only failure mode a Linux run cannot see. Nothing here
       # opens a real browser, and the handler is removed again on the way out.
       - name: Browser handover and export containment
-        run: cargo test --locked -p quota-desktop --lib --test browser_launch
+        run: cargo test --locked -p quota-desktop --lib --test browser_launch -- --show-output
         working-directory: src-tauri
 
       - name: Real-app tests
