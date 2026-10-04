@@ -21,7 +21,7 @@ last job can write.
 | Linux    | `.deb`                                                 | Ubuntu and Debian.                                      |
 | Linux    | `.rpm`                                                 | Fedora and openSUSE.                                    |
 | macOS    | `.dmg`, one for Apple Silicon and one for Intel        | Everyone on a Mac.                                      |
-| macOS    | `.app.tar.gz`, one for Apple Silicon and one for Intel | Updater payloads; initial installation uses the `.dmg`.  |
+| macOS    | `.app.tar.gz`, one for Apple Silicon and one for Intel | Updater payloads; initial installation uses the `.dmg`. |
 | All      | `.sig` file beside each updater payload                | Installed copies check it before they install.          |
 | All      | `latest.json`, the update list                         | Installed copies read it to find the newest version.    |
 | All      | `SHA256SUMS` and these release notes                   | Checking that a download is the one that was published. |
@@ -39,8 +39,8 @@ so it is a reviewed change.
 ## The update key
 
 Installed copies of Quota update themselves, and the one thing that stops a stranger from
-sending them a program is a signature. Every updater payload is signed with a private
-key, and the matching public key is built into Quota (`plugins.updater.pubkey` in
+sending them a program is a signature. Every updater payload is signed with a private key,
+and the matching public key is built into Quota (`plugins.updater.pubkey` in
 [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json)). A copy installs an update
 only if its signature verifies against that public key.
 
@@ -279,15 +279,15 @@ else is a failure, and you should stop and report what you saw instead.
    available (you have 0.1.0). Install it now? Quota will restart." and two buttons,
    **Cancel** and **OK**. No window of the operating system's own style.
 7. **Press Cancel** the first time. _You should see:_ the window closes, Quota keeps
-   running as version 0.1.0, and that version is not offered again until Quota is restarted.
-   Then restart it and press **OK**.
+   running as version 0.1.0, and that version is not offered again until Quota is
+   restarted. Then restart it and press **OK**.
 8. **Press OK.** _You should see:_ the same window changes to **Installing the update**
    with both buttons greyed out; then Quota closes and starts again by itself. Open Quota,
    **Settings** shows version **0.1.1** in the bottom-left corner of the navigation rail,
    and your accounts and preferences are all still there. No pop-up appears this time.
-9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and macOS
-   (Apple Silicon and Intel). On Windows the installer runs in a passive window and Quota
-   comes back by itself; the AppImage replaces itself in place; a deb or rpm install
+9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and
+   macOS (Apple Silicon and Intel). On Windows the installer runs in a passive window and
+   Quota comes back by itself; the AppImage replaces itself in place; a deb or rpm install
    should ask for administrator rights through the system's prompt; a Mac copy updates
    itself without the **Open Anyway** step.
 

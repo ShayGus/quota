@@ -3,9 +3,8 @@
 Quota builds and passes its checks on Windows and Linux. The release workflow has macOS
 build and packaging jobs; [Releasing](RELEASING.md#what-a-release-contains) owns the
 package details and [Acceptance mapping](acceptance.md) owns native verification status.
-`tauri-driver` has no macOS support.
-The code is arranged so that finishing macOS means the short list at the end of this page,
-not rewriting anything.
+`tauri-driver` has no macOS support. The code is arranged so that finishing macOS means
+the short list at the end of this page, not rewriting anything.
 
 ## Where platform code lives
 
