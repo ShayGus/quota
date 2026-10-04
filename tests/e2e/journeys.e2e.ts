@@ -15,6 +15,7 @@ import process from "node:process";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbox";
+import { startFakeProvider } from "./fake-provider";
 import { waitFor } from "./webdriver";
 
 const APP = process.env["QUOTA_E2E_APP"] ?? "src-tauri/target/e2e/quota";
@@ -248,9 +249,61 @@ describe("the real application", () => {
     await app.stop();
   });
 
-  // There is no seam for a fake provider: every adapter calls its provider's real
-  // HTTPS address, and the address is a constant. Adding one means changing
-  // production code, which this suite deliberately does not do. See CONTRIBUTING.md.
-  it.skip("adds an account against a fake local provider (no seam in the app)", () =>
-    undefined);
+  it("adds an account against a fake local provider and shows its reading", async () => {
+    const world = await begin("add-account");
+    const provider = await startFakeProvider();
+    try {
+      // The sandbox user is signed in to Codex, as the Codex CLI would leave it.
+      world.writeCodexSignIn("fake-codex-token");
+      const app = await world.launch(SAMPLE_APP, {
+        QUOTA_E2E_PROVIDER_BASE: provider.base,
+      });
+      await app.session.switchTo(await findWindow(app.session, "overview"));
+      await waitUntilVisible(app.session, "the overview");
+      await waitFor("the sample accounts", async () =>
+        (await app.session.evaluate<number>(
+          "return document.querySelectorAll('.provider-card').length",
+        )) >= 3
+          ? true
+          : null,
+      );
+
+      // Add account in the popover opens the wizard in the settings window.
+      await (await app.session.findByText("button", "Add account")).click();
+      await app.session.switchTo(await findWindow(app.session, "settings"));
+      await waitUntilVisible(app.session, "the settings window");
+      await (
+        await app.session.find(
+          "//button[contains(@class,'provider-pick')][.//span[normalize-space()='Codex']]",
+          "xpath",
+        )
+      ).click();
+      await (await app.session.findByText("button", "Connect")).click();
+      await waitFor("the verified account", async () =>
+        (await pageText(app)).includes("Add this account?") ? true : null,
+      );
+      // The application really asked the fake provider, with the sandbox's token.
+      expect(provider.requests.map((request) => request.path)).toContain(
+        "/backend-api/wham/usage",
+      );
+      expect(provider.requests.at(0)?.authorization).toBe("Bearer fake-codex-token");
+      await world.screenshot(app.session, "add-account-verify");
+      await (await app.session.findByText("button", "Add Codex account")).click();
+
+      // The new account is in the overview with the fake provider's reading:
+      // 28% used of the 5-hour window leaves 72%.
+      await app.session.switchTo(await findWindow(app.session, "overview"));
+      const card = await waitFor("the Codex card", async () => {
+        const text = await app.session.evaluate<string | null>(
+          "const card = [...document.querySelectorAll('.provider-card')].find((c) => c.getAttribute('aria-label')?.startsWith('Codex')); return card ? card.innerText : null",
+        );
+        return text !== null && text.includes("72") ? text : null;
+      });
+      expect(card).toContain("72");
+      await world.screenshot(app.session, "add-account-overview");
+      await app.stop();
+    } finally {
+      await provider.close();
+    }
+  });
 });

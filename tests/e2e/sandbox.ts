@@ -126,12 +126,15 @@ export class Sandbox {
   }
 
   /** Starts the application through tauri-driver and opens a WebDriver session. */
-  public async launch(binary: string): Promise<RunningApp> {
+  public async launch(
+    binary: string,
+    extraEnvironment: NodeJS.ProcessEnv = {},
+  ): Promise<RunningApp> {
     const port = await freePort();
     const logPath = join(this.root, "logs", `driver-${String(Date.now())}.log`);
     const log = openLog(logPath);
     const driver = spawn("tauri-driver", ["--port", String(port)], {
-      env: this.env,
+      env: { ...this.env, ...extraEnvironment },
       stdio: ["ignore", log, log],
     });
     this.driver = driver;
@@ -152,6 +155,19 @@ export class Sandbox {
         );
       },
     };
+  }
+
+  /**
+   * Gives the sandbox's user a Codex sign-in, as the Codex CLI would have
+   * written it. The token is synthetic and only the fake provider sees it.
+   */
+  public writeCodexSignIn(token: string): void {
+    const directory = join(this.home, ".codex");
+    mkdirSync(directory, { recursive: true });
+    writeFileSync(
+      join(directory, "auth.json"),
+      JSON.stringify({ tokens: { access_token: token, account_id: "fixture-account" } }),
+    );
   }
 
   /** Starts a second copy of the application directly, as a person would. */
