@@ -588,17 +588,20 @@ export async function findWindow(
   session: Session,
   role: "overview" | "settings" | "widget",
 ): Promise<string> {
+  const selector = {
+    overview: ".popover",
+    settings: ".settings-window",
+    widget: ".widget",
+  }[role];
   return waitFor(`the ${role} window`, async () => {
     for (const handle of await session.handles()) {
       await session.switchTo(handle);
-      const href = await session.evaluate<string>("return window.location.href");
-      const hash = href.split("#")[1] ?? "";
-      const found =
-        role === "settings"
-          ? hash.startsWith("/settings")
-          : role === "widget"
-            ? hash.startsWith("/widget")
-            : !hash.startsWith("/settings") && !hash.startsWith("/widget");
+      // A visible WebView can still be blank or have its URL before React has
+      // mounted. Select the rendered surface, so callers can use its controls.
+      const found = await session.evaluate<boolean>(
+        "return document.querySelector(arguments[0]) !== null",
+        [selector],
+      );
       if (found) return handle;
     }
     return null;

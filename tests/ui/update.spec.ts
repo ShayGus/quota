@@ -161,7 +161,8 @@ test.describe("the update pop-up", () => {
     secondWindow,
   }) => {
     for (const theme of ["light", "dark"] as const) {
-      const preferences = defaultPreferences({ theme });
+      // Compare the settled design, rather than sampling a theme transition.
+      const preferences = defaultPreferences({ theme, reduce_motion: true });
       const update = await open(
         scenario("update", {
           preferences,
@@ -179,6 +180,10 @@ test.describe("the update pop-up", () => {
       await expect(
         settings.page.getByRole("heading", { name: "Quota settings" }),
       ).toBeVisible();
+      for (const { page } of [update, settings]) {
+        await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+        await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "true");
+      }
 
       const style = (page: Page, selector: string) =>
         page.evaluate((query) => {
