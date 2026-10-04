@@ -84,7 +84,7 @@ impl ProviderHttp {
 
     /// Performs one bounded GET and decodes the JSON body.
     pub(crate) async fn get(&self, request: GetRequest<'_>) -> Result<HttpReply, ProviderError> {
-        let builder = self.client.get(request.url);
+        let builder = self.client.get(endpoint(request.url));
         send(builder, request.headers, request.deadline, Answers::Success).await
     }
 
@@ -92,6 +92,72 @@ impl ProviderHttp {
     pub(crate) const fn client(&self) -> &reqwest::Client {
         &self.client
     }
+}
+
+/// Rewrites one provider's fixed endpoint when a test build retargeted the
+/// transport.
+///
+/// In a build without the non-default `test-fixtures` feature this is the
+/// identity, and nothing else in the crate can change it: no environment
+/// variable, no setting, no file. `retarget` does not exist in that build.
+#[cfg(not(feature = "test-fixtures"))]
+pub(crate) fn endpoint(fixed: &str) -> &str {
+    fixed
+}
+
+#[cfg(feature = "test-fixtures")]
+pub(crate) fn endpoint(fixed: &str) -> String {
+    rewrite(test_base().as_deref(), fixed)
+}
+
+/// Puts a provider's path and query onto `base`, or leaves it alone.
+///
+/// The rule is pure, so a test states the base it wants instead of
+/// depending on whatever another test left behind.
+#[cfg(feature = "test-fixtures")]
+fn rewrite(base: Option<&str>, fixed: &str) -> String {
+    let Some(base) = base else {
+        return fixed.to_owned();
+    };
+    match split_origin(fixed) {
+        Some((_, path)) => format!("{base}{path}"),
+        None => fixed.to_owned(),
+    }
+}
+
+/// Retargets every provider at one base URL, for a test build only.
+///
+/// There is deliberately no environment variable and no settings file: a
+/// build that did not compile this function cannot be redirected at all.
+#[expect(
+    clippy::expect_used,
+    reason = "a poisoned test base means a test already panicked; failing here keeps the failure visible"
+)]
+#[cfg(feature = "test-fixtures")]
+pub(crate) fn retarget(base: &str) {
+    *TEST_BASE
+        .write()
+        .expect("the transport base lock is not poisoned") = Some(base.to_owned());
+}
+
+#[cfg(feature = "test-fixtures")]
+fn test_base() -> Option<String> {
+    TEST_BASE.read().ok().and_then(|base| base.clone())
+}
+
+#[cfg(feature = "test-fixtures")]
+static TEST_BASE: std::sync::RwLock<Option<String>> = std::sync::RwLock::new(None);
+
+/// Splits an absolute URL into its origin and everything after it.
+#[cfg(feature = "test-fixtures")]
+#[expect(
+    clippy::string_slice,
+    reason = "the index comes from `find('/')` or the string length, so it always lands on a character boundary"
+)]
+fn split_origin(url: &str) -> Option<(&str, &str)> {
+    let after_scheme = url.split_once("://")?.1;
+    let path_start = after_scheme.find('/').unwrap_or(after_scheme.len());
+    Some((&after_scheme[..path_start], &after_scheme[path_start..]))
 }
 
 /// Which answers a request accepts.
@@ -393,5 +459,48 @@ mod tests {
             }
             server.join().unwrap();
         }
+    }
+}
+
+#[cfg(test)]
+mod transport_seam_tests {
+    use super::*;
+
+    #[test]
+    fn an_endpoint_is_untouched_when_no_base_is_set() {
+        assert_eq!(
+            rewrite(None, "https://api.minimax.io/v1/token_plan/remains"),
+            "https://api.minimax.io/v1/token_plan/remains"
+        );
+    }
+
+    #[test]
+    fn a_base_moves_the_origin_and_keeps_the_path_and_query() {
+        assert_eq!(
+            rewrite(
+                Some("http://127.0.0.1:8080"),
+                "https://api.minimax.io/v1/token_plan/remains"
+            ),
+            "http://127.0.0.1:8080/v1/token_plan/remains"
+        );
+        assert_eq!(
+            rewrite(
+                Some("http://127.0.0.1:8080"),
+                "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
+            ),
+            "http://127.0.0.1:8080/v1/billing?format=credits"
+        );
+    }
+
+    #[test]
+    fn a_base_never_rewrites_something_that_is_not_a_url() {
+        assert_eq!(
+            rewrite(Some("http://127.0.0.1:8080"), "not a url"),
+            "not a url"
+        );
+        assert_eq!(
+            rewrite(Some("http://127.0.0.1:8080"), "https://ollama.com"),
+            "http://127.0.0.1:8080"
+        );
     }
 }

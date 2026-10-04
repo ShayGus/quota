@@ -56,7 +56,7 @@ pub(crate) mod muse;
 pub(crate) mod ollama;
 pub(crate) mod opencode_go;
 pub(crate) mod openrouter;
-pub(crate) mod platform_paths;
+pub mod platform;
 pub(crate) mod post;
 pub(crate) mod zai;
 
@@ -68,3 +68,18 @@ pub use registry::ProviderRegistry;
 
 #[cfg(feature = "test-fixtures")]
 pub use fixture::{FixtureAdapter, FixtureProfile};
+
+/// Retargets every provider at one base URL in a fixture build.
+///
+/// Available only with the non-default `test-fixtures` feature. Supply an
+/// origin without a trailing slash, such as `http://127.0.0.1:8080`; subsequent
+/// GET and POST requests replace their production origin while retaining the
+/// path and query, including requests from [`ProviderRegistry::production`].
+///
+/// The base is process-wide and persists for the rest of the process unless
+/// replaced by another call. Configure it before requests in an isolated test
+/// process, using synthetic credentials. There is no reset operation.
+#[cfg(feature = "test-fixtures")]
+pub fn retarget(base: &str) {
+    http::retarget(base);
+}

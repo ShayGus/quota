@@ -63,11 +63,9 @@ pub(super) async fn store(
     connection: &ConnectionId,
     secret: Secret,
 ) -> Result<(), CommandError> {
-    let secrets = Arc::clone(secrets);
-    let connection = connection.clone();
-    tokio::task::spawn_blocking(move || secrets.write(&connection, &secret))
+    secrets
+        .write(connection, &secret)
         .await
-        .map_err(|_| store_error(SecretStoreError::Unavailable))?
         .map_err(store_error)
 }
 
@@ -75,9 +73,8 @@ pub(super) async fn store(
 /// account is already gone, and a leftover entry names nothing but an unused
 /// connection identifier.
 pub(crate) async fn forget(secrets: &Arc<dyn SecretStore>, connection: ConnectionId) {
-    let secrets = Arc::clone(secrets);
-    let removed = tokio::task::spawn_blocking(move || secrets.delete(&connection)).await;
-    if !matches!(removed, Ok(Ok(()))) {
+    let removed = secrets.delete(&connection).await;
+    if !matches!(removed, Ok(())) {
         tracing::warn!("a disconnected account's credential was not removed from the store");
     }
 }

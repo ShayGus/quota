@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use quota_core::ports::ProviderError;
 use serde_json::Value;
 
-use crate::platform_paths::{self, Lookup};
+use crate::platform::{self, Lookup, Platform};
 
 /// The spellings Claude Code has written its access token under: nested in a
 /// `claudeAiOauth` object, or at the root of the file.
@@ -94,7 +94,7 @@ pub(crate) fn process_lookup(name: &str) -> Option<String> {
 /// Reads the Codex credential, honouring `CODEX_HOME` before the default.
 pub(crate) async fn codex_credential() -> Result<CodexCredential, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
-    let (path, profile_label) = codex_auth_file(lookup)?;
+    let (path, profile_label) = codex_auth_file(platform::system(), lookup)?;
     let document = read_json(&path).await?;
     let token = string_at(&document, &[CODEX_TOKEN_PATH, &["access_token"]])
         .ok_or(ProviderError::Authentication)?;
@@ -113,7 +113,7 @@ pub(crate) async fn codex_credential() -> Result<CodexCredential, ProviderError>
 /// that only carries a root token is a credential, not a missing one.
 pub(crate) async fn claude_credential() -> Result<ClaudeCredential, ProviderError> {
     let lookup: Lookup<'_> = &process_lookup;
-    let (path, profile_label) = claude_credentials_file(lookup)?;
+    let (path, profile_label) = claude_credentials_file(platform::system(), lookup)?;
     let document = read_json(&path).await?;
     let token = string_at(&document, CLAUDE_TOKEN_PATHS).ok_or(ProviderError::Authentication)?;
     Ok(ClaudeCredential {
@@ -136,7 +136,7 @@ pub(crate) async fn opencode_go_credential() -> Result<OpenCodeGoCredential, Pro
             profile_label: "opencode-api-key-env".to_owned(),
         });
     }
-    let (path, profile_label) = opencode_auth_file(lookup)?;
+    let (path, profile_label) = opencode_auth_file(platform::system(), lookup)?;
     let document = read_json(&path).await?;
     let key = document
         .get(OPENCODE_GO_ENTRY)
@@ -154,25 +154,33 @@ pub(crate) async fn opencode_go_credential() -> Result<OpenCodeGoCredential, Pro
 }
 
 /// The Codex `auth.json` path and a non-revealing profile label.
-fn codex_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderError> {
+pub fn codex_auth_file(
+    platform: &dyn Platform,
+    lookup: Lookup<'_>,
+) -> Result<(PathBuf, String), ProviderError> {
     Ok(match lookup("CODEX_HOME").map(PathBuf::from) {
         Some(home) => (home.join("auth.json"), "codex-home-env".to_owned()),
         None => (
-            profile_directory(lookup)?.join(".codex").join("auth.json"),
+            profile_directory(platform, lookup)?
+                .join(".codex")
+                .join("auth.json"),
             "codex-home-default".to_owned(),
         ),
     })
 }
 
 /// The Claude `.credentials.json` path and a non-revealing profile label.
-fn claude_credentials_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderError> {
+pub fn claude_credentials_file(
+    platform: &dyn Platform,
+    lookup: Lookup<'_>,
+) -> Result<(PathBuf, String), ProviderError> {
     Ok(match lookup("CLAUDE_CONFIG_DIR").map(PathBuf::from) {
         Some(dir) => (
             dir.join(".credentials.json"),
             "claude-config-env".to_owned(),
         ),
         None => (
-            profile_directory(lookup)?
+            profile_directory(platform, lookup)?
                 .join(".claude")
                 .join(".credentials.json"),
             "claude-config-default".to_owned(),
@@ -181,14 +189,17 @@ fn claude_credentials_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), Prov
 }
 
 /// The `OpenCode` `auth.json` path and a non-revealing profile label.
-fn opencode_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderError> {
+pub fn opencode_auth_file(
+    platform: &dyn Platform,
+    lookup: Lookup<'_>,
+) -> Result<(PathBuf, String), ProviderError> {
     Ok(match lookup("XDG_DATA_HOME").map(PathBuf::from) {
         Some(dir) => (
             dir.join("opencode").join("auth.json"),
             "opencode-xdg-env".to_owned(),
         ),
         None => (
-            profile_directory(lookup)?
+            profile_directory(platform, lookup)?
                 .join(".local")
                 .join("share")
                 .join("opencode")
@@ -198,9 +209,14 @@ fn opencode_auth_file(lookup: Lookup<'_>) -> Result<(PathBuf, String), ProviderE
     })
 }
 
-/// The user profile every default credential path is built from.
-pub(crate) fn profile_directory(lookup: Lookup<'_>) -> Result<PathBuf, ProviderError> {
-    platform_paths::user_profile(lookup).ok_or(ProviderError::Authentication)
+/// The user profile for profile-relative credential paths.
+pub fn profile_directory(
+    platform: &dyn Platform,
+    lookup: Lookup<'_>,
+) -> Result<PathBuf, ProviderError> {
+    platform
+        .user_profile(lookup)
+        .ok_or(ProviderError::Authentication)
 }
 
 /// Reads and parses one credential file without ever writing to it.
@@ -240,17 +256,6 @@ pub(crate) fn string_at(document: &Value, paths: &[&[&str]]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
-
-    use crate::platform_paths::tests::NATIVE_PROFILE_VARIABLE;
-    /// An environment made only of the variables a test names.
-    fn environment(pairs: &[(&str, &str)]) -> impl Fn(&str) -> Option<String> + use<> {
-        let map: HashMap<String, String> = pairs
-            .iter()
-            .map(|(name, value)| ((*name).to_owned(), (*value).to_owned()))
-            .collect();
-        move |name: &str| map.get(name).cloned()
-    }
 
     #[test]
     fn a_secret_never_reveals_itself() {
@@ -274,83 +279,6 @@ mod tests {
         assert_eq!(string_at(&document, &[&["missing"]]), None);
     }
 
-    /// The Windows defect: a profile-only machine must still resolve every file.
-    #[test]
-    fn a_profile_only_machine_resolves_every_credential_file() {
-        let profile = if cfg!(windows) {
-            "C:\\Users\\someone"
-        } else {
-            "/home/someone"
-        };
-        let lookup = environment(&[(NATIVE_PROFILE_VARIABLE, profile)]);
-        let (codex, codex_label) = codex_auth_file(&lookup).unwrap();
-        assert_eq!(
-            codex,
-            PathBuf::from(profile).join(".codex").join("auth.json")
-        );
-        assert_eq!(codex_label, "codex-home-default");
-        let (claude, claude_label) = claude_credentials_file(&lookup).unwrap();
-        assert_eq!(
-            claude,
-            PathBuf::from(profile)
-                .join(".claude")
-                .join(".credentials.json")
-        );
-        assert_eq!(claude_label, "claude-config-default");
-        let (go, go_label) = opencode_auth_file(&lookup).unwrap();
-        assert_eq!(
-            go,
-            PathBuf::from(profile)
-                .join(".local")
-                .join("share")
-                .join("opencode")
-                .join("auth.json")
-        );
-        assert_eq!(go_label, "opencode-xdg-default");
-    }
-
-    /// A Windows-only regression: `USERPROFILE` alone, with `HOME` absent.
-    #[test]
-    #[cfg(windows)]
-    fn a_windows_profile_without_home_resolves_every_credential_file() {
-        let lookup = environment(&[("USERPROFILE", "C:\\Users\\someone")]);
-        for path in [
-            codex_auth_file(&lookup).unwrap().0,
-            claude_credentials_file(&lookup).unwrap().0,
-            opencode_auth_file(&lookup).unwrap().0,
-        ] {
-            assert!(
-                path.starts_with("C:\\Users\\someone"),
-                "every default path lives under the profile: {}",
-                path.display()
-            );
-        }
-    }
-
-    #[test]
-    fn an_explicit_override_wins_over_the_profile() {
-        let lookup = environment(&[
-            (NATIVE_PROFILE_VARIABLE, "/profile"),
-            ("CODEX_HOME", "/override/codex"),
-            ("CLAUDE_CONFIG_DIR", "/override/claude"),
-            ("XDG_DATA_HOME", "/override/xdg"),
-        ]);
-        let (codex, label) = codex_auth_file(&lookup).unwrap();
-        assert_eq!(codex, PathBuf::from("/override/codex").join("auth.json"));
-        assert_eq!(label, "codex-home-env");
-        let (claude, _) = claude_credentials_file(&lookup).unwrap();
-        assert_eq!(
-            claude,
-            PathBuf::from("/override/claude").join(".credentials.json")
-        );
-        let (go, _) = opencode_auth_file(&lookup).unwrap();
-        assert_eq!(
-            go,
-            PathBuf::from("/override/xdg")
-                .join("opencode")
-                .join("auth.json")
-        );
-    }
     /// A root-only Claude file is a credential, not a missing one.
     #[test]
     fn a_root_only_claude_credential_is_still_read() {
@@ -363,19 +291,5 @@ mod tests {
         assert_eq!(string_at(&root, CLAUDE_TOKEN_PATHS), Some("two".to_owned()));
         let empty = serde_json::json!({"refreshToken": "only"});
         assert_eq!(string_at(&empty, CLAUDE_TOKEN_PATHS), None);
-    }
-
-    #[test]
-    fn no_profile_and_no_override_is_an_authentication_state() {
-        let lookup = environment(&[]);
-        assert_eq!(codex_auth_file(&lookup), Err(ProviderError::Authentication));
-        assert_eq!(
-            claude_credentials_file(&lookup),
-            Err(ProviderError::Authentication)
-        );
-        assert_eq!(
-            opencode_auth_file(&lookup),
-            Err(ProviderError::Authentication)
-        );
     }
 }

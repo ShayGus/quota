@@ -104,6 +104,55 @@ jobs:
       - name: Generated binding drift
         run: cargo xtask bindings --check
 
+  # The `rust` job runs on Linux, so an adapter that breaks only on Windows
+  # would pass CI untouched. quota-providers depends on ring 0.17.14, which
+  # compiles C, so a Linux cross-check with --target x86_64-pc-windows-gnu
+  # fails for lack of x86_64-w64-mingw32-gcc. On a Windows runner MSVC and
+  # the Windows SDK are already present, so this job checks the native
+  # target.
+  #
+  # The macOS adapter cannot be checked from any runner in this workflow: a
+  # Linux runner has no Apple C compiler and no macOS SDK, and a Windows
+  # runner has neither. The macOS PATH logic still compiles on the Linux
+  # runner, because the platform module compiles all of windows.rs, linux.rs,
+  # macos.rs and unsupported.rs on every host; the macOS credential-store
+  # constructor is the part no runner here can typecheck.
+  windows:
+    name: Windows adapter
+    runs-on: windows-2022
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: src-tauri
+    steps:
+      # actions/checkout v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+
+      # src-tauri/rust-toolchain.toml pins the compiler, and rustup installs it and the
+      # listed components on first use. No CI step repeats the version, so the
+      # toolchain cannot drift between the file and this workflow.
+      - name: Install the pinned toolchain
+        run: rustup show active-toolchain
+
+      # Swatinem/rust-cache v2.9.2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
+        with:
+          workspaces: src-tauri
+
+      - name: Adapter compiles for Windows
+        run: cargo check --locked -p quota-providers --all-targets
+
+      - name: Clippy
+        run: cargo clippy --locked -p quota-providers --all-targets -- -D warnings
+
+      - name: Tests
+        run: cargo test --locked -p quota-providers
+
+      - name: Format
+        run: cargo fmt --all -- --check
+
   frontend:
     name: Frontend
     runs-on: ubuntu-24.04

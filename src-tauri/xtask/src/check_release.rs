@@ -31,6 +31,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     crate::inspection_renderer::check(root, &mut outcome);
     check_inspection_capabilities(&workspace, &mut outcome);
     check_workflow_pins(root, &mut outcome);
+    check_provider_transport(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
     outcome
 }
@@ -768,4 +769,77 @@ fn check_tauri_config(root: &Path, outcome: &mut Outcome) {
         }
     }
     outcome.note(format!("{} tauri.conf.json file(s) checked", configs.len()));
+}
+
+/// The provider transport must never read an address from the environment,
+/// and the test retarget must be absent from a default build.
+fn check_provider_transport(root: &Path, outcome: &mut Outcome) {
+    let path = root
+        .join(scan::WORKSPACE)
+        .join("crates/quota-providers/src/http.rs");
+    let file = scan::relative(root, &path);
+    let Ok(text) = scan::read(&path) else {
+        outcome.fail(
+            file,
+            1,
+            "the provider transport module is missing".to_string(),
+        );
+        return;
+    };
+    let lines: Vec<&str> = text.lines().collect();
+    let mut inspected = 0;
+    for (index, line) in lines.iter().enumerate() {
+        inspected += 1;
+        let trimmed = line.trim();
+        if trimmed.contains("env::var")
+            || trimmed.contains("env::current_dir")
+            || trimmed.contains("env::vars")
+            || trimmed.contains("dotenv")
+        {
+            outcome.fail(
+                file.clone(),
+                index + 1,
+                "a provider address must never be selectable from the environment; the test transport is retargeted in-process".to_string(),
+            );
+        }
+    }
+    let retarget = lines.iter().enumerate().find(|(_, line)| {
+        let trimmed = line.trim();
+        trimmed.starts_with("fn retarget") || trimmed.starts_with("pub(crate) fn retarget")
+    });
+    match retarget {
+        None => outcome.fail(
+            file.clone(),
+            1,
+            "the test transport has no retarget function, so check 1 has nothing to protect"
+                .to_string(),
+        ),
+        Some((index, _)) => {
+            let above = if index == 0 {
+                None
+            } else {
+                lines.get(index - 1)
+            };
+            let gated =
+                above.is_some_and(|line| line.trim() == "#[cfg(feature = \"test-fixtures\")]");
+            if !gated {
+                outcome.fail(
+                    file.clone(),
+                    index + 1,
+                    "retarget must be gated behind the non-default `test-fixtures` feature so it does not exist in a release build".to_string(),
+                );
+            }
+        }
+    }
+    if !lines
+        .iter()
+        .any(|line| line.trim() == "#[cfg(not(feature = \"test-fixtures\"))]")
+    {
+        outcome.fail(
+            file.clone(),
+            1,
+            "the default build's endpoint must be proven to be the identity".to_string(),
+        );
+    }
+    outcome.note(format!("provider transport: {inspected} line(s) inspected"));
 }

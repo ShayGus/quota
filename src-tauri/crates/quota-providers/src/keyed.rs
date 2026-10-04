@@ -46,11 +46,9 @@ impl KeyedSource {
         &self,
         binding: &ConnectionBinding,
     ) -> Result<Secret, ProviderError> {
-        let secrets = Arc::clone(&self.secrets);
-        let connection = binding.connection_id.clone();
-        tokio::task::spawn_blocking(move || secrets.read(&connection))
+        self.secrets
+            .read(&binding.connection_id)
             .await
-            .map_err(|_| unavailable())?
             .map_err(|_| unavailable())?
             .ok_or(ProviderError::Authentication)
     }
@@ -62,11 +60,9 @@ impl KeyedSource {
         binding: &ConnectionBinding,
         secret: Secret,
     ) -> Result<(), ProviderError> {
-        let secrets = Arc::clone(&self.secrets);
-        let connection = binding.connection_id.clone();
-        tokio::task::spawn_blocking(move || secrets.write(&connection, &secret))
+        self.secrets
+            .write(&binding.connection_id, &secret)
             .await
-            .map_err(|_| unavailable())?
             .map_err(|_| unavailable())
     }
 
