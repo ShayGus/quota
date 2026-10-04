@@ -244,6 +244,9 @@ lookup, no downloaded parser, and no plugin loading.
 
 ## Transport
 
+The shared client supplies a User-Agent on both GET and POST requests;
+[`http::USER_AGENT`](src/http.rs) owns its value and Meta's compatibility requirement.
+
 One pooled `reqwest` client per adapter, so connection pooling works and policy is
 uniform: a 5-second connect deadline, a 10-second request deadline, the scheduler's own
 deadline when it is shorter, a 256 KiB response ceiling, and a redirect rule that follows
@@ -279,7 +282,7 @@ backend; `http::ProviderHttp` installs that crypto provider once on first use.
 | `tests/fixture_isolation.rs`     | multi-account isolation through the compiled fixture adapter                                                            |
 | `tests/platform_contract.rs`     | profile and application-data paths for all four platforms, and refusal to open a foreign platform's store               |
 | `tests/secret_store_contract.rs` | async read/write/delete and connection isolation; optional host-store identifier isolation                              |
-| `tests/transport_contract.rs`    | production-registry GET, JSON POST, and form POST requests reach a loopback fake server through the public retarget API |
+| `tests/transport_contract.rs`    | client identity on production-registry GET, JSON POST, and form POST through the public retarget API                    |
 
 The suite makes no network call to a live provider and reads no real provider credential
 file. Fixtures are sanitized payloads written for this crate, using obviously synthetic
