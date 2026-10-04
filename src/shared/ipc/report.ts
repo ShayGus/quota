@@ -48,6 +48,10 @@ export function describeCommandError(error: CommandError): string {
       return "Reconnect that account before Quota can read it.";
     case "permission_denied":
       return "This window is not allowed to do that.";
+    case "provider_refused":
+      // The host writes the whole sentence: what the provider turned down,
+      // that nothing was added, and where the log is.
+      return error.context.reason;
     case "secure_store_unavailable":
       return "The operating system key store is unavailable.";
     case "revision_conflict":
@@ -57,8 +61,14 @@ export function describeCommandError(error: CommandError): string {
     case "native_operation_unsupported":
       return "This system does not support that window operation.";
     case "native_operation_failed":
-      return error.context.operation.endsWith("launch_at_login")
-        ? "Windows did not change the login item. Launch at login is unchanged."
+      if (error.context.operation.endsWith("launch_at_login")) {
+        return "Windows did not change the login item. Launch at login is unchanged.";
+      }
+      // The host's own words name what was refused, which address or file it
+      // was, and where the log is. The generic sentence is only for a host
+      // that sent no reason of its own.
+      return error.context.reason.trim().length > 0
+        ? error.context.reason
         : "The system refused that window operation.";
     case "cancelled":
       return "That was cancelled.";
@@ -70,12 +80,6 @@ export function describeCommandError(error: CommandError): string {
           return "The provider answered in a format this version of Quota cannot read yet.";
         case "invalid_data":
           return "The provider's answer was incomplete or inconsistent, so no reading was taken.";
-        case "browser_sign_in_declined":
-          return "The sign-in was declined on the provider's page. Nothing was added.";
-        case "browser_sign_in_expired":
-          return "The sign-in code expired before it was entered. Start again for a new code.";
-        case "browser_sign_in_timeout":
-          return "The provider did not answer the sign-in in time. Try again.";
         case "credential_store_refused":
           return "The operating system key store refused to keep the credential.";
         default:

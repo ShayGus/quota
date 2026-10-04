@@ -14,6 +14,7 @@ pub mod monitoring;
 mod app_identity;
 pub mod bootstrap;
 pub mod bootstrap_helpers;
+mod file_log;
 pub mod ipc;
 pub mod platform;
 pub mod provider_catalog;

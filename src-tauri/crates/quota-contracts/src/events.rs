@@ -62,14 +62,17 @@ pub enum ConnectionProgress {
     Cancelled,
 }
 
-/// A browser sign-in waiting for the person: the page Quota opened, and the
-/// code to enter there.
+/// A browser sign-in waiting for the person: the page to open, the code to
+/// enter there, and any browser-launch failure.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 pub struct BrowserSignIn {
     /// The code to enter.
     pub user_code: String,
     /// The provider's sign-in page.
     pub verification_uri: String,
+    /// The error reported by the browser launcher.
+    #[serde(default)]
+    pub launch_error: Option<CommandError>,
 }
 
 /// Progress of one connection attempt.

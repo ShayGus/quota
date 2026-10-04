@@ -386,6 +386,14 @@ jobs:
       - name: Build the debug applications
         run: bun run build:e2e
 
+      # Exercise browser handover and export containment on Windows. The browser
+      # probe uses a throwaway per-user HTTPS recorder and prints a skip reason
+      # if it cannot establish that recorder as the effective handler. It never
+      # launches the real browser and removes any registration it installs.
+      - name: Browser handover and export containment
+        run: cargo test --locked -p quota-desktop --lib --test browser_launch -- --show-output
+        working-directory: src-tauri
+
       - name: Real-app tests
         run: bun run test:e2e
 

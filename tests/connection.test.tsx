@@ -528,6 +528,87 @@ describe("Provider → Connect → Verify", () => {
     ).toHaveProperty("disabled", true);
   });
 
+  it.each([
+    ["Grok", "grok", "the system browser refused the page"],
+    ["Muse Code", "muse_code", "the browser did not answer within 10 seconds"],
+  ] as const)(
+    "keeps %s approval active after browser launch trouble",
+    async (label, provider, detail) => {
+      const actions = settingsActions();
+      const onDone = vi.fn();
+      render(<Wizard actions={actions} onDone={onDone} />);
+      fireEvent.click(screen.getByRole("button", { name: new RegExp(`^${label}`) }));
+      await act(() =>
+        fireEvent.click(screen.getByRole("button", { name: "Sign in with browser" })),
+      );
+      const reason = `${detail}. Open https://auth.example.test/device and enter the code TEST-CODE. The log is at /logs/quota.log`;
+      act(() => {
+        acceptAttempt({
+          attemptId: "attempt-1",
+          revision: 3,
+          progress: {
+            kind: "awaiting_user",
+            context: {
+              sign_in: {
+                user_code: "TEST-CODE",
+                verification_uri: "https://auth.example.test/device",
+                launch_error: {
+                  kind: "native_operation_failed",
+                  context: { operation: "browser_launch", reason },
+                },
+              },
+            },
+          },
+        });
+      });
+      expect(screen.getByRole("alert").textContent).toBe(reason);
+      expect(screen.getByText("TEST-CODE")).toBeTruthy();
+      expect(
+        screen.getByRole("button", { name: "Waiting for the browser…" }),
+      ).toHaveProperty("disabled", true);
+      expect(actions.cancelConnection).not.toHaveBeenCalled();
+      expect(onDone).not.toHaveBeenCalled();
+      hold("attempt-1", provider, 4);
+      expect(screen.getByRole("heading", VERIFY)).toBeTruthy();
+      await act(() => fireEvent.click(screen.getByRole("button", ADD)));
+      expect(actions.confirmConnection).toHaveBeenCalledOnce();
+      expect(onDone).toHaveBeenCalledExactlyOnceWith(true);
+    },
+  );
+
+  it.each([
+    "authorization request timeout",
+    "poll timeout",
+    "sign-in denial",
+    "sign-in expiration",
+    "discovery timeout",
+    "verification timeout",
+  ])("shows the host reason and log for a terminal %s", async (failure) => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^Muse Code/ }));
+    await act(() =>
+      fireEvent.click(screen.getByRole("button", { name: "Sign in with browser" })),
+    );
+    const reason = `${failure}. The log is at C:\\Quota\\logs\\quota.log`;
+    act(() => {
+      acceptAttempt({
+        attemptId: "attempt-1",
+        revision: 3,
+        progress: {
+          kind: "failed",
+          context: { error: { kind: "provider_refused", context: { reason } } },
+        },
+      });
+    });
+    expect(screen.getByRole("alert").textContent).toBe(reason);
+    expect(screen.getByRole("button", { name: "Sign in with browser" })).toHaveProperty(
+      "disabled",
+      false,
+    );
+    expect(actions.cancelConnection).not.toHaveBeenCalled();
+  });
+
   it("can use the Grok CLI's sign-in instead of the browser", async () => {
     const actions = settingsActions();
     render(<Wizard actions={actions} onDone={vi.fn()} />);

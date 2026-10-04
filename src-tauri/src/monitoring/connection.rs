@@ -43,6 +43,12 @@ impl AttemptReporter {
         let Some(revision) = self.next_revision(&progress).await else {
             return;
         };
+        let progress = match progress {
+            ConnectionProgress::Failed { error } => ConnectionProgress::Failed {
+                error: report_attempt_failure(error, &crate::file_log::location(&state.app)),
+            },
+            other => other,
+        };
         let app_instance_id = state.snapshots.lock().await.app_instance_id().clone();
         let event =
             crate::ipc::events::ConnectionProgressChanged(ConnectionProgressChangedPayload {
@@ -182,7 +188,7 @@ async fn discover_connection_candidates(
                 .map_err(|_| CommandError::Internal {
                     code: "connection_discovery_timeout".into(),
                 })?
-                .map_err(provider_command_error)?
+                .map_err(|error| attempt_error(&error))?
         }
     };
     let candidates: Vec<_> = discovered
@@ -236,7 +242,7 @@ async fn read_candidate_quota(
             .map_err(|_| CommandError::Internal {
                 code: "connection_read_timeout".into(),
             })?
-            .map_err(provider_command_error)?,
+            .map_err(|error| attempt_error(&error))?,
     };
     let completed_at = runtime.state.clock.now();
     drop(permit);
@@ -255,6 +261,63 @@ async fn read_candidate_quota(
     )))
 }
 
+/// The failure a first attempt reports, before any account exists.
+///
+/// Nothing has been added, so nothing can be reconnected: reporting the
+/// provider's refusal as [`CommandError::ReconnectRequired`] would send the
+/// person back to the sign-in they just attempted, and as a window-permission
+/// error the words would have nothing to do with what happened.
+pub(super) fn attempt_error(error: &ProviderError) -> CommandError {
+    let detail = match error {
+        ProviderError::Cancelled => return CommandError::Cancelled,
+        ProviderError::Authentication => {
+            "The provider did not accept this sign-in, so nothing was added"
+        }
+        ProviderError::Authorization => "The provider declined this account, so nothing was added",
+        ProviderError::InvalidData { .. } => {
+            "The provider's answer was incomplete or inconsistent, so nothing was added"
+        }
+        ProviderError::UnsupportedSchema { .. } => {
+            "The provider answered in a format this version of Quota cannot read yet, \
+             so nothing was added"
+        }
+        ProviderError::Transient { .. } => {
+            "The provider reported a temporary failure, so nothing was added. Try again"
+        }
+        ProviderError::RateLimited { .. } => {
+            "The provider is asking for less traffic, so nothing was added. Try again shortly"
+        }
+    };
+    CommandError::ProviderRefused {
+        reason: detail.into(),
+    }
+}
+
+fn report_attempt_failure(
+    error: CommandError,
+    log: &(impl std::fmt::Display + ?Sized),
+) -> CommandError {
+    let detail = match error {
+        CommandError::Internal { code } => match code.as_str() {
+            "browser_sign_in_timeout" => "The provider did not answer the sign-in in time. Try again.",
+            "browser_sign_in_declined" => "The sign-in was declined on the provider's page. Nothing was added.",
+            "browser_sign_in_expired" => "The sign-in code expired before it was entered. Start again for a new code.",
+            "connection_discovery_timeout" => "The provider did not finish discovering the account in time. Nothing was added. Try again.",
+            "connection_read_timeout" => "The provider did not finish verifying the quota in time. Nothing was added. Try again.",
+            "unsupported_schema" => "The provider answered in a format this version of Quota cannot read yet.",
+            "invalid_data" => "The provider's answer was incomplete or inconsistent, so no reading was taken.",
+            "credential_store_refused" => "The operating system key store refused to keep the credential.",
+            _ => "Quota hit an internal problem.",
+        }.to_owned(),
+        CommandError::ProviderRefused { reason } => format!("{reason}."),
+        other => return other,
+    };
+    tracing::warn!(reason = detail, "connection attempt failed");
+    CommandError::ProviderRefused {
+        reason: format!("{detail} The log is at {log}"),
+    }
+}
+
 pub(super) fn provider_command_error(error: ProviderError) -> CommandError {
     match error {
         ProviderError::Authentication => CommandError::ReconnectRequired,
@@ -268,84 +331,5 @@ pub(super) fn provider_command_error(error: ProviderError) -> CommandError {
 }
 
 #[cfg(test)]
-mod tests {
-    use quota_contracts::commands::VerifiedCandidate;
-    use quota_domain::account::{ConnectionState, VerifiedIdentity};
-    use quota_domain::provider::ProviderId;
-    use quota_domain::quota::window::SourceKind;
-
-    use super::*;
-
-    /// The progress an attempt reports once it has verified one identity.
-    fn awaiting_confirmation() -> ConnectionProgress {
-        ConnectionProgress::AwaitingConfirmation {
-            candidate: VerifiedCandidate {
-                provider_id: ProviderId::Fixture,
-                nickname: "Personal".into(),
-                identity: VerifiedIdentity {
-                    principal_label: "demo@example.com".into(),
-                    workspace_label: None,
-                    plan_label: None,
-                    source: SourceKind::LocalCapture,
-                },
-                windows: Vec::new(),
-            },
-        }
-    }
-
-    #[tokio::test]
-    async fn acknowledged_cancellation_prevents_all_later_progress() {
-        let reporter = AttemptReporter::new();
-        assert_eq!(
-            reporter.next_revision(&ConnectionProgress::Cancelled).await,
-            Some(1)
-        );
-        for progress in [
-            ConnectionProgress::Started,
-            ConnectionProgress::AwaitingUser { sign_in: None },
-            awaiting_confirmation(),
-            ConnectionProgress::Verified {
-                state: ConnectionState::Connected,
-            },
-            ConnectionProgress::Failed {
-                error: CommandError::ReconnectRequired,
-            },
-            ConnectionProgress::Cancelled,
-        ] {
-            assert_eq!(reporter.next_revision(&progress).await, None);
-        }
-    }
-
-    #[tokio::test]
-    async fn normal_progress_advances_until_the_terminal_result() {
-        for terminal in [
-            ConnectionProgress::Verified {
-                state: ConnectionState::Connected,
-            },
-            ConnectionProgress::Failed {
-                error: CommandError::ReconnectRequired,
-            },
-        ] {
-            let reporter = AttemptReporter::new();
-            assert_eq!(
-                reporter.next_revision(&ConnectionProgress::Started).await,
-                Some(1)
-            );
-            assert_eq!(
-                reporter
-                    .next_revision(&ConnectionProgress::AwaitingUser { sign_in: None })
-                    .await,
-                Some(2)
-            );
-            assert_eq!(
-                reporter.next_revision(&awaiting_confirmation()).await,
-                Some(3)
-            );
-            assert_eq!(reporter.next_revision(&terminal).await, Some(4));
-            assert_eq!(
-                reporter.next_revision(&ConnectionProgress::Started).await,
-                None
-            );
-        }
-    }
-}
+#[path = "connection_tests.rs"]
+mod tests;

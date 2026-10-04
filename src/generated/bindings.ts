@@ -75,11 +75,10 @@ export const commands = {
 	 */
 	clearLocalHistory: (accountRef: AccountRef) => typedError<null, CommandError>(__TAURI_INVOKE("clear_local_history", { accountRef })),
 	/**
-	 *  Writes a redacted diagnostics export to a path the user chose.
+	 *  Writes a redacted diagnostics export through the host-owned export helper.
 	 * 
-	 *  The export carries adapter identifiers, error categories, timings, and
-	 *  sanitized status only. It never carries a token, a cookie, an account
-	 *  address, a profile path, or a raw provider body.
+	 *  `destination` is a file-name label, not a path. See
+	 *  [`crate::bootstrap_helpers::write_diagnostics`] for containment and privacy.
 	 */
 	exportSanitizedDiagnostics: (destination: string) => typedError<string, CommandError>(__TAURI_INVOKE("export_sanitized_diagnostics", { destination })),
 	/**  Moves the overview between floating and tray anchoring. */
@@ -339,14 +338,16 @@ export type BoundaryKind =
 "unknown";
 
 /**
- *  A browser sign-in waiting for the person: the page Quota opened, and the
- *  code to enter there.
+ *  A browser sign-in waiting for the person: the page to open, the code to
+ *  enter there, and any browser-launch failure.
  */
 export type BrowserSignIn = {
 	/**  The code to enter. */
 	user_code: string,
 	/**  The provider's sign-in page. */
 	verification_uri: string,
+	/**  The error reported by the browser launcher. */
+	launch_error?: CommandError | null,
 };
 
 /**
@@ -379,6 +380,18 @@ export type CommandError =
 } } | 
 /**  The credential must be renewed by the user before any read can succeed. */
 { kind: "reconnect_required" } | 
+/**
+ *  A connection attempt failed before an account was added, with a
+ *  sanitized reason for a provider refusal or another attempt failure.
+ * 
+ *  This is what a first sign-in that the provider turns down reports: there
+ *  is no connection yet to reconnect, so telling the person to reconnect, or
+ *  to sign in again the way they just did, would be advice in a circle.
+ */
+{ kind: "provider_refused"; context: {
+	/**  A sanitized, human-readable reason. */
+	reason: string,
+} } | 
 /**  The window label is not permitted to call this command. */
 { kind: "permission_denied"; context: {
 	/**  The window that attempted the call. */

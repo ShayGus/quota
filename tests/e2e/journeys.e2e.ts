@@ -8,7 +8,7 @@
  * screens have something to show; it keeps its data under a `sample` folder.
  * `bun run build:e2e` builds both.
  */
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
@@ -149,6 +149,39 @@ describe("the real application", () => {
         ? true
         : null,
     );
+    await app.stop();
+  });
+
+  it("exports diagnostics into the application's own folder and says which file", async () => {
+    const world = await begin("diagnostics-export");
+    const app = await startOverview(world, APP);
+    await (await app.session.find('[aria-label="Settings"]')).click();
+    await app.session.switchTo(await findWindow(app.session, "settings"));
+    await waitUntilVisible(app.session, "the settings window");
+    await (await app.session.findByText("button", "Diagnostics")).click();
+    await (await app.session.findByText("button", "Export diagnostics")).click();
+
+    // The host names the file it wrote, so a refusal here would be read as a
+    // refusal rather than as a silence.
+    const confirmation = await waitFor("the export confirmation", async () => {
+      const text = await pageText(app);
+      return text.includes("Saved to") ? text : null;
+    });
+    expect(confirmation).toContain("quota-diagnostics-settings.json");
+    await world.screenshot(app.session, "diagnostics-export");
+
+    // And the file really is there, beside the application's own folders.
+    const directories = foldersNamed(world.root, "diagnostics");
+    expect(directories).toHaveLength(1);
+    const written = await waitFor("the export file", () =>
+      Promise.resolve(
+        directories
+          .map((directory) => join(directory, "quota-diagnostics-settings.json"))
+          .find(existsSync) ?? null,
+      ),
+    );
+    const body = JSON.parse(readFileSync(written, "utf8")) as { schema_version?: number };
+    expect(body.schema_version).toBe(1);
     await app.stop();
   });
 

@@ -386,6 +386,10 @@ pub fn start() -> Result<(), String> {
                 .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("quota=info,warn")),
         )
         .with_target(false)
+        // The log goes to standard output, as it always has, and to a file a
+        // failure message can name. `attach` opens that file once the host can
+        // resolve its directory, which is after this line has run.
+        .with_writer(crate::file_log::LogWriter)
         .init();
 
     let registry = bindings::registry();
@@ -429,6 +433,8 @@ pub fn start() -> Result<(), String> {
     .setup(move |app| {
         registry.mount_events(app);
         let handle = app.handle().clone();
+        // The log directory needs the host, so it could not be opened earlier.
+        crate::file_log::attach(&handle);
         crate::platform::tray::install(&handle)?;
         crate::platform::window_events::install_close_handlers(&handle);
         // The saved view, the overview or the widget, is the only window a

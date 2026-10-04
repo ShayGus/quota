@@ -80,9 +80,8 @@ does, in the same place and at the same length.
 - **Clear accounts** becomes Clear history: Quota clears stored quota history for every
   account, and disconnecting stays an explicit per-account action.
 - **Diagnostics** lists each account's sanitized connection and fetch state in place of
-  the prototype's interaction log. Export writes `quota-diagnostics-settings.json` to the
-  host's diagnostics folder and states where; the file never holds account identities, so
-  there is no switch to include them.
+  the prototype's interaction log. There is no switch to include account identities;
+  [Diagnostics](../../README.md#diagnostics) owns the export's contents and destination.
 - **Tray.** By the owner's direction the tray menu has three items, Settings, Show App,
   and Exit, with the wireframe's icons; a left click always opens the app, and closing a
   window hides it to the tray. Refresh, pin, and pause stay in the popover and settings.
