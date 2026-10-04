@@ -134,13 +134,20 @@ started from.
 
 To replace an AppImage by hand, do one of these:
 
-- Write the new file to another name, then `mv` it over the old one. The running copy
-  keeps the image it started from.
-- Quit Quota first, then replace the file.
+- Download the new file to another name, run `chmod +x` on it, then `mv` it over the
+  installed AppImage. The running copy keeps the image it started from.
+- Quit Quota first, then replace the file and run `chmod +x ~/.local/bin/Quota.AppImage`
+  before launching it again.
 
 A plain in-place overwrite is what breaks the running copy.
 `curl -o ~/.local/bin/Quota.AppImage` and `cp ~/.local/bin/Quota.AppImage` write into the
-same file, so use `curl -o /tmp/Quota.AppImage` and `mv` it into place instead.
+same file. Instead, set `APPIMAGE_URL` to the release's AppImage download URL and run:
+
+```bash
+curl -fL -o ~/.local/bin/Quota.AppImage.new "$APPIMAGE_URL" &&
+  chmod +x ~/.local/bin/Quota.AppImage.new &&
+  mv ~/.local/bin/Quota.AppImage.new ~/.local/bin/Quota.AppImage
+```
 
 ## Which tests a release needs
 
