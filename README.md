@@ -96,6 +96,8 @@ There are no update settings, channels, release notes, or progress bar in the po
 
 [Releasing](docs/RELEASING.md) owns the platform packages, signing setup, and publication
 procedure, including the first-release checks.
+For manual Linux upgrades, follow
+[Replacing an AppImage by hand](docs/RELEASING.md#replacing-an-appimage-by-hand).
 
 ## Connect and refresh accounts
 

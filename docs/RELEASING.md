@@ -125,12 +125,16 @@ Mac archive for each processor.
 ### Replacing an AppImage by hand
 
 An AppImage is a squashfs image that its runtime mounts with FUSE while Quota runs.
-Writing over that image in place while a copy is running breaks it: the WebKit helper
-processes die with `SIGBUS` the first time they read a page that changed under them. That
-is [issue 38](https://github.com/ShayGus/quota/issues/38). Quota's own updater never does
-this, because it moves the running image aside under a temporary name first, then writes
-the new version to the original path, so the running copy keeps reading the image it
-started from.
+Overwriting that image in place while it is mounted can disrupt the running copy.
+[Issue 38](https://github.com/ShayGus/quota/issues/38) reports WebKit helpers dying with
+`SIGBUS` after replacement; changed pages in the mounted image are the suspected cause,
+and reproduction is not yet confirmed.
+
+Quota's updater avoids overwriting the mounted image: the pinned
+[`tauri-plugin-updater` 2.13.1 implementation](https://github.com/tauri-apps/plugins-workspace/blob/updater-v2.13.1/plugins/updater/src/updater.rs#L1069-L1134)
+renames the old image to a temporary path on the same filesystem, then writes the new
+version to the original path and preserves its permissions. The running copy keeps
+reading the image it started from until Quota restarts.
 
 To replace an AppImage by hand, do one of these:
 
@@ -139,9 +143,9 @@ To replace an AppImage by hand, do one of these:
 - Quit Quota first, then replace the file and run `chmod +x ~/.local/bin/Quota.AppImage`
   before launching it again.
 
-A plain in-place overwrite is what breaks the running copy.
-`curl -o ~/.local/bin/Quota.AppImage` and `cp ~/.local/bin/Quota.AppImage` write into the
-same file. Instead, set `APPIMAGE_URL` to the release's AppImage download URL and run:
+Avoid an in-place overwrite while Quota runs: `curl -o ~/.local/bin/Quota.AppImage
+"$APPIMAGE_URL"` and `cp new.AppImage ~/.local/bin/Quota.AppImage` write into the existing
+file. Instead, set `APPIMAGE_URL` to the release's AppImage download URL and run:
 
 ```bash
 curl -fL -o ~/.local/bin/Quota.AppImage.new "$APPIMAGE_URL" &&
@@ -311,10 +315,10 @@ else is a failure, and you should stop and report what you saw instead.
    and your accounts and preferences are all still there. No pop-up appears this time.
 9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and
    macOS (Apple Silicon and Intel). On Windows the installer runs in a passive window and
-   Quota comes back by itself; the AppImage replaces itself, and the copy that was running
-   when it did is not disturbed; a deb or rpm install should ask for administrator rights
-   through the system's prompt; a Mac copy updates itself without the **Open Anyway**
-   step.
+   Quota comes back by itself; the AppImage updater uses
+   [the replacement behavior described above](#replacing-an-appimage-by-hand) before
+   Quota restarts; a deb or rpm install should ask for administrator rights through the
+   system's prompt; a Mac copy updates itself without the **Open Anyway** step.
 
 If the pop-up never appears when it should, the cause is almost always one of these: the
 release is still a draft, the installed copy is a development build, the version in
