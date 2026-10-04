@@ -345,7 +345,7 @@ describe("Provider → Connect → Verify", () => {
   it.each([
     ["Codex", "codex", "codex login"],
     ["Claude", "claude", "Run claude in a terminal"],
-    ["OpenCode Go", "open_code_go", "Sign in with OpenCode"],
+    ["OpenCode Go", "open_code_go", "opencode auth login"],
   ] as const)(
     "guides a first %s connection through its own sign-in tool",
     async (provider, id, tool) => {
@@ -454,6 +454,41 @@ describe("Provider → Connect → Verify", () => {
     await act(() => fireEvent.click(connectButton));
     expect(actions.beginConnection).toHaveBeenCalledWith(
       expect.objectContaining({ provider_id: "kimi", credential: null }),
+    );
+  });
+
+  it("signs OpenCode Go in with a pasted key, sent once and then forgotten", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^OpenCode Go/ }));
+    const connectButton = screen.getByRole("button", { name: "Connect" });
+    const key = screen.getByLabelText("API key");
+    expect(key).toHaveProperty("type", "password");
+    expect(connectButton).toHaveProperty("disabled", false);
+    fireEvent.change(key, { target: { value: "  oc-go-abc  " } });
+    await act(() => fireEvent.click(connectButton));
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider_id: "open_code_go",
+        credential: "oc-go-abc",
+      }),
+    );
+    // The host has the key now, so the field no longer holds it.
+    expect(screen.getByLabelText("API key")).toHaveProperty("value", "");
+  });
+
+  it("lets OpenCode Go connect through the OpenCode CLI when no key is pasted", async () => {
+    const actions = settingsActions();
+    render(<Wizard actions={actions} onDone={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: /^OpenCode Go/ }));
+    expect(
+      screen.getByText(/leave it empty to use the sign-in the OpenCode CLI/),
+    ).toBeTruthy();
+    const connectButton = screen.getByRole("button", { name: "Connect" });
+    expect(connectButton).toHaveProperty("disabled", false);
+    await act(() => fireEvent.click(connectButton));
+    expect(actions.beginConnection).toHaveBeenCalledWith(
+      expect.objectContaining({ provider_id: "open_code_go", credential: null }),
     );
   });
 

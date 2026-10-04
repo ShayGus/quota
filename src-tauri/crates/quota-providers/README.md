@@ -145,14 +145,16 @@ Reads Claude subscription usage for the Claude Code login.
 
 ## OpenCode Go
 
-Reads the `OpenCode` Zen Go usage the local `OpenCode` login authorizes.
+Reads the `OpenCode` Zen Go usage a bearer key authorizes: a key the person pasted, or,
+when no key was pasted, the local `OpenCode` login's key.
 
 - Endpoint: `GET https://opencode.ai/zen/go/v1/usage` with a bearer key and a JSON accept
   header. It is undocumented.
 - Credential discovery: see the
   [OpenCode Go credential reference](../../../docs/providers.md#opencode-go).
-- Credential owner: the `OpenCode` login. Quota has no refresh path for this credential at
-  all, and never writes to the file.
+- Credential owner: a pasted key is owned by Quota in the system credential store, and a
+  connection's profile label says which sign-in it uses. The `OpenCode` login owns its own
+  file: Quota has no refresh path for that credential at all, and never writes to it.
 - Decoded fields: `usage` or the root object; `rollingUsage`/`rolling`,
   `weeklyUsage`/`weekly`, `monthlyUsage`/`monthly`. Used percent: `percent`,
   `percentUsed`, `usedPercent`, `usagePercent`; remaining percent: `percentRemaining`,

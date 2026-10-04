@@ -205,4 +205,24 @@ mod tests {
                 .is_none()
         );
     }
+
+    /// A provider that takes a key or its own sign-in, such as `OpenCode` Go,
+    /// accepts either: the key when pasted, nothing when the sign-in stands in.
+    #[test]
+    fn a_provider_that_takes_a_key_or_its_own_sign_in_accepts_either() {
+        let secret = supplied(&adapter(true, true), &request(Some("  oc-go-abc \n")))
+            .expect("accepted")
+            .expect("a key");
+        assert_eq!(secret.expose(), "oc-go-abc");
+        assert!(
+            supplied(&adapter(true, true), &request(None))
+                .expect("accepted")
+                .is_none()
+        );
+        assert!(
+            supplied(&adapter(true, true), &request(Some("   ")))
+                .expect("accepted")
+                .is_none()
+        );
+    }
 }

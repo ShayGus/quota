@@ -1,8 +1,8 @@
 # Quota
 
 Quota is a desktop monitor for AI subscription allowances. It tracks accounts across
-Codex, Claude, and OpenCode Go and shows their remaining allowances. Production adapters
-use one local credential profile per provider; see
+Codex, Claude, and OpenCode Go and shows their remaining allowances. Each local sign-in is
+one credential profile, and a pasted key is its own connection; see
 [provider connection limits](docs/providers.md). Same-provider account isolation is
 covered by the fictional fixture provider.
 
@@ -107,8 +107,8 @@ is missing or rejected, follow the provider-specific recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
-- OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
-  environment.
+- OpenCode Go: paste a key from opencode.ai/auth, or run `opencode auth login` with the
+  OpenCode CLI.
 
 After signing in, press Connect again. Verify shows the account the provider verified, its
 workspace and plan, and each quota reading, with the nickname it will be saved under.
