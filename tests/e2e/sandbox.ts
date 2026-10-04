@@ -365,19 +365,34 @@ export class Sandbox {
       .map(Number);
   }
 
-  public applicationWindowVisible(binary: string): boolean {
+  public applicationVisibleWindowCount(binary: string): number {
     if (process.platform !== "win32") {
       throw new Error("application window visibility is only available on Windows");
     }
     const [pid] = this.applicationProcesses(binary);
-    if (pid === undefined) return false;
-    const script = `Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public static class NativeWindow { [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd); }'; $handle = (Get-Process -Id ${String(pid)}).MainWindowHandle; if ($handle -eq [IntPtr]::Zero) { 'false' } else { $visible = [NativeWindow]::IsWindowVisible($handle); $visible.ToString().ToLowerInvariant() }`;
+    if (pid === undefined) return 0;
+    const type = [
+      "using System;",
+      "using System.Runtime.InteropServices;",
+      "public static class NativeWindow {",
+      "public delegate bool EnumWindowsProc(IntPtr window, IntPtr data);",
+      '[DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr data);',
+      '[DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);',
+      '[DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr window);',
+      "public static int CountVisible(uint targetProcessId) {",
+      "var visible = 0;",
+      "EnumWindows((window, data) => { uint owner; GetWindowThreadProcessId(window, out owner); if (owner == targetProcessId && IsWindowVisible(window)) visible++; return true; }, IntPtr.Zero);",
+      "return visible;",
+      "}",
+      "}",
+    ].join(" ");
+    const script = `Add-Type -TypeDefinition '${type}'; [NativeWindow]::CountVisible([uint32]${String(pid)})`;
     const output = execFileSync(
       "powershell.exe",
       ["-NoProfile", "-NonInteractive", "-Command", script],
       { encoding: "utf8", windowsHide: true },
     );
-    return output.trim() === "true";
+    return Number(output.trim());
   }
 
   /** The ids of every process, whatever its program, that has this sandbox's HOME. */
