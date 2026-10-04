@@ -35,6 +35,16 @@ pub enum CommandError {
     },
     /// The credential must be renewed by the user before any read can succeed.
     ReconnectRequired,
+    /// The provider refused the credential or the sign-in itself, so no account
+    /// was read, held, or stored.
+    ///
+    /// This is what a first sign-in that the provider turns down reports: there
+    /// is no connection yet to reconnect, so telling the person to reconnect, or
+    /// to sign in again the way they just did, would be advice in a circle.
+    ProviderRefused {
+        /// A sanitized, human-readable reason.
+        reason: String,
+    },
     /// The window label is not permitted to call this command.
     PermissionDenied {
         /// The window that attempted the call.
@@ -95,6 +105,7 @@ impl CommandError {
             Self::UnsupportedProvider { .. } => "unsupported_provider",
             Self::UnsupportedMethod { .. } => "unsupported_method",
             Self::ReconnectRequired => "reconnect_required",
+            Self::ProviderRefused { .. } => "provider_refused",
             Self::PermissionDenied { .. } => "permission_denied",
             Self::SecureStoreUnavailable => "secure_store_unavailable",
             Self::RevisionConflict { .. } => "revision_conflict",
@@ -127,6 +138,7 @@ mod tests {
                 requested: "m".into(),
             },
             CommandError::ReconnectRequired,
+            CommandError::ProviderRefused { reason: "r".into() },
             CommandError::PermissionDenied {
                 window_label: "w".into(),
             },

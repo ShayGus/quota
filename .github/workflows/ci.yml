@@ -386,6 +386,16 @@ jobs:
       - name: Build the debug applications
         run: bun run build:e2e
 
+      # The two places this branch changed are proven on the platform the
+      # report came from, not only on Linux: the handover of the sign-in
+      # address to the browser through a throwaway per-user `https` handler
+      # that records its own command line, and the export containment check,
+      # whose Windows-only failure mode a Linux run cannot see. Nothing here
+      # opens a real browser, and the handler is removed again on the way out.
+      - name: Browser handover and export containment
+        run: cargo test --locked -p quota-desktop --lib --test browser_launch
+        working-directory: src-tauri
+
       - name: Real-app tests
         run: bun run test:e2e
 

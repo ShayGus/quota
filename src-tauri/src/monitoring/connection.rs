@@ -182,7 +182,7 @@ async fn discover_connection_candidates(
                 .map_err(|_| CommandError::Internal {
                     code: "connection_discovery_timeout".into(),
                 })?
-                .map_err(provider_command_error)?
+                .map_err(|error| attempt_error(&runtime.state, &error))?
         }
     };
     let candidates: Vec<_> = discovered
@@ -236,7 +236,7 @@ async fn read_candidate_quota(
             .map_err(|_| CommandError::Internal {
                 code: "connection_read_timeout".into(),
             })?
-            .map_err(provider_command_error)?,
+            .map_err(|error| attempt_error(&runtime.state, &error))?,
     };
     let completed_at = runtime.state.clock.now();
     drop(permit);
@@ -253,6 +253,41 @@ async fn read_candidate_quota(
             completed_at,
         },
     )))
+}
+
+/// The failure a first attempt reports, before any account exists.
+///
+/// Nothing has been added, so nothing can be reconnected: reporting the
+/// provider's refusal as [`CommandError::ReconnectRequired`] would send the
+/// person back to the sign-in they just attempted, and as a window-permission
+/// error the words would have nothing to do with what happened. Every reason
+/// names the log, because this is the moment someone needs the detail behind a
+/// message they can no longer reproduce.
+pub(super) fn attempt_error(state: &RuntimeState, error: &ProviderError) -> CommandError {
+    let log = crate::file_log::location(&state.app);
+    let detail = match error {
+        ProviderError::Cancelled => return CommandError::Cancelled,
+        ProviderError::Authentication => {
+            "The provider did not accept this sign-in, so nothing was added"
+        }
+        ProviderError::Authorization => "The provider declined this account, so nothing was added",
+        ProviderError::InvalidData { .. } => {
+            "The provider's answer was incomplete or inconsistent, so nothing was added"
+        }
+        ProviderError::UnsupportedSchema { .. } => {
+            "The provider answered in a format this version of Quota cannot read yet, \
+             so nothing was added"
+        }
+        ProviderError::Transient { .. } => {
+            "The provider reported a temporary failure, so nothing was added. Try again"
+        }
+        ProviderError::RateLimited { .. } => {
+            "The provider is asking for less traffic, so nothing was added. Try again shortly"
+        }
+    };
+    CommandError::ProviderRefused {
+        reason: format!("{detail}. The log is at {log}"),
+    }
 }
 
 pub(super) fn provider_command_error(error: ProviderError) -> CommandError {

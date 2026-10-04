@@ -379,6 +379,18 @@ export type CommandError =
 } } | 
 /**  The credential must be renewed by the user before any read can succeed. */
 { kind: "reconnect_required" } | 
+/**
+ *  The provider refused the credential or the sign-in itself, so no account
+ *  was read, held, or stored.
+ * 
+ *  This is what a first sign-in that the provider turns down reports: there
+ *  is no connection yet to reconnect, so telling the person to reconnect, or
+ *  to sign in again the way they just did, would be advice in a circle.
+ */
+{ kind: "provider_refused"; context: {
+	/**  A sanitized, human-readable reason. */
+	reason: string,
+} } | 
 /**  The window label is not permitted to call this command. */
 { kind: "permission_denied"; context: {
 	/**  The window that attempted the call. */

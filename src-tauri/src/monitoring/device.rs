@@ -5,6 +5,11 @@
 //! the person approves, declines, lets the code expire, or cancels. The
 //! granted token then continues exactly like a pasted credential: verified,
 //! held in memory, and stored only when the person adds the account.
+//!
+//! Two things are reported rather than swallowed: the code reaches the screen
+//! before the browser is asked for, so a slow platform still leaves something
+//! to read, and a platform that never takes the page fails the attempt with the
+//! address, the code, and the log's path instead of a warning nobody sees.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -16,11 +21,18 @@ use quota_core::ports::{DeviceAuthorization, DevicePoll, ProviderAdapter};
 use quota_domain::ids::ConnectionAttemptId;
 use tokio::sync::watch;
 
-use super::connection::{AttemptReporter, provider_command_error};
+use super::connection::{AttemptReporter, attempt_error};
 use super::{MonitoringRuntime, REMOTE_TIMEOUT};
 
 /// Extra seconds between polls each time the provider asks Quota to slow down.
 const SLOW_DOWN_SECONDS: u64 = 5;
+
+/// How long the platform gets to take the page before the attempt says so.
+///
+/// A launcher that hangs is the failure a person cannot see: the code would
+/// sit on screen with no browser beside it and no message. Bounding it turns
+/// that into the same loud report as an outright refusal.
+const LAUNCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Runs the browser sign-in an attempt asked for, and answers the request
 /// carrying the granted credential. A request that did not ask for one comes
@@ -43,16 +55,16 @@ pub(super) async fn sign_in(
         _ = cancelled.changed() => return Ok(None),
         started = tokio::time::timeout(REMOTE_TIMEOUT, adapter.begin_device_sign_in()) => started
             .map_err(|_| timed_out())?
-            .map_err(provider_command_error)?,
+            .map_err(|error| attempt_error(&runtime.state, &error))?,
     };
     let page = authorization
         .verification_uri_complete
         .as_deref()
         .unwrap_or(&authorization.verification_uri);
-    if crate::bootstrap_helpers::open_external(&runtime.state.app, page).is_err() {
-        // The page and code stay on screen, so the person can open it.
-        tracing::warn!("the browser sign-in page could not be opened");
-    }
+    // The code goes on screen before the browser is asked for. A platform
+    // that is slow, or that refuses, then still leaves the person reading
+    // something, and the report below lands on a screen already showing the
+    // sign-in rather than on one stuck at "Verifying…".
     reporter
         .emit(
             &runtime.state,
@@ -65,7 +77,8 @@ pub(super) async fn sign_in(
             },
         )
         .await;
-    let Some(granted) = wait(adapter, &authorization, cancelled).await? else {
+    open_page(runtime, page, &authorization.user_code).await?;
+    let Some(granted) = wait(runtime, adapter, &authorization, cancelled).await? else {
         return Ok(None);
     };
     request.credential = Some(PastedCredential::new(granted));
@@ -73,8 +86,68 @@ pub(super) async fn sign_in(
     Ok(Some(request))
 }
 
+/// Hands the sign-in page to the browser, off the async runtime and bounded.
+///
+/// The launch runs on a blocking thread because a platform launcher may wait
+/// on the shell, and holding that here would stall every other attempt.
+///
+/// # Errors
+/// Returns [`CommandError::NativeOperationFailed`] carrying the address, the
+/// code, and the log's path whenever the platform does not take the page.
+async fn open_page(
+    runtime: &MonitoringRuntime,
+    url: &str,
+    user_code: &str,
+) -> Result<(), CommandError> {
+    let log = crate::file_log::location(&runtime.state.app);
+    let app = runtime.state.app.clone();
+    let target = url.to_owned();
+    let launched = tokio::time::timeout(
+        LAUNCH_TIMEOUT,
+        tokio::task::spawn_blocking(move || crate::bootstrap_helpers::open_external(&app, &target)),
+    )
+    .await;
+    match launched {
+        Ok(Ok(Ok(()))) => {
+            tracing::info!(url, user_code, "the sign-in page was handed to the browser");
+            Ok(())
+        }
+        Ok(Ok(Err(_))) => Err(refused(
+            url,
+            user_code,
+            "the system browser refused the page",
+            &log,
+        )),
+        Ok(Err(joined)) => Err(refused(
+            url,
+            user_code,
+            &format!("the browser launch stopped unexpectedly ({joined})"),
+            &log,
+        )),
+        Err(_) => Err(refused(
+            url,
+            user_code,
+            &format!(
+                "the browser did not answer within {} seconds",
+                LAUNCH_TIMEOUT.as_secs()
+            ),
+            &log,
+        )),
+    }
+}
+
+/// The words a refused launch is reported in: what to open, what to type, and
+/// where to look afterwards.
+fn refused(url: &str, user_code: &str, detail: &str, log: &str) -> CommandError {
+    CommandError::NativeOperationFailed {
+        operation: "browser_launch".into(),
+        reason: format!("{detail}. Open {url} and enter the code {user_code}. The log is at {log}"),
+    }
+}
+
 /// Polls until the person finishes, at the pace the provider asks for.
 async fn wait(
+    runtime: &MonitoringRuntime,
     adapter: &Arc<dyn ProviderAdapter>,
     authorization: &DeviceAuthorization,
     cancelled: &mut watch::Receiver<bool>,
@@ -90,7 +163,9 @@ async fn wait(
             polled = tokio::time::timeout(
                 REMOTE_TIMEOUT,
                 adapter.poll_device_sign_in(authorization),
-            ) => polled.map_err(|_| timed_out())?.map_err(provider_command_error)?,
+            ) => polled
+                .map_err(|_| timed_out())?
+                .map_err(|error| attempt_error(&runtime.state, &error))?,
         };
         match polled {
             DevicePoll::Pending => {}
