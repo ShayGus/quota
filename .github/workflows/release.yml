@@ -93,7 +93,7 @@ jobs:
             echo "the normal CI has never run on $COMMIT" >&2
             exit 1
           fi
-          if printf '%s\n' "$runs" | grep -qv ' completed success$'; then
+          if printf '%s\n' "$runs" | grep -qvFx 'completed success'; then
             printf '%s\n' "$runs" >&2
             echo "every CI run on the commit must have completed successfully" >&2
             exit 1

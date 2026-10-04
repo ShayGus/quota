@@ -10,8 +10,12 @@
 )]
 
 use std::fs;
+#[cfg(unix)]
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[cfg(unix)]
+use std::process::Stdio;
 use std::result::Result;
 
 /// The commit the repository pins the plugin to.
@@ -912,4 +916,55 @@ fn an_authority_without_a_version_fails() -> Outcome {
     )
     .map_err(|error| error.to_string())?;
     fails_with(directory.path(), "declares no `version`")
+}
+
+#[cfg(unix)]
+fn ci_runs_pass(runs: &str) -> Result<bool, String> {
+    if runs.is_empty() {
+        return Ok(false);
+    }
+    let mut grep = Command::new("grep")
+        .args(["-qvFx", "completed success"])
+        .stdin(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+    let Some(mut stdin) = grep.stdin.take() else {
+        return Err("grep input was not piped".to_string());
+    };
+    stdin
+        .write_all(runs.as_bytes())
+        .map_err(|error| error.to_string())?;
+    drop(stdin);
+    match grep.wait().map_err(|error| error.to_string())?.code() {
+        Some(0) => Ok(false),
+        Some(1) => Ok(true),
+        code => Err(format!("grep returned unexpected exit code {code:?}")),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn release_preflight_requires_all_ci_runs_to_succeed() -> Outcome {
+    let workflow = include_str!("../../../.github/workflows/release.yml");
+    if !workflow.contains("grep -qvFx 'completed success'") {
+        return Err("release preflight must match the full successful CI line".to_string());
+    }
+    if !workflow.contains("if [ -z \"$runs\" ]; then") {
+        return Err("release preflight must reject commits with no CI runs".to_string());
+    }
+    for (runs, expected) in [
+        ("completed success\ncompleted success", true),
+        ("completed success\ncompleted failure", false),
+        ("in_progress null", false),
+        ("completed cancelled", false),
+        ("", false),
+    ] {
+        let passed = ci_runs_pass(runs)?;
+        if passed != expected {
+            return Err(format!(
+                "CI run output {runs:?} passed as {passed}, expected {expected}"
+            ));
+        }
+    }
+    Ok(())
 }
