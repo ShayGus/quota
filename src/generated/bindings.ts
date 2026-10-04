@@ -347,6 +347,8 @@ export type BrowserSignIn = {
 	user_code: string,
 	/**  The provider's sign-in page. */
 	verification_uri: string,
+	/**  The error reported by the browser launcher. */
+	launch_error?: CommandError | null,
 };
 
 /**

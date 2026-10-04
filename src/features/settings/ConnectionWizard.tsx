@@ -569,6 +569,11 @@ function BrowserSignInBox({
         Quota opened {signIn.verification_uri} in your browser. If it did not open, go
         there yourself.
       </span>
+      {signIn.launch_error == null ? null : (
+        <span className="note" role="alert">
+          {describeCommandError(signIn.launch_error)}
+        </span>
+      )}
     </div>
   );
 }

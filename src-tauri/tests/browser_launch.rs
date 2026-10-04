@@ -12,6 +12,7 @@
 //! the handler is a throwaway per-user `https` registration that records the
 //! same. Neither touches the machine's real default browser, and the Windows
 //! registration is removed again on every path out of the test.
+#![cfg(any(target_os = "linux", windows))]
 #![expect(
     clippy::tests_outside_test_module,
     reason = "an integration test binary holds nothing but tests and compiles without cfg(test)"
@@ -28,7 +29,7 @@ use std::time::{Duration, Instant};
 use quota_desktop_lib::bootstrap_helpers::open_external;
 use tauri::test::{MockRuntime, mock_builder, mock_context, noop_assets};
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 use quota_contracts::CommandError;
 
 /// The address a first device sign-in hands to the platform: the provider's
@@ -65,7 +66,7 @@ fn wait_for_record(path: &Path) -> String {
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         if let Ok(text) = fs::read_to_string(path)
-            && !text.trim().is_empty()
+            && text.lines().last() == Some("complete")
         {
             return text;
         }
@@ -78,12 +79,29 @@ fn wait_for_record(path: &Path) -> String {
     }
 }
 
+#[test]
+fn a_partial_record_is_not_consumed_before_completion() {
+    let sandbox = scratch("partial");
+    let record = sandbox.join("record.txt");
+    fs::write(&record, "argc=1\n").expect("the first field can be written");
+    let target = record.clone();
+    let finished = std::thread::spawn(move || {
+        std::thread::sleep(Duration::from_millis(150));
+        fs::write(&target, "argc=1\narg1=address\ncomplete\n")
+            .expect("the record can be completed");
+    });
+    let recorded = wait_for_record(&record);
+    finished.join().expect("the recorder finished");
+    assert_eq!(recorded, "argc=1\narg1=address\ncomplete\n");
+    fs::remove_dir_all(sandbox).expect("the sandbox can be removed");
+}
+
 /// The name this test answers to when it is re-run as its own probe.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 const PROBE: &str = "QUOTA_BROWSER_LAUNCH_PROBE";
 
 /// Launchers the platform may reach for, in the order the opener tries them.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 const LAUNCHERS: &[&str] = &["xdg-open", "gio", "gnome-open", "kde-open"];
 
 /// A launcher that records how it was invoked and exits at once.
@@ -92,7 +110,7 @@ const LAUNCHERS: &[&str] = &["xdg-open", "gio", "gnome-open", "kde-open"];
 /// because the point of the test is what the launcher received and not what
 /// it inherited. `printf %s` keeps the address as data, so an address that
 /// contains `%` cannot be reinterpreted by the shell that runs this.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 const STUB_LAUNCHER: &str = r#"#!/bin/sh
 {
   printf 'program=%s\n' "$0"
@@ -102,11 +120,12 @@ const STUB_LAUNCHER: &str = r#"#!/bin/sh
     i=$((i + 1))
     printf 'arg%s=%s\n' "$i" "$a"
   done
+  printf 'complete\n'
 } >> "@@"
 exit 0
 "#;
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn write_stub_launchers(dir: &Path, record: &Path) {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -124,7 +143,7 @@ fn write_stub_launchers(dir: &Path, record: &Path) {
 /// `PATH` cannot be written from here: the workspace denies unsafe code and
 /// `std::env::set_var` is unsafe on this edition. Handing the child its own
 /// `PATH` is the same isolation without it.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn run_as_probe(test_name: &str, sandbox: &Path) -> std::process::ExitStatus {
     std::process::Command::new(std::env::current_exe().expect("the test is running from a file"))
         .args(["--exact", test_name, "--nocapture", "--test-threads=1"])
@@ -135,7 +154,7 @@ fn run_as_probe(test_name: &str, sandbox: &Path) -> std::process::ExitStatus {
 }
 
 /// What the probe did with the address, written where the parent can read it.
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 fn record_outcome(dir: &Path, outcome: Result<(), CommandError>) {
     let text = match outcome {
         Ok(()) => "ok\n".to_owned(),
@@ -147,7 +166,7 @@ fn record_outcome(dir: &Path, outcome: Result<(), CommandError>) {
     fs::write(dir.join("outcome.txt"), text).expect("the probe can report what it did");
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn the_sign_in_address_reaches_the_platform_launcher_intact() {
     if let Some(dir) = std::env::var_os(PROBE) {
@@ -186,7 +205,7 @@ fn the_sign_in_address_reaches_the_platform_launcher_intact() {
     );
 }
 
-#[cfg(unix)]
+#[cfg(target_os = "linux")]
 #[test]
 fn a_platform_without_a_launcher_reports_the_address_it_could_not_place() {
     if let Some(dir) = std::env::var_os(PROBE) {
@@ -261,7 +280,8 @@ fn handler_already_installed() -> bool {
 fn install_handler(script: &Path, record: &Path) {
     let source = format!(
         "Add-Content -LiteralPath '{record}' -Value ('argc=' + $args.Count)\n\
-         Add-Content -LiteralPath '{record}' -Value ('arg1=' + $args[0])\n",
+         Add-Content -LiteralPath '{record}' -Value ('arg1=' + $args[0])\n\
+         Add-Content -LiteralPath '{record}' -Value 'complete'\n",
         record = record.display()
     );
     fs::write(script, source).expect("the recorder can be written");

@@ -37,15 +37,28 @@ static OPEN: Mutex<Option<File>> = Mutex::new(None);
 /// directory the file itself is opened in.
 #[must_use]
 pub(crate) fn location<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> String {
-    file_path(app).to_string_lossy().into_owned()
+    file_path(app).map_or_else(
+        |_| "unavailable (the application log directory could not be resolved)".into(),
+        |path| path.to_string_lossy().into_owned(),
+    )
 }
 
 /// The log file's path, resolved from the application's own log directory.
-fn file_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
+fn file_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> tauri::Result<PathBuf> {
     app.path()
         .app_log_dir()
-        .unwrap_or_else(|_| PathBuf::from("."))
-        .join(FILE_NAME)
+        .map(|directory| directory.join(FILE_NAME))
+}
+
+pub(crate) fn browser_failure(url: &str, reason: &str) {
+    let host = tauri::Url::parse(url)
+        .ok()
+        .and_then(|url| url.host_str().map(str::to_owned));
+    tracing::warn!(
+        host = host.as_deref().unwrap_or("unknown"),
+        reason,
+        "browser launch failed"
+    );
 }
 
 /// Opens the log file for appending, rolling an oversized one over first.
@@ -53,13 +66,15 @@ fn file_path<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> PathBuf {
 /// Called once, from setup, when the host can resolve its directory. Every
 /// failure is swallowed: a log that cannot be opened must never stop the run.
 pub(crate) fn attach(app: &tauri::AppHandle) {
-    let Ok(directory) = app.path().app_log_dir() else {
+    let Ok(file) = file_path(app) else {
         return;
     };
-    if fs::create_dir_all(&directory).is_err() {
+    let Some(directory) = file.parent() else {
+        return;
+    };
+    if fs::create_dir_all(directory).is_err() {
         return;
     }
-    let file = directory.join(FILE_NAME);
     if let Ok(meta) = fs::metadata(&file)
         && meta.len() >= MAX_BYTES
     {
@@ -129,6 +144,32 @@ mod tests {
         writer.flush().unwrap();
         // With no file attached the write is dropped after standard output.
         append(b"unattached\n");
+    }
+
+    #[test]
+    fn browser_failure_logs_only_the_host_and_safe_reason() {
+        let path =
+            std::env::temp_dir().join(format!("quota-browser-log-{}.txt", std::process::id()));
+        let file = File::create(&path).expect("a log can be created");
+        let subscriber = tracing_subscriber::fmt()
+            .with_ansi(false)
+            .without_time()
+            .with_writer(move || file.try_clone().expect("the log can be shared"))
+            .finish();
+        tracing::subscriber::with_default(subscriber, || {
+            browser_failure(
+                "https://auth.example.test/private-device?code=PRIVATE-CODE#private-fragment",
+                "the system browser refused the page",
+            );
+        });
+        let logged = fs::read_to_string(&path).expect("the failure was logged");
+        assert!(logged.contains("auth.example.test"));
+        assert!(logged.contains("the system browser refused the page"));
+        assert!(!logged.contains("https://"));
+        assert!(!logged.contains("private-device"));
+        assert!(!logged.contains("PRIVATE-CODE"));
+        assert!(!logged.contains("private-fragment"));
+        fs::remove_file(path).expect("the log can be removed");
     }
 
     /// The subscriber can be built from the writer before a file exists.

@@ -8,8 +8,8 @@
 //!
 //! Two things are reported rather than swallowed: the code reaches the screen
 //! before the browser is asked for, so a slow platform still leaves something
-//! to read, and a platform that never takes the page fails the attempt with the
-//! address, the code, and the log's path instead of a warning nobody sees.
+//! to read, and a platform that never takes the page reports the address,
+//! the code, and the log's path while approval polling continues.
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -65,19 +65,32 @@ pub(super) async fn sign_in(
     // that is slow, or that refuses, then still leaves the person reading
     // something, and the report below lands on a screen already showing the
     // sign-in rather than on one stuck at "Verifying…".
+    let mut sign_in = BrowserSignIn {
+        user_code: authorization.user_code.clone(),
+        verification_uri: authorization.verification_uri.clone(),
+        launch_error: None,
+    };
     reporter
         .emit(
             &runtime.state,
             attempt_id,
             ConnectionProgress::AwaitingUser {
-                sign_in: Some(BrowserSignIn {
-                    user_code: authorization.user_code.clone(),
-                    verification_uri: authorization.verification_uri.clone(),
-                }),
+                sign_in: Some(sign_in.clone()),
             },
         )
         .await;
-    open_page(runtime, page, &authorization.user_code).await?;
+    if let Err(error) = open_page(runtime, page, &authorization.user_code).await {
+        sign_in.launch_error = Some(error);
+        reporter
+            .emit(
+                &runtime.state,
+                attempt_id,
+                ConnectionProgress::AwaitingUser {
+                    sign_in: Some(sign_in),
+                },
+            )
+            .await;
+    }
     let Some(granted) = wait(runtime, adapter, &authorization, cancelled).await? else {
         return Ok(None);
     };
@@ -108,31 +121,26 @@ async fn open_page(
     )
     .await;
     match launched {
-        Ok(Ok(Ok(()))) => {
-            tracing::info!(url, user_code, "the sign-in page was handed to the browser");
-            Ok(())
-        }
+        Ok(Ok(Ok(()))) => Ok(()),
         Ok(Ok(Err(_))) => Err(refused(
             url,
             user_code,
             "the system browser refused the page",
             &log,
         )),
-        Ok(Err(joined)) => Err(refused(
-            url,
-            user_code,
-            &format!("the browser launch stopped unexpectedly ({joined})"),
-            &log,
-        )),
-        Err(_) => Err(refused(
-            url,
-            user_code,
-            &format!(
+        Ok(Err(_)) => {
+            let detail = "the browser launch stopped unexpectedly";
+            crate::file_log::browser_failure(url, detail);
+            Err(refused(url, user_code, detail, &log))
+        }
+        Err(_) => {
+            let detail = format!(
                 "the browser did not answer within {} seconds",
                 LAUNCH_TIMEOUT.as_secs()
-            ),
-            &log,
-        )),
+            );
+            crate::file_log::browser_failure(url, &detail);
+            Err(refused(url, user_code, &detail, &log))
+        }
     }
 }
 

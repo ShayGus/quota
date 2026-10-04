@@ -113,15 +113,16 @@ pub fn open_external<R: tauri::Runtime>(
     url: &str,
 ) -> Result<(), CommandError> {
     use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_url(url, None::<&str>)
-        .map_err(|_| CommandError::NativeOperationFailed {
+    app.opener().open_url(url, None::<&str>).map_err(|_| {
+        crate::file_log::browser_failure(url, "the system browser refused the page");
+        CommandError::NativeOperationFailed {
             operation: "open_external".into(),
             reason: format!(
                 "the browser did not open {url}. The log is at {}",
                 crate::file_log::location(app)
             ),
-        })
+        }
+    })
 }
 
 /// Writes a redacted diagnostics export into a host-owned directory.
@@ -152,26 +153,35 @@ pub async fn write_diagnostics(
     });
     drop(policies);
 
-    let body = serde_json::to_string_pretty(&report).map_err(|_| CommandError::Internal {
-        code: "diagnostics_encode".into(),
+    let body = serde_json::to_string_pretty(&report).map_err(|_| {
+        tracing::warn!(reason = "diagnostics_encode", "diagnostics export failed");
+        CommandError::Internal {
+            code: "diagnostics_encode".into(),
+        }
     })?;
 
     let log = crate::file_log::location(app);
+    let write_error = |detail: &str| {
+        tracing::warn!(reason = detail, "diagnostics export failed");
+        CommandError::NativeOperationFailed {
+            operation: "write_diagnostics".into(),
+            reason: format!("{detail}. The log is at {log}"),
+        }
+    };
     let directory = app
         .path()
         .app_data_dir()
-        .map_err(|_| CommandError::NativeOperationFailed {
-            operation: "write_diagnostics".into(),
-            reason: format!("the application data directory is unavailable. The log is at {log}"),
-        })?
+        .map_err(|_| write_error("the application data directory is unavailable"))?
         .join("diagnostics");
-    std::fs::create_dir_all(&directory).map_err(|_| CommandError::NativeOperationFailed {
-        operation: "write_diagnostics".into(),
-        reason: format!("the diagnostics directory could not be created. The log is at {log}"),
-    })?;
+    std::fs::create_dir_all(&directory)
+        .map_err(|_| write_error("the diagnostics directory could not be created"))?;
 
     let path = directory.join(format!("quota-diagnostics-{label}.json"));
     if !export_lands_inside(&path, &directory) {
+        tracing::warn!(
+            reason = "destination outside diagnostics directory",
+            "diagnostics export failed"
+        );
         return Err(CommandError::ValidationFailed {
             field: "destination".into(),
             reason: format!(
@@ -181,10 +191,8 @@ pub async fn write_diagnostics(
         });
     }
 
-    std::fs::write(&path, body).map_err(|_| CommandError::NativeOperationFailed {
-        operation: "write_diagnostics".into(),
-        reason: format!("the diagnostics file could not be written. The log is at {log}"),
-    })?;
+    std::fs::write(&path, body)
+        .map_err(|_| write_error("the diagnostics file could not be written"))?;
     Ok(path.to_string_lossy().into_owned())
 }
 

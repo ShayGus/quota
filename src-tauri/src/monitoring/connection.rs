@@ -285,6 +285,7 @@ pub(super) fn attempt_error(state: &RuntimeState, error: &ProviderError) -> Comm
             "The provider is asking for less traffic, so nothing was added. Try again shortly"
         }
     };
+    tracing::warn!(reason = detail, "provider connection failed");
     CommandError::ProviderRefused {
         reason: format!("{detail}. The log is at {log}"),
     }

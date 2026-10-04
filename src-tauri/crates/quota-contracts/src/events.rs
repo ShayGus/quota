@@ -70,6 +70,9 @@ pub struct BrowserSignIn {
     pub user_code: String,
     /// The provider's sign-in page.
     pub verification_uri: String,
+    /// The error reported by the browser launcher.
+    #[serde(default)]
+    pub launch_error: Option<CommandError>,
 }
 
 /// Progress of one connection attempt.
