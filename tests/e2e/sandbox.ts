@@ -64,7 +64,7 @@ export const RESULTS_DIRECTORY = join(process.cwd(), "test-results", "e2e");
 /** A running application, started through `tauri-driver`. */
 export interface RunningApp {
   readonly session: Session;
-  /** Ends the WebDriver session, which closes the application. */
+  /** Closes the application and its driver. */
   stop: () => Promise<void>;
 }
 
@@ -279,6 +279,11 @@ export class Sandbox {
     return {
       session,
       stop: async () => {
+        if (process.platform === "win32") {
+          // End the whole tree while the app still owns its WebView2 children.
+          // Ending the session first can leave them holding sandbox files open.
+          for (const pid of this.applicationProcesses(binary)) terminateProcessTree(pid);
+        }
         await session.end().catch(() => undefined);
         await waitFor("the application to exit", () =>
           Promise.resolve(this.applicationProcesses(binary).length === 0),
