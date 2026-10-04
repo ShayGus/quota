@@ -223,7 +223,8 @@ jobs:
           persist-credentials: false
 
       # The same development packages ci.yml installs. The AppImage also needs
-      # `file`, `patchelf`, and `wget` to assemble its runtime.
+      # `file`, `patchelf`, and `wget` to assemble its runtime. `xvfb` and
+      # `xauth` are for the startup check below, as in ci.yml's real-app job.
       - name: Install the Tauri system build dependencies
         run: |
           sudo apt-get update
@@ -239,7 +240,9 @@ jobs:
             libxdo-dev \
             patchelf \
             pkg-config \
-            wget
+            wget \
+            xauth \
+            xvfb
           pkg-config --exists webkit2gtk-4.1
 
       - name: Install the pinned toolchain
@@ -260,6 +263,49 @@ jobs:
 
       - name: Build the AppImage, the deb, and the rpm
         run: bun tauri build --bundles appimage,deb,rpm -- --locked
+
+      # The packaged AppImage must start on this runner with the libraries it
+      # ships, or nothing may publish it. `timeout` exits 124 when the app was
+      # still alive at 15 s (137 when the follow-up KILL was needed): pass. A
+      # fast exit, a linker error, a missing symbol, or a Rust panic fails the
+      # job. That is the failure mode of the first practice run, whose
+      # AppImage mixed its bundled GLib with the host's app-indicator stack and
+      # died at startup on newer distributions while every build step stayed
+      # green.
+      - name: Start the packaged AppImage
+        run: |
+          shopt -s nullglob
+          appimages=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          if [ "${#appimages[@]}" -ne 1 ]; then
+            echo "expected exactly one AppImage in src-tauri/target/release/bundle/appimage, found ${#appimages[@]}"
+            exit 1
+          fi
+          echo "starting ${appimages[0]} under Xvfb with a private session bus"
+          log="$(mktemp)"
+          home="$(mktemp -d)"
+          install -d -m 700 "$home/run"
+          set +e
+          xvfb-run -a dbus-run-session -- timeout --signal=TERM --kill-after=10 15 \
+            env APPIMAGE_EXTRACT_AND_RUN=1 NO_AT_BRIDGE=1 \
+                HOME="$home" \
+                XDG_CONFIG_HOME="$home/.config" \
+                XDG_CACHE_HOME="$home/.cache" \
+                XDG_DATA_HOME="$home/.local/share" \
+                XDG_STATE_HOME="$home/.state" \
+                XDG_RUNTIME_DIR="$home/run" \
+            "${appimages[0]}" >"$log" 2>&1
+          rc=$?
+          set -e
+          cat "$log"
+          if [ "$rc" -ne 124 ] && [ "$rc" -ne 137 ]; then
+            echo "the AppImage exited on its own with code $rc before the 15 s timeout"
+            exit 1
+          fi
+          if grep -E 'undefined symbol|error while loading shared libraries|cannot open shared object|panicked at' "$log"; then
+            echo "the AppImage logged a fatal startup error"
+            exit 1
+          fi
+          echo "the AppImage was still running when the timeout fired and the log is clean"
 
       - name: Collect the Linux packages
         run: |
