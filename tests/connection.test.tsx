@@ -435,7 +435,7 @@ describe("Provider → Connect → Verify", () => {
     fireEvent.change(key, { target: { value: "  sk-or-v1-abc  " } });
     expect(connectButton).toHaveProperty("disabled", false);
     await act(() => fireEvent.click(connectButton));
-    expect(actions.beginConnection).toHaveBeenCalledWith(
+    expect(actions.beginConnection).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ provider_id: "openrouter", credential: "sk-or-v1-abc" }),
     );
     // The host has the key now, so the field no longer holds it.
@@ -467,7 +467,7 @@ describe("Provider → Connect → Verify", () => {
     expect(connectButton).toHaveProperty("disabled", false);
     fireEvent.change(key, { target: { value: "  oc-go-abc  " } });
     await act(() => fireEvent.click(connectButton));
-    expect(actions.beginConnection).toHaveBeenCalledWith(
+    expect(actions.beginConnection).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         provider_id: "open_code_go",
         credential: "oc-go-abc",

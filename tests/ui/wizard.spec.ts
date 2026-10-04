@@ -95,54 +95,69 @@ test.describe("add-account wizard", () => {
     expect(begin.request.credential).toBe("sk-or-v1-not-a-real-key");
   });
 
-  test("OpenCode Go takes a pasted key and the account is added", async ({ open }) => {
-    const host = await open(
-      scenario("settings", {
-        connection: {
-          progress: [
-            { kind: "started" },
-            {
-              kind: "awaiting_confirmation",
-              context: {
-                candidate: candidate("open_code_go", [
-                  quotaWindow("oc-5h", "session", percent(64), { label: "5-hour" }),
-                ]),
+  for (const theme of ["light", "dark"] as const) {
+    test(`OpenCode Go takes a pasted key and the account is added (${theme})`, async ({
+      open,
+    }) => {
+      const host = await open(
+        scenario("settings", {
+          preferences: defaultPreferences({ theme }),
+          connection: {
+            progress: [
+              { kind: "started" },
+              {
+                kind: "awaiting_confirmation",
+                context: {
+                  candidate: candidate("open_code_go", [
+                    quotaWindow("oc-5h", "session", percent(64), { label: "5-hour" }),
+                  ]),
+                },
               },
-            },
-          ],
-        },
-      }),
-      CONNECT,
-    );
-    const { page } = host;
-    await page.getByRole("button", { name: /OpenCode Go/ }).click();
-    await expect(
-      page.getByRole("heading", { name: "Connect OpenCode Go" }),
-    ).toBeVisible();
-    await expect(page.locator(".badge")).toHaveText("API KEY");
-    const key = page.getByLabel("API key");
-    await expect(key).toHaveAttribute("type", "password");
-    await expect(key).toHaveAttribute("placeholder", "Your OpenCode API key");
-    await expect(
-      page.getByText(/leave it empty to use the sign-in the OpenCode CLI/),
-    ).toBeVisible();
-    await host.screenshot("wizard-opencode-key-dark");
-    await key.fill("  oc-go-not-a-real-key  ");
-    await page.getByRole("button", { name: "Connect", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
-    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
-      request: { credential: string };
-    };
-    expect(begin.request.credential).toBe("oc-go-not-a-real-key");
-    await page.getByRole("textbox").fill("Go");
-    await page.getByRole("button", { name: "Add OpenCode Go account" }).click();
-    await expect(page.getByRole("heading", { name: "Accounts", level: 3 })).toBeVisible();
-    await expect(page.getByLabel("Manage OpenCode Go Go")).toBeVisible();
-    const confirm = (await host.callsTo("confirm_connection")).at(-1)?.args as {
-      nickname: string;
-    };
-    expect(confirm.nickname).toBe("Go");
-  });
+            ],
+          },
+        }),
+        CONNECT,
+      );
+      const { page } = host;
+      await page.getByRole("button", { name: /OpenCode Go/ }).click();
+      await expect(
+        page.getByRole("heading", { name: "Connect OpenCode Go" }),
+      ).toBeVisible();
+      await expect(page.locator(".badge")).toHaveText("API KEY");
+      const key = page.getByLabel("API key");
+      await expect(key).toHaveAttribute("type", "password");
+      await expect(key).toHaveAttribute("placeholder", "Your OpenCode API key");
+      await expect(
+        page.getByText(/leave it empty to use the sign-in the OpenCode CLI/),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await host.screenshot(`wizard-opencode-key-${theme}`);
+      await key.fill("  oc-go-not-a-real-key  ");
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Add this account?" }),
+      ).toBeVisible();
+      const begins = await host.callsTo("begin_connection");
+      expect(begins).toHaveLength(1);
+      const begin = begins[0]?.args as {
+        request: { credential: string };
+      };
+      expect(begin.request.credential).toBe("oc-go-not-a-real-key");
+      await page.getByRole("textbox").fill("Go");
+      await page.getByRole("button", { name: "Add OpenCode Go account" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Accounts", level: 3 }),
+      ).toBeVisible();
+      await expect(page.getByLabel("Manage OpenCode Go Go")).toBeVisible();
+      await host.screenshot(`wizard-opencode-saved-${theme}`);
+      const confirmations = await host.callsTo("confirm_connection");
+      expect(confirmations).toHaveLength(1);
+      const confirm = confirmations[0]?.args as {
+        nickname: string;
+      };
+      expect(confirm.nickname).toBe("Go");
+    });
+  }
 
   test("OpenCode Go with no pasted key signs in through its CLI", async ({ open }) => {
     const host = await open(
@@ -191,18 +206,22 @@ test.describe("add-account wizard", () => {
     await host.screenshot("wizard-opencode-refused-light");
   });
 
-  test("local-only providers still offer no key box", async ({ open }) => {
-    const host = await open(scenario("settings"), CONNECT);
-    const { page } = host;
-    await page.getByRole("button", { name: /Codex/ }).click();
-    await expect(page.getByLabel("API key")).toHaveCount(0);
-    await expect(page.locator(".badge")).toHaveText("LOCAL SIGN-IN");
-    await expect(
-      page.getByText(
-        "Quota uses this provider's existing local sign-in to read your quota.",
-      ),
-    ).toBeVisible();
-  });
+  for (const provider of ["Codex", "Claude", "Cursor"] as const) {
+    test(`local-only providers still offer no key box (${provider})`, async ({
+      open,
+    }) => {
+      const host = await open(scenario("settings"), CONNECT);
+      const { page } = host;
+      await page.getByRole("button", { name: new RegExp(`^${provider}`) }).click();
+      await expect(page.getByLabel("API key")).toHaveCount(0);
+      await expect(page.locator(".badge")).toHaveText("LOCAL SIGN-IN");
+      await expect(
+        page.getByText(
+          "Quota uses this provider's existing local sign-in to read your quota.",
+        ),
+      ).toBeVisible();
+    });
+  }
 
   test("a browser sign-in shows the code to enter", async ({ open }) => {
     const host = await open(
