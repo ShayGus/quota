@@ -115,6 +115,8 @@ async function request(method: string, url: string, body?: unknown): Promise<unk
   const response = await fetch(url, {
     method,
     headers: { "content-type": "application/json" },
+    // A server that never answers must fail the journey, not hang it.
+    signal: AbortSignal.timeout(90_000),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const reply = (await response.json()) as Reply;

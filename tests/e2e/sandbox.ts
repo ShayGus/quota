@@ -87,6 +87,11 @@ export class Sandbox {
       PATH: process.env["PATH"],
       LD_LIBRARY_PATH: process.env["LD_LIBRARY_PATH"],
       DISPLAY: display,
+      // `xvfb-run` protects its display with an authority file; without it GTK
+      // is refused and the app cannot open a window.
+      XAUTHORITY: process.env["XAUTHORITY"],
+      // No GPU under a virtual display: draw in software.
+      LIBGL_ALWAYS_SOFTWARE: "1",
       HOME: this.home,
       XDG_CONFIG_HOME: this.config,
       XDG_DATA_HOME: this.data,
