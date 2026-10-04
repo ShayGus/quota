@@ -74,7 +74,8 @@ excluded from version 1.
 | Undocumented-schema risk  | High. There is no vendor schema pin, and the decoder reference's alias lists mean the decoder must accept several spellings of the same field. A missing alias is an unavailable measurement, not a zero.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 
 A release may claim monthly support only after one production-approved monthly connector
-passes acceptance; a fixture demonstrates the renderer and proves nothing about integration.
+passes acceptance; a fixture demonstrates the renderer and proves nothing about
+integration.
 
 ## Cursor
 

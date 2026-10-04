@@ -116,11 +116,11 @@ After signing in, press Connect again. Verify shows the account the provider ver
 workspace and plan, and each quota reading, with the nickname it will be saved under.
 Choose **Add <provider> account** to add it, or **Not this account** to discard it and
 read how to switch that provider to the account you meant. Nothing is saved and no
-monitoring starts before Add; Not this account, Cancel, leaving the wizard, or
-restarting the app discards the verified result and leaves no account behind. Once saved,
-the account appears even if the confirmation reply or the next snapshot is lost on the
-way. With Hide account labels enabled, a pending identity is replaced exactly as a saved
-one is. Starting a new Add account request opens a fresh wizard.
+monitoring starts before Add; Not this account, Cancel, leaving the wizard, or restarting
+the app discards the verified result and leaves no account behind. Once saved, the account
+appears even if the confirmation reply or the next snapshot is lost on the way. With Hide
+account labels enabled, a pending identity is replaced exactly as a saved one is. Starting
+a new Add account request opens a fresh wizard.
 [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 

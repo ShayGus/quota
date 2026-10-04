@@ -20,9 +20,8 @@ network call is needed to run them.
 
 ## Schema risk
 
-An undocumented endpoint's fields can be renamed, dropped, or added without
-notice, and the shape can change between account plans. The decoders answer this in three
-ways:
+An undocumented endpoint's fields can be renamed, dropped, or added without notice, and
+the shape can change between account plans. The decoders answer this in three ways:
 
 - every field is optional, so a partial payload decodes rather than fails;
 - every documented spelling of every field is accepted as a `#[serde(alias)]`;
