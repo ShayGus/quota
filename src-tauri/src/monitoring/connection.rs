@@ -270,6 +270,11 @@ async fn read_candidate_quota(
 pub(super) fn attempt_error(error: &ProviderError) -> CommandError {
     let detail = match error {
         ProviderError::Cancelled => return CommandError::Cancelled,
+        ProviderError::UnsupportedUserAgent { .. } | ProviderError::EmptyResponse { .. } => {
+            return CommandError::ProviderRefused {
+                reason: format!("{error}. Nothing was added"),
+            };
+        }
         ProviderError::Authentication => {
             "The provider did not accept this sign-in, so nothing was added"
         }

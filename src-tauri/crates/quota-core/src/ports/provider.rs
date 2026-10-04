@@ -52,6 +52,22 @@ pub enum ProviderError {
         /// A sanitized description.
         detail: String,
     },
+    /// The provider redirected to its unsupported-browser page.
+    #[error(
+        "the provider rejected the request: missing or unsupported User-Agent (HTTP {status}, redirect host {redirect_host})"
+    )]
+    UnsupportedUserAgent {
+        /// The HTTP redirect status.
+        status: u16,
+        /// Only the target host; never a path, query, or credential.
+        redirect_host: String,
+    },
+    /// The provider answered successfully without a response document.
+    #[error("the provider returned an empty response (HTTP {status})")]
+    EmptyResponse {
+        /// The HTTP response status.
+        status: u16,
+    },
     /// The work was deliberately cancelled.
     #[error("the read was cancelled")]
     Cancelled,
@@ -74,6 +90,8 @@ impl ProviderError {
             Self::Authorization => "authorization",
             Self::UnsupportedSchema { .. } => "unsupported_schema",
             Self::InvalidData { .. } => "invalid_data",
+            Self::UnsupportedUserAgent { .. } => "unsupported_user_agent",
+            Self::EmptyResponse { .. } => "empty_response",
             Self::Cancelled => "cancelled",
         }
     }

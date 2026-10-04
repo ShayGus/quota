@@ -25,6 +25,9 @@ const CONNECT_DEADLINE_SECONDS: u64 = 5;
 /// The largest redirect chain a request may follow.
 const MAX_REDIRECTS: usize = 5;
 
+/// Identifies the provider client. Meta refuses device requests without it.
+const USER_AGENT: &str = concat!("Quota/", env!("CARGO_PKG_VERSION"));
+
 /// One GET request at the transport boundary.
 #[derive(Clone, Copy)]
 pub(crate) struct GetRequest<'a> {
@@ -61,6 +64,7 @@ impl ProviderHttp {
     pub(crate) fn new() -> Result<Self, ProviderError> {
         LazyLock::force(&CRYPTO_PROVIDER);
         let client = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
             .connect_timeout(Duration::from_secs(CONNECT_DEADLINE_SECONDS))
             .timeout(Duration::from_secs(REQUEST_DEADLINE_SECONDS))
             .redirect(Policy::custom(|attempt| {
@@ -189,6 +193,20 @@ pub(crate) async fn send(
         .await
         .map_err(|error| transport_error(&error))?;
     let status = response.status();
+    if status.is_redirection()
+        && let Some(target) = response
+            .headers()
+            .get(reqwest::header::LOCATION)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| response.url().join(value).ok())
+        && target.path().trim_end_matches('/') == "/unsupportedbrowser"
+        && let Some(host) = target.host_str()
+    {
+        return Err(ProviderError::UnsupportedUserAgent {
+            status: status.as_u16(),
+            redirect_host: host.to_owned(),
+        });
+    }
     let retry_after = retry_after(&response);
     if let Some(error) = classify_status(status, retry_after.as_ref().ok().copied().flatten()) {
         let explained = answers == Answers::AnyJson
@@ -206,6 +224,11 @@ pub(crate) async fn send(
         detail: "the provider body was not text".to_owned(),
     })?;
     let trimmed = text.trim_start_matches('\u{feff}').trim_start();
+    if trimmed.is_empty() {
+        return Err(ProviderError::EmptyResponse {
+            status: status.as_u16(),
+        });
+    }
     if !trimmed.starts_with('{') {
         // An HTML error page, a plain-text refusal, or a truncated body.
         return Err(ProviderError::InvalidData {
@@ -341,6 +364,10 @@ pub(crate) fn classify_status(
         },
     })
 }
+
+#[cfg(test)]
+#[path = "http_signin_tests.rs"]
+mod signin_tests;
 
 #[cfg(test)]
 mod tests {
