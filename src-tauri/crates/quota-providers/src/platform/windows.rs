@@ -19,10 +19,6 @@ use super::{Lookup, Platform};
 pub struct Windows;
 
 impl Platform for Windows {
-    fn profile_variable(&self) -> &'static str {
-        "USERPROFILE"
-    }
-
     /// Windows exports the profile to every process from the same
     /// known-folder API, with `HOME` as a fallback if it is absent or blank.
     fn user_profile(&self, lookup: Lookup<'_>) -> Option<PathBuf> {

@@ -19,10 +19,6 @@ use super::{Lookup, Platform};
 pub struct Macos;
 
 impl Platform for Macos {
-    fn profile_variable(&self) -> &'static str {
-        "HOME"
-    }
-
     fn user_profile(&self, lookup: Lookup<'_>) -> Option<PathBuf> {
         super::variable(lookup, "HOME")
     }

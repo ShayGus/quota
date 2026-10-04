@@ -41,31 +41,24 @@ fn credential_files(platform: &dyn Platform, lookup: Lookup<'_>) -> [(PathBuf, S
     [(codex, codex_label), (claude, claude_label), (go, go_label)]
 }
 
-/// Every implementation names the variable it reads the profile from.
-#[test]
-fn every_platform_names_its_profile_variable() {
-    assert_eq!(Windows.profile_variable(), "USERPROFILE");
-    assert_eq!(Linux.profile_variable(), "HOME");
-    assert_eq!(Macos.profile_variable(), "HOME");
-    assert_eq!(Unsupported.profile_variable(), "HOME");
-}
-
 /// The profile comes from that variable alone, with nothing else set.
 #[test]
 fn the_profile_variable_alone_resolves_the_profile() {
-    for (platform, profile) in [
-        (&Windows as &dyn Platform, "C:\\Users\\someone"),
-        (&Linux, "/home/someone"),
-        (&Macos, "/home/someone"),
-        (&Unsupported, "/home/someone"),
+    for (platform, variable, profile) in [
+        (
+            &Windows as &dyn Platform,
+            "USERPROFILE",
+            "C:\\Users\\someone",
+        ),
+        (&Linux, "HOME", "/home/someone"),
+        (&Macos, "HOME", "/home/someone"),
+        (&Unsupported, "HOME", "/home/someone"),
     ] {
-        let lookup = environment(&[(platform.profile_variable(), profile)]);
+        let lookup = environment(&[(variable, profile)]);
         assert_eq!(
             platform.user_profile(&lookup),
             Some(PathBuf::from(profile)),
-            "{} must resolve its profile from {} alone",
-            platform.profile_variable(),
-            platform.profile_variable()
+            "{platform:?} must resolve its profile from {variable} alone"
         );
     }
 }
@@ -86,13 +79,17 @@ fn a_windows_profile_without_home_resolves_every_credential_file() {
 /// A profile-only machine resolves every credential file, on every platform.
 #[test]
 fn a_profile_only_machine_resolves_every_credential_file() {
-    for (platform, profile) in [
-        (&Windows as &dyn Platform, "C:\\Users\\someone"),
-        (&Linux, "/home/someone"),
-        (&Macos, "/home/someone"),
-        (&Unsupported, "/home/someone"),
+    for (platform, variable, profile) in [
+        (
+            &Windows as &dyn Platform,
+            "USERPROFILE",
+            "C:\\Users\\someone",
+        ),
+        (&Linux, "HOME", "/home/someone"),
+        (&Macos, "HOME", "/home/someone"),
+        (&Unsupported, "HOME", "/home/someone"),
     ] {
-        let lookup = environment(&[(platform.profile_variable(), profile)]);
+        let lookup = environment(&[(variable, profile)]);
         let expected = PathBuf::from(profile);
         let [(codex, codex_label), (claude, claude_label), (go, go_label)] =
             credential_files(platform, &lookup);

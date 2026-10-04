@@ -47,9 +47,6 @@ pub fn variable(lookup: Lookup<'_>, name: &str) -> Option<PathBuf> {
 /// What this system decides about the profile, application data, and the
 /// credential store.
 pub trait Platform: std::fmt::Debug + Send + Sync {
-    /// The environment variable this system exports the user profile in.
-    fn profile_variable(&self) -> &'static str;
-
     /// The current user's profile directory, or `None` when nothing declares
     /// one.
     ///

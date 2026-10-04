@@ -68,3 +68,9 @@ pub use registry::ProviderRegistry;
 
 #[cfg(feature = "test-fixtures")]
 pub use fixture::{FixtureAdapter, FixtureProfile};
+
+/// Retargets every provider at one base URL in a fixture build.
+#[cfg(feature = "test-fixtures")]
+pub fn retarget(base: &str) {
+    http::set_test_base(base);
+}
