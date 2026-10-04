@@ -50,16 +50,16 @@ dependency sits behind the `tauri-plugins` feature, which is off by default.
 
 ## Platform seam and ports
 
-Operating-system decisions live in one module,
+Provider operating-system decisions live in one module,
 [`src-tauri/crates/quota-providers/src/platform/`](../src-tauri/crates/quota-providers/src/platform/).
 It holds four implementations — `windows.rs`, `linux.rs`, `macos.rs`, and
 `unsupported.rs` — and one `cfg` selects the one the build runs on.
 
 All four files compile on every host. A Linux CI runner therefore typechecks the
-Windows and macOS path logic, and one contract test
-(`crates/quota-providers/tests/platform_contract.rs`) asserts every platform's
-paths on every runner. The suite builds each implementation directly, so no case
-is skipped.
+Windows and macOS path logic, and
+[`platform_contract.rs`](../src-tauri/crates/quota-providers/tests/platform_contract.rs)
+asserts every platform's paths on every runner. The suite builds each
+implementation directly, so no case is skipped.
 
 The only system-specific code left is each implementation's
 `open_credential_store`. On a host that is not the platform under test it returns
@@ -71,10 +71,11 @@ directory.
 `src-tauri/src/platform/` is a different thing. It holds Tauri window, tray, and
 autostart code, and this seam does not touch it.
 
-The `SecretStore` port in `quota-core` is async. Each adapter owns its own
-threading: it runs every blocking credential-store call on a worker thread and
-releases the store off the async runtime, so a caller awaits one future and never
-blocks a worker or nests a runtime inside another one.
+Callers await the async `SecretStore` port directly. The
+[port contract](../src-tauri/crates/quota-core/src/ports/secrets.rs) owns the
+requirement that implementations handle blocking work; the
+[system adapter](../src-tauri/crates/quota-providers/src/secrets.rs) documents its
+credential-store lifecycle constraints.
 
 ## Persisted-state ownership
 

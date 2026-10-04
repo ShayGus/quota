@@ -78,6 +78,10 @@ pub struct SystemSecretStore {
 impl SystemSecretStore {
     /// Opens this system's credential store.
     ///
+    /// This synchronous constructor must run outside an async runtime: the
+    /// Linux store drives its own runtime while opening. Async callers use
+    /// [`system`] instead.
+    ///
     /// # Errors
     /// Returns [`SecretStoreError::Unavailable`] when the system has none, for
     /// example a Linux session without a Secret Service.

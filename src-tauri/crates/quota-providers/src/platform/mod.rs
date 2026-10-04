@@ -11,10 +11,8 @@
 //! shared, and a system other than the one this build runs on reports the store
 //! as unavailable instead of calling a store crate the host cannot link.
 //!
-//! One rule holds: a provider's own directory override always wins, then the
-//! operating system's user directory, then a shell variable. A profile path is
-//! never assembled from a user name, because a guessed path is worse than an
-//! honest "not found".
+//! A profile path is never assembled from a user name, because a guessed path
+//! is worse than an honest "not found".
 
 use std::path::PathBuf;
 use std::sync::{Arc, LazyLock};
@@ -49,10 +47,6 @@ pub fn variable(lookup: Lookup<'_>, name: &str) -> Option<PathBuf> {
 pub trait Platform: std::fmt::Debug + Send + Sync {
     /// The current user's profile directory, or `None` when nothing declares
     /// one.
-    ///
-    /// Every default credential this crate reads lives directly under this
-    /// directory. The roaming and local application-data folders are not needed
-    /// by any reader here, so they are not resolved.
     fn user_profile(&self, lookup: Lookup<'_>) -> Option<PathBuf>;
 
     /// The directory desktop applications keep their settings and state in, or

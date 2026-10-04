@@ -209,7 +209,7 @@ pub fn opencode_auth_file(
     })
 }
 
-/// The user profile every default credential path is built from.
+/// The user profile for profile-relative credential paths.
 pub fn profile_directory(
     platform: &dyn Platform,
     lookup: Lookup<'_>,

@@ -251,13 +251,10 @@ only native units with no denominator, and an account with an unlimited window.
 ## Registry
 
 `ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
-store Quota's own sign-ins live in (`secrets::system(identifier)` is async and opens this
-system's store on a blocking worker, filing every entry under the given application
-identifier, so a development build keeps its own entries, or returns a store that refuses
-every operation when opening fails; the adapter owns its own threading, including the
-release of the store off the async runtime, so the Linux store is never opened or dropped
-inside a running runtime; see [`secrets`' API documentation](src/secrets.rs) for
-constraints); `ProviderRegistry::with_fixture(secrets)` adds the fixture when the
+store Quota's own sign-ins live in. Async callers obtain it with
+`secrets::system(identifier).await`; [the `secrets` API documentation](src/secrets.rs)
+owns the identifier isolation, unavailable-store behavior, and runtime constraints.
+`ProviderRegistry::with_fixture(secrets)` adds the fixture when the
 feature is on. `provider(id)` returns `None` for any provider this build does not contain,
 so the application reports an explicit unsupported-provider state. There is no dynamic
 adapter lookup, no downloaded parser, and no plugin loading.
@@ -274,8 +271,13 @@ connection identity, and a profile label.
 
 The bundled TLS backend is rustls with the `ring` provider, so the provider transport does
 not require system TLS headers or `cmake`. The desktop host has separate native build
-prerequisites in the root README. Only the endpoints named in this file are ever
-contacted, and every request is HTTPS.
+prerequisites in the root README. Without `test-fixtures`, provider requests use their
+production HTTPS endpoints. Fixture-enabled tests can use the public
+[`quota_providers::retarget` API](src/lib.rs) to send GET and POST requests to a local
+fake server; its API documentation owns the process-wide base and setup requirements.
+No environment variable or settings file selects a transport address.
+`cargo xtask check-release` audits the transport source for environment access,
+the feature gate on its internal `retarget`, and the default endpoint identity gate.
 
 ## Dependencies added by this crate
 
@@ -292,10 +294,13 @@ backend; `http::ProviderHttp` installs that crypto provider once on first use.
 | `tests/claude_mapping.rs`      | Claude decoding: fixed windows, named limits, model scope, the extra-spend cap, boundaries                         |
 | `tests/opencode_go_mapping.rs` | `OpenCode` Go decoding, including the monthly window                                                               |
 | `tests/fixture_isolation.rs`   | multi-account isolation through the compiled fixture adapter                                                       |
+| `tests/platform_contract.rs`  | profile and application-data paths for all four platforms, and refusal to open a foreign platform's store          |
+| `tests/secret_store_contract.rs` | async read/write/delete and connection isolation; optional host-store identifier isolation                      |
+| `tests/transport_contract.rs` | production-registry GET, JSON POST, and form POST requests reach a loopback fake server through the public retarget API |
 
-The suite never makes a live network call, never reads a real credential file, and never
-needs one. Fixtures are sanitized payloads written for this crate, using obviously
-synthetic values and example.invalid addresses. The one exception is the Linux test that
+The suite makes no network call to a live provider and reads no real provider credential
+file. Fixtures are sanitized payloads written for this crate, using obviously
+synthetic values and example.invalid addresses. The default Linux store-opening test
 calls the async `system` from a running runtime to open this system's own credential
 store, then reads a generated connection; both calls stay on the runtime, because the
 adapter runs the blocking work itself. It writes nothing, so a session with no Secret
@@ -303,3 +308,8 @@ Service behind it simply reports the store as unavailable.
 `startup_failure_drops_both_registries_outside_the_runtime` separately uses
 an in-memory store to check destruction after a simulated startup failure for both
 production and fixture registries.
+
+The ignored `the_system_store_keeps_the_contract` test requires explicit opt-in:
+it writes, reads, and deletes synthetic entries in the host credential store under the
+development and production identifiers. See [the contract test](tests/secret_store_contract.rs)
+for its invocation and handling of an unavailable store.
