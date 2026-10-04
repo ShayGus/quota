@@ -344,9 +344,9 @@ fn check_entry(
     let signed_version = trusted
         .split('\t')
         .find_map(|field| field.strip_prefix("version:"));
-    if signed_version.is_some_and(|signed| signed != version) {
+    if signed_version != Some(version) {
         fail(format!(
-            "the signature was made for version {signed_version:?}, not {version}"
+            "the signature must include version {version}, found {signed_version:?}"
         ));
     }
 }

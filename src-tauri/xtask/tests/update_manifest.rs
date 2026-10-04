@@ -34,7 +34,7 @@ fn release_with_version(version: &str) -> Result<Release, String> {
     fs::write(
         root.join("src-tauri/tauri.conf.json"),
         format!(
-            "{{\"version\": \"{version}\", \"plugins\": {{\"updater\": {{\"pubkey\": \"{}\"}}}}}}\n",
+            "{{\"version\": \"{version}\", \"plugins\": {{\"updater\": {{\"pubkey\": \"{}\", \"requireSignedVersion\": true}}}}}}\n",
             PUBLIC_KEY.trim()
         ),
     )
@@ -119,6 +119,33 @@ fn write_manifest(release: &Release, manifest: &serde_json::Value) -> Outcome {
 fn an_assembled_release_verifies() -> Outcome {
     let release = assembled()?;
     succeeds(&release, "verify", &["--version", "0.1.0"])
+}
+
+#[test]
+fn a_signature_without_a_signed_version_fails() -> Outcome {
+    let release = release()?;
+    fs::copy(
+        Path::new(FIXTURES).join("without-version.sig"),
+        release.packages.join("Quota_0.1.0_amd64.AppImage.sig"),
+    )
+    .map_err(|e| e.to_string())?;
+    succeeds(&release, "assemble", &[])?;
+    fails_with(
+        &release,
+        "verify",
+        "the signature must include version 0.1.0, found None",
+    )
+}
+
+#[test]
+fn a_signature_for_another_version_fails() -> Outcome {
+    let release = release_with_version("0.2.0")?;
+    succeeds(&release, "assemble", &[])?;
+    fails_with(
+        &release,
+        "verify",
+        "the signature must include version 0.2.0, found Some(\"0.1.0\")",
+    )
 }
 
 /// Compares two JSON values, naming what was compared when they differ.
