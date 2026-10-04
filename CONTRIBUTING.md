@@ -168,8 +168,16 @@ repository gates and never starts the app.
 bun install            # once, from the repository root
 bun tauri dev          # Vite on 1420, then the native host
 bun run dev            # Vite alone, no native shell
-bun tauri build        # release bundles
+bun tauri build        # release bundles; needs TAURI_SIGNING_PRIVATE_KEY, see below
 ```
+
+Packaging signs every installer for the updater, because `bundle.createUpdaterArtifacts`
+is on, so `bun tauri build` with bundles stops without `TAURI_SIGNING_PRIVATE_KEY` (and
+its password in `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`). A local build that only needs the
+binary runs `bun tauri build --no-bundle`, which signs nothing, and `bun run build:dev`
+switches signing off for development packages. The real key is the maintainer's and lives
+in the repository secrets; see [Releasing](docs/RELEASING.md#the-update-key). Never put a
+private key in a file in the checkout.
 
 ### Development identity
 
@@ -245,8 +253,10 @@ The suite covers the popover with seven accounts in the states the interface has
 low, rate limited, offline, check failed, reconnect, monitoring off), the attention
 filter, the account detail, the first-launch screen, a host that cannot be reached, every
 settings panel, the add-account wizard through Provider, Connect and Verify, the privacy
-aliases, the light and dark theme, the 440-pixel popover width, and the mini widget. It
-does not start the native shell, so it cannot see window placement, the tray, the
+aliases, the light and dark theme, the 440-pixel popover width, the mini widget, and the
+update pop-up (the offer, OK with its busy state, Cancel, and a failed install, with
+screenshots in both themes beside the settings window's, in `docs/update-popup/`). It does
+not start the native shell, so it cannot see window placement, the tray, the
 single-instance lock, or anything the Rust host does; the faked host is only as faithful
 as `tests/ui/fake-backend.ts`.
 
@@ -323,20 +333,24 @@ user's `AppData` and `Local AppData` folders to the sandbox, then restores their
 after each journey. It sets a temporary `USERPROFILE` for sign-in files. The Windows job
 runs on `windows-2022`. The OS credential store is not isolated.
 
-The eight journeys cover: first launch with an empty profile; the main popover at 440 px;
+The nine journeys cover: first launch with an empty profile; the main popover at 440 px;
 settings opening from the popover and a preference surviving a restart; privacy aliases on
 sample accounts; a second launch not starting a second app and bringing the first forward;
 quitting from the tray menu and leaving no process or lock behind; using the development
 identity without creating the production identity; and adding an account against a fake
-provider. On Windows, the settings journey ends its WebDriver session before restarting.
-Windows runs the seven journeys that WebDriver can drive. It marks the tray-menu quit
+provider; and a development or test build never checking for updates, using a fake update
+server that offers a far newer version and asserting it receives no request. On Windows,
+the settings journey ends its WebDriver session before restarting.
+Windows runs the eight journeys that WebDriver can drive. It marks the tray-menu quit
 journey as skipped because the native Windows tray menu is outside the WebDriver
 interface.
 
 Adding an account works against a fake provider, through the transport seam the provider
 crate offers to test builds. `bun run build:e2e` also builds
 `src-tauri/examples/quota_e2e.rs`, a launcher that reads `QUOTA_E2E_PROVIDER_BASE` and
-calls `quota_providers::retarget` before starting the app. It exists only with the
+calls `quota_providers::retarget` before starting the app, and reads
+`QUOTA_E2E_UPDATE_ENDPOINT` for the update-check journey (the updater never reads the
+environment, and `cargo xtask check-release` keeps it that way). It exists only with the
 non-default `sample-data` feature (which compiles `test-fixtures`), so no default or
 release build contains it, and the provider transport itself still reads nothing from the
 environment (`cargo xtask check-release` checks this). The journey writes a Codex sign-in

@@ -5,21 +5,23 @@ The Tauri desktop host for Quota.
 This package is an outer composition layer. It maps domain results onto the typed IPC
 contracts in `quota-contracts`, mounts the Tauri Specta registry, and owns the native
 window, tray, and login-item adapters, and registers the notification, single-instance,
-and autostart plugins. It holds no quota rules of its own; every rule lives in
-`quota-domain` or `quota-core`.
+autostart and updater plugins; the updater runs from Rust (`src/updates/`), and no window
+is granted its commands. Its pop-up is a window of Quota's own. It holds no quota rules of
+its own; every rule lives in `quota-domain` or `quota-core`.
 
 ## Layout
 
-| Path                  | Responsibility                                                       |
-| --------------------- | -------------------------------------------------------------------- |
-| `src/main.rs`         | Entrypoint only. No business logic.                                  |
-| `src/lib.rs`          | Module exports and the run entrypoint.                               |
-| `src/bootstrap.rs`    | Plugin registration order, state restoration, supervisor start.      |
-| `src/state.rs`        | The managed state the commands read.                                 |
-| `src/ipc/commands.rs` | Thin `#[tauri::command]` handlers.                                   |
-| `src/ipc/events.rs`   | `tauri_specta::Event` wrappers and the typed emit path.              |
-| `src/ipc/bindings.rs` | The one registry used both to mount handlers and to export bindings. |
-| `src/platform/`       | Tray, popover window, and launch-at-login (`autostart.rs`) adapters. |
+| Path                  | Responsibility                                                        |
+| --------------------- | --------------------------------------------------------------------- |
+| `src/main.rs`         | Entrypoint only. No business logic.                                   |
+| `src/lib.rs`          | Module exports and the run entrypoint.                                |
+| `src/bootstrap.rs`    | Plugin registration order, state restoration, supervisor start.       |
+| `src/state.rs`        | The managed state the commands read.                                  |
+| `src/updates/`        | The update check, its schedule, and the pop-up; see the architecture. |
+| `src/ipc/commands.rs` | Thin `#[tauri::command]` handlers.                                    |
+| `src/ipc/events.rs`   | `tauri_specta::Event` wrappers and the typed emit path.               |
+| `src/ipc/bindings.rs` | The one registry used both to mount handlers and to export bindings.  |
+| `src/platform/`       | Tray, popover window, and launch-at-login (`autostart.rs`) adapters.  |
 
 ## Lifecycle
 
