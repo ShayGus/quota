@@ -363,10 +363,15 @@ bun run build:e2e                            # builds both binaries
 xvfb-run -a bun run test:e2e
 ```
 
-On Windows, put a matching `msedgedriver.exe` on `PATH`, then run:
+On Windows, install a WebDriver for the installed WebView2 runtime, then run:
 
 ```powershell
+Push-Location src-tauri
+cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
+& "$env:USERPROFILE\.cargo\bin\msedgedriver-tool.exe"
+$env:PATH = "$($PWD.Path);$env:USERPROFILE\.cargo\bin;$env:PATH"
 cargo install tauri-driver --version 2.1.0 --locked
+Pop-Location
 bun run build:e2e
 bun run test:e2e
 ```

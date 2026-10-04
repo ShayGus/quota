@@ -360,20 +360,22 @@ jobs:
       - name: Install
         run: bun install --frozen-lockfile
 
-      # windows-2022 supplies Edge and its matching WebDriver.
-      - name: Add Edge WebDriver to PATH
+      # This pinned installer matches WebDriver to WebView2, not to Edge.
+      - name: Install matching WebView2 driver
         shell: pwsh
         run: |
-          $driver = Join-Path $env:EDGEWEBDRIVER 'msedgedriver.exe'
-          if (-not (Test-Path $driver)) {
-            throw "Microsoft Edge WebDriver is missing: $driver"
+          cargo install --git https://github.com/chippers/msedgedriver-tool --rev 8c4b34f51b45f5cf08013366d703de464ab871d1 --locked
+          & "$env:USERPROFILE\.cargo\bin\msedgedriver-tool.exe"
+          if (-not (Test-Path .\msedgedriver.exe)) {
+            throw "Microsoft Edge WebDriver was not downloaded"
           }
-          & $driver --version
+          & .\msedgedriver.exe --version
           if ($LASTEXITCODE -ne 0) {
             throw "Microsoft Edge WebDriver did not start"
           }
-          $env:EDGEWEBDRIVER | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $PWD.Path | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        working-directory: src-tauri
 
       # The Tauri project's WebDriver server. The version is pinned and
       # `--locked` uses the crate's own lockfile.
