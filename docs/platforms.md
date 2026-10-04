@@ -1,10 +1,11 @@
 # Platforms
 
-Quota builds and passes its checks on Windows and Linux. macOS is built and packaged by
-the release workflow (a disk image and an update archive for Apple Silicon and for Intel,
-on GitHub's macOS runners), but it has never been run: no runner here can start it, and
-`tauri-driver` has no macOS support. The code is arranged so that finishing macOS means
-the short list at the end of this page, not rewriting anything.
+Quota builds and passes its checks on Windows and Linux. The release workflow has macOS
+build and packaging jobs; [Releasing](RELEASING.md#what-a-release-contains) owns the
+package details and [Acceptance mapping](acceptance.md) owns native verification status.
+`tauri-driver` has no macOS support.
+The code is arranged so that finishing macOS means the short list at the end of this page,
+not rewriting anything.
 
 ## Where platform code lives
 
@@ -37,7 +38,8 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 ## Already portable
 
 - Tray placement and the popover's height fit, as above.
-- Closing a window hides it to the tray; Exit is in the tray menu.
+- Window closing and tray actions follow [Run the app](../README.md#run-the-app) and
+  [Updates](../README.md#updates).
 - The settings window is owned by the overview (`"parent": "overview"` in
   `tauri.conf.json`), which keeps it above the overview on Windows, macOS (a child window)
   and Linux (a transient window).
@@ -61,8 +63,8 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 
 ## Adding macOS
 
-Each item names where the change goes. None of them is verified yet, because no Mac has
-built Quota.
+Each item names where the change goes. These runtime behaviours remain unverified on a
+Mac; adding release build jobs does not verify them.
 
 1. **Hide the Dock icon.** Quota is a tray app. In
    [`bootstrap.rs`](../src-tauri/src/bootstrap.rs) setup, call

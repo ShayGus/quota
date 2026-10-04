@@ -397,6 +397,6 @@ and logs go to `test-results/e2e/`. CI uploads `real-app-results` and
 
 ### How this gates a release
 
-Like the interface job, this job is in `.github/workflows/ci.yml`. The release workflow
-accepts a commit only when that file's CI run succeeded, so a release needs the unit
-tests, the interface tests and the real-app suite all green on that commit.
+Like the interface job, this job is in `.github/workflows/ci.yml`. See
+[Which tests a release needs](docs/RELEASING.md#which-tests-a-release-needs) for the
+release preflight requirement.

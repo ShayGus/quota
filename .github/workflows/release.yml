@@ -1,8 +1,8 @@
 # Manual release: one button, one draft release, nothing public until you say so.
 #
 # Every `uses:` is pinned to a full 40-character commit SHA; see ci.yml for why.
-# Two credentials exist. The automatic `GITHUB_TOKEN` is the draft job's alone,
-# the only job that may write, and it writes nothing until every build has
+# The automatic `GITHUB_TOKEN` reaches the read-only preflight and the draft job,
+# the only job that may write. The draft writes nothing until every build has
 # succeeded and the update list has been verified. The update signing key
 # (`TAURI_SIGNING_PRIVATE_KEY` and its password) reaches the build steps and no
 # other step: not the preflight, not the tests, not the assembly. It is not an
@@ -153,7 +153,7 @@ jobs:
       # The gates and the tests run again on the exact commit that is released,
       # with no release secret in the runner. The frontend checks are not
       # repeated: preflight has already refused any commit whose CI did not
-      # pass, and both builds run the frontend build themselves.
+      # pass, and all package builds run the frontend build themselves.
       - name: Release gate
         run: cargo xtask check-release
 

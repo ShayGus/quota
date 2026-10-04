@@ -87,16 +87,18 @@ The pop-up is the application's own interface, not an operating-system dialog: a
 frameless `update` window that the host opens when an update is found, drawn by the same
 renderer from the settings window's header and the dialog's text and buttons
 ([`src/features/update/`](../src/features/update/)). It has two commands of its own, one
-to read what it shows and one to say which button was pressed, and nothing else.
+to read what it shows and one to say which button was pressed. Its full grants, including
+reading the snapshot for the saved theme, are owned by the
+[update capability](../src-tauri/capabilities/update-capability.json).
 
 Its layers follow the platform seam's style, with one port:
 
 - `policy` is the single function, `may_check_for_updates`, that says whether this build
   may check at all. Only the installed release may: a debug build, the development
   identity, the `sample-data` build and a build with agent inspection never do.
-- `schedule` says when a check is due: at start, then every 24 hours (one constant) by a
-  wake-poll over a clock that counts time spent asleep, so a suspended machine is due
-  once, not many times.
+- `schedule` computes when a check is due from monotonic and wall clocks, counting time
+  spent asleep without accumulating missed checks. The
+  [user-facing schedule](../README.md#updates) includes the pop-up interaction.
 - `flow` is one check cycle over the `UpdateHost` port: check, ask, install, relaunch, and
   the in-memory record of the version already put to the person. It never starts a second
   check or a second pop-up, because it runs them one after the other.

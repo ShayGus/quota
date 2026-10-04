@@ -60,7 +60,7 @@ pub(crate) enum Outcome {
     CheckFailed,
     /// Nothing newer is published.
     UpToDate,
-    /// This version, or a newer one already answered, was turned down earlier.
+    /// This version, or a newer one, was already declined or failed to install.
     AlreadyAnswered(Version),
     /// The person pressed Cancel or closed the pop-up.
     Declined(Version),

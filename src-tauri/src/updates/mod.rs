@@ -1,15 +1,7 @@
 //! Updates: a published release is offered to the person, and installed if they say yes.
 //!
-//! Quota checks the release feed once when it starts and again every day for as
-//! long as it keeps running in the tray. The feed is
-//! `https://github.com/ShayGus/quota/releases/latest/download/latest.json`
-//! (`plugins.updater.endpoints` in `tauri.conf.json`). GitHub serves only
-//! published, non-draft releases at `/releases/latest`, so a draft release is
-//! never offered. When a newer version is found, one pop-up, in Quota's own
-//! design, names it and the running version and asks. OK downloads, verifies the signature against
-//! the public key in `tauri.conf.json`, installs, and restarts; Cancel, or
-//! closing the pop-up, does nothing until the application restarts or a newer
-//! version appears.
+//! The repository-root `README.md`'s Updates section owns the schedule and pop-up
+//! behaviour; `docs/RELEASING.md` owns the release feed and signing procedure.
 //!
 //! The work happens here, in Rust, on a task of its own: the windows may be
 //! hidden or closed while the tray application lives, so no window takes part in

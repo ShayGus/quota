@@ -25,20 +25,17 @@ its own; every rule lives in `quota-domain` or `quota-core`.
 
 ## Lifecycle
 
-Quota runs as one instance: a second launch brings the running popover forward. Closing a
-window hides it; the tray icon stays, a left click opens the app, and its menu offers
-Settings, Show App, and Exit. Only Exit ends the process. Launch at login registers a
-login item with an `--autostart` argument, so a launch at sign-in starts quietly in the
-tray and a login launch that finds Quota already running changes nothing.
+[Run the app](../README.md#run-the-app) and [Updates](../README.md#updates) own the window
+and tray behaviour. Launch at login registers a login item with an `--autostart` argument,
+so a launch at sign-in starts quietly in the tray and a login launch that finds Quota
+already running changes nothing.
 
 ## Security model
 
 Application commands are permissive by default unless the permission manifest in
-`build.rs` assigns them. The manifest names every command, and the two shipping capability
-files grant only what each window needs. The
-[overview capability](capabilities/overview-capability.json) and
-[settings capability](capabilities/settings-capability.json) own the command grants;
-consult their permission lists for each window's allowed operations.
+`build.rs` assigns them. The manifest names every command, and the shipping
+[capability files](capabilities/) own the command grants for each window; consult their
+permission lists for allowed operations.
 
 No capability grants `store:*`, `sql:*`, `http:*`, `fs:*`, or `shell:*`. The raw IPC call
 boundary is owned by

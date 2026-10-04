@@ -49,10 +49,11 @@ bun tauri dev
 and opens only the overview. Open Settings with the overview's settings button or the tray
 menu's Settings action; it stays hidden at launch even if it was open when you last quit.
 Quota runs as a single instance: launching it again brings the running overview forward.
-Closing a window, with its close button or Alt+F4, hides it to the tray while monitoring
-continues. Left-click the tray icon to open the app; right-click it for Settings, Show
-App, and Exit. Exit, or Ctrl-C in the terminal, stops the application. Settings → General
-→ Launch at login registers Quota with the system so it starts quietly in the tray when
+Closing the overview or settings window, with its close button or Alt+F4, hides
+it to the tray while monitoring continues. Left-click the tray icon to open the app;
+right-click it for Settings, Show App, and Exit. Exit, or Ctrl-C in the terminal, stops
+the application. Settings → General → Launch at login registers Quota with the system
+so it starts quietly in the tray when
 you sign in; turning it off removes the login item.
 
 Every debug build automatically runs under its own identity, `app.quota.monitor.dev`, so
@@ -66,7 +67,8 @@ focusing, and refused initial or periodic refresh requests.
 For development-only AI agent inspection, see
 [Inspecting the app](docs/inspecting-the-app.md).
 
-To produce a release build:
+To produce a release build, follow
+[the release signing setup](docs/RELEASING.md#the-update-key) before packaging:
 
 ```bash
 bun tauri build
@@ -74,6 +76,27 @@ bun tauri build
 
 The Tauri CLI owns starting, building and packaging the application; `cargo xtask` only
 runs the repository gates.
+
+## Updates
+
+Installed releases check for published updates at startup and while running in the tray.
+The next check is due 24 hours after the previous cycle ends, including any pop-up
+interaction; checks pause while an offer, installation, or failure message is open.
+
+A newer version opens one pop-up using Quota's theme and controls, naming the available
+and current versions. **OK** downloads the matching package, verifies its signature,
+installs it, and restarts Quota. **Cancel**, or closing the offer, keeps the current
+version. A declined version or a failed installation is not offered again during that
+run; a newer version can be offered at the next scheduled check. Restarting allows the
+same version to be offered again.
+
+Failed checks stay silent and log a warning. Feed requests and downloads have bounded
+timeouts. A failed installation shows a **Close** message and Quota keeps running its
+current version. Development, debug, sample-data, and agent-inspection builds never check.
+There are no update settings, channels, release notes, or progress bar in the pop-up.
+
+[Releasing](docs/RELEASING.md) owns the platform packages, signing setup, and publication
+procedure, including the first-release checks.
 
 ## Connect and refresh accounts
 

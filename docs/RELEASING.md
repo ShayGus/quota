@@ -21,14 +21,15 @@ last job can write.
 | Linux    | `.deb`                                                 | Ubuntu and Debian.                                      |
 | Linux    | `.rpm`                                                 | Fedora and openSUSE.                                    |
 | macOS    | `.dmg`, one for Apple Silicon and one for Intel        | Everyone on a Mac.                                      |
-| All      | `.sig` file beside each package above that updates     | Installed copies check it before they install.          |
+| macOS    | `.app.tar.gz`, one for Apple Silicon and one for Intel | Updater payloads; initial installation uses the `.dmg`.  |
+| All      | `.sig` file beside each updater payload                | Installed copies check it before they install.          |
 | All      | `latest.json`, the update list                         | Installed copies read it to find the newest version.    |
 | All      | `SHA256SUMS` and these release notes                   | Checking that a download is the one that was published. |
 
-The Mac packages are built on a GitHub macOS runner, one for each processor, and **have
-never been run**: GitHub's runners can compile and package a Mac app but nothing here can
-start it. The first release is the first time anyone will, so check the macOS rows of
-[the first-release checklist](#the-first-release-checklist) before you tell anyone.
+The Mac packages are built for both processors on an Apple Silicon GitHub runner. The
+workflow compiles and packages them but does not launch them; see
+[the native verification limits](acceptance.md) and the macOS checks in
+[the first-release checklist](#the-first-release-checklist).
 
 The Linux packages are built on Ubuntu 22.04 on purpose. It is the oldest supported base
 that ships WebKitGTK 4.1, so the packages run on more distributions than a build from a
@@ -38,7 +39,7 @@ so it is a reviewed change.
 ## The update key
 
 Installed copies of Quota update themselves, and the one thing that stops a stranger from
-sending them a program is a signature. Every package in a release is signed with a private
+sending them a program is a signature. Every updater payload is signed with a private
 key, and the matching public key is built into Quota (`plugins.updater.pubkey` in
 [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json)). A copy installs an update
 only if its signature verifies against that public key.
@@ -74,8 +75,9 @@ gh secret set TAURI_SIGNING_PRIVATE_KEY_PASSWORD --repo ShayGus/quota < ~/.confi
 
 Or in the browser: the repository's **Settings**, then **Secrets and variables**, then
 **Actions**, then **New repository secret**, once for each name, pasting the file's
-contents as the value. A release run stops at its first build step, with a message naming
-the missing secret, if either is absent.
+contents as the value. If the private key is absent, the first build step stops with a
+message naming `TAURI_SIGNING_PRIVATE_KEY`. The password must unlock that key; a missing
+or incorrect password prevents signing an encrypted key.
 
 The two secrets are given to the build steps and to no other step: not the preflight, not
 the tests, not the assembly, not the draft. `cargo xtask check-release` fails if the
@@ -101,9 +103,9 @@ lets someone ship an update that installed copies accept.
 
 ## How an installed copy updates
 
-Quota checks for a new version when it starts and again every 24 hours for as long as it
-keeps running in the tray, so a copy that is never restarted still hears about every
-release. It asks the address
+The [Updates section of the README](../README.md#updates) owns the check schedule and
+pop-up behaviour. The feed address is configured in `plugins.updater.endpoints` in
+[`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json):
 
 ```
 https://github.com/ShayGus/quota/releases/latest/download/latest.json
@@ -113,22 +115,8 @@ GitHub serves only **published** releases there. A draft release is never offere
 draft you build is invisible to every installed copy until you press **Publish release**.
 That is what "an update is published" means.
 
-When the list names a newer version, Quota opens one small window, in Quota's own design
-(not an operating-system dialog), with the question: "Quota 0.2.0 is available (you have
-0.1.0). Install it now? Quota will restart." **OK** downloads the package for that
-computer, verifies its signature, installs it, and restarts Quota. **Cancel**, or closing
-the pop-up, does nothing, and that version is not offered again until Quota is restarted;
-a newer version is offered at once. If the check fails (offline, GitHub down, no release
-yet), nothing is shown and one warning line is logged. If the install fails after OK, one
-pop-up says so and Quota keeps running the version it had. There is no progress bar, no
-setting, and no skip button.
-
-Only an installed release checks. A development build, a debug build, the sample-data
-build the real-app tests use, and a build with agent inspection never contact the update
-address; one function, `may_check_for_updates`, decides this, and it is unit-tested for
-each case. The address and the key cannot be changed by an environment variable or a
-setting, and `cargo xtask check-release` fails if a release build could be pointed
-anywhere else.
+The address and the key cannot be changed by an environment variable or a setting, and
+`cargo xtask check-release` fails if a release build could be pointed anywhere else.
 
 A copy updates with the kind of package it was installed from, so each has its own entry
 in the list: the Windows installer and the MSI, the AppImage, the deb and the rpm, and the
@@ -239,10 +227,10 @@ it, not a browser.
 2. Fix the notes if you want to say more.
 3. Press **Publish release**.
 
-Publishing makes the tag and the packages public, **and it is the moment installed copies
-start being offered this version**: GitHub now serves this release's `latest.json`, and
-every running Quota hears about it within a day. The GitHub Actions run and the release
-are two separate objects; publishing does not re-run anything.
+Publishing makes the tag and the packages public and exposes this release's `latest.json`
+to installed copies at their next check; see [the update schedule](../README.md#updates).
+The GitHub Actions run and the release are two separate objects; publishing does not
+re-run anything.
 
 ## 5. Roll back
 
@@ -263,22 +251,20 @@ updated stays on the new version. The only way out is a higher version:
 
 ## The first release checklist
 
-Nothing about updating can be proved in advance: the checks run in CI prove the pieces,
-and the key, the signatures, the real install on each system, and the Mac build can only
-be proved by a real release. Do this once, in order. Every step says **what you should
-see**; anything else is a failure, and you should stop and report what you saw instead.
+CI checks the update logic; the release workflow verifies the payload signatures before
+creating the draft. A real installation and update on each system still need manual
+verification. Do this once, in order. Every step says **what you should see**; anything
+else is a failure, and you should stop and report what you saw instead.
 
 1. **Set up the key.** Put the two secrets in GitHub and back the key up offline, as in
    [The update key](#the-update-key). _You should see:_ both names under **Settings,
-   Secrets and variables, Actions**. The Release workflow's first build step fails with
-   "the repository secret TAURI_SIGNING_PRIVATE_KEY is not set" if they are missing.
+   Secrets and variables, Actions**.
 2. **Publish v0.1.0.** Run the Release workflow for `0.1.0`. _You should see:_ every job
    green, and a **draft** release `v0.1.0` holding the installers, the `.sig` files,
    `latest.json`, and `SHA256SUMS`. Install the draft's packages on each system you can
-   reach (at least one of Windows, Linux and a Mac), as in
+   reach, covering Windows, Linux, and both Mac processors before release, as in
    [Review the draft](#3-review-the-draft). If a Mac build, a disk image, or a Mac launch
-   fails, fix it before going on; this is the first time anyone has run a Mac build of
-   Quota. Then press **Publish release**.
+   fails, fix it before going on. Then press **Publish release**.
 3. **Install v0.1.0** on the machine you will test the update on, from the published
    release, and start it. _You should see:_ Quota open as usual and **no pop-up**, because
    nothing newer exists.
@@ -287,22 +273,23 @@ see**; anything else is a failure, and you should stop and report what you saw i
    a **draft**. With it unpublished, quit and start the installed v0.1.0 again. _You
    should see:_ **no pop-up.** A draft is never offered.
 5. **Publish v0.1.1.** Press **Publish release**.
-6. **Start v0.1.0** again (or leave it running; it will notice within 24 hours, but a
-   restart is instant). _You should see:_ one small Quota window, in Quota's own design,
-   titled **Update available**, with the text "Quota 0.1.1 is available (you have 0.1.0).
-   Install it now? Quota will restart." and two buttons, **Cancel** and **OK**. No window
-   of the operating system's own style.
+6. **Start v0.1.0** again (or wait for the next check under
+   [the update schedule](../README.md#updates)). _You should see:_ one small Quota window,
+   in Quota's own design, titled **Update available**, with the text "Quota 0.1.1 is
+   available (you have 0.1.0). Install it now? Quota will restart." and two buttons,
+   **Cancel** and **OK**. No window of the operating system's own style.
 7. **Press Cancel** the first time. _You should see:_ the window closes, Quota keeps
-   running as version 0.1.0, and the pop-up does not come back until Quota is restarted.
+   running as version 0.1.0, and that version is not offered again until Quota is restarted.
    Then restart it and press **OK**.
 8. **Press OK.** _You should see:_ the same window changes to **Installing the update**
    with both buttons greyed out; then Quota closes and starts again by itself. Open Quota,
    **Settings** shows version **0.1.1** in the bottom-left corner of the navigation rail,
    and your accounts and preferences are all still there. No pop-up appears this time.
-9. Repeat steps 3 to 8 on each system you care about. On Windows the installer runs in a
-   passive window and Quota comes back by itself; the AppImage replaces itself in place; a
-   deb or rpm install should ask for administrator rights through the system's prompt; a
-   Mac copy updates itself without the **Open Anyway** step.
+9. Repeat steps 3 to 8 for Windows (NSIS and MSI), Linux (AppImage, deb and rpm), and macOS
+   (Apple Silicon and Intel). On Windows the installer runs in a passive window and Quota
+   comes back by itself; the AppImage replaces itself in place; a deb or rpm install
+   should ask for administrator rights through the system's prompt; a Mac copy updates
+   itself without the **Open Anyway** step.
 
 If the pop-up never appears when it should, the cause is almost always one of these: the
 release is still a draft, the installed copy is a development build, the version in

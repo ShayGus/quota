@@ -1,21 +1,21 @@
 //! When the next update check is due.
 //!
-//! Quota is a tray application that can run for weeks, so one check at start is
-//! not enough: another is due every [`CHECK_INTERVAL`] for as long as it runs.
+//! [`super::flow::UpdateFlow`] records the end of the entire check cycle,
+//! including its pop-up interaction, before the next interval starts.
 //!
-//! The schedule never sleeps for the whole interval. It is asked every
-//! [`WAKE_POLL`] whether a check is due, and answers from a [`Clock`]. That is
-//! what lets it survive a suspended machine: the operating systems disagree on
-//! whether their monotonic clock counts time spent asleep, but the wall clock
-//! always does, so elapsed time is the larger of the two readings. A machine
+//! Between cycles the schedule is polled every [`WAKE_POLL`], rather than
+//! sleeping for the whole interval. It answers from a [`Clock`] to survive a
+//! suspended machine: the operating systems disagree on whether their monotonic
+//! clock counts time spent asleep, but the wall clock always does, so elapsed
+//! time is the larger of the two readings. A machine
 //! that sleeps for three days is due on the first poll after it wakes, and is
 //! asked once, not three times, because the next interval starts when that
-//! check finishes. A wall clock set backwards cannot postpone a check by more
+//! cycle finishes. A wall clock set backwards cannot postpone a check by more
 //! than the monotonic clock allows.
 
 use std::time::{Duration, Instant, SystemTime};
 
-/// How long after one check the next is due. The one place this is decided.
+/// How long after one check cycle the next is due. The one place this is decided.
 pub(crate) const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// How often a running application asks whether a check is due.
@@ -68,7 +68,7 @@ impl Clock for SystemClock {
     }
 }
 
-/// Remembers when the last check finished.
+/// Remembers when the last check cycle finished, including any pop-up interaction.
 #[derive(Debug, Default)]
 pub(crate) struct Schedule {
     last_finished: Option<Moment>,
@@ -76,13 +76,13 @@ pub(crate) struct Schedule {
 
 impl Schedule {
     /// Whether a check is due at `now`: always the first time, then once
-    /// [`CHECK_INTERVAL`] has passed since the last one finished.
+    /// [`CHECK_INTERVAL`] has passed since the last cycle finished.
     pub(crate) fn is_due(&self, now: Moment) -> bool {
         self.last_finished
             .is_none_or(|finished| now.since(finished) >= CHECK_INTERVAL)
     }
 
-    /// Records that a check finished at `now`, which starts the next interval.
+    /// Records that a check cycle finished at `now`, which starts the next interval.
     pub(crate) fn finished(&mut self, now: Moment) {
         self.last_finished = Some(now);
     }

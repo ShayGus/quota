@@ -133,7 +133,7 @@ export function App(): JSX.Element {
   );
 }
 
-/** The update pop-up's window. It exists only while an update is being offered. */
+/** The update pop-up's window, including the installing and failure states. */
 function UpdatePopup(): JSX.Element {
   const prompt = useUpdatePrompt();
   return (

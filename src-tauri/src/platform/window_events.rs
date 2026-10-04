@@ -1,10 +1,11 @@
 //! What closing or leaving a window does.
 //!
-//! No window is ever destroyed: closing hides it, so the tray can bring it
-//! back. Closing settings on its add-account page also leaves that page, and a
-//! tray popover that loses focus hides, as a popover does. The widget is never
-//! hidden by closing: while it is the view it stays on screen, and wherever it
-//! is moved is saved.
+//! Persistent windows are kept alive: closing the overview or settings hides
+//! it, so the tray can bring it back. Closing settings on its add-account page
+//! also leaves that page, and a tray popover that loses focus hides, as a
+//! popover does. The widget is never hidden by closing: while it is the view it
+//! stays on screen, and wherever it is moved is saved.
+//! The transient update window has its own close handler in `updates::host`.
 
 use quota_domain::preferences::OverviewMode;
 use tauri::{AppHandle, Manager, WebviewWindow};
