@@ -333,16 +333,27 @@ user's `AppData` and `Local AppData` folders to the sandbox, then restores their
 after each journey. It sets a temporary `USERPROFILE` for sign-in files. The Windows job
 runs on `windows-2022`. The OS credential store is not isolated.
 
-The nine journeys cover: first launch with an empty profile; the main popover at 440 px;
-settings opening from the popover and a preference surviving a restart; privacy aliases on
-sample accounts; a second launch not starting a second app and bringing the first forward;
+The journeys in [`tests/e2e/journeys.e2e.ts`](tests/e2e/journeys.e2e.ts) cover: first launch
+with an empty profile; the main popover at 440 px; settings opening from the popover and a
+preference surviving a restart; diagnostics export reporting a path and producing a JSON
+file there; privacy aliases on sample accounts; a second launch not starting a second app
+and bringing the first forward;
 quitting from the tray menu and leaving no process or lock behind; using the development
 identity without creating the production identity; and adding an account against a fake
 provider; and a development or test build never checking for updates, using a fake update
 server that offers a far newer version and asserting it receives no request. On Windows,
-the settings journey ends its WebDriver session before restarting. Windows runs the eight
+the settings journey ends its WebDriver session before restarting. Windows runs the
 journeys that WebDriver can drive. It marks the tray-menu quit journey as skipped because
 the native Windows tray menu is outside the WebDriver interface.
+
+The Windows job also runs the host's library tests and
+[`browser_launch.rs`](src-tauri/tests/browser_launch.rs) before the real-app journeys.
+The browser probes record the opener's handover without launching a real browser: Linux
+uses sandbox launchers, while Windows temporarily registers an HTTPS recorder only when
+there is no per-user HTTPS registration or UserChoice. Windows queries the effective
+handler before installation and again before launching; it prints a skip reason if
+interception cannot be established. These probes do not establish live provider approval
+or a completed Muse Code connection.
 
 Adding an account works against a fake provider, through the transport seam the provider
 crate offers to test builds. `bun run build:e2e` also builds

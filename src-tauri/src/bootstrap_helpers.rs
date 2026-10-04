@@ -137,8 +137,7 @@ pub fn open_external<R: tauri::Runtime>(
 /// buffer, so a token, cookie, account address, or profile path cannot reach
 /// the file by accident.
 ///
-/// Every refusal names the log, because a failure nobody can investigate
-/// afterwards is a dead end.
+/// Filesystem and containment failures name the log or report its unavailability.
 pub async fn write_diagnostics(
     app: &tauri::AppHandle,
     state: &crate::state::AppState,

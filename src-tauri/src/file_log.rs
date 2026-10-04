@@ -157,9 +157,9 @@ impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for LogWriter {
 mod tests {
     use super::*;
 
-    /// The writer reports every byte as written, so no line is ever lost to a
-    /// half-available destination, and it never surfaces an error a caller
-    /// could act on: the log is a witness, not a participant.
+    /// The writer reports every byte as handled even if a destination drops it,
+    /// so logging never fails the caller's operation. Availability is reported
+    /// separately through the location shown in failure messages.
     #[test]
     fn the_writer_reports_availability_and_never_fails() {
         assert_eq!(

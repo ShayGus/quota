@@ -210,11 +210,10 @@ pub async fn clear_local_history(
         })
 }
 
-/// Writes a redacted diagnostics export to a path the user chose.
+/// Writes a redacted diagnostics export through the host-owned export helper.
 ///
-/// The export carries adapter identifiers, error categories, timings, and
-/// sanitized status only. It never carries a token, a cookie, an account
-/// address, a profile path, or a raw provider body.
+/// `destination` is a file-name label, not a path. See
+/// [`crate::bootstrap_helpers::write_diagnostics`] for containment and privacy.
 #[tauri::command]
 #[specta::specta]
 pub async fn export_sanitized_diagnostics(

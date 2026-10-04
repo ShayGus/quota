@@ -69,4 +69,4 @@ description = "Open an allowlisted provider usage page in the external browser."
 description = "Delete one account's local reading history."
 
 [allow-export-sanitized-diagnostics]
-description = "Write a redacted diagnostics export to a user-chosen path."
+description = "Write a redacted diagnostics export in the host-owned diagnostics folder."

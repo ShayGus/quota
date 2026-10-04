@@ -60,8 +60,12 @@ it keeps its data directory, its saved sign-ins, its login item and its single-i
 lock away from an installed production build. See
 [the development identity](CONTRIBUTING.md#development-identity).
 
-The native host logs warnings for failed close-time hiding, tray anchoring, second-launch
-focusing, and refused initial or periodic refresh requests.
+The native host writes to standard output and, once startup resolves the application log
+directory, to `quota.log` there. It logs warnings for failed close-time hiding, tray
+anchoring, second-launch focusing, and refused initial or periodic refresh requests.
+Browser-launch, provider sign-in, and filesystem export failures name the log in their
+messages. If the log cannot be opened or written, the message reports logging unavailable
+and gives the expected path when it can be resolved.
 
 For development-only AI agent inspection, see
 [Inspecting the app](docs/inspecting-the-app.md).
@@ -124,6 +128,14 @@ a new Add account request opens a fresh wizard.
 [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 
+For Grok and Muse Code browser sign-in, Connect shows the provider's page and the code
+before asking the system browser to open it. Approve the sign-in on that page; Quota polls
+for approval and then verifies the account. If the browser refuses or does not answer
+within ten seconds, the wizard shows the launch problem, address, code, and log status.
+Open the displayed address yourself and enter the code: approval polling continues.
+Provider refusals, expired codes, and sign-in, discovery, or verification timeouts show a
+reason and log status. The verification URL and user code are never written to the log.
+
 Ordinary refreshes, including manual requests, wait for the polling interval and any
 backoff deadline. Checks that do not send a request leave the due time unchanged. When you
 press refresh and a read is deferred, the popover's toast names the account and the
@@ -134,6 +146,18 @@ replacement labels as the overview cards.
 Reconnect immediately verifies the account once, even while monitoring is paused. If
 verification fails, subsequent ordinary retries respect the interval, backoff, and
 monitoring pause. A countdown names eligibility, not a guarantee of immediate completion.
+
+## Diagnostics
+
+In Settings → Diagnostics, **Export diagnostics** writes
+`quota-diagnostics-settings.json` in the `diagnostics` folder under Quota's application
+data directory, on Windows as on Linux. **Saved to** shows the full path after the write
+succeeds. Repeating the export replaces that file. The host chooses the folder; there is
+no destination picker. Filesystem or containment failures show a reason and log status.
+
+The export contains the account count, provider identifiers, and polling settings. It
+contains no account identities, credentials, cookies, profile paths, or raw provider
+payloads. It is rebuilt from typed state rather than copied from the host log.
 
 ## Developer setup from a clean checkout
 

@@ -35,8 +35,8 @@ pub enum CommandError {
     },
     /// The credential must be renewed by the user before any read can succeed.
     ReconnectRequired,
-    /// The provider refused the credential or the sign-in itself, so no account
-    /// was read, held, or stored.
+    /// A connection attempt failed before an account was added, with a
+    /// sanitized reason for a provider refusal or another attempt failure.
     ///
     /// This is what a first sign-in that the provider turns down reports: there
     /// is no connection yet to reconnect, so telling the person to reconnect, or
