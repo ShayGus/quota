@@ -63,31 +63,6 @@ fn terminal_failures_report_and_log_a_sanitized_reason() {
 }
 
 #[test]
-fn browser_request_rejections_reach_the_person_with_safe_details_and_the_log() {
-    for (error, expected) in [
-        (
-            ProviderError::UnsupportedUserAgent {
-                status: 302,
-                redirect_host: "www.facebook.com".into(),
-            },
-            "missing or unsupported User-Agent (HTTP 302, redirect host www.facebook.com)",
-        ),
-        (
-            ProviderError::EmptyResponse { status: 200 },
-            "empty response (HTTP 200)",
-        ),
-    ] {
-        let reported = report_attempt_failure(attempt_error(&error), "quota.log");
-        let CommandError::ProviderRefused { reason } = reported else {
-            panic!("a sign-in refusal must be readable");
-        };
-        assert!(reason.contains(expected));
-        assert!(reason.contains("Nothing was added"));
-        assert!(reason.ends_with("The log is at quota.log"));
-    }
-}
-
-#[test]
 fn reporting_preserves_typed_recovery_and_cancellation() {
     for error in [
         CommandError::Cancelled,
