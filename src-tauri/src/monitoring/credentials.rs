@@ -15,8 +15,9 @@ use quota_domain::ids::ConnectionId;
 
 /// The credential a connection attempt signs in with, when it carries one.
 ///
-/// A provider Quota signs in to itself needs one, and any other provider must
-/// not be sent one, so either mismatch is refused before any request is made.
+/// A pasted credential must never reach a provider that only accepts its own
+/// client's sign-in. A dual-mode provider may use its external profile when no
+/// credential is supplied. Mismatches are refused before any request is made.
 pub(super) fn supplied(
     adapter: &Arc<dyn ProviderAdapter>,
     request: &BeginConnectionRequest,

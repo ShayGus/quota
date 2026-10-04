@@ -31,11 +31,7 @@ pub struct ProviderRegistry {
 }
 
 impl ProviderRegistry {
-    /// Builds the production registry: Codex, Claude, and the
-    /// providers signed in with a pasted key (`OpenRouter`, Z.ai, `MiniMax`,
-    /// Kimi, `OpenCode` Go) or through the browser (Grok, Muse Code), whose
-    /// credentials live in `secrets`. `OpenCode` Go also reads a local
-    /// `OpenCode` login when no key was pasted.
+    /// Builds the production registry over the store for app-owned sign-ins.
     ///
     /// # Errors
     /// Returns a transient failure when an adapter's HTTP client cannot be built.

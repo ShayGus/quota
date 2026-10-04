@@ -100,10 +100,12 @@ procedure, including the first-release checks.
 ## Connect and refresh accounts
 
 Choose Add account in the popover or in Settings → Accounts to open the settings window on
-its add-account page: Provider → Connect → Verify. Choose a provider and press Connect.
-Quota reads an existing credential from the provider's client; it does not sign you in.
-The button stays busy until verification finishes, then shows the result. If a credential
-is missing or rejected, follow the provider-specific recovery guidance:
+its add-account page: Provider → Connect → Verify. Choose a provider and follow its
+connection instructions, then press Connect. Keyed providers offer a masked API-key box.
+For OpenCode Go, leave it empty to use the existing OpenCode CLI sign-in, or paste a key
+to add a separate connection. The button stays busy until verification finishes, then
+shows the result. If a credential is missing or rejected, follow the provider-specific
+recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
@@ -114,7 +116,7 @@ After signing in, press Connect again. Verify shows the account the provider ver
 workspace and plan, and each quota reading, with the nickname it will be saved under.
 Choose **Add <provider> account** to add it, or **Not this account** to discard it and
 read how to switch that provider to the account you meant. Nothing is saved and no
-monitoring starts before Add; Not this account, Cancel, closing the settings window, or
+monitoring starts before Add; Not this account, Cancel, leaving the wizard, or
 restarting the app discards the verified result and leaves no account behind. Once saved,
 the account appears even if the confirmation reply or the next snapshot is lost on the
 way. With Hide account labels enabled, a pending identity is replaced exactly as a saved

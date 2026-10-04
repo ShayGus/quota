@@ -1,8 +1,8 @@
 # quota-providers
 
-Provider connectors for Quota. Each connector discovers a credential another client owns,
-reads that provider's quota source through a bounded HTTP boundary, and normalises the
-payload into `quota_domain::quota::window::QuotaWindow` values.
+Provider connectors for Quota. Each connector reads its provider's quota source through a
+bounded HTTP boundary and normalises the payload into
+`quota_domain::quota::window::QuotaWindow` values.
 
 No connector starts a conversation, a turn, or a tool call. None writes to, refreshes, or
 rotates an externally owned credential. None makes an inference or a model call to obtain
@@ -10,24 +10,8 @@ a quota reading.
 
 ## Verification status
 
-**No live call was made by this crate or its tests.** Every endpoint below except
-OpenRouter's is undocumented, and their field spellings were supplied as a specification,
-not observed by this crate from a real login. The status column therefore separates what
-an automated test proves from what only a real login can prove:
-
-| Provider    | Endpoint behaviour | Field spellings | Live-login verification |
-| ----------- | ------------------ | --------------- | ----------------------- |
-| Codex       | ASSUMED            | ASSUMED         | Not performed           |
-| Claude      | ASSUMED            | ASSUMED         | Not performed           |
-| OpenCode Go | ASSUMED            | ASSUMED         | Not performed           |
-| OpenRouter  | DOCUMENTED         | DOCUMENTED      | See the pull request    |
-| Z.ai        | ASSUMED            | ASSUMED         | Not performed           |
-| MiniMax     | ASSUMED            | ASSUMED         | Not performed           |
-| Kimi        | ASSUMED            | ASSUMED         | Not performed           |
-| Grok        | ASSUMED            | ASSUMED         | Not performed           |
-| Muse Code   | ASSUMED            | ASSUMED         | Not performed           |
-| Cursor      | ASSUMED            | ASSUMED         | Not performed           |
-| Ollama      | ASSUMED            | ASSUMED         | Not performed           |
+The [provider reference](../../../docs/providers.md) owns endpoint provenance and
+live-login verification status. Automated tests make no live provider calls.
 
 What the tests do prove, over sanitized fixtures under `tests/fixtures/` and inline
 payloads: the decoding and normalisation of each documented field spelling, the
@@ -36,7 +20,7 @@ network call is needed to run them.
 
 ## Schema risk
 
-Every endpoint here is undocumented. A field can be renamed, dropped, or added without
+An undocumented endpoint's fields can be renamed, dropped, or added without
 notice, and the shape can change between account plans. The decoders answer this in three
 ways:
 
@@ -150,11 +134,8 @@ when no key was pasted, the local `OpenCode` login's key.
 
 - Endpoint: `GET https://opencode.ai/zen/go/v1/usage` with a bearer key and a JSON accept
   header. It is undocumented.
-- Credential discovery: see the
+- Credentials and connection limits: see the
   [OpenCode Go credential reference](../../../docs/providers.md#opencode-go).
-- Credential owner: a pasted key is owned by Quota in the system credential store, and a
-  connection's profile label says which sign-in it uses. The `OpenCode` login owns its own
-  file: Quota has no refresh path for that credential at all, and never writes to it.
 - Decoded fields: `usage` or the root object; `rollingUsage`/`rolling`,
   `weeklyUsage`/`weekly`, `monthlyUsage`/`monthly`. Used percent: `percent`,
   `percentUsed`, `usedPercent`, `usagePercent`; remaining percent: `percentRemaining`,
@@ -167,8 +148,9 @@ when no key was pasted, the local `OpenCode` login's key.
   identity. This adapter does not invent one. It uses a stable local `QuotaPoolId` derived
   from the credential profile label and leaves the optional principal, workspace, and
   entitlement fields `None`, so the account reads as unverified. A binding whose principal
-  is set is therefore refused on read. This is an accepted, honest limitation of this
-  connector, not a defect to paper over.
+  is set is therefore refused on read. The display identity is `OpenCode Go (<profile>)`
+  for a local sign-in and `OpenCode Go API key` for a pasted key. This is an accepted,
+  honest limitation of this connector, not a defect to paper over.
 - Cadence: a fixed interval with a 300-second minimum. HTTP 429 becomes `RateLimited` with
   the `Retry-After` deadline.
 
