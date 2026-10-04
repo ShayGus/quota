@@ -10,6 +10,8 @@
 //! the same renderer as every other window and draws what the shared
 //! [`PromptSlot`] says.
 
+use std::time::Duration;
+
 use quota_contracts::{UpdatePrompt, UpdatePromptChangedPayload, UpdateResponse};
 use semver::Version;
 use tauri::{AppHandle, Manager, State, WebviewUrl, WebviewWindowBuilder, Wry};
@@ -118,7 +120,7 @@ impl UpdateHost for TauriHost {
     type Pending = Update;
 
     async fn check(&self) -> Result<Option<Found<Update>>, String> {
-        let builder = self.app.updater_builder();
+        let builder = self.app.updater_builder().timeout(Duration::from_secs(60));
         #[cfg(feature = "sample-data")]
         let builder = super::test_endpoint::apply(builder)?;
         let updater = builder.build().map_err(|error| error.to_string())?;
@@ -155,9 +157,10 @@ impl UpdateHost for TauriHost {
         }
     }
 
-    async fn install(&self, update: Update) -> Result<(), String> {
+    async fn install(&self, mut update: Update) -> Result<(), String> {
         // The pop-up shows the install as busy, with no progress. On Windows this
         // call does not return: the installer takes over and restarts Quota.
+        update.timeout = Some(Duration::from_secs(15 * 60));
         update
             .download_and_install(|_chunk, _total| {}, || {})
             .await

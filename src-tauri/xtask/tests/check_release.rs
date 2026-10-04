@@ -10,12 +10,8 @@
 )]
 
 use std::fs;
-#[cfg(unix)]
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-#[cfg(unix)]
-use std::process::Stdio;
 use std::result::Result;
 
 /// The commit the repository pins the plugin to.
@@ -970,47 +966,118 @@ fn an_authority_without_a_version_fails() -> Outcome {
 }
 
 #[cfg(unix)]
-fn ci_runs_pass(runs: &str) -> Result<bool, String> {
-    if runs.is_empty() {
-        return Ok(false);
-    }
-    let mut grep = Command::new("grep")
-        .args(["-qvFx", "completed success"])
-        .stdin(Stdio::piped())
-        .spawn()
+fn ci_runs_pass(
+    script: &str,
+    environment: &[(String, &str)],
+    runs: &str,
+    api_status: i32,
+) -> Result<bool, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let gh = directory.path().join("gh");
+    fs::write(
+        &gh,
+        "#!/bin/sh\nprintf '%s\\n' \"$@\" >> \"$GH_CALL\"\nprintf '%s' \"$CI_RUNS\"\nexit \"$GH_STATUS\"\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fs::set_permissions(&gh, fs::Permissions::from_mode(0o755))
         .map_err(|error| error.to_string())?;
-    let Some(mut stdin) = grep.stdin.take() else {
-        return Err("grep input was not piped".to_string());
-    };
-    stdin
-        .write_all(runs.as_bytes())
+    let call = directory.path().join("gh-call");
+    let path = std::env::join_paths(std::iter::once(directory.path().to_path_buf()).chain(
+        std::env::split_paths(&std::env::var_os("PATH").ok_or("PATH is missing")?),
+    ))
+    .map_err(|error| error.to_string())?;
+    let output = Command::new("bash")
+        .args(["--noprofile", "--norc", "-e", "-c", script])
+        .current_dir(directory.path())
+        .envs(environment.iter().map(|(key, value)| (key, value)))
+        .env("PATH", path)
+        .env("GH_CALL", &call)
+        .env("CI_RUNS", runs)
+        .env("GH_STATUS", api_status.to_string())
+        .output()
         .map_err(|error| error.to_string())?;
-    drop(stdin);
-    match grep.wait().map_err(|error| error.to_string())?.code() {
-        Some(0) => Ok(false),
-        Some(1) => Ok(true),
-        code => Err(format!("grep returned unexpected exit code {code:?}")),
+    let arguments = fs::read_to_string(call).map_err(|error| error.to_string())?;
+    let expected = [
+        "api",
+        "repos/test/quota/actions/workflows/ci.yml/runs?head_sha=0123456789abcdef&per_page=100",
+        "--jq",
+        r#".workflow_runs[] | "\(.status) \(.conclusion)""#,
+    ];
+    if arguments.lines().collect::<Vec<_>>() != expected {
+        return Err(format!("preflight queried unexpected CI runs: {arguments}"));
     }
+    Ok(output.status.success())
 }
 
 #[cfg(unix)]
 #[test]
 fn release_preflight_requires_all_ci_runs_to_succeed() -> Outcome {
-    let workflow = include_str!("../../../.github/workflows/release.yml");
-    if !workflow.contains("grep -qvFx 'completed success'") {
-        return Err("release preflight must match the full successful CI line".to_string());
+    let workflow: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(include_str!("../../../.github/workflows/release.yml"))
+            .map_err(|error| error.to_string())?;
+    let preflight = workflow
+        .get("jobs")
+        .and_then(|jobs| jobs.get("preflight"))
+        .ok_or("the release preflight job is missing")?;
+    let steps = preflight
+        .get("steps")
+        .and_then(serde_yaml_ng::Value::as_sequence)
+        .ok_or("the release preflight steps are missing")?;
+    let matching = steps
+        .iter()
+        .filter(|step| {
+            step.get("name").and_then(serde_yaml_ng::Value::as_str)
+                == Some("The commit passed the normal checks")
+        })
+        .collect::<Vec<_>>();
+    let [step] = matching.as_slice() else {
+        return Err("the CI preflight step must appear exactly once".to_string());
+    };
+    if preflight.get("if").is_some()
+        || step.get("if").is_some()
+        || step.get("uses").is_some()
+        || step
+            .get("continue-on-error")
+            .is_some_and(|value| value.as_bool() != Some(false))
+    {
+        return Err("the CI preflight must run and enforce its exit status".to_string());
     }
-    if !workflow.contains("if [ -z \"$runs\" ]; then") {
-        return Err("release preflight must reject commits with no CI runs".to_string());
+    let script = step
+        .get("run")
+        .and_then(serde_yaml_ng::Value::as_str)
+        .ok_or("the CI preflight has no script")?;
+    let bindings = step
+        .get("env")
+        .and_then(serde_yaml_ng::Value::as_mapping)
+        .ok_or("the CI preflight has no environment")?;
+    let mut environment = Vec::new();
+    for (key, expression) in bindings {
+        let key = key.as_str().ok_or("the environment key is not a string")?;
+        let value = match expression.as_str() {
+            Some("${{ github.token }}") => "test-token",
+            Some("${{ github.repository }}") => "test/quota",
+            Some("${{ github.sha }}") => "0123456789abcdef",
+            _ => return Err(format!("unsupported preflight environment: {key}")),
+        };
+        environment.push((key.to_owned(), value));
     }
-    for (runs, expected) in [
-        ("completed success\ncompleted success", true),
-        ("completed success\ncompleted failure", false),
-        ("in_progress null", false),
-        ("completed cancelled", false),
-        ("", false),
+    for (runs, api_status, expected) in [
+        ("completed success", 0, true),
+        ("completed success\ncompleted success\n", 0, true),
+        ("completed success\ncompleted failure", 0, false),
+        ("completed failure\ncompleted success", 0, false),
+        ("in_progress null", 0, false),
+        ("queued null", 0, false),
+        ("completed cancelled", 0, false),
+        ("completed skipped", 0, false),
+        ("", 0, false),
+        ("completed success extra", 0, false),
+        ("", 1, false),
+        ("completed success", 1, false),
     ] {
-        let passed = ci_runs_pass(runs)?;
+        let passed = ci_runs_pass(script, &environment, runs, api_status)?;
         if passed != expected {
             return Err(format!(
                 "CI run output {runs:?} passed as {passed}, expected {expected}"
