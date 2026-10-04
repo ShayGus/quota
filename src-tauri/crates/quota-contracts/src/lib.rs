@@ -14,6 +14,7 @@ pub mod errors;
 pub mod events;
 pub mod preferences;
 pub mod refs;
+pub mod update;
 
 pub use commands::{
     AccountSelection, BeginConnectionRequest, ConnectionAttemptAccepted, PastedCredential,
@@ -28,3 +29,4 @@ pub use events::{
 };
 pub use preferences::{NotificationPolicy, NotificationThresholds, Preferences, PrivacyPolicy};
 pub use refs::{AccountRef, AttemptRef, ConnectionRef};
+pub use update::{UpdatePrompt, UpdatePromptChangedPayload, UpdateResponse};

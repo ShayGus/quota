@@ -17,6 +17,11 @@ import type { Plugin } from "vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
+// The version every window reports, stamped in from package.json so an update
+// can never leave the interface naming the old one.
+const version = (JSON.parse(readFileSync("package.json", "utf8")) as { version: string })
+  .version;
+
 function inspectionModule(id: string): boolean {
   let directory = dirname(id.split("?")[0] ?? id);
   if (!isAbsolute(directory)) return false;
@@ -61,6 +66,7 @@ export function inspectionReleaseCheck(): Plugin {
 
 export default defineConfig(() => ({
   plugins: [react({ compiler: { logDiagnostics: true } }), inspectionReleaseCheck()],
+  define: { __QUOTA_VERSION__: JSON.stringify(version) },
   build: {
     // Vite transpiles; `bun run typecheck` is the separate type gate (spec 7.8.1).
     outDir: "dist",

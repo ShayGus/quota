@@ -22,6 +22,7 @@ export const WINDOW_SIZE = {
   overview: { width: 440, height: 640 },
   settings: { width: 780, height: 600 },
   widget: { width: 316, height: 172 },
+  update: { width: 440, height: 250 },
 } as const;
 
 /** A loaded window and what the test can do with the faked host behind it. */
@@ -33,6 +34,8 @@ export interface Host {
   callsTo: (command: string) => Promise<RecordedCall[]>;
   /** Publishes a host event, as the Rust side does. */
   emit: (event: string, payload: unknown) => Promise<void>;
+  /** Lets a started update install end, the way the faked host's script says. */
+  finishUpdate: () => Promise<void>;
   /** The faked host's current snapshot and preferences. */
   hostState: () => Promise<{
     snapshot: FakeConfig["snapshot"];
@@ -111,6 +114,7 @@ export const test = base.extend<Fixtures>({
             event,
             payload,
           ] as const),
+        finishUpdate: () => target.evaluate(() => window.__quotaFake?.finishUpdate()),
         hostState: () =>
           target.evaluate(() => {
             const state = window.__quotaFake?.state();

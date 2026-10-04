@@ -70,6 +70,9 @@ test("the production identity is the one that was always shipped", () => {
         installMode: "currentUser",
       },
     },
+    macOS: {
+      signingIdentity: "-",
+    },
     linux: {
       appimage: {
         files: {
@@ -92,6 +95,7 @@ test("the production identity is the one that was always shipped", () => {
         depends: ["webkit2gtk4.1", "libappindicator-gtk3", "openssl-libs"],
       },
     },
+    createUpdaterArtifacts: true,
   });
 });
 
@@ -113,4 +117,12 @@ test("every development window says which build it is", () => {
   const devTitles = development().app.windows.map((window) => window.title);
   expect(devTitles).toEqual(["Quota Dev", "Quota Dev settings", "Quota Dev widget"]);
   expect(devTitles).not.toEqual(productionTitles);
+});
+
+test("a development package signs nothing and carries no update settings", () => {
+  // The release signs every package for the updater; a development package needs
+  // no key, and an overlay must not be able to change where updates come from.
+  expect(production.bundle?.["createUpdaterArtifacts"]).toBe(true);
+  expect(overlay.bundle).toEqual({ createUpdaterArtifacts: false });
+  expect(overlay).not.toHaveProperty("plugins");
 });

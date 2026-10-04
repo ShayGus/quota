@@ -19,10 +19,12 @@ import {
   type RefreshReason,
   type IndicatorStyle,
   type SettingsDestination,
+  type UpdateResponse,
 } from "../generated/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { disable, enable, isEnabled } from "@tauri-apps/plugin-autostart";
 import { reportAsync, reportSettled } from "../shared/ipc/report";
+import { respondToUpdate } from "../shared/ipc/update";
 import { reconcileSnapshot } from "../shared/ipc/subscription";
 import {
   acceptAttempt,
@@ -173,6 +175,10 @@ export const actions = {
   },
   async closeWindow(): Promise<void> {
     await getCurrentWindow().close();
+  },
+  /** Tells the host which button the update pop-up's person pressed. */
+  async respondToUpdate(response: UpdateResponse): Promise<void> {
+    await respondToUpdate(response);
   },
   /**
    * Whether Quota is registered to start at login, as the system reports it,

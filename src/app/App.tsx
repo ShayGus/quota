@@ -11,6 +11,8 @@ import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import type { OverviewFilter } from "../features/overview/OverviewToolbar";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
+import { UpdateWindow } from "../features/update/UpdatePrompt";
+import { useUpdatePrompt } from "../features/update/useUpdatePrompt";
 import { Widget } from "../features/widget/Widget";
 import type { AccountId, QuotaWindowId } from "../generated/bindings";
 import {
@@ -131,7 +133,22 @@ export function App(): JSX.Element {
   );
 }
 
-/** The window: the settings window, the mini widget, or the popover. */
+/** The update pop-up's window. It exists only while an update is being offered. */
+function UpdatePopup(): JSX.Element {
+  const prompt = useUpdatePrompt();
+  return (
+    <FeatureBoundary surface="update">
+      <UpdateWindow
+        prompt={prompt}
+        onRespond={(response) => {
+          launch(actions.respondToUpdate(response));
+        }}
+      />
+    </FeatureBoundary>
+  );
+}
+
+/** The window: the update pop-up, the settings window, the mini widget, or the popover. */
 function QuotaWindow(): JSX.Element {
   const state = useRendererState();
   useTheme(state);
@@ -140,6 +157,10 @@ function QuotaWindow(): JSX.Element {
   const isSettingsWindow = window.location.hash.startsWith("#/settings");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   useFailureToast(state.failure, setToast);
+  // The update pop-up is opened by the host with its own hash.
+  if (window.location.hash.startsWith("#/update")) {
+    return <UpdatePopup />;
+  }
   // The widget window is opened with its own hash. It is the compact view of
   // the app, and its only action is switching back to the full window.
   if (window.location.hash.startsWith("#/widget")) {

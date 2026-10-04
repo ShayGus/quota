@@ -54,6 +54,7 @@ quota-persistence = { workspace = true, features = ["tauri-plugins"] }
 quota-providers = { workspace = true }
 chrono = { workspace = true }
 serde = { workspace = true }
+semver = { workspace = true }
 serde_json = { workspace = true }
 specta = { workspace = true, features = ["derive"] }
 specta-typescript = { workspace = true }
@@ -65,6 +66,7 @@ tauri-plugin-opener = { workspace = true }
 tauri-plugin-single-instance = { workspace = true }
 tauri-plugin-sql = { workspace = true }
 tauri-plugin-store = { workspace = true }
+tauri-plugin-updater = { workspace = true }
 tauri-plugin-window-state = { workspace = true }
 tauri-specta = { workspace = true, features = ["derive", "typescript"] }
 thiserror = { workspace = true }
@@ -161,6 +163,7 @@ quota-providers = { path = "crates/quota-providers" }
 chrono = { version = "0.4.45", default-features = false, features = ["clock", "serde", "std"] }
 proptest = "1.11.0"
 serde = { version = "1.0.229", features = ["derive"] }
+semver = "=1.0.28"
 serde_json = "1.0.151"
 specta = "=2.0.0-rc.25"
 specta-serde = "0.0.12"
@@ -187,6 +190,7 @@ tauri-plugin-opener = "2.7.0"
 tauri-plugin-single-instance = "2.5.1"
 tauri-plugin-sql = { version = "2.5.0", features = ["sqlite"] }
 tauri-plugin-store = "2.5.0"
+tauri-plugin-updater = "=2.13.1"
 tauri-plugin-window-state = "2.5.0"
 tauri-specta = "=2.0.0-rc.25"
 tempfile = "3.27.0"

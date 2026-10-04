@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "update-capability",
+  "description": "The update pop-up, a small window the host opens when a newer version is published. It reads the snapshot only for the saved theme, asks the host what it is showing, and says which button the person pressed; it moves by its own header. It may not start, skip or redirect an update: the host owns the update flow, and no updater, process, store, SQL, filesystem, shell or HTTP permission is granted here.",
+  "windows": ["update"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:event:default",
+    "allow-get-snapshot",
+    "allow-get-update-prompt",
+    "allow-respond-to-update-prompt"
+  ]
+}

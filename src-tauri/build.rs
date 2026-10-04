@@ -32,6 +32,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "open_settings_window",
         "clear_local_history",
         "export_sanitized_diagnostics",
+        "get_update_prompt",
+        "respond_to_update_prompt",
     ]);
     // Tauri embeds its Windows application manifest as a resource linked into
     // the application binary only. Test binaries then load the version 5 common
