@@ -293,7 +293,10 @@ pub(super) fn attempt_error(error: ProviderError) -> CommandError {
     }
 }
 
-fn report_attempt_failure(error: CommandError, log: &str) -> CommandError {
+fn report_attempt_failure(
+    error: CommandError,
+    log: &(impl std::fmt::Display + ?Sized),
+) -> CommandError {
     let detail = match error {
         CommandError::Internal { code } => match code.as_str() {
             "browser_sign_in_timeout" => "The provider did not answer the sign-in in time. Try again.",

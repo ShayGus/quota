@@ -146,7 +146,12 @@ async fn open_page(
 
 /// The words a refused launch is reported in: what to open, what to type, and
 /// where to look afterwards.
-fn refused(url: &str, user_code: &str, detail: &str, log: &str) -> CommandError {
+fn refused(
+    url: &str,
+    user_code: &str,
+    detail: &str,
+    log: &(impl std::fmt::Display + ?Sized),
+) -> CommandError {
     CommandError::NativeOperationFailed {
         operation: "browser_launch".into(),
         reason: format!("{detail}. Open {url} and enter the code {user_code}. The log is at {log}"),
