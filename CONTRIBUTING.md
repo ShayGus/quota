@@ -61,15 +61,16 @@ From the repository root:
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
 bun run test:ui                        # interface tests, see section 7
-bun run build:e2e && xvfb-run -a bun run test:e2e   # real-app tests, Linux, see section 8
+bun run build:e2e && xvfb-run -a bun run test:e2e   # Linux real-app tests, see section 8
+bun run build:e2e && bun run test:e2e               # Windows real-app tests, see section 8
 ```
 
-CI runs exactly these commands. If a command passes locally and fails in CI, the
-difference is the environment, not the command.
+CI runs the relevant commands for each operating system. Linux uses `xvfb-run` for the
+real-app suite. Windows runs that suite directly.
 
-The same commands run on Windows and Linux, and are meant to run unchanged on macOS (see
-[Platforms](docs/platforms.md)). On Windows, stop a running development app first, because
-it holds `src-tauri\target\debug\quota.exe` open. Tauri needs the version 6 common
+The frontend and Rust commands run on Windows and Linux. They are meant to run unchanged
+on macOS (see [Platforms](docs/platforms.md)). On Windows, stop a running development app
+first. It holds `src-tauri\target\debug\quota.exe` open. Tauri needs the version 6 common
 controls, which only the Windows application manifest selects, so `src-tauri/build.rs` and
 `src-tauri/crates/quota-persistence/build.rs` hand `src-tauri/windows-app-manifest.xml` to
 the linker for every binary they link, tests included. A crate whose tests start linking
@@ -307,29 +308,30 @@ release workflow accepts a commit only when that file's CI run completed success
 a release needs the unit tests, the interface tests and every other CI job green on the
 exact commit. Keep new test layers inside `ci.yml` for the same reason.
 
-## 8. Real-app tests (Linux)
+## 8. Real-app tests (Linux and Windows)
 
 The interface tests fake the Rust host. The real-app suite does not: `bun run build:e2e`
 builds the actual desktop application in debug mode (twice: once as is, once as the test
-launcher with the `sample-data` feature, which seeds ten fixture accounts), and
-`bun run test:e2e` starts it under a display and drives it through `tauri-driver`, Tauri's
-official WebDriver server, which launches WebKitGTK's `WebKitWebDriver`. The client is a
-small W3C WebDriver client in `tests/e2e/webdriver.ts`; Vitest is the runner
-(`vitest.e2e.config.ts`), so the suite adds no dependency.
+launcher with the `sample-data` feature, which seeds ten fixture accounts).
+`bun run test:e2e` starts it through Tauri's official WebDriver server and drives it with
+the small W3C WebDriver client in `tests/e2e/webdriver.ts`.
 
-Every journey gets its own sandbox (`tests/e2e/sandbox.ts`): a temporary folder used as
-`HOME` and as every `XDG_*` folder, and a private D-Bus session bus. The application can
-neither read nor write the real user's data, the keyring, or another journey's
-single-instance lock. The folder is deleted afterwards.
+On Linux, the app runs under a display and uses WebKitGTK's `WebKitWebDriver`. Each
+journey gets a temporary `HOME`, isolated `XDG_*` folders, and a private D-Bus session
+bus. On Windows, the app uses Microsoft Edge WebDriver. The harness redirects the current
+user's `AppData` and `Local AppData` folders to the sandbox, then restores their settings
+after each journey. It sets a temporary `USERPROFILE` for sign-in files. The Windows job
+runs on `windows-2022`. The OS credential store is not isolated.
 
-The journeys are: adding an account against a fake provider (below); first launch with an
-empty profile; the main popover at 440 px; settings opening from the popover and a
-preference surviving a restart through the tray's Quit; the privacy aliases on the sample
-accounts; a second launch not starting a second app and bringing the first forward;
-quitting from the tray menu (chosen over D-Bus, the way a panel would) leaving no process
-and no lock behind; and the development identity: a debug build uses
-`app.quota.monitor.dev`, writes only under that folder name, and never creates the
-production one.
+The eight journeys cover: first launch with an empty profile; the main popover at 440 px;
+settings opening from the popover and a preference surviving a restart; privacy aliases on
+sample accounts; a second launch not starting a second app and bringing the first forward;
+quitting from the tray menu and leaving no process or lock behind; using the development
+identity without creating the production identity; and adding an account against a fake
+provider. On Windows, the settings journey ends its WebDriver session before restarting.
+Windows runs the seven journeys that WebDriver can drive. It marks the tray-menu quit
+journey as skipped because the native Windows tray menu is outside the WebDriver
+interface.
 
 Adding an account works against a fake provider, through the transport seam the provider
 crate offers to test builds. `bun run build:e2e` also builds
@@ -346,10 +348,10 @@ journey, which therefore runs the launcher build (with its ten seeded sample acc
 every other journey uses the ordinary debug build or, for the privacy aliases, the same
 launcher.
 
-Not covered: Windows, macOS, installed packages (these tests run the unpackaged debug
-binary), the tray icon's picture, which needs a panel, and the system credential store: a
-sandbox has no Secret Service, so only providers that read another tool's sign-in file
-(Codex here) can be added, not ones that keep a pasted key.
+Not covered: installing or upgrading an installer; SmartScreen; the real Windows
+credential store; the Windows tray-menu quit journey; macOS; and the tray icon's picture,
+which needs a panel. The sandboxed account-add journey uses a synthetic Codex file and a
+fake local provider. It does not verify system credential-store behavior.
 
 To run it locally on Linux you need a display, `dbus-daemon`, `busctl`, `tauri-driver` and
 `WebKitWebDriver`:
@@ -357,14 +359,22 @@ To run it locally on Linux you need a display, `dbus-daemon`, `busctl`, `tauri-d
 ```bash
 sudo apt install xvfb webkit2gtk-driver      # the package is webkitgtk-webdriver on newer Ubuntu
 cargo install tauri-driver --version 2.1.0 --locked
-bun run build:e2e                            # about 2 min cold, builds both binaries
-xvfb-run -a bun run test:e2e                 # about 15 s
+bun run build:e2e                            # builds both binaries
+xvfb-run -a bun run test:e2e
 ```
 
-With a desktop session you can run `bun run test:e2e` directly and watch the windows;
+On Windows, put a matching `msedgedriver.exe` on `PATH`, then run:
+
+```powershell
+cargo install tauri-driver --version 2.1.0 --locked
+bun run build:e2e
+bun run test:e2e
+```
+
+With a desktop session on Linux, `bun run test:e2e` opens the application windows.
 `QUOTA_E2E_APP` and `QUOTA_E2E_SAMPLE_APP` point the suite at other binaries. Screenshots
-and the logs of every journey are written to `test-results/e2e/`, and CI uploads them as
-`real-app-results`.
+and logs go to `test-results/e2e/`. CI uploads `real-app-results` and
+`real-app-windows-results`.
 
 ### How this gates a release
 

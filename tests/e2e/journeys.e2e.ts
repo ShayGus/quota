@@ -18,9 +18,12 @@ import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbo
 import { startFakeProvider } from "./fake-provider";
 import { waitFor } from "./webdriver";
 
-const APP = process.env["QUOTA_E2E_APP"] ?? "src-tauri/target/e2e/quota";
+const EXE = process.platform === "win32" ? ".exe" : "";
+const APP =
+  process.env["QUOTA_E2E_APP"] ?? join("src-tauri", "target", "e2e", `quota${EXE}`);
 const SAMPLE_APP =
-  process.env["QUOTA_E2E_SAMPLE_APP"] ?? "src-tauri/target/e2e/quota-sample";
+  process.env["QUOTA_E2E_SAMPLE_APP"] ??
+  join("src-tauri", "target", "e2e", `quota-sample${EXE}`);
 
 /** The identity a debug build must run under, from `tauri.dev.conf.json`. */
 const DEV_IDENTIFIER = "app.quota.monitor.dev";
@@ -28,8 +31,8 @@ const PRODUCTION_IDENTIFIER = "app.quota.monitor";
 
 let sandbox: Sandbox | null = null;
 
-afterEach(() => {
-  sandbox?.destroy();
+afterEach(async () => {
+  await sandbox?.destroy();
   sandbox = null;
 });
 
@@ -47,8 +50,12 @@ async function startOverview(world: Sandbox, binary: string): Promise<RunningApp
   return app;
 }
 
-/** Quits the way a person does, from the tray menu, then closes the session. */
+/** Exits from the tray on Linux, or ends the WebDriver session on Windows. */
 async function quit(world: Sandbox, app: RunningApp): Promise<void> {
+  if (process.platform === "win32") {
+    await app.stop();
+    return;
+  }
   expect(await waitFor("the tray menu", () => world.chooseTrayItem("Exit"))).toBe(true);
   await waitFor("the app to exit", () =>
     Promise.resolve(world.applicationProcesses(APP).length === 0),
@@ -208,28 +215,34 @@ describe("the real application", () => {
     await app.stop();
   });
 
-  it("quitting from the tray menu ends the app and leaves nothing behind", async () => {
-    const world = await begin("clean-quit");
-    const app = await startOverview(world, APP);
-    expect(world.applicationProcesses(APP)).toHaveLength(1);
-    expect(await world.busNames()).toContain(`${DEV_IDENTIFIER}.SingleInstance`);
+  // WebDriver cannot operate the native Windows tray menu.
+  (process.platform === "win32" ? it.skip : it)(
+    "quitting from the tray menu ends the app and leaves nothing behind",
+    async () => {
+      const world = await begin("clean-quit");
+      const app = await startOverview(world, APP);
+      expect(world.applicationProcesses(APP)).toHaveLength(1);
+      expect(await world.busNames()).toContain(`${DEV_IDENTIFIER}.SingleInstance`);
 
-    const chosen = await waitFor("the tray menu", () => world.chooseTrayItem("Exit"));
-    expect(chosen).toBe(true);
-    await waitFor("the app to exit", () =>
-      Promise.resolve(world.applicationProcesses(APP).length === 0),
-    );
-    // The single-instance lock is released, and no helper process is left.
-    await waitFor("the single-instance name to be released", async () =>
-      (await world.busNames()).includes(`${DEV_IDENTIFIER}.SingleInstance`) ? null : true,
-    );
-    expect(
-      world
-        .leftoverProcesses()
-        .filter((name) => name.startsWith("WebKit") && name !== "WebKitWebDriver"),
-    ).toEqual([]);
-    await app.session.end().catch(() => undefined);
-  });
+      const chosen = await waitFor("the tray menu", () => world.chooseTrayItem("Exit"));
+      expect(chosen).toBe(true);
+      await waitFor("the app to exit", () =>
+        Promise.resolve(world.applicationProcesses(APP).length === 0),
+      );
+      // The single-instance lock is released, and no helper process is left.
+      await waitFor("the single-instance name to be released", async () =>
+        (await world.busNames()).includes(`${DEV_IDENTIFIER}.SingleInstance`)
+          ? null
+          : true,
+      );
+      expect(
+        world
+          .leftoverProcesses()
+          .filter((name) => name.startsWith("WebKit") && name !== "WebKitWebDriver"),
+      ).toEqual([]);
+      await app.session.end().catch(() => undefined);
+    },
+  );
 
   it("a debug build runs under the Quota Dev identity and writes only its own folders", async () => {
     const world = await begin("dev-identity");
@@ -241,11 +254,14 @@ describe("the real application", () => {
     expect(existsSync(join(world.config, DEV_IDENTIFIER))).toBe(true);
     expect(existsSync(join(world.data, DEV_IDENTIFIER))).toBe(true);
     expect(foldersNamed(world.root, PRODUCTION_IDENTIFIER)).toEqual([]);
-    // The single-instance lock and the window titles use the same identity.
-    expect(await world.busNames()).toContain(`${DEV_IDENTIFIER}.SingleInstance`);
-    expect(await world.busNames()).not.toContain(
-      `${PRODUCTION_IDENTIFIER}.SingleInstance`,
-    );
+    if (process.platform === "linux") {
+      expect(await world.busNames()).toContain(`${DEV_IDENTIFIER}.SingleInstance`);
+      expect(await world.busNames()).not.toContain(
+        `${PRODUCTION_IDENTIFIER}.SingleInstance`,
+      );
+    } else {
+      expect(world.applicationProcesses(APP)).toHaveLength(1);
+    }
     await app.stop();
   });
 

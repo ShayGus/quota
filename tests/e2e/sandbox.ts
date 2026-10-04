@@ -1,17 +1,20 @@
 /**
  * The throwaway world one real-app journey runs in.
  *
- * Every journey gets its own directory with its own HOME and XDG folders and its
- * own private D-Bus session bus, so the app can neither read nor write the real
- * user's data and a second journey cannot see the first one's single-instance
- * lock. The folder is deleted afterwards. Nothing here touches the real HOME.
- *
- * Linux only: it needs a display (the CI job runs under `xvfb-run`), `dbus-daemon`,
- * `busctl`, `tauri-driver` and `WebKitWebDriver`.
+ * Linux isolates HOME, XDG folders, and a private D-Bus session. Windows
+ * redirects the user's roaming and local app folders and sets USERPROFILE for
+ * profile files. The app's OS credential store is not isolated.
  */
-import { spawn, execFile, type ChildProcess } from "node:child_process";
+import {
+  spawn,
+  spawnSync,
+  execFile,
+  execFileSync,
+  type ChildProcess,
+} from "node:child_process";
 import {
   cpSync,
+  linkSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -25,13 +28,35 @@ import {
 } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import process from "node:process";
 import { promisify } from "node:util";
 
 import { startSession, waitFor, type Session } from "./webdriver";
 
 const run = promisify(execFile);
+const SHELL_FOLDERS_KEY =
+  "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\User Shell Folders";
+const WINDOWS_ENVIRONMENT: Record<string, true> = {
+  PATH: true,
+  SYSTEMROOT: true,
+  WINDIR: true,
+  PATHEXT: true,
+  COMSPEC: true,
+  PROGRAMDATA: true,
+  PROGRAMFILES: true,
+  "PROGRAMFILES(X86)": true,
+  COMMONPROGRAMFILES: true,
+  "COMMONPROGRAMFILES(X86)": true,
+  PROCESSOR_ARCHITECTURE: true,
+  NUMBER_OF_PROCESSORS: true,
+  OS: true,
+};
+
+interface WindowsShellFolder {
+  readonly type: string;
+  readonly value: string;
+}
 
 /** Where logs and screenshots are kept for CI to upload. */
 export const RESULTS_DIRECTORY = join(process.cwd(), "test-results", "e2e");
@@ -55,6 +80,8 @@ export class Sandbox {
   private bus: ChildProcess | null = null;
   private driver: ChildProcess | null = null;
   private readonly children: ChildProcess[] = [];
+  private readonly stagedBinaries = new Map<string, string>();
+  private readonly windowsShellFolders = new Map<string, WindowsShellFolder>();
 
   public readonly name: string;
 
@@ -63,55 +90,154 @@ export class Sandbox {
     this.root = root;
     this.home = join(root, "home");
     this.config = join(root, "config");
-    this.data = join(root, "data");
+    this.data = process.platform === "win32" ? this.config : join(root, "data");
     this.cache = join(root, "cache");
     this.runtime = join(root, "run");
     for (const directory of [
       this.home,
       this.config,
-      this.data,
+      ...(process.platform === "win32" ? [] : [this.data]),
       this.cache,
       this.runtime,
       join(root, "logs"),
     ]) {
       mkdirSync(directory, { recursive: true, mode: 0o700 });
     }
-    const display = process.env["DISPLAY"];
-    if (display === undefined || display === "") {
-      throw new Error(
-        "no DISPLAY: run the real-app suite under a display, for example `xvfb-run -a bun run test:e2e`",
+
+    if (process.platform === "win32") {
+      const inherited = Object.fromEntries(
+        Object.entries(process.env).filter(
+          ([name]) => WINDOWS_ENVIRONMENT[name.toUpperCase()] === true,
+        ),
       );
+      this.env = {
+        ...inherited,
+        HOME: this.home,
+        USERPROFILE: this.home,
+        APPDATA: this.config,
+        LOCALAPPDATA: this.cache,
+        TEMP: this.runtime,
+        TMP: this.runtime,
+        RUST_BACKTRACE: "1",
+      };
+    } else {
+      const display = process.env["DISPLAY"];
+      if (display === undefined || display === "") {
+        throw new Error(
+          "no DISPLAY: run the real-app suite under a display, for example `xvfb-run -a bun run test:e2e`",
+        );
+      }
+      this.env = {
+        // Everything the app resolves a folder from is inside the sandbox.
+        PATH: process.env["PATH"],
+        LD_LIBRARY_PATH: process.env["LD_LIBRARY_PATH"],
+        DISPLAY: display,
+        // `xvfb-run` protects its display with an authority file; without it GTK
+        // is refused and the app cannot open a window.
+        XAUTHORITY: process.env["XAUTHORITY"],
+        // No GPU under a virtual display: draw in software.
+        LIBGL_ALWAYS_SOFTWARE: "1",
+        HOME: this.home,
+        XDG_CONFIG_HOME: this.config,
+        XDG_DATA_HOME: this.data,
+        XDG_CACHE_HOME: this.cache,
+        XDG_RUNTIME_DIR: this.runtime,
+        XDG_STATE_HOME: join(root, "state"),
+        // The keyring and WebKit must not find the real session's services.
+        DBUS_SESSION_BUS_ADDRESS: `unix:path=${join(root, "run", "bus")}`,
+        NO_AT_BRIDGE: "1",
+        WEBKIT_DISABLE_COMPOSITING_MODE: "1",
+        RUST_BACKTRACE: "1",
+      };
     }
-    this.env = {
-      // Everything the app resolves a folder from is inside the sandbox.
-      PATH: process.env["PATH"],
-      LD_LIBRARY_PATH: process.env["LD_LIBRARY_PATH"],
-      DISPLAY: display,
-      // `xvfb-run` protects its display with an authority file; without it GTK
-      // is refused and the app cannot open a window.
-      XAUTHORITY: process.env["XAUTHORITY"],
-      // No GPU under a virtual display: draw in software.
-      LIBGL_ALWAYS_SOFTWARE: "1",
-      HOME: this.home,
-      XDG_CONFIG_HOME: this.config,
-      XDG_DATA_HOME: this.data,
-      XDG_CACHE_HOME: this.cache,
-      XDG_RUNTIME_DIR: this.runtime,
-      XDG_STATE_HOME: join(root, "state"),
-      // The keyring and WebKit must not find the real session's services.
-      DBUS_SESSION_BUS_ADDRESS: `unix:path=${join(root, "run", "bus")}`,
-      NO_AT_BRIDGE: "1",
-      WEBKIT_DISABLE_COMPOSITING_MODE: "1",
-      RUST_BACKTRACE: "1",
-    };
   }
 
-  /** Creates the folders and starts the private session bus. */
+  /** Creates an isolated sandbox for the current platform. */
   public static async create(name: string): Promise<Sandbox> {
     const root = mkdtempSync(join(tmpdir(), "quota-e2e-"));
     const sandbox = new Sandbox(name, root);
-    await sandbox.startBus();
-    return sandbox;
+    try {
+      if (process.platform === "win32") await sandbox.redirectWindowsFolders();
+      else await sandbox.startBus();
+      return sandbox;
+    } catch (error) {
+      await sandbox.destroy();
+      throw error;
+    }
+  }
+
+  private async redirectWindowsFolders(): Promise<void> {
+    for (const name of ["AppData", "Local AppData"]) {
+      const { stdout } = await run("reg.exe", ["query", SHELL_FOLDERS_KEY, "/v", name]);
+      const row = stdout
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .find((line) => line.startsWith(`${name} `));
+      const value = row?.match(/^(.+?)\s+(REG_[A-Z_]+)\s+(.+)$/);
+      if (value?.[1] !== name || value[2] === undefined || value[3] === undefined) {
+        throw new Error(`could not read the Windows ${name} folder setting`);
+      }
+      this.windowsShellFolders.set(name, { type: value[2], value: value[3] });
+    }
+
+    try {
+      for (const [name, path] of [
+        ["AppData", this.config],
+        ["Local AppData", this.cache],
+      ] as const) {
+        await run("reg.exe", [
+          "add",
+          SHELL_FOLDERS_KEY,
+          "/v",
+          name,
+          "/t",
+          this.windowsShellFolders.get(name)?.type ?? "REG_SZ",
+          "/d",
+          path,
+          "/f",
+        ]);
+      }
+
+      const { stdout } = await run(
+        "powershell.exe",
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
+          "[Environment]::GetFolderPath([Environment+SpecialFolder]::ApplicationData); [Environment]::GetFolderPath([Environment+SpecialFolder]::LocalApplicationData)",
+        ],
+        { env: this.env },
+      );
+      const [roaming, local] = stdout.trim().split(/\r?\n/);
+      if (
+        roaming === undefined ||
+        local === undefined ||
+        resolve(roaming).toLowerCase() !== resolve(this.config).toLowerCase() ||
+        resolve(local).toLowerCase() !== resolve(this.cache).toLowerCase()
+      ) {
+        throw new Error("Windows did not apply the sandbox's app-folder paths");
+      }
+    } catch (error) {
+      await this.restoreWindowsFolders();
+      throw error;
+    }
+  }
+
+  private async restoreWindowsFolders(): Promise<void> {
+    for (const [name, folder] of this.windowsShellFolders) {
+      await run("reg.exe", [
+        "add",
+        SHELL_FOLDERS_KEY,
+        "/v",
+        name,
+        "/t",
+        folder.type,
+        "/d",
+        folder.value,
+        "/f",
+      ]);
+    }
+    this.windowsShellFolders.clear();
   }
 
   private async startBus(): Promise<void> {
@@ -135,6 +261,7 @@ export class Sandbox {
     binary: string,
     extraEnvironment: NodeJS.ProcessEnv = {},
   ): Promise<RunningApp> {
+    const application = this.stagedBinary(binary);
     const port = await freePort();
     const logPath = join(this.root, "logs", `driver-${String(Date.now())}.log`);
     const log = openLog(logPath);
@@ -148,16 +275,20 @@ export class Sandbox {
       const response = await fetch(`${base}/status`).catch(() => null);
       return response?.ok === true ? true : null;
     });
-    const session = await startSession(base, realpathSync(binary));
+    const session = await startSession(base, application);
     return {
       session,
       stop: async () => {
         await session.end().catch(() => undefined);
-        driver.kill("SIGTERM");
-        this.driver = null;
         await waitFor("the application to exit", () =>
           Promise.resolve(this.applicationProcesses(binary).length === 0),
         );
+        if (process.platform === "win32") {
+          if (driver.pid !== undefined) terminateProcessTree(driver.pid);
+        } else {
+          driver.kill("SIGTERM");
+        }
+        this.driver = null;
       },
     };
   }
@@ -175,9 +306,24 @@ export class Sandbox {
     );
   }
 
+  private stagedBinary(binary: string): string {
+    const source = realpathSync(binary);
+    if (process.platform !== "win32") return source;
+    const existing = this.stagedBinaries.get(source);
+    if (existing !== undefined) return existing;
+    const suffix = extname(source);
+    const staged = join(
+      dirname(source),
+      `${basename(source, suffix)}-${basename(this.root)}${suffix}`,
+    );
+    linkSync(source, staged);
+    this.stagedBinaries.set(source, staged);
+    return staged;
+  }
+
   /** Starts a second copy of the application directly, as a person would. */
   public launchDirect(binary: string): ChildProcess {
-    const child = spawn(realpathSync(binary), [], {
+    const child = spawn(this.stagedBinary(binary), [], {
       env: this.env,
       stdio: "ignore",
     });
@@ -185,19 +331,30 @@ export class Sandbox {
     return child;
   }
 
-  /**
-   * The ids of the processes of this application that belong to this sandbox.
-   * A process belongs to it when its executable is the binary and its
-   * environment carries this sandbox's HOME.
-   */
+  /** The pids of this sandbox's application process. */
   public applicationProcesses(binary: string): number[] {
-    const target = realpathSync(binary);
+    const target = this.stagedBinary(binary);
+    if (process.platform === "win32") {
+      const image = basename(target);
+      const output = execFileSync(
+        "tasklist.exe",
+        ["/FI", `IMAGENAME eq ${image}`, "/FO", "CSV", "/NH"],
+        { encoding: "utf8" },
+      );
+      return output.split(/\r?\n/).flatMap((line) => {
+        const match = /^"([^"]+)","(\d+)"/.exec(line);
+        return match?.[1]?.toLowerCase() === image.toLowerCase() && match[2] !== undefined
+          ? [Number(match[2])]
+          : [];
+      });
+    }
+    const targetPath = realpathSync(target);
     const marker = `HOME=${this.home}`;
     return readdirSync("/proc")
       .filter((entry) => /^\d+$/.test(entry))
       .filter((entry) => {
         try {
-          if (readlinkSync(`/proc/${entry}/exe`) !== target) return false;
+          if (readlinkSync(`/proc/${entry}/exe`) !== targetPath) return false;
           return readFileSync(`/proc/${entry}/environ`, "utf8")
             .split("\0")
             .includes(marker);
@@ -304,25 +461,55 @@ export class Sandbox {
     writeFileSync(join(directory, `${name}.png`), Buffer.from(png, "base64"));
   }
 
-  /** Keeps the logs, then removes the sandbox and everything started in it. */
-  public destroy(): void {
-    // A journey that failed midway leaves the app running; nothing may outlive it.
-    for (const pid of this.sandboxPids()) {
+  /** Keeps logs, stops child processes, restores Windows paths, then deletes the sandbox. */
+  public async destroy(): Promise<void> {
+    try {
+      if (process.platform === "win32") {
+        for (const binary of this.stagedBinaries.keys()) {
+          for (const pid of this.applicationProcesses(binary)) terminateProcessTree(pid);
+        }
+        for (const child of [this.driver, this.bus, ...this.children]) {
+          if (child?.pid !== undefined) terminateProcessTree(child.pid);
+        }
+      } else {
+        // A journey that failed midway leaves the app running; nothing may outlive it.
+        for (const pid of this.sandboxPids()) {
+          try {
+            process.kill(pid, "SIGKILL");
+          } catch {
+            // Already gone.
+          }
+        }
+        for (const child of [this.driver, this.bus, ...this.children]) {
+          child?.kill("SIGKILL");
+        }
+      }
+      const logs = join(this.root, "logs");
+      const kept = join(RESULTS_DIRECTORY, "logs", this.name.replaceAll(/[^\w-]+/g, "_"));
+      mkdirSync(kept, { recursive: true });
+      cpSync(logs, kept, { recursive: true });
+    } finally {
       try {
-        process.kill(pid, "SIGKILL");
-      } catch {
-        // Already gone.
+        for (const binary of this.stagedBinaries.values()) {
+          rmSync(binary, { force: true });
+        }
+      } finally {
+        try {
+          await this.restoreWindowsFolders();
+        } finally {
+          rmSync(this.root, { recursive: true, force: true });
+        }
       }
     }
-    for (const child of [this.driver, this.bus, ...this.children]) {
-      child?.kill("SIGKILL");
-    }
-    const logs = join(this.root, "logs");
-    const kept = join(RESULTS_DIRECTORY, "logs", this.name.replaceAll(/[^\w-]+/g, "_"));
-    mkdirSync(kept, { recursive: true });
-    cpSync(logs, kept, { recursive: true });
-    rmSync(this.root, { recursive: true, force: true });
   }
+}
+
+function terminateProcessTree(pid: number): void {
+  const result = spawnSync("taskkill.exe", ["/PID", String(pid), "/T", "/F"], {
+    stdio: "ignore",
+    windowsHide: true,
+  });
+  if (result.error !== undefined) throw result.error;
 }
 
 /** Opens a log file for a child's output and returns its descriptor. */
