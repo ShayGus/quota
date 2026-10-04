@@ -149,11 +149,11 @@ monitoring pause. A countdown names eligibility, not a guarantee of immediate co
 
 ## Diagnostics
 
-In Settings → Diagnostics, **Export diagnostics** writes
-`quota-diagnostics-settings.json` in the `diagnostics` folder under Quota's application
-data directory, on Windows as on Linux. **Saved to** shows the full path after the write
-succeeds. Repeating the export replaces that file. The host chooses the folder; there is
-no destination picker. Filesystem or containment failures show a reason and log status.
+In Settings → Diagnostics, **Export diagnostics** writes `quota-diagnostics-settings.json`
+in the `diagnostics` folder under Quota's application data directory, on Windows as on
+Linux. **Saved to** shows the full path after the write succeeds. Repeating the export
+replaces that file. The host chooses the folder; there is no destination picker.
+Filesystem or containment failures show a reason and log status.
 
 The export contains the account count, provider identifiers, and polling settings. It
 contains no account identities, credentials, cookies, profile paths, or raw provider

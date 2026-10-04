@@ -55,7 +55,7 @@ pub(super) async fn sign_in(
         _ = cancelled.changed() => return Ok(None),
         started = tokio::time::timeout(REMOTE_TIMEOUT, adapter.begin_device_sign_in()) => started
             .map_err(|_| timed_out())?
-            .map_err(attempt_error)?,
+            .map_err(|error| attempt_error(&error))?,
     };
     let page = authorization
         .verification_uri_complete
@@ -177,7 +177,7 @@ async fn wait(
                 adapter.poll_device_sign_in(authorization),
             ) => polled
                 .map_err(|_| timed_out())?
-                .map_err(attempt_error)?,
+                .map_err(|error| attempt_error(&error))?,
         };
         match polled {
             DevicePoll::Pending => {}
