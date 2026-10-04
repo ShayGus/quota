@@ -1,9 +1,10 @@
 /**
  * Add an account: Provider → Connect → Verify.
  *
- * Connecting uses the provider's existing local sign-in, or, for a provider
- * with no local tool, an API key the person pastes, which goes straight to the
- * host. A verified attempt is held by the host as a pending
+ * Connecting uses the provider's existing local sign-in, or an API key the
+ * person pastes, which goes straight to the host; a provider whose own tool
+ * can stand in for a key, such as OpenCode Go, is signed in by either. A
+ * verified attempt is held by the host as a pending
  * candidate: nothing is saved and no monitoring starts until the person
  * confirms it and names it here. Leaving the wizard by any route, whether
  * Back, Cancel, Escape, or opening a fresh wizard, discards the candidate, so
@@ -222,10 +223,10 @@ export function ConnectionWizard({
           </button>
         ))}
         <div className="note">
-          Codex, Claude, OpenCode Go and Cursor use the sign-in their own apps keep on
-          this computer. Grok and Muse Code sign in on their own page in your browser, and
-          the others take an API key. Quota keeps what it is given in{" "}
-          {credentialStoreName()} and never asks for a password.
+          Codex, Claude and Cursor use the sign-in their own apps keep on this computer.
+          Grok and Muse Code sign in on their own page in your browser, and the others
+          take an API key. Quota keeps what it is given in {credentialStoreName()} and
+          never asks for a password.
         </div>
       </>
     );

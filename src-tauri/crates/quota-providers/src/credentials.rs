@@ -34,6 +34,15 @@ const CODEX_TOKEN_PATH: &[&str] = &["tokens", "access_token"];
 /// The `OpenCode` file entry that belongs to Go, and the only one used.
 const OPENCODE_GO_ENTRY: &str = "opencode-go";
 
+/// The profile label for an `OpenCode` key taken from `OPENCODE_API_KEY`.
+const OPENCODE_ENV_PROFILE: &str = "opencode-api-key-env";
+
+/// The profile label for an `OpenCode` key read under `XDG_DATA_HOME`.
+const OPENCODE_XDG_ENV_PROFILE: &str = "opencode-xdg-env";
+
+/// The profile label for an `OpenCode` key read under the default data home.
+const OPENCODE_XDG_DEFAULT_PROFILE: &str = "opencode-xdg-default";
+
 /// A credential value that never reveals itself through `Debug`.
 ///
 /// The value is deliberately not `Clone`, so no copy of it can drift into a
@@ -133,7 +142,7 @@ pub(crate) async fn opencode_go_credential() -> Result<OpenCodeGoCredential, Pro
     if let Some(key) = lookup("OPENCODE_API_KEY") {
         return Ok(OpenCodeGoCredential {
             key: SecretToken::new(key),
-            profile_label: "opencode-api-key-env".to_owned(),
+            profile_label: OPENCODE_ENV_PROFILE.to_owned(),
         });
     }
     let (path, profile_label) = opencode_auth_file(platform::system(), lookup)?;
@@ -196,7 +205,7 @@ pub fn opencode_auth_file(
     Ok(match lookup("XDG_DATA_HOME").map(PathBuf::from) {
         Some(dir) => (
             dir.join("opencode").join("auth.json"),
-            "opencode-xdg-env".to_owned(),
+            OPENCODE_XDG_ENV_PROFILE.to_owned(),
         ),
         None => (
             profile_directory(platform, lookup)?
@@ -204,9 +213,22 @@ pub fn opencode_auth_file(
                 .join("share")
                 .join("opencode")
                 .join("auth.json"),
-            "opencode-xdg-default".to_owned(),
+            OPENCODE_XDG_DEFAULT_PROFILE.to_owned(),
         ),
     })
+}
+
+/// Whether a connection's profile is a local `OpenCode` sign-in Quota only
+/// reads, rather than a key the person pasted.
+///
+/// A pasted key's profile is its fingerprint (see [`crate::keyed::profile`]);
+/// every label this module produces for the `OpenCode` login's own key starts
+/// here, so the read path can tell the two credentials apart without opening
+/// either store first.
+pub(crate) fn opencode_go_local_profile(profile_label: &str) -> bool {
+    profile_label == OPENCODE_ENV_PROFILE
+        || profile_label == OPENCODE_XDG_ENV_PROFILE
+        || profile_label == OPENCODE_XDG_DEFAULT_PROFILE
 }
 
 /// The user profile for profile-relative credential paths.
@@ -291,5 +313,20 @@ mod tests {
         assert_eq!(string_at(&root, CLAUDE_TOKEN_PATHS), Some("two".to_owned()));
         let empty = serde_json::json!({"refreshToken": "only"});
         assert_eq!(string_at(&empty, CLAUDE_TOKEN_PATHS), None);
+    }
+
+    /// Every label this module gives an `OpenCode` login's key is a local
+    /// profile, and a pasted key's fingerprint is not mistaken for one.
+    #[test]
+    fn an_opencode_go_profile_tells_the_local_login_from_a_pasted_key() {
+        for label in [
+            OPENCODE_ENV_PROFILE,
+            OPENCODE_XDG_ENV_PROFILE,
+            OPENCODE_XDG_DEFAULT_PROFILE,
+        ] {
+            assert!(opencode_go_local_profile(label), "{label} is local");
+        }
+        assert!(!opencode_go_local_profile("key-0123456789abcdef"));
+        assert!(!opencode_go_local_profile(""));
     }
 }

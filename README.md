@@ -1,8 +1,8 @@
 # Quota
 
 Quota is a desktop monitor for AI subscription allowances. It tracks accounts across
-Codex, Claude, and OpenCode Go and shows their remaining allowances. Production adapters
-use one local credential profile per provider; see
+Codex, Claude, and OpenCode Go and shows their remaining allowances. Each local sign-in is
+one credential profile, and a pasted key is its own connection; see
 [provider connection limits](docs/providers.md). Same-provider account isolation is
 covered by the fictional fixture provider.
 
@@ -100,25 +100,27 @@ procedure, including the first-release checks.
 ## Connect and refresh accounts
 
 Choose Add account in the popover or in Settings → Accounts to open the settings window on
-its add-account page: Provider → Connect → Verify. Choose a provider and press Connect.
-Quota reads an existing credential from the provider's client; it does not sign you in.
-The button stays busy until verification finishes, then shows the result. If a credential
-is missing or rejected, follow the provider-specific recovery guidance:
+its add-account page: Provider → Connect → Verify. Choose a provider and follow its
+connection instructions, then press Connect. Keyed providers offer a masked API-key box.
+For OpenCode Go, leave it empty to use the existing OpenCode CLI sign-in, or paste a key
+to add a separate connection. The button stays busy until verification finishes, then
+shows the result. If a credential is missing or rejected, follow the provider-specific
+recovery guidance:
 
 - Codex: run `codex login` in a terminal.
 - Claude: run `claude` in a terminal and sign in to Claude Code.
-- OpenCode Go: sign in through OpenCode, or set `OPENCODE_API_KEY` in Quota's process
-  environment.
+- OpenCode Go: paste a key from opencode.ai/auth, or run `opencode auth login` with the
+  OpenCode CLI.
 
 After signing in, press Connect again. Verify shows the account the provider verified, its
 workspace and plan, and each quota reading, with the nickname it will be saved under.
 Choose **Add <provider> account** to add it, or **Not this account** to discard it and
 read how to switch that provider to the account you meant. Nothing is saved and no
-monitoring starts before Add; Not this account, Cancel, closing the settings window, or
-restarting the app discards the verified result and leaves no account behind. Once saved,
-the account appears even if the confirmation reply or the next snapshot is lost on the
-way. With Hide account labels enabled, a pending identity is replaced exactly as a saved
-one is. Starting a new Add account request opens a fresh wizard.
+monitoring starts before Add; Not this account, Cancel, leaving the wizard, or restarting
+the app discards the verified result and leaves no account behind. Once saved, the account
+appears even if the confirmation reply or the next snapshot is lost on the way. With Hide
+account labels enabled, a pending identity is replaced exactly as a saved one is. Starting
+a new Add account request opens a fresh wizard.
 [Provider credential discovery](docs/providers.md) owns the supported locations and
 overrides, including Windows defaults that work without `HOME`.
 

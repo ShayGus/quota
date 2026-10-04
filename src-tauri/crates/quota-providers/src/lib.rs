@@ -1,10 +1,10 @@
 //! Provider adapters for Quota.
 //!
-//! Each module here is one connector: it discovers the credential another client
-//! owns, reads that provider's quota source within a bounded HTTP boundary, and
-//! normalises the payload into [`quota_domain::quota::window::QuotaWindow`]
-//! values. Nothing in this crate starts a conversation, a turn, or a tool call,
-//! and nothing writes to, refreshes, or rotates an externally owned credential.
+//! Each module here is one connector: it reads its provider's quota source
+//! within a bounded HTTP boundary and normalises the payload into
+//! [`quota_domain::quota::window::QuotaWindow`] values. Nothing in this crate
+//! starts a conversation, a turn, or a tool call, and nothing writes to,
+//! refreshes, or rotates an externally owned credential.
 //!
 //! # Compiled-in providers
 //!
@@ -15,18 +15,18 @@
 //!
 //! # Schema risk
 //!
-//! Every endpoint these adapters read is undocumented. The field spellings,
-//! endpoint paths, and payload shapes are recorded in `README.md` together with
-//! whether each reading is verified against a live login or only assumed. The
+//! The field spellings, endpoint paths, and payload shapes are recorded in
+//! `README.md`; live-login verification status is owned by `docs/providers.md`
+//! at the repository root. Undocumented endpoints can change without notice. The
 //! decoders tolerate unknown fields and accept every documented spelling of every
 //! field, so an added provider field cannot fail a parse or silently change what
 //! a number means.
 //!
 //! # Credentials
 //!
-//! Credential files belong to the Codex CLI, Claude Code, and the local
-//! `OpenCode` login. This crate reads them, never writes them, and never logs a
-//! token, a cookie, an address, a profile path, a request body, or a full URL.
+//! Externally owned credential files remain read-only; see [`credentials`] for
+//! their readers and `keyed` for app-owned keys. This crate never logs a token,
+//! a cookie, an address, a profile path, a request body, or a full URL.
 
 #![forbid(unsafe_code)]
 // Provider failures are mapped onto this crate's closed `ProviderError`, whose

@@ -1,10 +1,11 @@
 /**
  * What the add-account wizard says about each provider it offers.
  *
- * Codex, Claude and OpenCode Go are read through the sign-in their own tools
- * already keep on this computer. A provider with no such tool is signed in by
- * Quota itself with an API key, which the host keeps in the system credential
- * store and never in Quota's own files.
+ * Codex, Claude and Cursor are read through the sign-in their own tools
+ * already keep on this computer. A provider Quota signs in to itself takes an
+ * API key, which the host keeps in the system credential store and never in
+ * Quota's own files; when the provider's own tool can stand in for a key, as
+ * the OpenCode CLI does, the key is optional.
  */
 
 /** The providers the wizard offers, in the order it lists them. */
@@ -50,7 +51,12 @@ export type SignIn =
 export const SIGN_IN: Record<OfferedProvider, SignIn> = {
   codex: { kind: "local" },
   claude: { kind: "local" },
-  open_code_go: { kind: "local" },
+  open_code_go: {
+    kind: "api_key",
+    keyPage: "opencode.ai/auth",
+    placeholder: "Your OpenCode API key",
+    cli: { name: "OpenCode CLI", signIn: "opencode auth login" },
+  },
   cursor: { kind: "local" },
   openrouter: {
     kind: "api_key",
@@ -115,7 +121,7 @@ export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
   claude:
     "Claude Code sign-in is required. Run claude in a terminal, sign in, then press Connect again.",
   open_code_go:
-    "OpenCode Go sign-in is required. Sign in with OpenCode, or set OPENCODE_API_KEY, then press Connect again.",
+    "OpenCode Go needs a sign-in. Paste a key from opencode.ai/auth, or sign in with the OpenCode CLI (opencode auth login), then press Connect again.",
   cursor:
     "Cursor sign-in is required. Open the Cursor app and sign in, then press Connect again.",
   openrouter:
@@ -138,7 +144,7 @@ export const SWITCH_ACCOUNT: Record<OfferedProvider, string> = {
   claude:
     "To add a different Claude account, sign in to it in Claude Code (/login), then press Connect again.",
   open_code_go:
-    "To add a different OpenCode Go account, sign in to it with OpenCode, then press Connect again.",
+    "To add a different OpenCode Go account, paste an API key from it, or sign in to it with the OpenCode CLI, then press Connect again.",
   cursor:
     "To add a different Cursor account, sign in to it in the Cursor app, then press Connect again.",
   openrouter:

@@ -4,6 +4,7 @@
  * is what the renderer asks for and what it shows at each step.
  */
 import { expect, test } from "./harness";
+import { candidate, percent, window as quotaWindow } from "../fixtures";
 import { defaultPreferences, scenario, verifiedConnection } from "./scenarios";
 
 const CONNECT = "#/settings/connect/1";
@@ -93,6 +94,134 @@ test.describe("add-account wizard", () => {
     };
     expect(begin.request.credential).toBe("sk-or-v1-not-a-real-key");
   });
+
+  for (const theme of ["light", "dark"] as const) {
+    test(`OpenCode Go takes a pasted key and the account is added (${theme})`, async ({
+      open,
+    }) => {
+      const host = await open(
+        scenario("settings", {
+          preferences: defaultPreferences({ theme }),
+          connection: {
+            progress: [
+              { kind: "started" },
+              {
+                kind: "awaiting_confirmation",
+                context: {
+                  candidate: candidate("open_code_go", [
+                    quotaWindow("oc-5h", "session", percent(64), { label: "5-hour" }),
+                  ]),
+                },
+              },
+            ],
+          },
+        }),
+        CONNECT,
+      );
+      const { page } = host;
+      await page.getByRole("button", { name: /OpenCode Go/ }).click();
+      await expect(
+        page.getByRole("heading", { name: "Connect OpenCode Go" }),
+      ).toBeVisible();
+      await expect(page.locator(".badge")).toHaveText("API KEY");
+      const key = page.getByLabel("API key");
+      await expect(key).toHaveAttribute("type", "password");
+      await expect(key).toHaveAttribute("placeholder", "Your OpenCode API key");
+      await expect(
+        page.getByText(/leave it empty to use the sign-in the OpenCode CLI/),
+      ).toBeVisible();
+      await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
+      await host.screenshot(`wizard-opencode-key-${theme}`);
+      await key.fill("  oc-go-not-a-real-key  ");
+      await page.getByRole("button", { name: "Connect", exact: true }).click();
+      await expect(
+        page.getByRole("heading", { name: "Add this account?" }),
+      ).toBeVisible();
+      const begins = await host.callsTo("begin_connection");
+      expect(begins).toHaveLength(1);
+      const begin = begins[0]?.args as {
+        request: { credential: string };
+      };
+      expect(begin.request.credential).toBe("oc-go-not-a-real-key");
+      await page.getByRole("textbox").fill("Go");
+      await page.getByRole("button", { name: "Add OpenCode Go account" }).click();
+      await expect(
+        page.getByRole("heading", { name: "Accounts", level: 3 }),
+      ).toBeVisible();
+      await expect(page.getByLabel("Manage OpenCode Go Go")).toBeVisible();
+      await host.screenshot(`wizard-opencode-saved-${theme}`);
+      const confirmations = await host.callsTo("confirm_connection");
+      expect(confirmations).toHaveLength(1);
+      const confirm = confirmations[0]?.args as {
+        nickname: string;
+      };
+      expect(confirm.nickname).toBe("Go");
+    });
+  }
+
+  test("OpenCode Go with no pasted key signs in through its CLI", async ({ open }) => {
+    const host = await open(
+      scenario("settings", { connection: { progress: [{ kind: "started" }] } }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /OpenCode Go/ }).click();
+    await expect(
+      page.getByText(/leave it empty to use the sign-in the OpenCode CLI/),
+    ).toBeVisible();
+    const connect = page.getByRole("button", { name: "Connect", exact: true });
+    await expect(connect).toBeEnabled();
+    await connect.click();
+    await expect(page.getByRole("button", { name: "Verifying…" })).toBeVisible();
+    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
+      request: { credential: unknown; provider_id: string };
+    };
+    expect(begin.request.provider_id).toBe("open_code_go");
+    expect(begin.request.credential).toBeNull();
+  });
+
+  test("an OpenCode Go key the provider refuses explains how to recover", async ({
+    open,
+  }) => {
+    const base = defaultPreferences();
+    const host = await open(
+      scenario("settings", {
+        preferences: { ...base, theme: "light" },
+        connection: {
+          progress: [
+            { kind: "started" },
+            { kind: "failed", context: { error: { kind: "reconnect_required" } } },
+          ],
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /OpenCode Go/ }).click();
+    await page.getByLabel("API key").fill("oc-go-refused");
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByRole("alert")).toContainText("opencode.ai/auth");
+    await expect(page.getByRole("alert")).toContainText("opencode auth login");
+    await expect(page.getByRole("alert")).toContainText("press Connect again");
+    await host.screenshot("wizard-opencode-refused-light");
+  });
+
+  for (const provider of ["Codex", "Claude", "Cursor"] as const) {
+    test(`local-only providers still offer no key box (${provider})`, async ({
+      open,
+    }) => {
+      const host = await open(scenario("settings"), CONNECT);
+      const { page } = host;
+      await page.getByRole("button", { name: new RegExp(`^${provider}`) }).click();
+      await expect(page.getByLabel("API key")).toHaveCount(0);
+      await expect(page.locator(".badge")).toHaveText("LOCAL SIGN-IN");
+      await expect(
+        page.getByText(
+          "Quota uses this provider's existing local sign-in to read your quota.",
+        ),
+      ).toBeVisible();
+    });
+  }
 
   test("a browser sign-in shows the code to enter", async ({ open }) => {
     const host = await open(

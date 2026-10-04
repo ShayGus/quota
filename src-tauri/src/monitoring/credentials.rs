@@ -15,8 +15,9 @@ use quota_domain::ids::ConnectionId;
 
 /// The credential a connection attempt signs in with, when it carries one.
 ///
-/// A provider Quota signs in to itself needs one, and any other provider must
-/// not be sent one, so either mismatch is refused before any request is made.
+/// A pasted credential must never reach a provider that only accepts its own
+/// client's sign-in. A dual-mode provider may use its external profile when no
+/// credential is supplied. Mismatches are refused before any request is made.
 pub(super) fn supplied(
     adapter: &Arc<dyn ProviderAdapter>,
     request: &BeginConnectionRequest,
@@ -201,6 +202,26 @@ mod tests {
         ));
         assert!(
             supplied(&adapter(false, true), &request(None))
+                .expect("accepted")
+                .is_none()
+        );
+    }
+
+    /// A provider that takes a key or its own sign-in, such as `OpenCode` Go,
+    /// accepts either: the key when pasted, nothing when the sign-in stands in.
+    #[test]
+    fn a_provider_that_takes_a_key_or_its_own_sign_in_accepts_either() {
+        let secret = supplied(&adapter(true, true), &request(Some("  oc-go-abc \n")))
+            .expect("accepted")
+            .expect("a key");
+        assert_eq!(secret.expose(), "oc-go-abc");
+        assert!(
+            supplied(&adapter(true, true), &request(None))
+                .expect("accepted")
+                .is_none()
+        );
+        assert!(
+            supplied(&adapter(true, true), &request(Some("   ")))
                 .expect("accepted")
                 .is_none()
         );

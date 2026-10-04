@@ -10,7 +10,7 @@ use quota_domain::provider::{ProviderCapabilities, ProviderId};
 #[must_use]
 pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
     match provider_id {
-        ProviderId::Codex | ProviderId::Claude | ProviderId::OpenCodeGo | ProviderId::Cursor => {
+        ProviderId::Codex | ProviderId::Claude | ProviderId::Cursor => {
             ProviderCapabilities {
                 provider_id,
                 cardinality: AccountCardinality::SingleProfile,
@@ -31,20 +31,23 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
             reports_monthly_window: true,
             minimum_interval_seconds: 300,
         },
-        // Signed in with a pasted key; Kimi can also read its CLI's sign-in.
-        ProviderId::Zai | ProviderId::Minimax | ProviderId::Kimi | ProviderId::OllamaCloud => {
-            ProviderCapabilities {
+        // Signed in with a pasted key; Kimi, Ollama Cloud, and `OpenCode` Go
+        // can also read their own tool's sign-in when no key was pasted.
+        ProviderId::Zai
+        | ProviderId::Minimax
+        | ProviderId::Kimi
+        | ProviderId::OllamaCloud
+        | ProviderId::OpenCodeGo => ProviderCapabilities {
+            provider_id,
+            cardinality: AccountCardinality::Independent,
+            supports_app_owned_authorization: true,
+            supports_external_profile: matches!(
                 provider_id,
-                cardinality: AccountCardinality::Independent,
-                supports_app_owned_authorization: true,
-                supports_external_profile: matches!(
-                    provider_id,
-                    ProviderId::Kimi | ProviderId::OllamaCloud
-                ),
-                reports_monthly_window: !matches!(provider_id, ProviderId::Minimax),
-                minimum_interval_seconds: 300,
-            }
-        }
+                ProviderId::Kimi | ProviderId::OllamaCloud | ProviderId::OpenCodeGo
+            ),
+            reports_monthly_window: !matches!(provider_id, ProviderId::Minimax),
+            minimum_interval_seconds: 300,
+        },
         // Signed in through the browser, or with the provider's own CLI.
         ProviderId::Grok | ProviderId::MuseCode => ProviderCapabilities {
             provider_id,
@@ -89,4 +92,28 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
             | ProviderId::Cursor
             | ProviderId::OllamaCloud
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use quota_providers::ProviderRegistry;
+
+    use super::*;
+
+    /// `OpenCode` Go takes a pasted key or its own login's sign-in. The
+    /// declaration the renderer is served and the one the connection gate
+    /// reads belong to different crates, so this keeps them from drifting
+    /// apart on the provider that offers both.
+    #[test]
+    fn the_opencode_go_declaration_matches_its_adapter() {
+        let registry = ProviderRegistry::production(quota_providers::secrets::unavailable())
+            .expect("the registry builds");
+        let adapter = registry
+            .provider(ProviderId::OpenCodeGo)
+            .expect("a compiled adapter");
+        assert_eq!(
+            capabilities_of(ProviderId::OpenCodeGo),
+            adapter.capabilities()
+        );
+    }
 }

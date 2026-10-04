@@ -31,10 +31,7 @@ pub struct ProviderRegistry {
 }
 
 impl ProviderRegistry {
-    /// Builds the production registry: Codex, Claude, `OpenCode` Go, and the
-    /// providers signed in with a pasted key (`OpenRouter`, Z.ai, `MiniMax`,
-    /// Kimi) or through the browser (Grok, Muse Code), whose credentials live
-    /// in `secrets`.
+    /// Builds the production registry over the store for app-owned sign-ins.
     ///
     /// # Errors
     /// Returns a transient failure when an adapter's HTTP client cannot be built.
@@ -43,7 +40,7 @@ impl ProviderRegistry {
             adapters: vec![
                 Arc::new(CodexAdapter::new()?),
                 Arc::new(ClaudeAdapter::new()?),
-                Arc::new(OpenCodeGoAdapter::new()?),
+                Arc::new(OpenCodeGoAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(OpenRouterAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(ZaiAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(MinimaxAdapter::new(Arc::clone(&secrets))?),
