@@ -20,7 +20,7 @@ mkdirSync(OUT, { recursive: true });
 
 // The ordinary debug build, exactly as `bun tauri build --debug` makes it.
 run("bun", ["tauri", "build", "--debug", "--no-bundle"]);
-copyFileSync(BUILT, `${OUT}/quota`);
+copyFileSync(BUILT, `${OUT}/quota${EXE}`);
 
 // The test launcher: the same app with `sample-data` (ten seeded fixture
 // accounts) behind `src-tauri/examples/quota_e2e.rs`, which can point the
@@ -35,4 +35,4 @@ run("cargo", [
   "--features",
   "sample-data,custom-protocol",
 ]);
-copyFileSync(LAUNCHER, `${OUT}/quota-sample`);
+copyFileSync(LAUNCHER, `${OUT}/quota-sample${EXE}`);
