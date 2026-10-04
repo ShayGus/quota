@@ -83,7 +83,7 @@ runs the repository gates.
 ## Updates
 
 Installed releases check for published updates at startup and while running in the tray.
-The next check is due 24 hours after the previous cycle ends, including any pop-up
+The next check is due 30 minutes after the previous cycle ends, including any pop-up
 interaction; checks pause while an offer, installation, or failure message is open.
 
 A newer version opens one pop-up using Quota's theme and controls, naming the available

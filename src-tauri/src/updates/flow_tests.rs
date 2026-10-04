@@ -5,9 +5,8 @@ use std::time::Duration;
 use super::super::schedule::{CHECK_INTERVAL, fake::FakeClock};
 use super::*;
 
-const HOUR: Duration = Duration::from_secs(60 * 60);
-const ONE_SECOND_SHORT_OF_A_DAY: Duration = Duration::from_secs(24 * 60 * 60 - 1);
-const AN_HOUR_SHORT_OF_A_DAY: Duration = Duration::from_secs(23 * 60 * 60);
+const MINUTE: Duration = Duration::from_secs(60);
+const ONE_SECOND_SHORT_OF_THE_INTERVAL: Duration = Duration::from_secs(30 * 60 - 1);
 
 /// What the scripted host was asked, in order.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -214,17 +213,17 @@ async fn a_failed_install_shows_the_error_pop_up_and_keeps_running() {
 }
 
 #[tokio::test]
-async fn one_check_at_start_and_none_before_a_day_has_passed() {
+async fn one_check_at_start_and_none_before_the_interval_has_passed() {
     let (mut flow, host, clock) = flow();
     host.check_finds_nothing().check_finds_nothing();
     assert_eq!(flow.pass().await, Outcome::UpToDate);
-    clock.advance(ONE_SECOND_SHORT_OF_A_DAY);
+    clock.advance(ONE_SECOND_SHORT_OF_THE_INTERVAL);
     assert_eq!(flow.pass().await, Outcome::NotDue);
     assert_eq!(host.checks_made(), 1);
 }
 
 #[tokio::test]
-async fn the_second_check_runs_when_the_day_is_up() {
+async fn the_second_check_runs_when_the_interval_is_up() {
     let (mut flow, host, clock) = flow();
     host.check_finds_nothing().check_finds_nothing();
     flow.pass().await;
@@ -238,7 +237,7 @@ async fn a_long_sleep_triggers_one_check_not_many() {
     let (mut flow, host, clock) = flow();
     host.check_finds_nothing().check_finds_nothing();
     flow.pass().await;
-    // Three days asleep: the monotonic clock saw none of it.
+    // An hour and a half asleep: the monotonic clock saw none of it.
     clock.sleep(3 * CHECK_INTERVAL);
     assert_eq!(flow.pass().await, Outcome::UpToDate);
     assert_eq!(flow.pass().await, Outcome::NotDue);
@@ -248,14 +247,14 @@ async fn a_long_sleep_triggers_one_check_not_many() {
 
 #[tokio::test]
 async fn the_interval_runs_from_the_end_of_the_cycle() {
-    // The pop-up stays open for a day; the next check is a day after it closes.
+    // The pop-up stays open for half an hour; the next check is half an hour after it closes.
     let (mut flow, host, clock) = flow();
     host.check_finds("0.2.0", "0.1.0").user_answers(false);
     host.check_finds_nothing();
     flow.pass().await;
-    clock.advance(HOUR);
+    clock.advance(5 * MINUTE);
     assert_eq!(flow.pass().await, Outcome::NotDue);
-    clock.advance(AN_HOUR_SHORT_OF_A_DAY);
+    clock.advance(25 * MINUTE);
     assert_eq!(flow.pass().await, Outcome::UpToDate);
 }
 
