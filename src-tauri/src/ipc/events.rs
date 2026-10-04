@@ -8,7 +8,7 @@
 use quota_contracts::{
     ConnectionProgressChangedPayload, MonitoringStateChangedPayload,
     OverviewWindowStateChangedPayload, PersistenceStatusChangedPayload, PreferencesChangedPayload,
-    SnapshotUpdatedPayload,
+    SnapshotUpdatedPayload, UpdatePromptChangedPayload,
 };
 use serde::{Deserialize, Serialize};
 use specta::Type;
@@ -40,6 +40,7 @@ pub fn publish_preferences(
     emit_preferences(app, &event, "overview", "overview_preferences_event_failed");
     emit_preferences(app, &event, "settings", "settings_preferences_event_failed");
     emit_preferences(app, &event, "widget", "widget_preferences_event_failed");
+    emit_preferences(app, &event, "update", "update_preferences_event_failed");
 }
 
 fn emit_preferences(app: &tauri::AppHandle, event: &PreferencesChanged, label: &str, code: &str) {
@@ -59,3 +60,7 @@ pub struct OverviewWindowStateChanged(pub OverviewWindowStateChangedPayload);
 /// Durable storage availability.
 #[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
 pub struct PersistenceStatusChanged(pub PersistenceStatusChangedPayload);
+
+/// The update pop-up changed what it shows.
+#[derive(Debug, Clone, Serialize, Deserialize, Type, tauri_specta::Event)]
+pub struct UpdatePromptChanged(pub UpdatePromptChangedPayload);

@@ -422,7 +422,8 @@ pub fn start() -> Result<(), String> {
             .plugin(tauri_plugin_sql::Builder::default().build())
             .plugin(window_state)
             .plugin(tauri_plugin_opener::init())
-            .plugin(tauri_plugin_notification::init()),
+            .plugin(tauri_plugin_notification::init())
+            .plugin(tauri_plugin_updater::Builder::new().build()),
     )
     .invoke_handler(registry.invoke_handler())
     .setup(move |app| {
@@ -444,6 +445,9 @@ pub fn start() -> Result<(), String> {
                     tracing::warn!(%error, "the overview could not be shown");
                 }
             }
+            // The window is ready, or has said why it is not. Only now does the
+            // first update check start, and it never holds the startup up.
+            crate::updates::start(&handle);
         });
         Ok(())
     })

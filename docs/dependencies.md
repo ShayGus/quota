@@ -28,6 +28,16 @@ bootstrap. `tauri-plugin-autostart` 2.7.0 and its renderer package
 `@tauri-apps/plugin-autostart` 2.7.0 were added on 2 October 2026 for launch at login; the
 two are pinned to the same release.
 
+`tauri-plugin-updater` 2.13.1 and `semver` 1.0.28 were added on 4 October 2026 for in-app
+updates, and are pinned with `=`: an update is code that replaces the installed program,
+so none moves without a pull request. They are used from Rust only; no renderer package
+(`@tauri-apps/plugin-updater`, `-dialog` or `-process`) was added, because the update flow
+runs in the host and no window is granted an updater permission. The pop-up is Quota's own
+window, so there is no dialog plugin. `AppHandle::restart` does what the process plugin's
+`relaunch` does, so that plugin is not a dependency either. `xtask` gained `base64` 0.22.1
+and `minisign-verify` 0.2.5, both already in the graph through the updater, to verify the
+update list's signatures with the same library the application uses.
+
 `keyring-core` 1.0.0 and one store crate per system were added on 3 October 2026 for the
 credentials Quota owns itself, such as a pasted OpenRouter key:
 `windows-native-keyring-store` 1.1.0 (Credential Manager),

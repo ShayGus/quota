@@ -6,6 +6,7 @@ use std::path::Path;
 use cargo_toml::Value;
 
 use crate::cargo_manifest;
+use crate::check_updater;
 use crate::outcome::Outcome;
 use crate::scan;
 use crate::toml::{self, Document};
@@ -34,6 +35,7 @@ pub(crate) fn run(root: &Path) -> Outcome {
     check_workflow_pins(root, &mut outcome);
     check_provider_transport(root, &mut outcome);
     check_tauri_config(root, &mut outcome);
+    check_updater::check(root, &mut outcome);
     version::check(root, &mut outcome);
     outcome
 }

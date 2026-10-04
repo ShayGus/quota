@@ -123,6 +123,29 @@ export const commands = {
 	 *  one side.
 	 */
 	openSettingsWindow: (destination: SettingsDestination) => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window", { destination })),
+	/**  What the update pop-up shows, or nothing when no update is being offered. */
+	getUpdatePrompt: () => __TAURI_INVOKE<
+/**  A newer version is published and the person is asked about it. */
+{ kind: "offer"; context: {
+	/**  The version on offer, such as `0.2.0`. */
+	version: string,
+	/**  The version running now. */
+	current: string,
+} } | 
+/**  The person said yes; the update is downloading and installing. */
+{ kind: "installing"; context: {
+	/**  The version being installed. */
+	version: string,
+} } | 
+/**  The update was accepted and could not be installed. */
+{ kind: "failed" } | null>("get_update_prompt"),
+	/**
+	 *  Passes the person's answer to the update flow.
+	 * 
+	 *  An answer that does not fit what the pop-up shows, such as pressing OK twice
+	 *  or any button during the install, is refused.
+	 */
+	respondToUpdatePrompt: (response: UpdateResponse) => typedError<null, CommandError>(__TAURI_INVOKE("respond_to_update_prompt", { response })),
 };
 
 /** Events */
@@ -133,6 +156,7 @@ export const events = {
 	persistenceStatusChanged: makeEvent<PersistenceStatusChanged>("persistence-status-changed"),
 	preferencesChanged: makeEvent<PreferencesChanged>("preferences-changed"),
 	snapshotUpdated: makeEvent<SnapshotUpdated>("snapshot-updated"),
+	updatePromptChanged: makeEvent<UpdatePromptChanged>("update-prompt-changed"),
 };
 
 /* Types */
@@ -1249,6 +1273,41 @@ export type UnrankedReason =
 "monitoring_paused" | 
 /**  No included allowance applies to this account. */
 "no_included_allowance";
+
+/**  What the update pop-up is showing. */
+export type UpdatePrompt = 
+/**  A newer version is published and the person is asked about it. */
+{ kind: "offer"; context: {
+	/**  The version on offer, such as `0.2.0`. */
+	version: string,
+	/**  The version running now. */
+	current: string,
+} } | 
+/**  The person said yes; the update is downloading and installing. */
+{ kind: "installing"; context: {
+	/**  The version being installed. */
+	version: string,
+} } | 
+/**  The update was accepted and could not be installed. */
+{ kind: "failed" };
+
+/**  The update pop-up changed what it shows. */
+export type UpdatePromptChanged = UpdatePromptChangedPayload;
+
+/**  The pop-up changed what it shows. */
+export type UpdatePromptChangedPayload = {
+	/**  What the pop-up shows now. */
+	prompt: UpdatePrompt,
+};
+
+/**  What the person pressed in the update pop-up. */
+export type UpdateResponse = 
+/**  OK: install the offered update now. */
+"install" | 
+/**  Cancel, or closing the pop-up, on an offer. */
+"decline" | 
+/**  Close, on the message that the install failed. */
+"dismiss";
 
 /**
  *  A verified identity held for the person's decision, and not yet saved.

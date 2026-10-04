@@ -7,5 +7,6 @@ pub mod bindings;
 pub mod commands;
 pub mod commands_connection;
 pub mod commands_prefs;
+pub mod commands_update;
 pub mod commands_window;
 pub mod events;

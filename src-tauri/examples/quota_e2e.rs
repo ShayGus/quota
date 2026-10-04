@@ -9,13 +9,20 @@
 //!
 //! The base address is read here, in the test launcher, from
 //! `QUOTA_E2E_PROVIDER_BASE`. The provider transport itself never reads the
-//! environment, and `cargo xtask check-release` keeps it that way.
+//! environment, and `cargo xtask check-release` keeps it that way. The update
+//! address is read the same way, from `QUOTA_E2E_UPDATE_ENDPOINT`; the updater
+//! never reads the environment either.
 
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
     if let Ok(base) = std::env::var("QUOTA_E2E_PROVIDER_BASE") {
         quota_providers::retarget(&base);
+    }
+    // An update server the suite watches. This build never checks for updates, so
+    // the address only lets a test prove that no request is ever made.
+    if let Ok(endpoint) = std::env::var("QUOTA_E2E_UPDATE_ENDPOINT") {
+        quota_desktop_lib::updates::retarget_for_tests(&endpoint);
     }
     quota_desktop_lib::run()
 }

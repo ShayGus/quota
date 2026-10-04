@@ -27,11 +27,12 @@ import type {
   OverviewWindowState,
   Preferences,
   RegisteredProvider,
+  UpdatePrompt,
   VerifiedCandidate,
 } from "../../src/generated/bindings";
 
 /** The windows the application creates, by label. */
-export type WindowLabel = "overview" | "settings" | "widget";
+export type WindowLabel = "overview" | "settings" | "widget" | "update";
 
 /** What a scripted connection attempt does after it starts. */
 export interface ConnectionScript {
@@ -43,6 +44,17 @@ export interface ConnectionScript {
   readonly confirmRefusedWith?: CommandError;
 }
 
+/**
+ * What the faked host does about an update: what the pop-up shows first, and
+ * how the install ends once the test lets it end.
+ */
+export interface UpdateScript {
+  /** What the pop-up shows when its window opens. */
+  readonly prompt: UpdatePrompt;
+  /** `restarts`: the install works and Quota relaunches. `fails`: it does not. */
+  readonly installOutcome: "restarts" | "fails";
+}
+
 /** Everything a test decides about the faked host before the page loads. */
 export interface FakeConfig {
   readonly window: WindowLabel;
@@ -52,6 +64,8 @@ export interface FakeConfig {
   readonly providers: readonly RegisteredProvider[];
   readonly launchAtLogin: boolean;
   readonly connection: ConnectionScript | null;
+  /** The update pop-up's script, or `null` for a window that is not one. */
+  readonly update: UpdateScript | null;
   /** Commands the host refuses, by wire name, with the typed error. */
   readonly refuse: Readonly<Record<string, CommandError>>;
 }
@@ -70,6 +84,8 @@ export interface FakeHandle {
   emit: (event: string, payload: unknown) => Promise<void>;
   /** The host's current view of the snapshot and preferences. */
   state: () => { snapshot: AppSnapshot; preferences: Preferences };
+  /** Lets a started install end, the way the script says it ends. */
+  finishUpdate: () => void;
 }
 
 declare global {
@@ -89,6 +105,7 @@ export function installFakeBackend(config: FakeConfig): void {
   let monitoringRevision = 1;
   let attemptCounter = 0;
   let candidate: VerifiedCandidate | null = null;
+  let updatePrompt: UpdatePrompt | null = config.update?.prompt ?? null;
   const calls: RecordedCall[] = [];
   const unhandled: string[] = [];
   const instance = snapshot.app_instance_id;
@@ -315,6 +332,34 @@ export function installFakeBackend(config: FakeConfig): void {
         });
         return null;
       }
+      case "get_update_prompt":
+        return updatePrompt;
+      case "respond_to_update_prompt": {
+        const response = args?.response as string;
+        const shown = updatePrompt?.kind;
+        const fits =
+          (shown === "offer" && (response === "install" || response === "decline")) ||
+          (shown === "failed" && response === "dismiss");
+        if (!fits || updatePrompt === null) {
+          // eslint-disable-next-line @typescript-eslint/only-throw-error
+          throw {
+            kind: "validation_failed",
+            context: { field: "response", reason: "that answer does not belong here" },
+          };
+        }
+        if (response === "install" && updatePrompt.kind === "offer") {
+          updatePrompt = {
+            kind: "installing",
+            context: { version: updatePrompt.context.version },
+          };
+          publishLater("update-prompt-changed", { prompt: updatePrompt });
+        } else {
+          // The host closes the window; the page is left as it was.
+          calls.push({ command: "(host) close the pop-up", args: null });
+          updatePrompt = null;
+        }
+        return null;
+      }
       case "plugin:autostart|is_enabled":
         return launchAtLogin;
       case "plugin:autostart|enable":
@@ -338,11 +383,24 @@ export function installFakeBackend(config: FakeConfig): void {
 
   mockIPC((command, args) => handle(command, args as Args), { shouldMockEvents: true });
 
+  const finishUpdate = (): void => {
+    if (updatePrompt?.kind !== "installing") return;
+    if (config.update?.installOutcome === "fails") {
+      updatePrompt = { kind: "failed" };
+      publishLater("update-prompt-changed", { prompt: updatePrompt });
+    } else {
+      // The host relaunches Quota; the window goes with the process.
+      calls.push({ command: "(host) relaunch", args: null });
+      updatePrompt = null;
+    }
+  };
+
   window.__quotaFake = {
     calls,
     unhandled,
     emit,
     state: () => ({ snapshot, preferences }),
+    finishUpdate,
   };
 }
 

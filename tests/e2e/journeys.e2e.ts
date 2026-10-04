@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbox";
 import { startFakeProvider } from "./fake-provider";
+import { startFakeUpdateServer } from "./fake-update-server";
 import { waitFor } from "./webdriver";
 
 const EXE = process.platform === "win32" ? ".exe" : "";
@@ -339,6 +340,35 @@ describe("the real application", () => {
       await app.stop();
     } finally {
       await provider.close();
+    }
+  });
+
+  it("a development or test build never asks an update server for an update", async () => {
+    const world = await begin("no-update-check");
+    const server = await startFakeUpdateServer();
+    try {
+      // The launcher points the updater at the fake server, which offers a far
+      // newer version. A build that checked would be shown a pop-up and the
+      // server would have a request on record.
+      const app = await world.launch(SAMPLE_APP, {
+        QUOTA_E2E_UPDATE_ENDPOINT: server.endpoint,
+      });
+      await app.session.switchTo(await findWindow(app.session, "overview"));
+      await waitUntilVisible(app.session, "the overview");
+      // The first check would start as soon as the backend is ready, which is
+      // when the accounts appear. Give it time to arrive, then count.
+      await waitFor("the sample accounts", async () =>
+        (await app.session.evaluate<number>(
+          "return document.querySelectorAll('.provider-card').length",
+        )) >= 3
+          ? true
+          : null,
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      expect(server.requests).toEqual([]);
+      await app.stop();
+    } finally {
+      await server.close();
     }
   });
 });

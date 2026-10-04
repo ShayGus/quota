@@ -76,6 +76,43 @@ that implementations handle blocking work; the
 [system adapter](../src-tauri/crates/quota-providers/src/secrets.rs) documents its
 credential-store lifecycle constraints.
 
+## Updates
+
+[`src-tauri/src/updates/`](../src-tauri/src/updates/) keeps an installed copy current. It
+is host code, in Rust, on a task of its own, because the windows of a tray application may
+be hidden or closed for weeks; no window takes part in the check or the install, and none
+is granted an updater permission. The Tauri updater plugin is used from Rust only.
+
+The pop-up is the application's own interface, not an operating-system dialog: a small
+frameless `update` window that the host opens when an update is found, drawn by the same
+renderer from the settings window's header and the dialog's text and buttons
+([`src/features/update/`](../src/features/update/)). It has two commands of its own, one
+to read what it shows and one to say which button was pressed. Its full grants, including
+reading the snapshot for the saved theme, are owned by the
+[update capability](../src-tauri/capabilities/update-capability.json).
+
+Its layers follow the platform seam's style, with one port:
+
+- `policy` is the single function, `may_check_for_updates`, that says whether this build
+  may check at all. Only the installed release may: a debug build, the development
+  identity, the `sample-data` build and a build with agent inspection never do.
+- `schedule` computes when a check is due from monotonic and wall clocks, counting time
+  spent asleep without accumulating missed checks. The
+  [user-facing schedule](../README.md#updates) includes the pop-up interaction.
+- `flow` is one check cycle over the `UpdateHost` port: check, ask, install, relaunch, and
+  the in-memory record of the version already put to the person. It never starts a second
+  check or a second pop-up, because it runs them one after the other.
+- `prompt` holds what the pop-up shows and who waits for its answer. Only an answer that
+  fits what is on screen is accepted, and nothing is accepted while an install runs.
+- `host` is the port's real implementation over the updater plugin and the pop-up window.
+  It names no address and no key; both come from `plugins.updater` in `tauri.conf.json`,
+  and `cargo xtask check-release` keeps every other route to them closed.
+
+The tests drive `flow` through a scripted host and a fake clock, so each behaviour is
+checked without a network, a window or a restart. The pop-up itself is tested in Chromium
+against a faked host, with screenshots in both themes beside the settings window's. The
+release side is described in [Releasing](RELEASING.md).
+
 ## Persisted-state ownership
 
 Each kind of durable state has exactly one owner. A typed `Preferences` value returned to
@@ -130,6 +167,8 @@ Small records, kept here rather than in separate files:
 - **Persistence ownership.** The table above owns the durable-state boundaries.
 - **IPC trust model.** Rust-owned DTOs, generated bindings, no generic
   `set_state(key, value)` command, no raw URL, path, or SQL argument.
+- **Updates are host-side.** The update flow runs in Rust, not in a window, so it keeps
+  running while every window is hidden, and the renderer needs no updater permission.
 - **Release feature set.** Release artifacts are built from an explicit audited feature
   list, never `--all-features`. The `test-fixtures` feature is non-default;
   `cargo xtask check-release` fails when it enters a default set.

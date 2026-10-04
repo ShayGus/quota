@@ -14,11 +14,9 @@ import { providerLabel } from "../../../shared/format/provider";
 import type { RendererState } from "../../../shared/state/types";
 import { Icon } from "../../../shared/ui/Icon";
 import { launch } from "../../../shared/ipc/report";
+import { APP_VERSION } from "../../../shared/version";
 import { SettingsTitle } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-
-/** The application version this panel reports. */
-const APP_VERSION = "0.1.0";
 
 /**
  * The label the host puts in the export's file name. The host reduces it to a

@@ -1,0 +1,26 @@
+/**
+ * The update pop-up, a window of its own. It is built from the settings
+ * window's header and the dialog's text and buttons, so this adds only the
+ * spacing that holds them together.
+ */
+
+.update-window {
+  background: var(--surface);
+}
+
+.update-body {
+  flex: 1;
+  min-height: 0;
+  padding: 21px 17px 0;
+}
+
+.update-body p {
+  font-size: 12px;
+  line-height: 1.8;
+  color: var(--muted);
+}
+
+.update-actions {
+  margin-top: 0;
+  padding: 17px;
+}

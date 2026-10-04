@@ -16,6 +16,7 @@ dependencies are declared in `Cargo.toml`.
 - `errors` — the `CommandError` union. Recovery switches on the variant, never on the
   message text.
 - `events` — payload types for the typed backend-to-renderer events.
+- `update` — what the update pop-up shows and what a person can answer.
 - `preferences` — the aggregate the renderer receives, assembled from the store and
   `SQLite` owners.
 

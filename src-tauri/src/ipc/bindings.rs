@@ -8,10 +8,10 @@ use tauri_specta::Builder;
 
 use crate::ipc::events::{
     ConnectionProgressChanged, MonitoringStateChanged, OverviewWindowStateChanged,
-    PersistenceStatusChanged, PreferencesChanged, SnapshotUpdated,
+    PersistenceStatusChanged, PreferencesChanged, SnapshotUpdated, UpdatePromptChanged,
 };
 
-use crate::ipc::{commands, commands_connection, commands_prefs, commands_window};
+use crate::ipc::{commands, commands_connection, commands_prefs, commands_update, commands_window};
 
 /// Builds the registry with every command and event type collected.
 #[must_use]
@@ -41,6 +41,8 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_window::set_app_view,
             commands_window::open_provider_usage_page,
             commands_window::open_settings_window,
+            commands_update::get_update_prompt,
+            commands_update::respond_to_update_prompt,
         ])
         .events(tauri_specta::collect_events![
             SnapshotUpdated,
@@ -49,6 +51,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             MonitoringStateChanged,
             OverviewWindowStateChanged,
             PersistenceStatusChanged,
+            UpdatePromptChanged,
         ])
 }
 

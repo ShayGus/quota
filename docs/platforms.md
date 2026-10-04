@@ -1,8 +1,10 @@
 # Platforms
 
-Quota builds and passes its checks on Windows and Linux. macOS is not built yet, and the
-code is arranged so that adding it means finishing the short list at the end of this page,
-not rewriting anything.
+Quota builds and passes its checks on Windows and Linux. The release workflow has macOS
+build and packaging jobs; [Releasing](RELEASING.md#what-a-release-contains) owns the
+package details and [Acceptance mapping](acceptance.md) owns native verification status.
+`tauri-driver` has no macOS support. The code is arranged so that finishing macOS means
+the short list at the end of this page, not rewriting anything.
 
 ## Where platform code lives
 
@@ -13,7 +15,7 @@ Everything outside these places is the same on every operating system:
 | [`src-tauri/src/platform/`](../src-tauri/src/platform/)                                                                                        | Tray, popover window, login item, tray placement, height fit                                                                   |
 | [`src-tauri/crates/quota-providers/src/platform/`](../src-tauri/crates/quota-providers/src/platform/)                                          | Credential directories and system credential-store selection; see [the platform seam](architecture.md#platform-seam-and-ports) |
 | [`src-tauri/build.rs`](../src-tauri/build.rs), [`src-tauri/crates/quota-persistence/build.rs`](../src-tauri/crates/quota-persistence/build.rs) | The Windows application manifest, on Windows only                                                                              |
-| [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `bundle`                                                                           | Installer formats and icons                                                                                                    |
+| [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) `bundle`                                                                           | Installer formats, icons, and the ad-hoc macOS signature                                                                       |
 
 Two rules keep it that way:
 
@@ -35,7 +37,8 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 ## Already portable
 
 - Tray placement and the popover's height fit, as above.
-- Closing a window hides it to the tray; Exit is in the tray menu.
+- Window closing and tray actions follow [Run the app](../README.md#run-the-app) and
+  [Updates](../README.md#updates).
 - The settings window is owned by the overview (`"parent": "overview"` in
   `tauri.conf.json`), which keeps it above the overview on Windows, macOS (a child window)
   and Linux (a transient window).
@@ -43,6 +46,10 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
   the overview on the overview's screen, or beside the tray when the overview is hidden,
   and places it again after a move to a screen with another scale. On macOS a child window
   also moves with its parent; confirm that this is wanted.
+- Updating (`src-tauri/src/updates/`): the updater plugin picks the package kind the copy
+  was installed from and does the system-specific install, so Quota's own code has no
+  system branch. On Windows the installer takes over and restarts Quota; elsewhere Quota
+  restarts itself.
 - Single instance (`tauri-plugin-single-instance`) and launch at login
   (`tauri-plugin-autostart`, a launch agent on macOS) support macOS as they are.
 - Saved window geometry (`tauri-plugin-window-state`).
@@ -55,8 +62,8 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 
 ## Adding macOS
 
-Each item names where the change goes. None of them is verified yet, because no Mac has
-built Quota.
+Each item names where the change goes. These runtime behaviours remain unverified on a
+Mac; adding release build jobs does not verify them.
 
 1. **Hide the Dock icon.** Quota is a tray app. In
    [`bootstrap.rs`](../src-tauri/src/bootstrap.rs) setup, call
@@ -72,9 +79,14 @@ built Quota.
    beside the file reader, behind the same function. It needs a Keychain dependency, which
    is a separate pull request (see [CONTRIBUTING](../CONTRIBUTING.md)); confirm the
    Keychain item's service name on a Mac first.
-4. **Sign and notarise the bundle.** `"targets": "all"` already produces an `.app` and a
-   `.dmg`; distribution outside the App Store needs a Developer ID signing identity and
-   notarisation in the release workflow.
+4. **Sign and notarise the bundle.** The release workflow already builds an `.app`, a
+   `.dmg` and an updater archive for each processor, signed ad hoc
+   (`bundle.macOS.signingIdentity` is `-`) so the bundle is internally consistent, which
+   Apple Silicon requires of code. Without a Developer ID there is no notarisation, so a
+   downloaded copy needs **Open Anyway** on first launch (see
+   [Releasing](RELEASING.md#opening-quota-on-a-mac)). A Developer ID signing identity and
+   notarisation in the release workflow are the remaining step for a Mac that opens
+   without asking.
 5. **Run the checks on a `macos-latest` runner** in CI, with the same commands.
 6. **Check the inspection guide.** The development inspection socket is
    `${TMPDIR:-/tmp}/tauri-mcp.sock` on macOS as on Linux; confirm it with

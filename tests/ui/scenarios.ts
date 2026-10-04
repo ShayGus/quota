@@ -170,6 +170,7 @@ export function scenario(
     readonly preferences?: Preferences;
     readonly snapshot?: Partial<AppSnapshot>;
     readonly connection?: ConnectionScript | null;
+    readonly update?: FakeConfig["update"];
     readonly launchAtLogin?: boolean;
     readonly refuse?: FakeConfig["refuse"];
   } = {},
@@ -183,6 +184,7 @@ export function scenario(
     providers: providers(),
     launchAtLogin: options.launchAtLogin ?? false,
     connection: options.connection ?? null,
+    update: options.update ?? null,
     refuse: options.refuse ?? {},
   };
 }

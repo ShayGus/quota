@@ -18,6 +18,7 @@ pub mod ipc;
 pub mod platform;
 pub mod provider_catalog;
 pub mod state;
+pub mod updates;
 
 pub use bootstrap::start;
 pub use state::AppState;

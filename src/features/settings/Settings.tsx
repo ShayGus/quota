@@ -16,6 +16,7 @@ import type {
   ProviderPollingPolicy,
 } from "../../generated/bindings";
 import type { RendererState } from "../../shared/state/types";
+import { APP_VERSION } from "../../shared/version";
 import { Icon, type IconName } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { AccountsPanel } from "./panels/AccountsPanel";
@@ -29,9 +30,6 @@ import { WindowPanel } from "./panels/WindowPanel";
 /** The settings sections. */
 type SettingsTab =
   "general" | "accounts" | "appearance" | "notifications" | "privacy" | "diagnostics";
-
-/** The application version the navigation rail states. */
-const APP_VERSION = "0.1.0";
 
 /** One navigation entry. */
 const TABS: readonly (readonly [SettingsTab, string, IconName])[] = [
