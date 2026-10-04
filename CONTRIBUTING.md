@@ -313,10 +313,10 @@ with four tiles in a row, "Rate limited" and "Check failed" are cut to "Rate lim
 
 ### How this gates a release
 
-The interface job is part of `.github/workflows/ci.yml`, not a workflow of its own. The
-release workflow accepts a commit only when that file's CI run completed successfully, so
-a release needs the unit tests, the interface tests and every other CI job green on the
-exact commit. Keep new test layers inside `ci.yml` for the same reason.
+Keep new test layers in `.github/workflows/ci.yml`, alongside the interface job, so the
+release preflight covers them. See
+[Which tests a release needs](docs/RELEASING.md#which-tests-a-release-needs) for the
+preflight requirement.
 
 ## 8. Real-app tests (Linux and Windows)
 

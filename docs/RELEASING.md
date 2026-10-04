@@ -126,18 +126,13 @@ Mac archive for each processor.
 
 The release workflow refuses to start unless **every run of the normal CI workflow
 ([`ci.yml`](../.github/workflows/ci.yml)) on that exact commit completed successfully**.
-That workflow is the full test suite, and its jobs are:
+That file owns the current jobs and commands; [CONTRIBUTING](../CONTRIBUTING.md#3-run-the-checks)
+explains how to run the checks, including the
+[interface suite](../CONTRIBUTING.md#7-interface-tests) and
+[real-app suite](../CONTRIBUTING.md#8-real-app-tests-linux-and-windows).
 
-| CI job               | What it proves                                                                                                                                                                                                                             |
-| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Rust**             | The host builds; format and clippy are clean; every Rust unit and contract test passes (`cargo test --workspace`, including the update flow, schedule and policy tests); the docs build; the architecture, release and binding gates pass. |
-| **Windows adapter**  | The provider adapters build, lint and pass their tests on Windows.                                                                                                                                                                         |
-| **Frontend**         | Type check, lint, format check and the renderer unit tests pass, and the renderer build excludes development inspection.                                                                                                                   |
-| **Interface tests**  | The built renderer, in Chromium against a faked backend, behaves as designed.                                                                                                                                                              |
-| **Real app (Linux)** | The real desktop application, under a display and driven through `tauri-driver`, passes its journeys, including that a development or test build never contacts an update server.                                                          |
-
-Any job added to `ci.yml` later, such as a Windows run of the real-app suite, is covered
-without editing the release workflow, because the preflight asks about the whole workflow.
+Every job in `ci.yml`, including both real-app jobs, is covered without editing the
+release workflow, because the preflight asks about the whole workflow.
 The release workflow then runs the release gate, the architecture gate, the binding check
 and `cargo test --workspace` again on the exact commit, with no secret present, and builds
 only after those pass.
@@ -183,9 +178,11 @@ The run refuses to continue, and creates nothing, when:
 - the update list does not verify. A separate job builds `latest.json` from the real
   signatures and refuses the release unless every platform (Windows, Linux, and both Macs)
   is listed, each signature is the one on disk and verifies its package under the public
-  key in the repository, each address is an asset of this same release, and the version is
-  the one in `tauri.conf.json`. The check is `cargo xtask update-manifest verify`, and its
-  tests run in CI.
+  key in the repository, each address is an asset of this same release, and both the list's
+  version and the signature's signed `version:` field match `tauri.conf.json`. A missing
+  or mismatched signed version fails verification, matching the installed updater's
+  `requireSignedVersion` requirement. The check is `cargo xtask update-manifest verify`,
+  and its tests run in CI.
 
 ## 3. Review the draft
 
