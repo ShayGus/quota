@@ -2,15 +2,15 @@
 //!
 //! The subscription has a rolling window, five hours on today's plans, and a
 //! weekly window, each reported as the percent used. Muse omits the usage
-//! while the rolling window is idle; that is reported as not reported, never
-//! as an empty allowance.
+//! while the rolling window is idle, and may omit either window. As oh-my-pi
+//! does, a window is shown only when Muse reports its percent; one it leaves
+//! out is not shown, rather than as an empty allowance or a partial reading.
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
 use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
-use quota_domain::quota::measurement::{Measurement, UnavailableReason};
 use quota_domain::quota::scope::ACCOUNT_RESOURCE;
 use quota_domain::quota::window::{MetricRole, QuotaCategory, QuotaWindow, WindowSemantics};
 
@@ -36,22 +36,29 @@ pub(crate) fn decode(
         Some(_) => QuotaCategory::Custom,
     };
     let mut decoded = DecodedUsage::new();
-    decoded.push(window(
-        rolling,
-        session,
-        "rolling",
-        minutes.and_then(|minutes| minutes.checked_mul(60)),
-        pool,
-        received_at,
-    )?);
-    decoded.push(window(
-        usage.and_then(|usage| usage.weekly.as_ref()),
-        QuotaCategory::Weekly,
-        "weekly",
-        Some(604_800),
-        pool,
-        received_at,
-    )?);
+    for window in [
+        window(
+            rolling,
+            session,
+            "rolling",
+            minutes.and_then(|minutes| minutes.checked_mul(60)),
+            pool,
+            received_at,
+        )?,
+        window(
+            usage.and_then(|usage| usage.weekly.as_ref()),
+            QuotaCategory::Weekly,
+            "weekly",
+            Some(604_800),
+            pool,
+            received_at,
+        )?,
+    ]
+    .into_iter()
+    .flatten()
+    {
+        decoded.push(window);
+    }
     decoded.plan_label = answer
         .subs_tier_name
         .as_deref()
@@ -68,7 +75,7 @@ fn window(
     seconds: Option<i64>,
     pool: &QuotaPoolId,
     received_at: DateTime<Utc>,
-) -> Result<QuotaWindow, ProviderError> {
+) -> Result<Option<QuotaWindow>, ProviderError> {
     let draft = WindowDraft {
         provider: ProviderId::MuseCode,
         pool_id: pool,
@@ -85,26 +92,24 @@ fn window(
         duration_seconds: seconds,
         received_at,
     };
-    let Some(reported) = reported else {
-        return draft.reported_missing();
+    let Some(used) = reported.and_then(|reported| reported.used_percent.as_ref()) else {
+        return Ok(None);
     };
-    let boundary = reported.resets_at.as_ref().and_then(decode::reset_instant);
-    let Some(used) = reported.used_percent.as_ref() else {
-        return draft.build(
-            Measurement::Unavailable(UnavailableReason::NotReported),
-            boundary,
-            Vec::new(),
-        );
-    };
+    let boundary = reported
+        .and_then(|reported| reported.resets_at.as_ref())
+        .and_then(decode::reset_instant);
     let Some(field) = used.field() else {
-        return draft.invalid(vec![QuotaIssue::NonFiniteValue {
-            field: "used_percent".to_owned(),
-        }]);
+        return draft
+            .invalid(vec![QuotaIssue::NonFiniteValue {
+                field: "used_percent".to_owned(),
+            }])
+            .map(Some);
     };
     match decode::percentage(field.value, field.decimals, "used_percent") {
         Ok(measurement) => draft.build(measurement, boundary, Vec::new()),
         Err(issue) => draft.invalid(vec![issue]),
     }
+    .map(Some)
 }
 
 #[cfg(test)]
@@ -145,20 +150,42 @@ mod tests {
     }
 
     #[test]
-    fn idle_usage_is_not_reported_rather_than_empty() {
+    fn idle_usage_shows_no_window_and_is_still_a_complete_reading() {
         let usage = decoded(serde_json::json!({ "is_subs_active": true })).expect("decodes");
-        assert!(!usage.is_complete());
-        assert!(
-            usage
-                .windows
-                .iter()
-                .all(|window| window.measurement.remaining_percent().is_none())
-        );
+        assert!(usage.is_complete());
+        assert_eq!(usage.windows, [] as [QuotaWindow; 0]);
+    }
+
+    #[test]
+    fn only_the_windows_muse_reports_are_shown() {
+        let usage = decoded(serde_json::json!({
+            "is_subs_active": true,
+            "subs_usage": {
+                "window": { "resets_at": "2026-10-03T18:00:00Z", "window_duration_mins": 300 },
+                "weekly": { "used_percent": 40, "resets_at": 1_791_100_000 }
+            }
+        }))
+        .expect("decodes");
+        assert!(usage.is_complete());
+        assert_eq!(usage.windows.len(), 1);
+        assert_eq!(usage.windows[0].category, QuotaCategory::Weekly);
     }
 
     #[test]
     fn an_inactive_subscription_is_refused() {
         let refused = decoded(serde_json::json!({ "is_subs_active": false }));
         assert!(matches!(refused, Err(ProviderError::Authorization)));
+    }
+
+    #[test]
+    fn the_account_is_the_user_id_otherwise_the_address() {
+        let answer = |body| -> SubscriptionAnswer {
+            serde_json::from_value(body).expect("the answer parses")
+        };
+        let both = answer(serde_json::json!({ "user_id": "42", "user_email": "A@x.test" }));
+        assert_eq!(both.account_id().as_deref(), Some("42"));
+        let address = answer(serde_json::json!({ "user_id": " ", "user_email": " A@x.test " }));
+        assert_eq!(address.account_id().as_deref(), Some("a@x.test"));
+        assert_eq!(answer(serde_json::json!({})).account_id(), None);
     }
 }
