@@ -25,6 +25,7 @@ import { getRendererState } from "../shared/state/store";
 import { useRendererState } from "../shared/state/useRendererState";
 import { Icon } from "../shared/ui/Icon";
 import { refreshMessage, Toast, type ToastMessage } from "../shared/ui/RefreshNotice";
+import { PROMPT_COPIED } from "../shared/ui/ReportBug";
 import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
 import { AppHeader, SettingsHeader } from "./AppHeader";
@@ -91,6 +92,8 @@ const settingsActions: SettingsActions = {
     launch(actions.clearHistory(accountId));
   },
   exportDiagnostics: (label) => actions.exportDiagnostics(label),
+  openBugReportIssue: () => actions.openBugReportIssue(),
+  copyBugReportPrompt: () => actions.copyBugReportPrompt(),
   launchAtLogin: () => actions.launchAtLogin(),
   setLaunchAtLogin: (launch) => actions.setLaunchAtLogin(launch),
   showOverview: () => {
@@ -168,6 +171,10 @@ function QuotaWindow(): JSX.Element {
       <FeatureBoundary surface="widget">
         <Widget
           state={state}
+          report={{
+            openIssue: () => actions.openBugReportIssue(),
+            copyPrompt: () => actions.copyBugReportPrompt(),
+          }}
           onExpand={() => {
             launch(actions.setAppView("overview"));
           }}
@@ -290,6 +297,13 @@ function Popover({
         state={state}
         onSettings={() => {
           launch(actions.openSettings());
+        }}
+        report={{
+          openIssue: () => actions.openBugReportIssue(),
+          copyPrompt: () => actions.copyBugReportPrompt(),
+          onCopied: () => {
+            onToast({ text: PROMPT_COPIED });
+          },
         }}
         onRefresh={() => {
           onToast({

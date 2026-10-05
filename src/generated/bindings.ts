@@ -122,6 +122,10 @@ export const commands = {
 	 *  one side.
 	 */
 	openSettingsWindow: (destination: SettingsDestination) => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window", { destination })),
+	/**  Opens GitHub's new-issue form for Quota, prefilled with the environment. */
+	openBugReportIssue: () => typedError<null, CommandError>(__TAURI_INVOKE("open_bug_report_issue")),
+	/**  Copies a prompt that asks an AI agent to file the bug for the person. */
+	copyBugReportPrompt: () => typedError<null, CommandError>(__TAURI_INVOKE("copy_bug_report_prompt")),
 	/**  What the update pop-up shows, or nothing when no update is being offered. */
 	getUpdatePrompt: () => __TAURI_INVOKE<
 /**  A newer version is published and the person is asked about it. */

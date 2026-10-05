@@ -30,6 +30,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "set_app_view",
         "open_provider_usage_page",
         "open_settings_window",
+        "open_bug_report_issue",
+        "copy_bug_report_prompt",
         "clear_local_history",
         "export_sanitized_diagnostics",
         "get_update_prompt",

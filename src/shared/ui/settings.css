@@ -453,3 +453,10 @@
     padding: 18px 15px;
   }
 }
+
+/* A row of buttons in a settings panel, such as Report a bug's two choices. */
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}

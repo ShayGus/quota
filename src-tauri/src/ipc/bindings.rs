@@ -11,7 +11,10 @@ use crate::ipc::events::{
     PersistenceStatusChanged, PreferencesChanged, SnapshotUpdated, UpdatePromptChanged,
 };
 
-use crate::ipc::{commands, commands_connection, commands_prefs, commands_update, commands_window};
+use crate::ipc::{
+    commands, commands_connection, commands_prefs, commands_report, commands_update,
+    commands_window,
+};
 
 /// Builds the registry with every command and event type collected.
 #[must_use]
@@ -41,6 +44,8 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_window::set_app_view,
             commands_window::open_provider_usage_page,
             commands_window::open_settings_window,
+            commands_report::open_bug_report_issue,
+            commands_report::copy_bug_report_prompt,
             commands_update::get_update_prompt,
             commands_update::respond_to_update_prompt,
         ])

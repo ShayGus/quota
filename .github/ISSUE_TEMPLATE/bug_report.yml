@@ -1,0 +1,68 @@
+# Quota's Report a bug opens this form with the environment fields filled in:
+# the query parameters version, os, view and providers match the ids below.
+# Keep those ids when editing the form, or the prefill stops working.
+name: Bug report
+description: Something in Quota does not work as it should.
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a problem. Please do not include API keys, tokens, cookies,
+        email addresses, account names or file paths that contain your user name.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you saw, including any message Quota showed.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open Settings → Accounts
+        2. Choose Add account → Claude
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Quota version
+      description: Settings shows it in the bottom-left corner.
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: windows (x86_64)
+    validations:
+      required: true
+  - type: input
+    id: view
+    attributes:
+      label: View
+      description: The full window (docked or floating) or the mini widget, with rings or bars.
+  - type: input
+    id: providers
+    attributes:
+      label: Connected providers
+      description: Provider names only, such as claude, codex. Never account names.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt (optional)
+      description: >-
+        The lines from quota.log around the problem. Review them first and remove
+        anything personal: addresses, account names, user names and paths.
+      render: text

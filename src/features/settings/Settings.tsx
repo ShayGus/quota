@@ -72,6 +72,10 @@ export interface SettingsActions {
   /** Writes a diagnostic export to the destination the host will validate. */
   /** Writes a sanitized report and answers where, or `null` when it failed. */
   readonly exportDiagnostics: (label: string) => Promise<string | null>;
+  /** Opens GitHub's new-issue form, prefilled by the host. */
+  readonly openBugReportIssue: () => Promise<void>;
+  /** Copies the agent prompt; true once it is on the clipboard. */
+  readonly copyBugReportPrompt: () => Promise<boolean>;
   /** Whether Quota starts at login, as the system confirms it; `null` when unknown. */
   readonly launchAtLogin: () => Promise<boolean | null>;
   /** Registers or removes the login item and returns the confirmed state. */

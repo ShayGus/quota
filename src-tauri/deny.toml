@@ -60,4 +60,10 @@ allow = [
     "MPL-2.0",
     "Zlib",
 ]
-exceptions = []
+# The Windows clipboard behind tauri-plugin-clipboard-manager (via arboard), used
+# by Report a bug. The Boost licence is permissive and OSI-approved; it is
+# allowed for these two crates only, not for the whole graph.
+exceptions = [
+    { allow = ["BSL-1.0"], crate = "clipboard-win" },
+    { allow = ["BSL-1.0"], crate = "error-code" },
+]

@@ -36,6 +36,8 @@ function settingsActions(): SettingsActions {
     exportDiagnostics: vi.fn(() =>
       Promise.resolve("/data/diagnostics/quota-diagnostics-settings.json"),
     ),
+    openBugReportIssue: vi.fn(() => Promise.resolve()),
+    copyBugReportPrompt: vi.fn(() => Promise.resolve(true)),
     showOverview: vi.fn(),
     showAccountDetail: vi.fn(),
     launchAtLogin: vi.fn(() => Promise.resolve(false)),

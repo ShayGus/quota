@@ -426,6 +426,7 @@ pub fn start() -> Result<(), String> {
             .plugin(tauri_plugin_sql::Builder::default().build())
             .plugin(window_state)
             .plugin(tauri_plugin_opener::init())
+            .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_notification::init())
             .plugin(tauri_plugin_updater::Builder::new().build()),
     )

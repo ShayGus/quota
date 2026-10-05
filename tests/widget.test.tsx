@@ -282,6 +282,11 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
+  const report = {
+    openIssue: vi.fn(() => Promise.resolve()),
+    copyPrompt: vi.fn(() => Promise.resolve(true)),
+  };
+
   function renderWidget(onExpand: () => void): void {
     globalThis.ResizeObserver = class {
       observe(): void {}
@@ -292,7 +297,7 @@ describe("the widget window", () => {
       snapshot: snapshot("instance", 1, [kimi, claude]),
       preferences: preferences({ view: "widget" }),
     } as unknown as RendererState;
-    render(<Widget state={state} onExpand={onExpand} />);
+    render(<Widget state={state} onExpand={onExpand} report={report} />);
   }
 
   it("keeps its own size fitted to its accounts", () => {
@@ -313,5 +318,16 @@ describe("the widget window", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
     expect(screen.getByRole("tooltip").textContent).toContain("Fable weekly");
     expect(onExpand).not.toHaveBeenCalled();
+  });
+
+  it("reports a bug from beside the expand button and confirms a copied prompt", async () => {
+    renderWidget(vi.fn());
+    fireEvent.click(screen.getByRole("button", { name: "Report a bug" }));
+    fireEvent.click(
+      screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
+    );
+    expect(report.copyPrompt).toHaveBeenCalled();
+    expect((await screen.findByRole("status")).textContent).toContain("Prompt copied");
+    expect(screen.queryByRole("menu")).toBeNull();
   });
 });

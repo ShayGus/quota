@@ -477,3 +477,63 @@
 .widget-empty span {
   color: var(--muted);
 }
+
+/* Report a bug, beside the expand button, and shown with it. */
+.widget-report {
+  position: absolute;
+  top: 5px;
+  right: 31px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-3);
+  color: var(--muted);
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.widget-report .icon {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2;
+}
+
+.widget:hover .widget-report,
+.widget-report:focus-visible,
+.widget-report[aria-expanded="true"] {
+  opacity: 1;
+}
+
+.widget-report:hover {
+  color: var(--text);
+}
+
+/*
+ * The widget fits its window to its content, so the menu and the notice sit
+ * beneath the accounts and the window grows to show them, never clipped.
+ */
+.report-bug-widget {
+  position: static;
+}
+
+.report-bug-widget .report-menu {
+  position: static;
+  margin-top: 6px;
+  min-width: 0;
+  box-shadow: none;
+}
+
+.widget-notice {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--text);
+  color: var(--surface);
+  font-size: 11px;
+  line-height: 1.5;
+}

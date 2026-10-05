@@ -7,14 +7,21 @@
  * It is another way to present the app, never shown beside the full window.
  * The window always fits its accounts exactly, so nothing is ever scrolled or
  * cut off, and it moves wherever it is dragged. The button in its corner, the
- * tray menu, and Settings switch back to the full window.
+ * tray menu, and Settings switch back to the full window; beside that button,
+ * Report a bug opens the same two choices as the full window's header.
  */
-import { useEffect, useMemo, useRef, type JSX, type PointerEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type JSX, type PointerEvent } from "react";
 
 import { launch } from "../../shared/ipc/report";
 import { dragWidget, fitWidget } from "../../shared/ipc/widget";
 import type { RendererState } from "../../shared/state/types";
 import { Icon } from "../../shared/ui/Icon";
+import { TOAST_MS } from "../../shared/ui/RefreshNotice";
+import {
+  PROMPT_COPIED,
+  ReportBugMenu,
+  type ReportBugActions,
+} from "../../shared/ui/ReportBug";
 import { useNow } from "../../shared/ui/useNow";
 import { MiniCards } from "./MiniCards";
 import { widgetAccounts } from "./model";
@@ -27,10 +34,13 @@ const DRAG_DISTANCE = 4;
 export function Widget({
   state,
   onExpand,
+  report,
 }: {
   readonly state: RendererState;
   /** Switches back to the full window. */
   readonly onExpand: () => void;
+  /** Opens the issue form or copies the agent prompt. */
+  readonly report: Omit<ReportBugActions, "onCopied">;
 }): JSX.Element {
   const now = useNow();
   const accounts = useMemo(
@@ -41,6 +51,7 @@ export function Widget({
   useFitWindow(root);
   useTransparentPage();
   const drag = useDragToMove();
+  const [copied, showCopied] = useCopiedNotice();
   const expand = (): void => {
     if (!drag.consumeDrag()) {
       onExpand();
@@ -63,6 +74,12 @@ export function Widget({
       ) : (
         <RingStrip accounts={accounts} />
       )}
+      {copied ? (
+        <p className="widget-notice" role="status">
+          {PROMPT_COPIED}
+        </p>
+      ) : null}
+      <ReportBugMenu variant="widget" actions={{ ...report, onCopied: showCopied }} />
       <button
         type="button"
         className="widget-expand"
@@ -74,6 +91,29 @@ export function Widget({
       </button>
     </div>
   );
+}
+
+/**
+ * Whether the copied-prompt notice is showing. The widget has no toast layer,
+ * so the notice sits beneath the accounts for as long as a toast would.
+ */
+function useCopiedNotice(): readonly [boolean, () => void] {
+  const [shownAt, setShownAt] = useState<number | null>(null);
+  useEffect(() => {
+    if (shownAt === null) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setShownAt(null);
+    }, TOAST_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [shownAt]);
+  const show = (): void => {
+    setShownAt(Date.now());
+  };
+  return [shownAt !== null, show];
 }
 
 /** Keeps the window exactly the size of its content, so it never scrolls. */

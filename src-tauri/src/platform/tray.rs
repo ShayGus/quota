@@ -3,7 +3,8 @@
 //! The tray exists in Rust so it survives renderer closure. Closing a window
 //! hides it to the tray; a left click on the icon always opens the app in its
 //! chosen view, and the menu offers Settings, Show App, the switch between the
-//! full window and the mini widget, and Exit. Only Exit ends the process.
+//! full window and the mini widget, Report a bug, and Exit. Only Exit ends the
+//! process.
 
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::provider::ProviderId;
@@ -11,7 +12,7 @@ use quota_domain::quota::QuotaCategory;
 use quota_domain::ranking::{AccountOrder, UnrankedReason};
 use quota_domain::snapshot::{AccountSnapshot, AppSnapshot, MonitoringState};
 
-use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, IconMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager};
 
@@ -35,9 +36,13 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     // Checked while the widget is the view; the saved view checks it at launch.
     let widget = CheckMenuItem::with_id(app, "widget", "Mini widget", true, false, None::<&str>)?;
     app.manage(super::widget::WidgetMenuItem(widget.clone()));
+    let report = report_menu(app, dark)?;
     let exit = item("exit", "Exit", MenuIcon::Power)?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let menu = Menu::with_items(app, &[&settings, &show, &widget, &separator, &exit])?;
+    let menu = Menu::with_items(
+        app,
+        &[&settings, &show, &widget, &report, &separator, &exit],
+    )?;
     TrayIconBuilder::with_id("quota")
         .icon(tray_image(false, system_is_dark(app)))
         .tooltip("Quota")
@@ -76,11 +81,34 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Report a bug: the two ways to report, as the app's own menus offer them.
+fn report_menu(app: &AppHandle, dark: bool) -> tauri::Result<Submenu<tauri::Wry>> {
+    let issue = MenuItem::with_id(
+        app,
+        "report-issue",
+        "Open an issue on GitHub",
+        true,
+        None::<&str>,
+    )?;
+    let prompt = MenuItem::with_id(
+        app,
+        "report-prompt",
+        "Copy a prompt for an AI agent",
+        true,
+        None::<&str>,
+    )?;
+    let report =
+        Submenu::with_id_and_items(app, "report", "Report a bug", true, &[&issue, &prompt])?;
+    report.set_icon(Some(menu_icon(MenuIcon::Bug, dark)))?;
+    Ok(report)
+}
+
 /// The wireframe's menu icons, drawn from its line-icon paths.
 #[derive(Clone, Copy)]
 enum MenuIcon {
     Donut,
     Settings,
+    Bug,
     Power,
 }
 
@@ -91,6 +119,8 @@ fn menu_icon(icon: MenuIcon, dark: bool) -> tauri::image::Image<'static> {
         (MenuIcon::Donut, true) => include_bytes!("../../icons/menu/donut-dark.png"),
         (MenuIcon::Settings, false) => include_bytes!("../../icons/menu/settings-light.png"),
         (MenuIcon::Settings, true) => include_bytes!("../../icons/menu/settings-dark.png"),
+        (MenuIcon::Bug, false) => include_bytes!("../../icons/menu/bug-light.png"),
+        (MenuIcon::Bug, true) => include_bytes!("../../icons/menu/bug-dark.png"),
         (MenuIcon::Power, false) => include_bytes!("../../icons/menu/power-light.png"),
         (MenuIcon::Power, true) => include_bytes!("../../icons/menu/power-dark.png"),
     };
@@ -333,8 +363,51 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         }
         "show" => activate_from_tray(app),
         "widget" => super::app_view::toggle_from_tray(app),
+        "report-issue" => report_from_tray(app, false),
+        "report-prompt" => report_from_tray(app, true),
         "exit" => app.exit(0),
         _ => {}
+    }
+}
+
+/// Opens the issue form or copies the agent prompt, off the main thread.
+///
+/// The tray has no window to show a confirmation in, so a copied prompt is
+/// confirmed with a system notification, and a failure is logged.
+fn report_from_tray(app: &AppHandle, prompt: bool) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(state) = app.try_state::<crate::state::AppState>() else {
+            return;
+        };
+        let result = if prompt {
+            crate::bug_report::copy_prompt(&state).await
+        } else {
+            crate::bug_report::open_issue(&state).await
+        };
+        match result {
+            Ok(()) if prompt => confirm_copied(&app),
+            Ok(()) => {}
+            Err(error) => tracing::warn!(
+                code = error.diagnostic_code(),
+                "a bug report could not be started from the tray"
+            ),
+        }
+    });
+}
+
+/// Tells the person the prompt is on the clipboard.
+fn confirm_copied(app: &AppHandle) {
+    use tauri_plugin_notification::NotificationExt;
+    if app
+        .notification()
+        .builder()
+        .title("Prompt copied")
+        .body("Paste it into your AI agent to report the bug.")
+        .show()
+        .is_err()
+    {
+        tracing::warn!("the copied bug-report prompt could not be confirmed");
     }
 }
 
