@@ -532,10 +532,37 @@ export class Sandbox {
         try {
           await this.restoreWindowsFolders();
         } finally {
-          rmSync(this.root, { recursive: true, force: true });
+          removeRoot(this.root);
         }
       }
     }
+  }
+}
+
+/**
+ * Deletes a journey's world.
+ *
+ * On Windows the journey redirects the user's own AppData folders, so for its
+ * length any process on the machine that resolves them writes into this world:
+ * Firefox's scheduled background task has been seen to leave a profile with a
+ * lock still held. A lock that outlives the retries belongs to that other
+ * process, not to Quota, so it is reported and the folder is left for the
+ * runner to discard instead of failing a journey that passed.
+ */
+function removeRoot(root: string): void {
+  try {
+    rmSync(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (
+      process.platform !== "win32" ||
+      !["EBUSY", "EPERM", "ENOTEMPTY"].includes(code ?? "")
+    ) {
+      throw error;
+    }
+    console.warn(
+      `left ${root} behind: ${String(code)}, a file in it is held by another process`,
+    );
   }
 }
 
