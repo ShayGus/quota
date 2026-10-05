@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings-capability",
-  "description": "The settings window. It manages accounts and preferences, and it drives the overview window's mode, topmost flag and usage pages, and switches between the full window and the mini widget. It moves by its own header, registers or removes the login item, and it asks the overview to show the add-account wizard or an account's details. It may not read the account snapshot for ranking beyond what the shared commands return.",
+  "description": "The settings window. It manages accounts and preferences, and it drives the overview window's mode, topmost flag and usage pages, and switches between the full window and the mini widget. It moves by its own header, registers or removes the login item, and it asks the overview to show the add-account wizard or an account's details. It may open the prefilled bug-report issue and copy the bug-report prompt. It may not read the account snapshot for ranking beyond what the shared commands return.",
   "windows": ["settings"],
   "permissions": [
     "core:default",
@@ -23,6 +23,8 @@
     "allow-disconnect-account",
     "allow-clear-local-history",
     "allow-export-sanitized-diagnostics",
+    "allow-open-bug-report-issue",
+    "allow-copy-bug-report-prompt",
     "allow-set-overview-mode",
     "allow-set-overview-always-on-top",
     "allow-set-app-view",

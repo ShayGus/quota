@@ -2,7 +2,7 @@
  * The window headers.
  *
  * The popover header carries refresh, the pin, the switch to the mini widget,
- * settings, and hide. Refresh, the pin, settings and hide are as the wireframe
+ * Report a bug, settings, and hide. Refresh, the pin, settings and hide are as the wireframe
  * draws them. Pinning turns the tray popover into a floating window
  * that stays open and moves by its header; keeping it on top is a separate
  * setting, so pinning never changes topmost (spec 4.4). The pin's state is
@@ -12,6 +12,7 @@ import type { JSX } from "react";
 
 import type { RendererState } from "../shared/state/types";
 import { Icon, Logo } from "../shared/ui/Icon";
+import { ReportBugMenu, type ReportBugActions } from "../shared/ui/ReportBug";
 import { launch } from "../shared/ipc/report";
 import { actions } from "./actions";
 
@@ -53,10 +54,12 @@ export function AppHeader({
   state,
   onSettings,
   onRefresh,
+  report,
 }: {
   readonly state: RendererState;
   readonly onSettings: () => void;
   readonly onRefresh: () => void;
+  readonly report: ReportBugActions;
 }): JSX.Element {
   const pinned = (state.preferences?.overview_mode ?? "tray") === "floating";
   const paused = state.monitoring?.kind === "paused";
@@ -107,6 +110,7 @@ export function AppHeader({
         >
           <Icon name="shrink" />
         </button>
+        <ReportBugMenu actions={report} variant="header" />
         <button
           type="button"
           className="icon-btn"

@@ -13,6 +13,7 @@ import { formatAge, instantOf } from "../../../shared/format/duration";
 import { providerLabel } from "../../../shared/format/provider";
 import type { RendererState } from "../../../shared/state/types";
 import { Icon } from "../../../shared/ui/Icon";
+import { PROMPT_COPIED } from "../../../shared/ui/ReportBug";
 import { launch } from "../../../shared/ipc/report";
 import { APP_VERSION } from "../../../shared/version";
 import { SettingsTitle } from "../Primitives";
@@ -110,6 +111,60 @@ export function DiagnosticsPanel({
         settings, and never contains account identities, tokens, cookies, or provider
         payloads.
       </div>
+      <ReportBugSection actions={actions} />
+    </>
+  );
+}
+
+/**
+ * Report a bug: the same two choices as the header and the tray. Both carry
+ * only the version, the system, the view and the connected providers.
+ */
+function ReportBugSection({
+  actions,
+}: {
+  readonly actions: SettingsActions;
+}): JSX.Element {
+  const [copied, setCopied] = useState(false);
+  return (
+    <>
+      <h4 className="section-title">Report a bug</h4>
+      <p className="form-hint">
+        Open a GitHub issue, or copy a prompt that asks your AI agent to file one for you.
+        Either one includes Quota&apos;s version, your system, the view and the connected
+        providers, never account names or keys.
+      </p>
+      <div className="button-row">
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            launch(actions.openBugReportIssue());
+          }}
+        >
+          <Icon name="external" />
+          Open an issue on GitHub
+        </button>
+        <button
+          type="button"
+          className="button"
+          onClick={() => {
+            launch(
+              actions.copyBugReportPrompt().then((done) => {
+                setCopied(done);
+              }),
+            );
+          }}
+        >
+          <Icon name="terminal" />
+          Copy a prompt for an AI agent
+        </button>
+      </div>
+      {copied ? (
+        <p className="form-hint" role="status">
+          {PROMPT_COPIED}
+        </p>
+      ) : null}
     </>
   );
 }

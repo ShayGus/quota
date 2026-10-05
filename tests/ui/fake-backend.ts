@@ -280,6 +280,8 @@ export function installFakeBackend(config: FakeConfig): void {
       case "clear_local_history":
       case "open_settings_window":
       case "open_provider_usage_page":
+      case "open_bug_report_issue":
+      case "copy_bug_report_prompt":
         return null;
       case "export_sanitized_diagnostics":
         return "/tmp/quota-diagnostics.json";

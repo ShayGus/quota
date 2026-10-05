@@ -128,12 +128,24 @@ old one.
 
 ## Getting help
 
+The quickest way is **Report a bug**: in the tray menu, behind the bug button in the
+header, beside the mini widget's **Open the full window**, or in **Settings →
+Diagnostics**. It offers two choices:
+
+- **Open an issue on GitHub** opens the bug form with your Quota version, operating
+  system, view and connected providers already filled in.
+- **Copy a prompt for an AI agent** copies a prompt for an AI coding agent, which asks you
+  about the problem, shows you the issue for approval and files it for you.
+
+Neither includes account names, keys or file paths. To add more evidence:
+
 1. Turn on **Settings → Privacy → Hide account names** before you take screenshots.
 2. Use **Settings → Diagnostics → Export diagnostics** to save a summary of Quota's state.
    It contains no account names, credentials or provider answers, but look through it
    before you share it.
 3. Open the log ([where it is](user-guide.md#where-quota-keeps-its-data)) and copy the
    lines around the problem. Check them for anything personal first.
-4. [Open an issue](https://github.com/ShayGus/quota/issues/new) with what you did, what
-   you expected, what happened, your Quota version (shown at the bottom of Settings), and
-   your operating system.
+4. If you open an issue by hand instead, use the
+   [bug form](https://github.com/ShayGus/quota/issues/new?template=bug_report.yml) and
+   include what you did, what you expected, what happened, your Quota version (shown at
+   the bottom of Settings), and your operating system.

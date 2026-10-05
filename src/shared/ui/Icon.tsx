@@ -12,6 +12,7 @@ export type IconName =
   | "arrow-left"
   | "arrow-right"
   | "bell"
+  | "bug"
   | "check"
   | "chevron-down"
   | "chevron-right"
@@ -48,6 +49,10 @@ const PATHS: Record<IconName, JSX.Element> = {
   "arrow-left": <path d="M20 12H5m6-6-6 6 6 6" />,
   "arrow-right": <path d="M4 12h15m-6-6 6 6-6 6" />,
   bell: <path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM10 21h4" />,
+  // Not in the wireframe, which has no bug report: drawn in its line style.
+  bug: (
+    <path d="M8 10a4 4 0 0 1 8 0v5a4 4 0 0 1-8 0v-5ZM8 10h8M12 10v9M10 6.5 8 4.5M14 6.5l2-2M8 13H4M8 17H5M16 13h4M16 17h3" />
+  ),
   check: <path d="m5 12 4 4L19 6" />,
   "chevron-down": <path d="m6 9 6 6 6-6" />,
   "chevron-right": <path d="m9 5 7 7-7 7" />,

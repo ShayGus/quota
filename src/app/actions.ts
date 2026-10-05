@@ -223,6 +223,17 @@ export const actions = {
   async clearHistory(accountId: AccountId): Promise<void> {
     await reportAsync(commands.clearLocalHistory({ id: accountId }));
   },
+  /** Opens GitHub's new-issue form, prefilled by the host with the environment. */
+  async openBugReportIssue(): Promise<void> {
+    await reportAsync(commands.openBugReportIssue());
+  },
+  /**
+   * Copies the host-built prompt for an AI agent. True once it is on the
+   * clipboard, so the window confirms only a copy that happened.
+   */
+  async copyBugReportPrompt(): Promise<boolean> {
+    return reportSettled(commands.copyBugReportPrompt());
+  },
   /** Writes a sanitized diagnostic export to a host-resolved destination. */
   async exportDiagnostics(label: string): Promise<string | null> {
     return reportAsync(commands.exportSanitizedDiagnostics(label));

@@ -38,6 +38,15 @@ window, so there is no dialog plugin. `AppHandle::restart` does what the process
 and `minisign-verify` 0.2.5, both already in the graph through the updater, to verify the
 update list's signatures with the same library the application uses.
 
+`tauri-plugin-clipboard-manager` 2.4.1 was added on 5 October 2026 so Report a bug can
+copy its agent prompt, including from the tray menu, where no window exists to use the
+browser clipboard. It brings `arboard` 3.6.1 and, on Linux, `x11rb` 0.13.2 and
+`wl-clipboard-rs` 0.9.4. It is used from Rust only: the host writes the text it built
+itself, so no renderer package was added and no window is granted a clipboard permission.
+On Windows, `arboard` uses `clipboard-win` 5.4.1 and `error-code` 3.4.0, which are under
+the Boost Software License (BSL-1.0). `deny.toml` allows that licence for those two crates
+only, as named exceptions, rather than adding it to the allow list for the whole graph.
+
 `keyring-core` 1.0.0 and one store crate per system were added on 3 October 2026 for the
 credentials Quota owns itself, such as a pasted OpenRouter key:
 `windows-native-keyring-store` 1.1.0 (Credential Manager),

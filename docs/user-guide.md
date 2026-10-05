@@ -16,6 +16,7 @@ The screenshots use fictional accounts.
 - [Read the overview](#read-the-overview)
 - [The mini widget](#the-mini-widget)
 - [The tray icon](#the-tray-icon)
+- [Report a bug](#report-a-bug)
 - [Manage accounts](#manage-accounts)
 - [Settings](#settings)
 - [Updates](#updates)
@@ -153,13 +154,14 @@ first, by remaining allowance, and a card keeps its place while a new reading ar
 
 The header buttons, from left to right:
 
-| Button                    | What it does                                                                             |
-| ------------------------- | ---------------------------------------------------------------------------------------- |
-| Refresh readings          | Asks for new readings, within each provider's minimum interval (see [Refresh](#refresh)) |
-| Float / Dock              | Turns the popover into a floating window you can move by its header, and back            |
-| Switch to the mini widget | Replaces the window with the [mini widget](#the-mini-widget)                             |
-| Settings                  | Opens the settings window                                                                |
-| Close                     | Hides Quota to the tray; checking continues                                              |
+| Button                    | What it does                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------- |
+| Refresh readings          | Asks for new readings, within each provider's minimum interval (see [Refresh](#refresh))    |
+| Float / Dock              | Turns the popover into a floating window you can move by its header, and back               |
+| Switch to the mini widget | Replaces the window with the [mini widget](#the-mini-widget)                                |
+| Report a bug              | Opens a GitHub issue or copies a prompt for an AI agent (see [Report a bug](#report-a-bug)) |
+| Settings                  | Opens the settings window                                                                   |
+| Close                     | Hides Quota to the tray; checking continues                                                 |
 
 **All accounts / Attention** filters the list. Attention shows only the accounts whose
 badge is anything other than Current or Unlimited, such as a window at 20% or less, an
@@ -217,7 +219,9 @@ and its view when Quota restarts. Drag it anywhere.
 
 Switch to it with the header's **Switch to the mini widget** button, the tray menu's
 **Mini widget**, or **Settings → General → Mini widget**. Its expand button, **Open the
-full window**, switches back.
+full window**, switches back. Beside it, **Report a bug** offers the same two choices as
+the header (see [Report a bug](#report-a-bug)). Both buttons show while the pointer is on
+the widget.
 
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
 mini cards.
@@ -233,9 +237,34 @@ mini cards.
 
 - **Left-click** opens Quota.
 - **Right-click** opens the menu: **Settings**, **Show App**, **Mini widget** (a check
-  mark shows which view is active), and **Exit**.
+  mark shows which view is active), **Report a bug** (see [Report a bug](#report-a-bug)),
+  and **Exit**.
 
 **Exit** is the only way to stop Quota; closing a window hides it to the tray.
+
+## Report a bug
+
+**Report a bug** is in the tray menu, behind the bug button in the header, beside the mini
+widget's **Open the full window**, and in **Settings → Diagnostics**. Each offers two
+choices:
+
+- **Open an issue on GitHub** opens Quota's bug form in your browser with your Quota
+  version, operating system, view and connected providers already filled in. You describe
+  what happened; you need a GitHub account to submit it.
+- **Copy a prompt for an AI agent** copies a prompt to paste into an AI coding agent, such
+  as Claude Code. The agent asks you what happened, shows you the issue for approval, and
+  files it with the GitHub CLI. A message confirms the copy; from the tray it is a system
+  notification.
+
+Neither includes account names, email addresses, keys or file paths: only the version, the
+operating system, the view and the provider names, such as `claude` or `codex`.
+
+<table>
+  <tr>
+    <td valign="top" width="58%"><img src="images/report-bug-menu.png" alt="The header's Report a bug menu: Open an issue on GitHub, Copy a prompt for an AI agent"><br><sub>From the header</sub></td>
+    <td valign="top" width="42%"><img src="images/widget-report-bug.png" alt="The mini widget with its Report a bug menu beneath the accounts"><br><sub>From the mini widget</sub></td>
+  </tr>
+</table>
 
 ## Manage accounts
 
@@ -324,6 +353,9 @@ service, how many accounts are checked, and each account's last status.
 folder in [Quota's data folder](#where-quota-keeps-its-data) and shows the full path. It
 contains the account count, provider names and polling settings, and no account names,
 credentials, file paths or provider answers. Exporting again replaces the file.
+
+**Report a bug** at the bottom of the panel offers the same two choices as the header (see
+[Report a bug](#report-a-bug)).
 
 ## Updates
 
