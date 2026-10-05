@@ -75,8 +75,9 @@ interface Fixtures {
 const SCREENSHOT_DIRECTORY = join(process.cwd(), "test-results", "screenshots");
 
 /**
- * How much taller the window must be for its tallest scrolling area, or the
- * page itself, to show all of its content. Runs in the page.
+ * How much taller the window must be to show all of its content: the content
+ * hidden in its tallest scrolling area, or laid out below the window's edge
+ * and clipped, as the mini widget's is. Runs in the page.
  */
 function hiddenHeight(): number {
   let hidden = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
@@ -84,6 +85,10 @@ function hiddenHeight(): number {
     const { overflowY } = getComputedStyle(element);
     if (overflowY === "auto" || overflowY === "scroll") {
       hidden = Math.max(hidden, element.scrollHeight - element.clientHeight);
+    }
+    const { bottom, height } = element.getBoundingClientRect();
+    if (height > 1) {
+      hidden = Math.max(hidden, Math.ceil(bottom - window.innerHeight));
     }
   }
   return hidden;

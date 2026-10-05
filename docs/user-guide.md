@@ -51,10 +51,10 @@ published but have not yet been verified on a real Mac.
 
 ## First launch
 
+<img align="right" width="230" src="images/first-launch.png" alt="The first-launch screen with an Add your first account button">
+
 Quota opens as a small window above the tray icon: the **popover**. With no accounts yet,
 it offers to add the first one.
-
-<img src="images/first-launch.png" width="360" alt="The first-launch screen with an Add your first account button">
 
 Closing the window, with its close button or Alt+F4, hides it to the tray; Quota keeps
 checking your accounts in the background. Click the tray icon to bring it back. Starting
@@ -63,6 +63,8 @@ copy. Settings stays closed when Quota starts, even if it was open when you quit
 
 To start Quota when you sign in to your computer, turn on **Settings → General → Launch at
 login**.
+
+<br clear="right">
 
 ## Add an account
 
@@ -101,14 +103,10 @@ What Connect shows depends on how the provider signs in.
 **An existing sign-in** (Codex, Claude, Cursor): Quota reads the sign-in the provider's
 own tool already keeps on this computer. Nothing opens; press **Connect**.
 
-<img src="images/wizard-connect.png" width="600" alt="Connect Codex: Quota uses the existing local sign-in">
-
 **An API key**: paste the key into the masked box and press **Connect**. The key is kept
 in your system's credential store (Windows Credential Manager, the macOS Keychain, or your
 Linux keyring), never in Quota's own files. Where the provider's own tool can stand in for
 a key, the box is optional.
-
-<img src="images/wizard-api-key.png" width="600" alt="Connect OpenCode Go with an optional API key box">
 
 **A browser sign-in** (Grok, Muse Code): Quota shows a code and opens the provider's page
 in your browser. Approve the sign-in there, entering the code if the page asks for it.
@@ -116,7 +114,13 @@ Nothing comes back to the browser: Quota checks with the provider in the backgro
 moves on as soon as you approve. If the browser does not open within ten seconds, open the
 address shown yourself; Quota keeps waiting.
 
-<img src="images/wizard-browser-code.png" width="600" alt="Connect Grok: the sign-in code, waiting for the browser">
+<table>
+  <tr>
+    <td valign="top" width="33%"><img src="images/wizard-connect.png" alt="Connect Codex: Quota uses the existing local sign-in"><br><sub>An existing sign-in</sub></td>
+    <td valign="top" width="33%"><img src="images/wizard-api-key.png" alt="Connect OpenCode Go with an optional API key box"><br><sub>An API key</sub></td>
+    <td valign="top" width="33%"><img src="images/wizard-browser-code.png" alt="Connect Grok: the sign-in code, waiting for the browser"><br><sub>A browser sign-in</sub></td>
+  </tr>
+</table>
 
 ### 3. Verify
 
@@ -139,7 +143,13 @@ Each account is a card. A ring shows how much of a window is **left**, not how m
 used, with the time until it resets underneath. Cards are ordered closest to running out
 first, by remaining allowance, and a card keeps its place while a new reading arrives.
 
-<img src="images/overview-rings.png" width="360" alt="The overview: Codex low on its 5-hour window, Cursor rate limited, Claude current">
+<table>
+  <tr>
+    <td valign="top" width="33%"><img src="images/overview-rings.png" alt="The overview: Codex low on its 5-hour window, Cursor rate limited, Claude current"><br><sub>Rings, dark theme</sub></td>
+    <td valign="top" width="33%"><img src="images/overview-bars-light.png" alt="The compact layout with bars, in the light theme"><br><sub>Compact bars, light theme</sub></td>
+    <td valign="top" width="33%"><img src="images/attention-filter.png" alt="The Attention filter showing only accounts that need attention"><br><sub>The Attention filter</sub></td>
+  </tr>
+</table>
 
 The header buttons, from left to right:
 
@@ -156,20 +166,13 @@ badge is anything other than Current or Unlimited, such as a window at 20% or le
 exhausted window, a failed check, a rate limit, or a sign-in to renew. Accounts with
 monitoring off are left out.
 
-<img src="images/attention-filter.png" width="360" alt="The Attention filter showing only accounts that need attention">
-
 The two buttons on the right switch between rings and a compact list of bars. Some
 providers have more limits than the standard windows, such as Claude's model-specific
 weekly allowance; those open under the card with **other limits**.
 
-<img src="images/overview-bars-light.png" width="360" alt="The compact layout with bars, in the light theme">
-
 ### Account status
 
-The badge in each card's corner says how the account is doing. This overview shows most of
-them:
-
-<img src="images/overview-all.png" width="360" alt="Seven accounts: Reconnect, 5h low, Rate limited, Check failed, Current, Offline and Monitoring off">
+The badge in each card's corner says how the account is doing:
 
 | Badge                    | Meaning                                                                  | What to do                                                            |
 | ------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |
@@ -185,13 +188,18 @@ them:
 | Reconnect                | The sign-in expired or was refused                                       | Choose **Reconnect** and sign in again                                |
 | Monitoring off / Paused  | Checks are off for this account, or for all of them                      | Turn monitoring back on in Settings                                   |
 
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/overview-all.png" alt="Seven accounts: Reconnect, 5h low, Rate limited, Check failed, Current, Offline and Monitoring off"><br><sub>Most of the badges, one account each</sub></td>
+    <td valign="top" width="50%"><img src="images/account-detail.png" alt="Quota detail for a Codex 5-hour window: 8% left, resets in 2h 0m"><br><sub>Quota detail for one window</sub></td>
+  </tr>
+</table>
+
 ### Quota detail
 
 Click a ring, or **Details**, for that account's detail: a tab for each window, when it
 resets in your time zone, how much is used and left, when it was last checked, and where
 the reading came from.
-
-<img src="images/account-detail.png" width="360" alt="Quota detail for a Codex 5-hour window: 8% left, resets in 2h 0m">
 
 ### Refresh
 
@@ -214,8 +222,12 @@ full window**, switches back.
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
 mini cards.
 
-<img src="images/widget-rings.png" width="320" alt="The mini widget as a strip of rings">
-<img src="images/widget-cards.png" width="320" alt="The mini widget as mini cards with bars">
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/widget-rings.png" alt="The mini widget as a strip of rings"><br><sub>Rings: the ring strip</sub></td>
+    <td valign="top" width="50%"><img src="images/widget-cards.png" alt="The mini widget as mini cards with bars"><br><sub>Bars: the mini cards</sub></td>
+  </tr>
+</table>
 
 ## The tray icon
 
@@ -229,7 +241,7 @@ mini cards.
 
 **Settings → Accounts** lists every account.
 
-<img src="images/settings-accounts.png" width="600" alt="Settings, Accounts: each account with Details, Rename, Reconnect and Disconnect">
+<img align="right" width="340" src="images/settings-accounts.png" alt="Settings, Accounts: each account with Details, Rename, Reconnect and Disconnect">
 
 - The switch turns checking on or off for that account. Its last readings stay visible.
 - **Details** opens the account's quota detail.
@@ -240,14 +252,27 @@ mini cards.
   the credential store. It does not sign you out of the provider's own apps.
 - The arrows move the account up or down in this list.
 
+<br clear="right">
+
 ## Settings
 
 Open Settings from the header's gear button or the tray menu. Every change is saved on
 this computer and applies immediately.
 
-### General
+<table>
+  <tr>
+    <td valign="top" width="33%"><img src="images/settings-general.png" alt="Settings, General"><br><sub>General</sub></td>
+    <td valign="top" width="33%"><img src="images/settings-appearance.png" alt="Settings, Appearance: theme, overview layout and reduce motion"><br><sub>Appearance</sub></td>
+    <td valign="top" width="33%"><img src="images/settings-notifications.png" alt="Settings, Notifications"><br><sub>Notifications</sub></td>
+  </tr>
+  <tr>
+    <td valign="top" width="33%"><img src="images/settings-privacy.png" alt="Settings, Privacy: what Quota does with your data"><br><sub>Privacy</sub></td>
+    <td valign="top" width="33%"><img src="images/settings-diagnostics.png" alt="Settings, Diagnostics"><br><sub>Diagnostics</sub></td>
+    <td valign="top" width="33%"><img src="images/settings-accounts.png" alt="Settings, Accounts"><br><sub>Accounts</sub></td>
+  </tr>
+</table>
 
-<img src="images/settings-general.png" width="600" alt="Settings, General">
+### General
 
 | Setting            | What it does                                                                                                       |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------ |
@@ -259,16 +284,12 @@ this computer and applies immediately.
 
 ### Appearance
 
-<img src="images/settings-appearance.png" width="600" alt="Settings, Appearance: theme, overview layout and reduce motion">
-
 - **Theme**: Light, Dark, or System, which follows your operating system.
 - **Overview layout**: **Donuts** (rings) or **Compact** (bars). This also picks the mini
   widget's look.
 - **Reduce motion**: turns off small transitions; values still change, without movement.
 
 ### Notifications
-
-<img src="images/settings-notifications.png" width="600" alt="Settings, Notifications">
 
 - **Enable notifications**: desktop alerts based on verified readings. Off by default.
 - **Notify when remaining quota reaches**: 20%, 10% and 0%; choose any of them.
@@ -283,8 +304,6 @@ Alerts are not repeated within the same quota window.
 
 ### Privacy
 
-<img src="images/settings-privacy.png" width="600" alt="Settings, Privacy: what Quota does with your data">
-
 The panel states what Quota does with your data; [Your data](#your-data) below has the
 details. Its settings:
 
@@ -297,8 +316,6 @@ details. Its settings:
   stay.
 
 ### Diagnostics
-
-<img src="images/settings-diagnostics.png" width="600" alt="Settings, Diagnostics: application, backend link, enabled accounts, monitoring and account status">
 
 Diagnostics shows Quota's version, whether the window is connected to the background
 service, how many accounts are checked, and each account's last status.
@@ -316,9 +333,9 @@ spent in the pop-up, and checks pause while an offer, an installation, or a fail
 message is open.
 
 A newer version opens one pop-up in Quota's theme, naming the available and current
-versions:
+versions.
 
-<img src="images/update-offer.png" width="360" alt="The update offer naming the new and current versions">
+<img align="right" width="300" src="images/update-offer.png" alt="The update offer naming the new and current versions">
 
 **OK** downloads the matching package, verifies its signature, installs it and restarts
 Quota. **Cancel**, or closing the pop-up, keeps the current version. A declined version or
@@ -329,6 +346,8 @@ A failed check stays silent and logs a warning, and every check and download has
 limit. A failed installation shows a message with **Close**, and Quota keeps running its
 current version. Development, debug, sample-data and inspection builds never check. There
 are no update settings, channels, release notes or progress bar.
+
+<br clear="right">
 
 Each copy updates with the kind of package it was installed from: the Windows installer or
 MSI, the AppImage, the `.deb` or `.rpm`, or the Mac app. To replace an AppImage by hand,
