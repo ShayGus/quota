@@ -25,10 +25,10 @@ its own; every rule lives in `quota-domain` or `quota-core`.
 
 ## Lifecycle
 
-[Run the app](../README.md#run-the-app) and [Updates](../README.md#updates) own the window
-and tray behaviour. Launch at login registers a login item with an `--autostart` argument,
-so a launch at sign-in starts quietly in the tray and a login launch that finds Quota
-already running changes nothing.
+[The tray icon](../docs/user-guide.md#the-tray-icon) and
+[Updates](../docs/user-guide.md#updates) own the window and tray behaviour. Launch at
+login registers a login item with an `--autostart` argument, so a launch at sign-in starts
+quietly in the tray and a login launch that finds Quota already running changes nothing.
 
 ## Security model
 
@@ -46,6 +46,5 @@ development-only inspection permissions, see
 ## Build status
 
 [Acceptance mapping](../docs/acceptance.md) owns the local build and launch evidence and
-its native verification limits.
-[README.md](../README.md#developer-setup-from-a-clean-checkout) lists the native build
-prerequisites.
+its native verification limits. [README.md](../CONTRIBUTING.md#1-set-up-the-checkout)
+lists the native build prerequisites.

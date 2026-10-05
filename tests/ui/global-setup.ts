@@ -9,6 +9,7 @@
 import { rmSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
+import { fileURLToPath } from "node:url";
 
 import { build } from "vite";
 
@@ -28,7 +29,7 @@ export default async function globalSetup(): Promise<void> {
       emptyOutDir: true,
       minify: false,
       lib: {
-        entry: new URL("fake-backend.ts", import.meta.url).pathname,
+        entry: fileURLToPath(new URL("fake-backend.ts", import.meta.url)),
         formats: ["iife"],
         name: "QuotaFakeBackend",
         fileName: () => FAKE_BACKEND_FILE,

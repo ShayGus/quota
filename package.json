@@ -18,7 +18,8 @@
     "test:ui": "playwright test",
     "build:e2e": "bun tools/e2e/build-apps.mjs",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
-    "inspect": "tauri dev --features agent-inspection --config '{\"app\":{\"security\":{\"capabilities\":[\"overview-capability\",\"settings-capability\",\"widget-capability\",\"agent-inspection-capability\"]}}}'"
+    "inspect": "tauri dev --features agent-inspection --config '{\"app\":{\"security\":{\"capabilities\":[\"overview-capability\",\"settings-capability\",\"widget-capability\",\"agent-inspection-capability\"]}}}'",
+    "docs:screenshots": "bun tools/docs/screenshots.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "2.12.1",
