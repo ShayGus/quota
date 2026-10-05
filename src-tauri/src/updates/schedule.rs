@@ -16,7 +16,7 @@
 use std::time::{Duration, Instant, SystemTime};
 
 /// How long after one check cycle the next is due. The one place this is decided.
-pub(crate) const CHECK_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+pub(crate) const CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 /// How often a running application asks whether a check is due.
 pub(crate) const WAKE_POLL: Duration = Duration::from_secs(60);
@@ -142,12 +142,12 @@ mod tests {
     use super::*;
 
     const HOUR: Duration = Duration::from_secs(60 * 60);
-    const ONE_SECOND_SHORT_OF_A_DAY: Duration = Duration::from_secs(24 * 60 * 60 - 1);
-    const AN_HOUR_SHORT_OF_A_DAY: Duration = Duration::from_secs(23 * 60 * 60);
+    const MINUTE: Duration = Duration::from_secs(60);
+    const ONE_SECOND_SHORT_OF_THE_INTERVAL: Duration = Duration::from_secs(30 * 60 - 1);
 
     #[test]
-    fn the_interval_is_one_day() {
-        assert_eq!(CHECK_INTERVAL, 24 * HOUR);
+    fn the_interval_is_half_an_hour() {
+        assert_eq!(CHECK_INTERVAL, 30 * MINUTE);
     }
 
     #[test]
@@ -161,7 +161,7 @@ mod tests {
         let clock = FakeClock::new();
         let mut schedule = Schedule::default();
         schedule.finished(clock.now());
-        clock.advance(ONE_SECOND_SHORT_OF_A_DAY);
+        clock.advance(ONE_SECOND_SHORT_OF_THE_INTERVAL);
         assert!(!schedule.is_due(clock.now()));
     }
 
@@ -179,12 +179,12 @@ mod tests {
         let clock = FakeClock::new();
         let mut schedule = Schedule::default();
         schedule.finished(clock.now());
-        clock.advance(CHECK_INTERVAL + 3 * HOUR);
+        clock.advance(CHECK_INTERVAL + 3 * MINUTE);
         assert!(schedule.is_due(clock.now()));
         schedule.finished(clock.now());
-        clock.advance(AN_HOUR_SHORT_OF_A_DAY);
+        clock.advance(25 * MINUTE);
         assert!(!schedule.is_due(clock.now()));
-        clock.advance(HOUR);
+        clock.advance(5 * MINUTE);
         assert!(schedule.is_due(clock.now()));
     }
 
