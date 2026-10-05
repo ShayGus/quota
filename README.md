@@ -129,7 +129,9 @@ packages, every check, and the tests.
 
 ## Reporting a problem
 
-[Open an issue](https://github.com/ShayGus/quota/issues/new).
+In the app, **Report a bug** (tray menu, header, mini widget, or Settings → Diagnostics)
+opens a prefilled GitHub issue or copies a prompt for an AI agent to file one for you. Or
+[open an issue](https://github.com/ShayGus/quota/issues/new?template=bug_report.yml).
 [Getting help](docs/troubleshooting.md#getting-help) lists what to include and how to
 leave out anything personal.
 

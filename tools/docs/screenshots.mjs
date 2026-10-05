@@ -16,8 +16,9 @@ const TARGET = join(process.cwd(), "docs", "images");
 
 /**
  * The published name, then the screenshot it is copied from. Every one is a
- * `screenshotFull` capture under `docs/`, made as tall as its content so
- * nothing is cut off.
+ * capture under `docs/`; most are `screenshotFull`, made as tall as their
+ * content so nothing is cut off, and the Report a bug menus are taken at the
+ * window's own size, which already shows all of them.
  */
 const IMAGES = [
   ["overview-rings.png", "hero-ring-dark.png"],
@@ -40,6 +41,8 @@ const IMAGES = [
   ["settings-privacy.png", "settings-privacy.png"],
   ["settings-diagnostics.png", "settings-diagnostics.png"],
   ["update-offer.png", "update-offer.png"],
+  ["report-bug-menu.png", "report-bug-menu.png"],
+  ["widget-report-bug.png", "widget-report-bug.png"],
 ];
 
 mkdirSync(TARGET, { recursive: true });

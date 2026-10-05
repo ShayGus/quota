@@ -20,6 +20,9 @@ test.describe("report a bug", () => {
       const menu = page.getByRole("menu", { name: "Report a bug" });
       await expect(menu.getByRole("menuitem")).toHaveText([ISSUE, PROMPT]);
       await host.screenshot(`report-bug/header-menu-${theme}`);
+      if (theme === "dark") {
+        await host.screenshot("docs/report-bug-menu");
+      }
     });
   }
 
@@ -66,12 +69,12 @@ test.describe("report a bug", () => {
     await page.getByRole("button", { name: "Report a bug" }).click();
     await expect(page.getByRole("menuitem")).toHaveText([ISSUE, PROMPT]);
     // The host grows the window to the widget's content; the page stands in.
-    const height = await page
-      .locator(".widget")
-      .evaluate((widget) => widget.offsetHeight);
+    const box = await page.locator(".widget").boundingBox();
+    const height = Math.ceil(box?.height ?? 0);
     expect(height).toBeGreaterThan(172);
     await page.setViewportSize({ width: 316, height });
     await host.screenshot("report-bug/widget-menu");
+    await host.screenshot("docs/widget-report-bug");
     await page.getByRole("menuitem", { name: PROMPT }).click();
     await expect
       .poll(async () => (await host.callsTo("copy_bug_report_prompt")).length)
