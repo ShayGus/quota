@@ -18,6 +18,7 @@ test.describe("add-account wizard", () => {
     await expect(page.getByRole("button", { name: /Codex/ })).toBeVisible();
     await expect(page.locator(".provider-pick")).toHaveCount(11);
     await host.screenshot("wizard-1-provider");
+    await host.screenshotFull("wizard-provider");
     await page.getByRole("button", { name: "Cancel" }).click();
     await expect(page.getByRole("heading", { name: "Accounts", level: 3 })).toBeVisible();
   });
@@ -34,6 +35,7 @@ test.describe("add-account wizard", () => {
     await expect(page.getByRole("heading", { name: "Connect Codex" })).toBeVisible();
     await expect(page.locator(".step.selected")).toHaveText("2");
     await host.screenshot("wizard-2-connect");
+    await host.screenshotFull("wizard-connect");
 
     await page.getByRole("button", { name: "Connect", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
@@ -41,6 +43,7 @@ test.describe("add-account wizard", () => {
     await expect(page.getByText("new.person@example.test")).toBeVisible();
     await expect(page.getByText("5-hour")).toBeVisible();
     await host.screenshot("wizard-3-verify");
+    await host.screenshotFull("wizard-verify");
     // Nothing is saved until the person adds it.
     expect(await host.callsTo("confirm_connection")).toHaveLength(0);
 
@@ -132,6 +135,7 @@ test.describe("add-account wizard", () => {
       ).toBeVisible();
       await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
       await host.screenshot(`wizard-opencode-key-${theme}`);
+      await host.screenshotFull(`wizard-api-key-${theme}`);
       await key.fill("  oc-go-not-a-real-key  ");
       await page.getByRole("button", { name: "Connect", exact: true }).click();
       await expect(
@@ -251,6 +255,7 @@ test.describe("add-account wizard", () => {
       page.getByRole("button", { name: "Waiting for the browser…" }),
     ).toBeDisabled();
     await host.screenshot("wizard-browser-code");
+    await host.screenshotFull("wizard-browser-code");
     const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
       request: { browser_sign_in: boolean };
     };

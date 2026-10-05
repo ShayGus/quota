@@ -16,6 +16,7 @@ test.describe("widget", () => {
       page.getByRole("button", { name: "Open the full window" }),
     ).toBeVisible();
     await host.screenshot("widget-rings");
+    await host.screenshotFull("widget-rings");
     await page.getByRole("button", { name: "Open the full window" }).click();
     expect((await host.callsTo("set_app_view")).at(-1)?.args).toEqual({
       view: "overview",
@@ -33,6 +34,7 @@ test.describe("widget", () => {
       host.page.getByRole("button", { name: "Open the full window" }),
     ).toBeVisible();
     await host.screenshot("widget-bars");
+    await host.screenshotFull("widget-cards");
   });
 
   test("with no accounts it says so", async ({ open }) => {

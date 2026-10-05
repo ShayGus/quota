@@ -4,10 +4,10 @@ Quota shows how much of your AI subscriptions you have left. It sits in the syst
 and puts every 5-hour, weekly, monthly and model-specific allowance of every account in
 one small window, with when each resets and how recently it was checked.
 
-<p>
-  <img src="docs/images/overview-rings.png" width="320" alt="The Quota overview: one card per account, with a ring for each allowance window">
-  &nbsp;
-  <img src="docs/images/widget-rings.png" width="320" alt="The mini widget: every account as a small ring">
+<p align="center">
+  <img src="docs/images/overview-rings.png" width="300" alt="The Quota overview in the dark theme: Codex low on its 5-hour window, Cursor rate limited, Claude current">
+  &nbsp;&nbsp;
+  <img src="docs/images/overview-bars-light.png" width="300" alt="The same accounts in the compact layout, in the light theme">
 </p>
 
 - **Every subscription in one place**: Codex, Claude, Cursor, OpenCode Go, OpenRouter,
@@ -23,6 +23,30 @@ one small window, with when each resets and how recently it was checked.
   in your system's credential store.
 
 Quota runs on Windows, Linux and macOS.
+
+## Screenshots
+
+The screenshots use fictional accounts.
+
+<table>
+  <tr>
+    <td width="33%" valign="top"><img src="docs/images/widget-rings.png" alt="The mini widget: every account as a small ring"><br><b>Mini widget.</b> Every account at a glance, always on top, wherever you put it.</td>
+    <td width="33%" valign="top"><img src="docs/images/account-detail.png" alt="Quota detail for a Codex 5-hour window"><br><b>Quota detail.</b> When each window resets, how much is used and left, and where the reading came from.</td>
+    <td width="33%" valign="top"><img src="docs/images/attention-filter.png" alt="The Attention filter"><br><b>Attention.</b> Only the accounts that need something from you: low, exhausted, failing or signed out.</td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/wizard-provider.png" alt="Add a subscription: the list of eleven providers"><br><b>Add an account.</b> Eleven providers, each with the windows it reports.</td>
+    <td valign="top"><img src="docs/images/wizard-browser-code.png" alt="Browser sign-in for Grok with a sign-in code"><br><b>Browser sign-in.</b> Approve in your browser; Quota never asks for a password.</td>
+    <td valign="top"><img src="docs/images/wizard-verify.png" alt="Add this account? The verified account and its readings"><br><b>Verify first.</b> See the account and its readings before anything is saved.</td>
+  </tr>
+  <tr>
+    <td valign="top"><img src="docs/images/settings-notifications.png" alt="Notification settings"><br><b>Notifications</b> at 20%, 10% and 0% left, and when a window is back.</td>
+    <td valign="top"><img src="docs/images/settings-privacy.png" alt="Privacy settings"><br><b>Privacy.</b> No server, no tracking, and a switch to hide account names on screen.</td>
+    <td valign="top"><img src="docs/images/settings-appearance.png" alt="Appearance settings"><br><b>Appearance.</b> Light, dark or system theme; rings or a compact list.</td>
+  </tr>
+</table>
+
+The [user guide](docs/user-guide.md) walks through every screen.
 
 ## Install
 

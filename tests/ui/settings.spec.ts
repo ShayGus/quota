@@ -26,6 +26,7 @@ test.describe("settings", () => {
         .click();
       await expect(page.getByRole("heading", { name: title, level: 3 })).toBeVisible();
       await host.screenshot(`settings-${id}`);
+      await host.screenshotFull(`settings-${id}`);
     }
   });
 

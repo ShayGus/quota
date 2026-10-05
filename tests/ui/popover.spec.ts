@@ -21,6 +21,7 @@ test.describe("popover", () => {
     await expect(card("Old Kimi")).toContainText("Reconnect");
     await expect(card("Parked Grok")).toContainText("Monitoring off");
     await host.screenshot("popover-seven-accounts");
+    await host.screenshotFull("overview-all");
   });
 
   test("the attention filter keeps only accounts that need something", async ({
@@ -33,6 +34,7 @@ test.describe("popover", () => {
     await expect(page.getByLabel(/Work Claude allowance/)).toHaveCount(0);
     await expect(page.getByLabel(/Parked Grok allowance/)).toHaveCount(0);
     await host.screenshot("popover-attention-filter");
+    await host.screenshotFull("attention-filter");
   });
 
   test("a card opens its detail and Back returns to the list", async ({ open }) => {
@@ -41,6 +43,7 @@ test.describe("popover", () => {
     await page.getByRole("button", { name: /Details for Codex Personal Codex/ }).click();
     await expect(page.getByRole("article")).toHaveCount(0);
     await host.screenshot("popover-account-detail");
+    await host.screenshotFull("account-detail");
     await page.keyboard.press("Escape");
     await expect(page.getByRole("article")).toHaveCount(7);
   });
@@ -97,6 +100,7 @@ test.describe("popover", () => {
       destination: "connect",
     });
     await host.screenshot("popover-first-launch");
+    await host.screenshotFull("first-launch");
   });
 
   test("an account with an unreported reading still renders", async ({ open }) => {

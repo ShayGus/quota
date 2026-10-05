@@ -139,7 +139,7 @@ Each account is a card. A ring shows how much of a window is **left**, not how m
 used, with the time until it resets underneath. Cards are ordered closest to running out
 first, by remaining allowance, and a card keeps its place while a new reading arrives.
 
-<img src="images/overview-rings.png" width="360" alt="The overview with a Reconnect card, a Codex card low on its 5-hour window, and a rate-limited Cursor card">
+<img src="images/overview-rings.png" width="360" alt="The overview: Codex low on its 5-hour window, Cursor rate limited, Claude current">
 
 The header buttons, from left to right:
 
@@ -166,7 +166,10 @@ weekly allowance; those open under the card with **other limits**.
 
 ### Account status
 
-The badge in each card's corner says how the account is doing:
+The badge in each card's corner says how the account is doing. This overview shows most of
+them:
+
+<img src="images/overview-all.png" width="360" alt="Seven accounts: Reconnect, 5h low, Rate limited, Check failed, Current, Offline and Monitoring off">
 
 | Badge                    | Meaning                                                                  | What to do                                                            |
 | ------------------------ | ------------------------------------------------------------------------ | --------------------------------------------------------------------- |

@@ -46,6 +46,13 @@ export interface Host {
    * uploads. `name` may contain folders. With a locator, only that element.
    */
   screenshot: (name: string, element?: Locator) => Promise<void>;
+  /**
+   * Saves a screenshot of the whole window under
+   * `test-results/screenshots/docs/<name>.png`, for the user guide: the window
+   * is made as tall as its content first, so nothing is cut off, then given
+   * back its size.
+   */
+  screenshotFull: (name: string) => Promise<void>;
 }
 
 interface Opener {
@@ -66,6 +73,21 @@ interface Fixtures {
 
 /** Where screenshots are kept for CI to upload. */
 const SCREENSHOT_DIRECTORY = join(process.cwd(), "test-results", "screenshots");
+
+/**
+ * How much taller the window must be for its tallest scrolling area, or the
+ * page itself, to show all of its content. Runs in the page.
+ */
+function hiddenHeight(): number {
+  let hidden = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+  for (const element of document.querySelectorAll<HTMLElement>("*")) {
+    const { overflowY } = getComputedStyle(element);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      hidden = Math.max(hidden, element.scrollHeight - element.clientHeight);
+    }
+  }
+  return hidden;
+}
 
 const fakeBackendScript = (): string =>
   readFileSync(join(FAKE_BACKEND_DIRECTORY, FAKE_BACKEND_FILE), "utf8");
@@ -127,6 +149,24 @@ export const test = base.extend<Fixtures>({
           const path = join(SCREENSHOT_DIRECTORY, `${name}.png`);
           mkdirSync(dirname(path), { recursive: true });
           await (element ?? target).screenshot({ path });
+        },
+        screenshotFull: async (name) => {
+          const path = join(SCREENSHOT_DIRECTORY, "docs", `${name}.png`);
+          mkdirSync(dirname(path), { recursive: true });
+          const original = target.viewportSize() ?? WINDOW_SIZE[config.window];
+          // Growing the window can reveal more content, so grow until nothing
+          // in the page still scrolls.
+          for (let round = 0; round < 5; round += 1) {
+            const hidden = await target.evaluate(hiddenHeight);
+            if (hidden <= 0) break;
+            const size = target.viewportSize() ?? original;
+            await target.setViewportSize({
+              width: size.width,
+              height: size.height + hidden,
+            });
+          }
+          await target.screenshot({ path });
+          await target.setViewportSize(original);
         },
       };
     };

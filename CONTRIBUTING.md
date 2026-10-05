@@ -356,10 +356,13 @@ Counts by theme by aliases are 6 surfaces x 5 x 2 x 2 = 120 tests, states by the
 6 x 2 = 72, long names 12, sizes 3, switching 5. `test-results/screenshots/index.html` is
 a contact sheet of every screenshot, grouped by folder.
 
-The user guide's pictures in `docs/images/` are copies of some of these screenshots, so
-they show the fictional accounts of the faked host. After an interface change, refresh
-them with `bun run test:ui && bun run docs:screenshots`; `tools/docs/screenshots.mjs`
-lists which screenshot each picture comes from.
+The README's and the user guide's pictures in `docs/images/` come from the same run, so
+they show the fictional accounts of the faked host. A test takes one with
+`host.screenshotFull(name)`, which grows the window until nothing in it scrolls, so the
+picture is never cut off, and writes it to `test-results/screenshots/docs/`;
+`tests/ui/docs.spec.ts` takes the README's overview pictures. After an interface change,
+refresh them with `bun run test:ui && bun run docs:screenshots`;
+`tools/docs/screenshots.mjs` lists which capture each picture comes from.
 
 What the screenshots show about the mini widget, as the code stands: the mini cards draw
 readings and not statuses, so a rate-limited, offline or check-failed account looks normal

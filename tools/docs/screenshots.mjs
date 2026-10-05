@@ -11,30 +11,35 @@ import { copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
-const SOURCE = join(process.cwd(), "test-results", "screenshots");
+const SOURCE = join(process.cwd(), "test-results", "screenshots", "docs");
 const TARGET = join(process.cwd(), "docs", "images");
 
-/** The published name, then the screenshot it is copied from. */
+/**
+ * The published name, then the screenshot it is copied from. Every one is a
+ * `screenshotFull` capture under `docs/`, made as tall as its content so
+ * nothing is cut off.
+ */
 const IMAGES = [
-  ["first-launch.png", "popover-first-launch.png"],
-  ["overview-rings.png", "popover-seven-accounts.png"],
-  ["overview-bars-light.png", "popover-440-bar-light.png"],
-  ["account-detail.png", "popover-account-detail.png"],
-  ["attention-filter.png", "popover-attention-filter.png"],
+  ["overview-rings.png", "hero-ring-dark.png"],
+  ["overview-bars-light.png", "hero-bar-light.png"],
+  ["overview-all.png", "overview-all.png"],
+  ["first-launch.png", "first-launch.png"],
+  ["account-detail.png", "account-detail.png"],
+  ["attention-filter.png", "attention-filter.png"],
   ["widget-rings.png", "widget-rings.png"],
-  ["widget-cards.png", "widget-bars.png"],
-  ["wizard-provider.png", "wizard-1-provider.png"],
-  ["wizard-connect.png", "wizard-2-connect.png"],
+  ["widget-cards.png", "widget-cards.png"],
+  ["wizard-provider.png", "wizard-provider.png"],
+  ["wizard-connect.png", "wizard-connect.png"],
   ["wizard-browser-code.png", "wizard-browser-code.png"],
-  ["wizard-api-key.png", "wizard-opencode-key-light.png"],
-  ["wizard-verify.png", "wizard-3-verify.png"],
+  ["wizard-api-key.png", "wizard-api-key-light.png"],
+  ["wizard-verify.png", "wizard-verify.png"],
   ["settings-general.png", "settings-general.png"],
   ["settings-accounts.png", "settings-accounts.png"],
   ["settings-appearance.png", "settings-appearance.png"],
   ["settings-notifications.png", "settings-notifications.png"],
   ["settings-privacy.png", "settings-privacy.png"],
   ["settings-diagnostics.png", "settings-diagnostics.png"],
-  ["update-offer.png", join("update-popup", "offer-light.png")],
+  ["update-offer.png", "update-offer.png"],
 ];
 
 mkdirSync(TARGET, { recursive: true });
