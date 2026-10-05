@@ -107,6 +107,7 @@ async fn serve(listener: TcpListener) {
         assert_eq!(line, request_line);
         let mut length = 0;
         let mut actual_type = None;
+        let mut user_agent = None;
         loop {
             line.clear();
             assert!(stream.read_line(&mut line).await.expect("a header") > 0);
@@ -114,10 +115,11 @@ async fn serve(listener: TcpListener) {
                 break;
             }
             let (name, value) = line.split_once(':').expect("a header pair");
-            if name.eq_ignore_ascii_case("content-length") {
-                length = value.trim().parse().expect("a body length");
-            } else if name.eq_ignore_ascii_case("content-type") {
-                actual_type = Some(value.trim().to_owned());
+            match name.to_ascii_lowercase().as_str() {
+                "content-length" => length = value.trim().parse().expect("a body length"),
+                "content-type" => actual_type = Some(value.trim().to_owned()),
+                "user-agent" => user_agent = Some(value.trim().to_owned()),
+                _ => {}
             }
         }
         assert_eq!(actual_type.as_deref(), content_type);
@@ -127,10 +129,16 @@ async fn serve(listener: TcpListener) {
             .await
             .expect("the request body");
         assert_eq!(bytes, body.as_bytes());
-        let reply = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
-            response.len()
-        );
+        // Reproduce Meta's actual refusal: a request without a client identity
+        // gets an empty redirect, before any OAuth document is returned.
+        let reply = if user_agent.as_deref() == Some(concat!("Quota/", env!("CARGO_PKG_VERSION"))) {
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+                response.len()
+            )
+        } else {
+            "HTTP/1.1 302 Found\r\nLocation: https://www.facebook.com/unsupportedbrowser\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned()
+        };
         stream
             .get_mut()
             .write_all(reply.as_bytes())

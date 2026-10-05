@@ -25,6 +25,9 @@ const CONNECT_DEADLINE_SECONDS: u64 = 5;
 /// The largest redirect chain a request may follow.
 const MAX_REDIRECTS: usize = 5;
 
+/// Identifies the provider client. Meta refuses device requests without it.
+const USER_AGENT: &str = concat!("Quota/", env!("CARGO_PKG_VERSION"));
+
 /// One GET request at the transport boundary.
 #[derive(Clone, Copy)]
 pub(crate) struct GetRequest<'a> {
@@ -61,6 +64,7 @@ impl ProviderHttp {
     pub(crate) fn new() -> Result<Self, ProviderError> {
         LazyLock::force(&CRYPTO_PROVIDER);
         let client = reqwest::Client::builder()
+            .user_agent(USER_AGENT)
             .connect_timeout(Duration::from_secs(CONNECT_DEADLINE_SECONDS))
             .timeout(Duration::from_secs(REQUEST_DEADLINE_SECONDS))
             .redirect(Policy::custom(|attempt| {
