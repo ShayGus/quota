@@ -437,6 +437,8 @@ mod tests {
             windows: Vec::new(),
             expected_but_missing_window_ids: Vec::new(),
             order,
+            balance: None,
+            show_key_limit: false,
         }
     }
 

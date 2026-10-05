@@ -27,6 +27,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands::set_monitoring_state,
             commands::set_account_enabled,
             commands::rename_account,
+            commands::set_key_limit_shown,
             commands::disconnect_account,
             commands::refresh_accounts,
             commands_connection::begin_connection,

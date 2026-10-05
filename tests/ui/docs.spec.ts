@@ -5,10 +5,10 @@
  * `docs/images/`.
  */
 import { expect, test } from "./harness";
-import { defaultPreferences, overviewAccounts, scenario } from "./scenarios";
+import { defaultPreferences, heroAccounts, scenario } from "./scenarios";
 
-/** A Claude account with room left, a Codex account running low, a rate-limited Cursor. */
-const HERO_ACCOUNTS = overviewAccounts().slice(0, 3);
+/** A Codex account running low, a Claude account with room left, an OpenRouter balance. */
+const HERO_ACCOUNTS = heroAccounts();
 
 for (const theme of ["dark", "light"] as const) {
   for (const layout of ["ring", "bar"] as const) {

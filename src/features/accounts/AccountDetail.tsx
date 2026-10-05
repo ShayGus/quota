@@ -36,6 +36,8 @@ import {
   type WindowView,
 } from "../overview/reading";
 import { statusOf } from "../overview/status";
+import { isPrepaidBalance } from "../../shared/format/balance";
+import { BalanceDetail, balanceMeasurement, balanceSummaryCopy } from "./BalanceDetail";
 
 /** The time zone used for exact boundary times. */
 export const DISPLAY_TIME_ZONE = "Asia/Jerusalem";
@@ -54,6 +56,7 @@ const ROLE_WORDS: Record<QuotaWindow["metric_role"], string> = {
   included_allowance: "Included allowance",
   extra_spend_cap: "Extra-spend cap",
   credit_balance: "Credit balance",
+  prepaid_balance: "Prepaid balance, measured from the last top-up",
 };
 
 /** The words for what a window's period is. */
@@ -262,7 +265,13 @@ function SelectedWindow({
   readonly onTabKey: (event: KeyboardEvent<HTMLButtonElement>) => void;
 }): JSX.Element {
   const view = windowView(account, selected, now);
-  const summary = summaryCopy(view, selected, now);
+  // A prepaid balance never resets; it is described by what it is measured from.
+  const balance =
+    isPrepaidBalance(selected) && view === "current" ? account.balance : null;
+  const summary =
+    balance === null
+      ? summaryCopy(view, selected, now)
+      : balanceSummaryCopy(selected, balance);
   const others = windows.filter((window) => window.id !== selected.id);
   return (
     <>
@@ -316,7 +325,11 @@ function SelectedWindow({
         </div>
         <div>
           <dt>Measurement</dt>
-          <dd>{measurementText(view, selected)}</dd>
+          <dd>
+            {balance === null
+              ? measurementText(view, selected)
+              : balanceMeasurement(balance)}
+          </dd>
         </div>
         <div>
           <dt>Last checked</dt>
@@ -341,6 +354,7 @@ function SelectedWindow({
           </dd>
         </div>
       </dl>
+      {balance === null ? null : <BalanceDetail balance={balance} />}
       {others.length === 0 ? null : (
         <>
           <h3 className="section-title">Other independent limits</h3>

@@ -16,6 +16,7 @@ import type {
 } from "../../generated/bindings";
 import { displayName } from "../../shared/format/alias";
 import { moneyLeft, remainingPercent } from "../../shared/format/allowance";
+import { isPrepaidBalance, isRankable, isWindowShown } from "../../shared/format/balance";
 import { providerLabel } from "../../shared/format/provider";
 import { placeAccounts } from "../../shared/state/order";
 import { boundaryCountdown } from "../../shared/format/duration";
@@ -142,12 +143,11 @@ const UNRANKABLE: ReadonlySet<string> = new Set([
 
 /** One account's rings, rows and headline. */
 function describe(account: AccountSnapshot, name: string, now: number): WidgetAccount {
-  const included = ordered(
-    account.windows.filter((window) => window.metric_role === "included_allowance"),
-  );
-  const others = account.windows.filter(
-    (window) => window.metric_role !== "included_allowance",
-  );
+  // A prepaid balance measured from its last top-up is drawn as a ring, like
+  // an allowance; a key limit beside it only when the person chose to show it.
+  const shown = account.windows.filter((window) => isWindowShown(account, window));
+  const included = ordered(shown.filter(isRankable));
+  const others = shown.filter((window) => !isRankable(window));
   const rows = [...included, ...others].map((window) => row(account, window, now));
   const rings = ringsOf(rows.slice(0, included.length));
   const headline = headlineOf(account, rows, included.length, now);
@@ -180,17 +180,19 @@ function ordered(windows: readonly QuotaWindow[]): readonly QuotaWindow[] {
 function row(account: AccountSnapshot, window: QuotaWindow, now: number): WidgetRow {
   const view = windowView(account, window, now);
   const known = viewKnown(view);
+  // A prepaid balance is a share of its last top-up, shown as its money left.
+  const gauge = isPrepaidBalance(window);
   const money = known ? moneyLeft(window.measurement) : null;
-  const fraction = money === null ? viewFraction(view, window) : null;
+  const fraction = money === null || gauge ? viewFraction(view, window) : null;
   const percent = known ? remainingPercent(window.measurement) : null;
   return {
     tag: tagOf(window),
     name: windowLabel(window),
-    kind: money === null && (fraction !== null || !known) ? "share" : "amount",
+    kind: gauge || (money === null && (fraction !== null || !known)) ? "share" : "amount",
     period: window.category,
     fraction,
-    value: money === null ? viewValue(view, window) : `${money} left`,
-    low: money === null && percent !== null && percent <= LOW_PERCENT,
+    value: money === null ? viewValue(view, window) : gauge ? money : `${money} left`,
+    low: (money === null || gauge) && percent !== null && percent <= LOW_PERCENT,
     reset: resetWords(view, window, now),
   };
 }
@@ -219,7 +221,7 @@ function tagOf(window: QuotaWindow): string {
   if (window.metric_role === "extra_spend_cap") {
     return "Extra";
   }
-  if (window.metric_role === "credit_balance") {
+  if (window.metric_role === "credit_balance" || isPrepaidBalance(window)) {
     return "Credit";
   }
   if (window.scope.resource !== ACCOUNT_RESOURCE || window.category === "custom") {

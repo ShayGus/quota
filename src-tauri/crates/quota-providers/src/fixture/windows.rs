@@ -377,5 +377,7 @@ async fn sample_account(
         identity: Some(identity),
         windows: read.windows,
         expected_but_missing_window_ids: read.expected_but_missing,
+        balance: None,
+        show_key_limit: false,
     })
 }

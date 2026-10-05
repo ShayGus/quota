@@ -327,6 +327,10 @@
   color: var(--text);
 }
 
+.runway-label {
+  margin-top: 0;
+}
+
 .card-foot {
   border-top: 1px solid var(--line);
   display: flex;

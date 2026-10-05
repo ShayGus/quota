@@ -7,6 +7,7 @@
 pub mod account_repository;
 pub mod alert_repository;
 pub mod backoff_repository;
+mod balance_repository;
 pub mod connection_repository;
 mod history_repository;
 pub mod measurement_repository;

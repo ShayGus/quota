@@ -26,6 +26,7 @@ function settingsActions(): SettingsActions {
     setOverviewMode: vi.fn(),
     setAccountEnabled: vi.fn(),
     renameAccount: vi.fn(),
+    setKeyLimitShown: vi.fn(),
     disconnectAccount: vi.fn(),
     openUsagePage: vi.fn(),
     beginConnection: vi.fn(() => Promise.resolve(null)),

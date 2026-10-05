@@ -45,6 +45,7 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       setOverviewMode: vi.fn(),
       setAccountEnabled: vi.fn(),
       renameAccount: vi.fn(),
+      setKeyLimitShown: vi.fn(),
       disconnectAccount: vi.fn(),
       openUsagePage: vi.fn(),
       beginConnection: vi.fn(() => Promise.resolve({ id: "attempt-1" })),

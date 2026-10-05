@@ -12,7 +12,7 @@ use crate::account::ConnectionState;
 use crate::ids::{AccountId, QuotaWindowId};
 use crate::percent::Percent;
 use crate::quota::measurement::Measurement;
-use crate::quota::window::QuotaWindow;
+use crate::quota::window::{MetricRole, QuotaWindow};
 
 /// The version of the ranking rule, recorded with every result.
 pub const ORDER_RULE_VERSION: u16 = 1;
@@ -117,11 +117,16 @@ fn controlling_window(windows: &[QuotaWindow], now: DateTime<Utc>) -> Option<&Qu
     windows
         .iter()
         .filter(|window| {
-            window.metric_role.is_included_allowance()
+            window.metric_role.is_rankable()
                 && !window.boundary_has_passed(now)
                 && !window.is_stale_at(now)
         })
-        .filter(|window| matches!(window.measurement, Measurement::Percentage(_)))
+        .filter(|window| match window.measurement {
+            Measurement::Percentage(_) => true,
+            // A prepaid balance is money measured from its last top-up.
+            Measurement::Money(_) => window.metric_role == MetricRole::PrepaidBalance,
+            _ => false,
+        })
         .min_by(|a, b| {
             let a_value = a.measurement.remaining_percent();
             let b_value = b.measurement.remaining_percent();
@@ -173,7 +178,7 @@ pub fn rank_account(input: &RankingInput<'_>) -> AccountOrder {
 fn absence_reason(windows: &[QuotaWindow], now: DateTime<Utc>) -> UnrankedReason {
     let applicable: Vec<_> = windows
         .iter()
-        .filter(|w| w.metric_role.is_included_allowance())
+        .filter(|w| w.metric_role.is_rankable())
         .collect();
 
     if applicable.is_empty() {

@@ -41,6 +41,8 @@ fn registry() -> (AccountRegistry, AccountId, ConnectionId) {
         identity: None,
         windows: Vec::new(),
         expected_but_missing_window_ids: Vec::new(),
+        balance: None,
+        show_key_limit: false,
     };
     (
         AccountRegistry::from_stored(vec![stored]),

@@ -6,14 +6,25 @@
  * stale in another (spec 6, AC-15). Nothing here invents a number for a
  * reading that has none (AC-07).
  */
-import type { AccountSnapshot, QuotaWindow } from "../../generated/bindings";
+import type {
+  AccountSnapshot,
+  BalanceSummary,
+  QuotaWindow,
+} from "../../generated/bindings";
 import {
   arcFraction,
   formatRemaining,
   hasReading,
+  moneyLeft,
   severityOf,
   type Severity,
 } from "../../shared/format/allowance";
+import {
+  baselineLine,
+  isPrepaidBalance,
+  isWindowShown,
+  runwayShort,
+} from "../../shared/format/balance";
 import {
   boundaryCountdown,
   boundaryLead,
@@ -109,15 +120,15 @@ export const ACCOUNT_RESOURCE = "account";
  *
  * A pay-as-you-go account has no included allowance at all. Its card draws
  * its balance and spend limits instead, balance first, so it shows what the
- * account has rather than an empty card.
+ * account has rather than an empty card. A key spend limit beside a prepaid
+ * balance is left out unless the person chose to show it.
  */
 export function cardWindows(account: AccountSnapshot): {
   readonly main: readonly QuotaWindow[];
   readonly extra: readonly QuotaWindow[];
 } {
-  const included = account.windows.filter(
-    (window) => window.metric_role === "included_allowance",
-  );
+  const shown = account.windows.filter((window) => isWindowShown(account, window));
+  const included = shown.filter((window) => window.metric_role === "included_allowance");
   const main: QuotaWindow[] = [];
   for (const category of MAIN_CATEGORIES) {
     const window = included.find(
@@ -141,12 +152,13 @@ export function cardWindows(account: AccountSnapshot): {
   }
   if (included.length === 0) {
     const ordered = [
-      ...account.windows.filter((window) => window.metric_role === "credit_balance"),
-      ...account.windows.filter((window) => window.metric_role === "extra_spend_cap"),
+      ...shown.filter(isPrepaidBalance),
+      ...shown.filter((window) => window.metric_role === "credit_balance"),
+      ...shown.filter((window) => window.metric_role === "extra_spend_cap"),
     ];
     main.push(...ordered.slice(0, MAX_RINGS));
   }
-  const extra = account.windows.filter((window) => !main.includes(window));
+  const extra = shown.filter((window) => !main.includes(window));
   return { main, extra };
 }
 
@@ -190,9 +202,17 @@ export function viewKnown(view: WindowView): boolean {
   return view === "current" || view === "stale";
 }
 
-/** The value at the centre of a ring, or in a bar's value column. */
+/**
+ * The value at the centre of a ring, or in a bar's value column. A prepaid
+ * balance shows the money left, `$37.20`; its share of the last top-up is the
+ * ring itself.
+ */
 export function viewValue(view: WindowView, window: QuotaWindow): string {
-  return viewKnown(view) ? formatRemaining(window.measurement) : "—";
+  if (!viewKnown(view)) {
+    return "—";
+  }
+  const money = isPrepaidBalance(window) ? moneyLeft(window.measurement) : null;
+  return money ?? formatRemaining(window.measurement);
 }
 
 /** The arc fraction to draw, or `null` for no arc. */
@@ -229,7 +249,8 @@ export function readingText(view: WindowView, window: QuotaWindow): string {
 }
 
 /**
- * The line under a ring: when the window resets, or why that is not shown.
+ * The line under a ring: when the window resets, or why that is not shown. A
+ * prepaid balance never resets; its line says what it is measured from.
  *
  * `lead` and `time` are separate so the countdown can be set in bold.
  */
@@ -237,7 +258,11 @@ export function resetLine(
   view: WindowView,
   window: QuotaWindow,
   now: number,
+  balance: BalanceSummary | null = null,
 ): { readonly lead: string; readonly time: string | null } {
+  if (view === "current" && isPrepaidBalance(window) && balance !== null) {
+    return { lead: baselineLine(balance) ?? "No reported reset", time: null };
+  }
   switch (view) {
     case "pending":
       return { lead: "Reset due · verifying", time: null };
@@ -255,8 +280,19 @@ export function resetLine(
   }
 }
 
-/** The short time column of a compact row. */
-export function ledgerTime(view: WindowView, window: QuotaWindow, now: number): string {
+/**
+ * The short time column of a compact row. A prepaid balance shows how long it
+ * lasts at the recent pace instead of a reset.
+ */
+export function ledgerTime(
+  view: WindowView,
+  window: QuotaWindow,
+  now: number,
+  balance: BalanceSummary | null = null,
+): string {
+  if (view === "current" && isPrepaidBalance(window)) {
+    return runwayShort(balance) ?? "—";
+  }
   switch (view) {
     case "pending":
       return "Verifying";
@@ -274,11 +310,12 @@ export function boundarySentence(
   view: WindowView,
   window: QuotaWindow,
   now: number,
+  balance: BalanceSummary | null = null,
 ): string {
   if (view === "current" && window.boundary !== null) {
     return formatBoundary(window.boundary, now);
   }
-  return resetLine(view, window, now).lead;
+  return resetLine(view, window, now, balance).lead;
 }
 
 /**
@@ -293,6 +330,7 @@ export function windowControlName(
   view: WindowView,
   window: QuotaWindow,
   now: number,
+  balance: BalanceSummary | null = null,
 ): string {
-  return `${provider} ${accountLabel}, ${label}: ${readingText(view, window)}. ${boundarySentence(view, window, now)}`;
+  return `${provider} ${accountLabel}, ${label}: ${readingText(view, window)}. ${boundarySentence(view, window, now, balance)}`;
 }

@@ -61,6 +61,8 @@ pub struct AccountRecord {
     pub next_attempt_at: Option<DateTime<Utc>>,
     /// The verified identity, when one was confirmed.
     pub verified_identity: Option<VerifiedIdentity>,
+    /// Whether the card shows the account's API key spend limit.
+    pub show_key_limit: bool,
 }
 
 /// Reads and writes connections, accounts, and pool bindings.
@@ -280,7 +282,8 @@ impl AccountRepository {
                     a.connection_ordinal, a.monitoring_enabled, a.connection_state,
                     a.fetch_state, a.last_attempt_at, a.last_success_at,
                     a.next_attempt_at, a.verified_principal_label,
-                    a.verified_workspace_label, a.verified_plan_label, a.identity_source
+                    a.verified_workspace_label, a.verified_plan_label, a.identity_source,
+                    a.show_key_limit
                FROM accounts a
                JOIN connections c ON c.id = a.connection_id
               WHERE a.connection_id = ?
@@ -305,7 +308,8 @@ impl AccountRepository {
                     a.connection_ordinal, a.monitoring_enabled, a.connection_state,
                     a.fetch_state, a.last_attempt_at, a.last_success_at,
                     a.next_attempt_at, a.verified_principal_label,
-                    a.verified_workspace_label, a.verified_plan_label, a.identity_source
+                    a.verified_workspace_label, a.verified_plan_label, a.identity_source,
+                    a.show_key_limit
                FROM accounts a
                JOIN connections c ON c.id = a.connection_id
               ORDER BY a.connection_ordinal, a.id",

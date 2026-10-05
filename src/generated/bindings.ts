@@ -33,6 +33,13 @@ export const commands = {
 	/**  Changes one account's display name without touching its identity or rank. */
 	renameAccount: (accountRef: AccountRef, nickname: string) => typedError<null, CommandError>(__TAURI_INVOKE("rename_account", { accountRef, nickname })),
 	/**
+	 *  Shows or hides one account's API key spend limit on its card.
+	 * 
+	 *  A key that exists only so Quota can read the account has a limit nobody
+	 *  needs to see, so the limit is hidden until the person turns it on.
+	 */
+	setKeyLimitShown: (accountRef: AccountRef, shown: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_key_limit_shown", { accountRef, shown })),
+	/**
 	 *  Removes the application's local reference to one account.
 	 * 
 	 *  It does not log out, unlink, or otherwise disturb the owning tool.
@@ -231,6 +238,10 @@ export type AccountSnapshot = {
 	expected_but_missing_window_ids: QuotaWindowId[],
 	/**  The order position, recorded so the reason is inspectable. */
 	order: AccountOrder,
+	/**  A prepaid balance, measured from its last top-up, when the account has one. */
+	balance: BalanceSummary | null,
+	/**  Whether the card shows the account's API key spend limit. */
+	show_key_limit: boolean,
 };
 
 /**  Bounds and signals for an adaptive strategy. */
@@ -284,6 +295,41 @@ export type AppView =
 export type AttemptRef = {
 	id: ConnectionAttemptId,
 };
+
+/**  What the renderer shows about one account's prepaid balance. */
+export type BalanceSummary = {
+	/**  The currency of every amount. */
+	currency: CurrencyCode,
+	/**  Decimal places in one major unit. */
+	scale: number,
+	/**  The balance now. */
+	balance_minor: number | null,
+	/**  The balance the gauge is measured from. */
+	baseline_minor: number | null,
+	/**  When the baseline was set. */
+	baseline_at: string,
+	/**  What the baseline is. */
+	baseline_kind: BaselineKind,
+	/**  Everything ever loaded. */
+	loaded_minor: number | null,
+	/**  Everything ever spent. */
+	spent_minor: number | null,
+	/**  The top-ups seen, newest first. */
+	top_ups: TopUp[],
+	/**  The spending pace, when there is enough history and some spending. */
+	runway: Runway | null,
+	/**  What the key spent in the current periods, when reported. */
+	key_spend: PeriodSpend | null,
+};
+
+/**  What the balance is measured from. */
+export type BaselineKind = 
+/**  The first reading after the account was added; no top-up seen yet. */
+"since_added" | 
+/**  The last top-up. */
+"top_up" | 
+/**  A refund or a correction lowered the amount loaded. */
+"adjusted";
 
 /**
  *  Arguments for starting an authorized connection attempt.
@@ -656,7 +702,12 @@ export type MetricRole =
 /**  A ceiling on extra spend. Not included quota. */
 "extra_spend_cap" | 
 /**  An informational balance. Not included quota. */
-"credit_balance";
+"credit_balance" | 
+/**
+ *  A prepaid balance measured from its last top-up. Not included quota,
+ *  but it runs out the same way, so it ranks and alerts like one.
+ */
+"prepaid_balance";
 
 /**
  *  A monetary allowance, such as a monthly extra-spend cap.
@@ -821,6 +872,16 @@ export type PercentageMeasurement = {
 	remaining_percent: Percent,
 	/**  Decimal places the provider reported. */
 	precision: DecimalPrecision,
+};
+
+/**  What a key spent today, this week and this month, in minor units. */
+export type PeriodSpend = {
+	/**  Spent in the current UTC day. */
+	today_minor: number | null,
+	/**  Spent in the current UTC week. */
+	week_minor: number | null,
+	/**  Spent in the current UTC month. */
+	month_minor: number | null,
 };
 
 /**  Whether durable storage is usable. */
@@ -1186,6 +1247,14 @@ export type RegisteredProvider = {
 /**  A metered resource such as a model or product surface. */
 export type ResourceId = string;
 
+/**  The spending pace, and how long the balance lasts at it. */
+export type Runway = {
+	/**  Spent per day, on average, over the pace period. */
+	spend_per_day_minor: number | null,
+	/**  Whole days the balance lasts at that pace. */
+	days_left: number,
+};
+
 /**  Arguments for enabling or disabling one account. */
 export type SetAccountEnabledRequest = {
 	/**  The account to change. */
@@ -1247,6 +1316,16 @@ export type Theme =
 "light" | 
 /**  Always dark. */
 "dark";
+
+/**  One top-up, as Quota saw it. */
+export type TopUp = {
+	/**  The reading that first showed it. */
+	detected_at: string,
+	/**  How much was loaded. */
+	amount_minor: number | null,
+	/**  The balance right after it: the balance before, plus the amount. */
+	balance_after_minor: number | null,
+};
 
 /**  Why an allowance has no usable number. */
 export type UnavailableReason = 

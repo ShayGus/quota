@@ -16,6 +16,7 @@ import type {
   QuotaWindowId,
 } from "../../generated/bindings";
 import { remainingPercent } from "../../shared/format/allowance";
+import { isPrepaidBalance, runwayLine } from "../../shared/format/balance";
 import { formatAge, instantOf } from "../../shared/format/duration";
 import { providerLabel } from "../../shared/format/provider";
 import { Icon } from "../../shared/ui/Icon";
@@ -184,7 +185,11 @@ function QuotaButton({
 }): JSX.Element {
   const view = windowView(account, window, now);
   const label = windowLabel(window);
-  const reset = resetLine(view, window, now);
+  const reset = resetLine(view, window, now, account.balance);
+  const runway =
+    view === "current" && isPrepaidBalance(window) && account.balance !== null
+      ? runwayLine(account.balance)
+      : null;
   return (
     <button
       type="button"
@@ -196,6 +201,7 @@ function QuotaButton({
         view,
         window,
         now,
+        account.balance,
       )}
       onClick={() => {
         onOpenWindow(account.account_id, window.id);
@@ -217,6 +223,7 @@ function QuotaButton({
           </>
         )}
       </div>
+      {runway === null ? null : <div className="reset-label runway-label">{runway}</div>}
     </button>
   );
 }
@@ -251,6 +258,7 @@ function LedgerRow({
         view,
         window,
         now,
+        account.balance,
       )}
       onClick={() => {
         onOpenWindow(account.account_id, window.id);
@@ -259,8 +267,11 @@ function LedgerRow({
       <span className="bar-label">{label}</span>
       <Bar fraction={viewFraction(view, window)} />
       <span className="bar-value">{viewValue(view, window)}</span>
-      <span className="bar-time" title={boundarySentence(view, window, now)}>
-        {ledgerTime(view, window, now)}
+      <span
+        className="bar-time"
+        title={boundarySentence(view, window, now, account.balance)}
+      >
+        {ledgerTime(view, window, now, account.balance)}
       </span>
     </button>
   );

@@ -152,6 +152,9 @@ pub struct QuotaRead {
     pub windows: Vec<QuotaWindow>,
     /// Windows the provider was expected to report and did not.
     pub expected_but_missing: Vec<quota_domain::ids::QuotaWindowId>,
+    /// What the provider reported about a prepaid balance, when the account
+    /// has one. The host measures it from the last top-up it saw.
+    pub balance: Option<quota_domain::balance::BalanceReading>,
     /// Provider-specific metadata for local diagnostics only. It never carries
     /// a token, cookie, or unrelated account content.
     pub debug_metadata: Option<serde_json::Value>,

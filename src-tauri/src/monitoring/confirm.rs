@@ -230,6 +230,15 @@ async fn commit_candidate(
     read: QuotaRead,
     timestamps: ReadTimestamps,
 ) -> Result<(), CommandError> {
+    // A prepaid balance is measured from this first reading until Quota sees a
+    // top-up.
+    let balance = read.balance.as_ref().map(|reading| {
+        quota_domain::balance::BalanceLedger::record(None, reading, timestamps.completed_at)
+    });
+    let mut windows = read.windows;
+    if let Some(ledger) = balance.as_ref() {
+        ledger.apply_to(&mut windows);
+    }
     let stored = quota_core::ports::StoredAccount {
         account_id: ids.account_id.clone(),
         connection: quota_domain::account::ConnectionSummary {
@@ -253,8 +262,10 @@ async fn commit_candidate(
         last_success_at: Some(timestamps.completed_at),
         next_attempt_at: Some(timestamps.completed_at + chrono::Duration::seconds(300)),
         identity: Some(read.identity),
-        windows: read.windows,
+        windows,
         expected_but_missing_window_ids: read.expected_but_missing,
+        balance,
+        show_key_limit: false,
     };
     let new_account = quota_core::accounts::NewAccount {
         account_id: ids.account_id.clone(),

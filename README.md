@@ -7,7 +7,7 @@ one small window, with when each resets and how recently it was checked.
 <table>
   <tr>
     <td valign="top" width="50%">
-      <img src="docs/images/overview-rings.png" alt="The Quota window: Codex low on its 5-hour window, Cursor rate limited, Claude current"><br>
+      <img src="docs/images/overview-rings.png" alt="The Quota window: Codex low on its 5-hour window, Claude current, and an OpenRouter balance of $37.20"><br>
       <sub><b>The full window</b>, opened from the tray: one card per account, a ring for each allowance window.</sub>
     </td>
     <td valign="top" width="50%">
@@ -30,6 +30,8 @@ one small window, with when each resets and how recently it was checked.
   Attention filter shows only the accounts that need something from you.
 - **Alerts before you hit a limit**: optional notifications at 20%, 10% and 0% left, and
   when a window is available again.
+- **Prepaid balances, too**: an OpenRouter balance is measured from your last top-up, with
+  how long it lasts at your recent pace.
 - **A mini widget** that stays on top with every account at a glance.
 - **Private by design**: no server, no account, no tracking. Quota talks only to the
   providers you add, reads their existing sign-ins without changing them, and keeps keys

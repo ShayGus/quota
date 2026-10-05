@@ -35,6 +35,15 @@ pub(crate) struct KeyData {
     /// Whether the account has never bought credits.
     #[serde(default)]
     pub(crate) is_free_tier: Option<bool>,
+    /// What the key spent in the current UTC day, in US dollars.
+    #[serde(default)]
+    pub(crate) usage_daily: Option<Numberish>,
+    /// What the key spent in the current UTC week, in US dollars.
+    #[serde(default)]
+    pub(crate) usage_weekly: Option<Numberish>,
+    /// What the key spent in the current UTC month, in US dollars.
+    #[serde(default)]
+    pub(crate) usage_monthly: Option<Numberish>,
 }
 
 /// The body of `GET /api/v1/credits`.

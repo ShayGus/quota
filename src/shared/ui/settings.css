@@ -163,6 +163,26 @@
   gap: 10px;
 }
 
+.account-manage-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.account-manage-option small {
+  display: block;
+  margin-top: 2px;
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.account-manage-option-label {
+  font-weight: 600;
+}
+
 .account-manage-actions {
   display: flex;
   align-items: center;

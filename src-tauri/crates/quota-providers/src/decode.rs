@@ -59,6 +59,8 @@ pub(crate) struct DecodedUsage {
     pub plan_label: Option<String>,
     /// A principal label, when the payload carried one.
     pub principal_label: Option<String>,
+    /// What the payload said about a prepaid balance, when it had one.
+    pub balance: Option<quota_domain::balance::BalanceReading>,
 }
 
 impl DecodedUsage {
@@ -70,6 +72,7 @@ impl DecodedUsage {
             expected_but_missing: Vec::new(),
             plan_label: None,
             principal_label: None,
+            balance: None,
         }
     }
 
@@ -87,6 +90,7 @@ impl DecodedUsage {
             identity,
             windows: self.windows,
             expected_but_missing: self.expected_but_missing,
+            balance: self.balance,
             debug_metadata: None,
         };
         if complete {

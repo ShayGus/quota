@@ -1,13 +1,16 @@
 //! Turn `OpenRouter`'s key and credit answers into quota windows.
 //!
 //! `OpenRouter` is pay as you go: nothing is an included allowance. The account
-//! has a credit balance, and each API key may carry its own spend limit, which
-//! can reset daily, weekly or monthly. The balance is a balance and the key
-//! limit is a spend cap, so neither takes part in the least-remaining ranking.
-//! A key with no limit is reported as unlimited, never as a zero.
+//! has a prepaid balance, and each API key may carry its own spend limit, which
+//! can reset daily, weekly or monthly. The balance is reported as everything
+//! loaded and everything spent; the host measures it from the last top-up it
+//! saw (`quota_domain::balance`), and it then ranks like an allowance. The key
+//! limit is a spend cap and takes no part in the ranking. A key with no limit is
+//! reported as unlimited, never as a zero.
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
+use quota_domain::balance::{BalanceReading, PeriodSpend};
 use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
@@ -38,6 +41,7 @@ pub(crate) fn decode(
     let mut decoded = DecodedUsage::new();
     if let Some(credits) = credits {
         decoded.push(documented(credit_window(credits, pool, received_at)?));
+        decoded.balance = balance_reading(key, credits)?;
     }
     decoded.push(documented(key_window(key, pool, received_at)?));
     Ok(decoded)
@@ -49,7 +53,35 @@ fn documented(mut window: QuotaWindow) -> QuotaWindow {
     window
 }
 
-/// The account's credit balance: what was bought, spent, and is left.
+/// What the answers say about the prepaid balance, for the host's ledger, or
+/// `None` when either total is missing or unusable.
+fn balance_reading(
+    key: &KeyData,
+    credits: &CreditsData,
+) -> Result<Option<BalanceReading>, ProviderError> {
+    let (Ok(Some(loaded)), Ok(Some(spent))) = (
+        cents(credits.total_credits.as_ref()),
+        cents(credits.total_usage.as_ref()),
+    ) else {
+        return Ok(None);
+    };
+    let period = |reported: Option<&Numberish>| cents(reported).ok().flatten();
+    let key_spend = PeriodSpend {
+        today_minor: period(key.usage_daily.as_ref()),
+        week_minor: period(key.usage_weekly.as_ref()),
+        month_minor: period(key.usage_monthly.as_ref()),
+    };
+    Ok(Some(BalanceReading {
+        currency: usd()?,
+        scale: SCALE,
+        loaded_minor: loaded,
+        spent_minor: spent,
+        key_spend: (key_spend != PeriodSpend::default()).then_some(key_spend),
+    }))
+}
+
+/// The account's prepaid balance: what was bought, spent, and is left. The
+/// host measures it from the last top-up before it is shown.
 fn credit_window(
     credits: &CreditsData,
     pool: &QuotaPoolId,
@@ -62,7 +94,7 @@ fn credit_window(
         resource: "credits",
         resource_label: "Credit balance",
         bucket_id: Some("credits"),
-        metric_role: MetricRole::CreditBalance,
+        metric_role: MetricRole::PrepaidBalance,
         semantics: WindowSemantics::Unknown,
         duration_seconds: None,
         received_at,
@@ -134,16 +166,20 @@ fn money(
     remaining: Option<i64>,
     limit: Option<i64>,
 ) -> Result<Measurement, ProviderError> {
-    let currency = CurrencyCode::new("USD").map_err(|_| ProviderError::InvalidData {
-        detail: "the currency code was rejected".to_owned(),
-    })?;
     Ok(Measurement::Money(MoneyMeasurement {
-        currency,
+        currency: usd()?,
         scale: SCALE,
         used_minor_units: used,
         remaining_minor_units: remaining,
         limit_minor_units: limit,
     }))
+}
+
+/// The currency every `OpenRouter` amount is in.
+fn usd() -> Result<CurrencyCode, ProviderError> {
+    CurrencyCode::new("USD").map_err(|_| ProviderError::InvalidData {
+        detail: "the currency code was rejected".to_owned(),
+    })
 }
 
 /// A dollar amount in whole cents, or `Ok(None)` when it was not reported.
@@ -194,12 +230,43 @@ mod tests {
         };
         let usage = decoded(&KeyData::default(), Some(&credits));
         let balance = &usage.windows[0];
-        assert_eq!(balance.metric_role, MetricRole::CreditBalance);
+        assert_eq!(balance.metric_role, MetricRole::PrepaidBalance);
         assert_eq!(balance.source, SourceKind::DocumentedApi);
         let money = money_of(balance);
         assert_eq!(money.limit_minor_units, Some(2500));
         assert_eq!(money.used_minor_units, Some(746));
         assert_eq!(money.remaining_minor_units, Some(1754));
+        let reading = usage.balance.expect("a balance for the host's ledger");
+        assert_eq!((reading.loaded_minor, reading.spent_minor), (2500, 746));
+        assert_eq!(reading.key_spend, None);
+    }
+
+    #[test]
+    fn the_key_spend_of_each_period_is_read_for_the_detail() {
+        let key = KeyData {
+            usage_daily: Some(number(0.42)),
+            usage_weekly: Some(number(3.1)),
+            usage_monthly: Some(number(12.0)),
+            ..KeyData::default()
+        };
+        let credits = CreditsData {
+            total_credits: Some(number(50.0)),
+            total_usage: Some(number(12.8)),
+        };
+        let reading = decoded(&key, Some(&credits)).balance.expect("a balance");
+        assert_eq!(
+            reading.key_spend,
+            Some(PeriodSpend {
+                today_minor: Some(42),
+                week_minor: Some(310),
+                month_minor: Some(1200),
+            })
+        );
+    }
+
+    #[test]
+    fn a_key_that_cannot_read_the_balance_reports_none() {
+        assert_eq!(decoded(&KeyData::default(), None).balance, None);
     }
 
     #[test]

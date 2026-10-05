@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::account::{ConnectionState, ConnectionSummary, FetchState, VerifiedIdentity};
+use crate::balance::BalanceSummary;
 use crate::ids::{AccountId, AppInstanceId, ConnectionId, QuotaWindowId};
 use crate::provider::ProviderId;
 use crate::quota::window::QuotaWindow;
@@ -72,6 +73,10 @@ pub struct AccountSnapshot {
     pub expected_but_missing_window_ids: Vec<QuotaWindowId>,
     /// The order position, recorded so the reason is inspectable.
     pub order: AccountOrder,
+    /// A prepaid balance, measured from its last top-up, when the account has one.
+    pub balance: Option<BalanceSummary>,
+    /// Whether the card shows the account's API key spend limit.
+    pub show_key_limit: bool,
 }
 
 /// The complete application state at one revision.
@@ -139,6 +144,8 @@ mod tests {
                 reason: UnrankedReason::Incomplete,
                 rule_version: 1,
             }),
+            balance: None,
+            show_key_limit: false,
         }
     }
 

@@ -115,6 +115,31 @@
   margin-top: 14px;
 }
 
+.top-up-list {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.top-up-list li {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 11px;
+  border-top: 1px solid var(--line);
+}
+
+.top-up-list li:first-child {
+  border-top: 0;
+}
+
+.top-up-list span {
+  color: var(--muted);
+}
+
 .other-limit {
   display: flex;
   align-items: center;

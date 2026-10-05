@@ -51,6 +51,7 @@ export interface SettingsActions {
   readonly setOverviewMode: (mode: Preferences["overview_mode"]) => void;
   readonly setAccountEnabled: (accountId: AccountId, enabled: boolean) => void;
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;
+  readonly setKeyLimitShown: (accountId: AccountId, shown: boolean) => void;
   readonly disconnectAccount: (accountId: AccountId) => void;
   readonly openUsagePage: (accountId: AccountId) => void;
   /**
