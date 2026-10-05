@@ -37,8 +37,8 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 ## Already portable
 
 - Tray placement and the popover's height fit, as above.
-- Window closing and tray actions follow [Run the app](../README.md#run-the-app) and
-  [Updates](../README.md#updates).
+- Window closing and tray actions follow [The tray icon](user-guide.md#the-tray-icon) and
+  [Updates](user-guide.md#updates).
 - The settings window is owned by the overview (`"parent": "overview"` in
   `tauri.conf.json`), which keeps it above the overview on Windows, macOS (a child window)
   and Linux (a transient window).

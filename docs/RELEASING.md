@@ -103,7 +103,7 @@ lets someone ship an update that installed copies accept.
 
 ## How an installed copy updates
 
-The [Updates section of the README](../README.md#updates) owns the check schedule and
+The [Updates section of the README](user-guide.md#updates) owns the check schedule and
 pop-up behaviour. The feed address is configured in `plugins.updater.endpoints` in
 [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json):
 
@@ -160,8 +160,8 @@ The release workflow refuses to start unless **every run of the normal CI workfl
 ([`ci.yml`](../.github/workflows/ci.yml)) on that exact commit completed successfully**.
 That file owns the current jobs and commands;
 [CONTRIBUTING](../CONTRIBUTING.md#3-run-the-checks) explains how to run the checks,
-including the [interface suite](../CONTRIBUTING.md#7-interface-tests) and
-[real-app suite](../CONTRIBUTING.md#8-real-app-tests-linux-and-windows).
+including the [interface suite](../CONTRIBUTING.md#9-interface-tests) and
+[real-app suite](../CONTRIBUTING.md#10-real-app-tests-linux-and-windows).
 
 Every job in `ci.yml`, including both real-app jobs, is covered without editing the
 release workflow, because the preflight asks about the whole workflow. The release
@@ -257,7 +257,7 @@ it, not a browser.
 3. Press **Publish release**.
 
 Publishing makes the tag and the packages public and exposes this release's `latest.json`
-to installed copies at their next check; see [the update schedule](../README.md#updates).
+to installed copies at their next check; see [the update schedule](user-guide.md#updates).
 The GitHub Actions run and the release are two separate objects; publishing does not
 re-run anything.
 
@@ -303,9 +303,9 @@ else is a failure, and you should stop and report what you saw instead.
    should see:_ **no pop-up.** A draft is never offered.
 5. **Publish v0.1.1.** Press **Publish release**.
 6. **Start v0.1.0** again (or wait for the next check under
-   [the update schedule](../README.md#updates)). _You should see:_ one small Quota window,
-   in Quota's own design, titled **Update available**, with the text "Quota 0.1.1 is
-   available (you have 0.1.0). Install it now? Quota will restart." and two buttons,
+   [the update schedule](user-guide.md#updates)). _You should see:_ one small Quota
+   window, in Quota's own design, titled **Update available**, with the text "Quota 0.1.1
+   is available (you have 0.1.0). Install it now? Quota will restart." and two buttons,
    **Cancel** and **OK**. No window of the operating system's own style.
 7. **Press Cancel** the first time. _You should see:_ the window closes, Quota keeps
    running as version 0.1.0, and that version is not offered again until Quota is

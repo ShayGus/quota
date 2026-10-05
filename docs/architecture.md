@@ -98,7 +98,7 @@ Its layers follow the platform seam's style, with one port:
   identity, the `sample-data` build and a build with agent inspection never do.
 - `schedule` computes when a check is due from monotonic and wall clocks, counting time
   spent asleep without accumulating missed checks. The
-  [user-facing schedule](../README.md#updates) includes the pop-up interaction.
+  [user-facing schedule](user-guide.md#updates) includes the pop-up interaction.
 - `flow` is one check cycle over the `UpdateHost` port: check, ask, install, relaunch, and
   the in-memory record of the version already put to the person. It never starts a second
   check or a second pop-up, because it runs them one after the other.

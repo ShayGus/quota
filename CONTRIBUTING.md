@@ -7,6 +7,13 @@ one before it.
 
 Prerequisites: `rustup`, and [Bun](https://bun.sh) for the frontend.
 
+On Ubuntu, install the Tauri build packages first:
+
+```bash
+sudo apt-get update
+sudo apt-get install --no-install-recommends -y   build-essential curl file libayatana-appindicator3-dev libdbus-1-dev   librsvg2-dev libssl-dev libwebkit2gtk-4.1-dev libxdo-dev patchelf   pkg-config wget
+```
+
 ```bash
 git clone https://github.com/ShayGus/quota.git
 cd quota
@@ -22,6 +29,40 @@ Cargo and lint configuration. Run `cargo` from `src-tauri` and `bun` from the ro
 
 `src-tauri/rust-toolchain.toml` owns the compiler pin and the required components. Do not
 edit the version in a workflow file; it lives in that one file, so it cannot drift.
+`src-tauri/Cargo.toml` owns the declared minimum Rust version.
+
+### Project layout
+
+```text
+quota/
+├── package.json, src/      # The React 19 renderer, at the repository root
+├── tests/                  # Renderer, interface and real-app tests
+├── tools/                  # Build helpers for the tests and the docs screenshots
+├── .github/workflows/      # CI, dependency and release workflows
+├── docs/                   # User guide, troubleshooting, providers, architecture,
+│                           # platforms, releasing, acceptance, exceptions
+└── src-tauri/              # Everything Rust: the Cargo workspace
+    ├── Cargo.toml          # The workspace (resolver 3) and the Tauri host
+    ├── Cargo.lock          # The one committed Rust lockfile
+    ├── rust-toolchain.toml # Pinned compiler
+    ├── rustfmt.toml, clippy.toml
+    ├── deny.toml           # cargo-deny policy
+    ├── src/                # The Tauri host
+    ├── crates/
+    │   ├── quota-domain/       # Validated values, quota windows, ranking
+    │   ├── quota-core/         # Accounts, snapshots, scheduler, alerts, ports
+    │   ├── quota-contracts/    # Serde + Specta IPC transport DTOs
+    │   ├── quota-providers/    # Provider clients, decoders, strategies
+    │   └── quota-persistence/  # Typed Store and SQLite repositories
+    └── xtask/              # Repository gates
+```
+
+Rust owns provider access, polling, account identity, quota normalisation, ranking,
+credentials, durable storage, notifications, and native lifecycle. React owns presentation
+and transient interaction state. SQLite stores account, history, backoff, monitoring,
+notification, operational privacy, and polling state; the Tauri Store plugin stores
+presentation settings. [Architecture](docs/architecture.md) has the dependency graph and
+the state ownership table.
 
 ## 2. Verify the versions
 
@@ -60,9 +101,9 @@ From the repository root:
 
 ```bash
 bun run typecheck && bun run lint && bun run format:check && bun run test && bun run check:release:renderer
-bun run test:ui                        # interface tests, see section 7
-bun run build:e2e && xvfb-run -a bun run test:e2e   # Linux real-app tests, see section 8
-bun run build:e2e && bun run test:e2e               # Windows real-app tests, see section 8
+bun run test:ui                        # interface tests, see section 9
+bun run build:e2e && xvfb-run -a bun run test:e2e   # Linux real-app tests, see section 10
+bun run build:e2e && bun run test:e2e               # Windows real-app tests, see section 10
 ```
 
 CI runs the relevant commands for each operating system. Linux uses `xvfb-run` for the
@@ -179,6 +220,16 @@ switches signing off for development packages. The real key is the maintainer's 
 in the repository secrets; see [Releasing](docs/RELEASING.md#the-update-key). Never put a
 private key in a file in the checkout.
 
+`bun tauri dev` starts the Vite dev server on port 1420, compiles the Rust host, and opens
+only the overview; Settings stays hidden at launch. The native host writes to standard
+output and, once startup resolves the application log directory, to `quota.log` there. It
+logs warnings for failed close-time hiding, tray anchoring, second-launch focusing, and
+refused initial or periodic refresh requests. Browser-launch, provider sign-in, and
+filesystem export failures name the log in their messages; if the log cannot be opened or
+written, the message says logging is unavailable and gives the expected path when it can
+be resolved. `cargo deny` is not a workspace tool: install it once with
+`cargo install cargo-deny`.
+
 ### Development identity
 
 Every debug executable, including those produced by plain `bun tauri dev`,
@@ -240,7 +291,7 @@ change. A new enum variant breaks every handwritten exhaustive match by design; 
 the point of the typed contracts. Record any new exception in `docs/exceptions.md` with an
 owner, a rationale, a scope, a review date, and a removal condition.
 
-## 7. Interface tests
+## 9. Interface tests
 
 `bun run test:ui` loads the real built renderer (`bun run build`, served by
 `vite preview`) in headless Chromium and drives it with Playwright. Only the Rust host is
@@ -305,6 +356,14 @@ Counts by theme by aliases are 6 surfaces x 5 x 2 x 2 = 120 tests, states by the
 6 x 2 = 72, long names 12, sizes 3, switching 5. `test-results/screenshots/index.html` is
 a contact sheet of every screenshot, grouped by folder.
 
+The README's and the user guide's pictures in `docs/images/` come from the same run, so
+they show the fictional accounts of the faked host. A test takes one with
+`host.screenshotFull(name)`, which grows the window until nothing in it scrolls, so the
+picture is never cut off, and writes it to `test-results/screenshots/docs/`;
+`tests/ui/docs.spec.ts` takes the README's overview pictures. After an interface change,
+refresh them with `bun run test:ui && bun run docs:screenshots`;
+`tools/docs/screenshots.mjs` lists which capture each picture comes from.
+
 What the screenshots show about the mini widget, as the code stands: the mini cards draw
 readings and not statuses, so a rate-limited, offline or check-failed account looks normal
 there (only an account with no reading at all says "Reconnect"); and in the ring strip
@@ -318,7 +377,7 @@ release preflight covers them. See
 [Which tests a release needs](docs/RELEASING.md#which-tests-a-release-needs) for the
 preflight requirement.
 
-## 8. Real-app tests (Linux and Windows)
+## 10. Real-app tests (Linux and Windows)
 
 The interface tests fake the Rust host. The real-app suite does not: `bun run build:e2e`
 builds the actual desktop application in debug mode (twice: once as is, once as the test

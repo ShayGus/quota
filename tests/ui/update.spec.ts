@@ -61,6 +61,7 @@ test.describe("the update pop-up", () => {
     await expect(button(page, "OK")).toBeFocused();
     expect(await answers(host)).toEqual([]);
     await host.screenshot("update-popup/offer-light");
+    await host.screenshotFull("update-offer");
   });
 
   test("it is drawn in the dark theme too", async ({ open }) => {

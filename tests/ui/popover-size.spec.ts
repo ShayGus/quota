@@ -30,6 +30,7 @@ test.describe("popover at 440 px", () => {
         expect(metrics.scrollWidth).toBeLessThanOrEqual(440);
         expect(metrics.popover).toBe(440);
         await host.screenshot(`popover-440-${layout}-${theme}`);
+        await host.screenshotFull(`overview-${layout}-${theme}`);
       });
     }
   }
