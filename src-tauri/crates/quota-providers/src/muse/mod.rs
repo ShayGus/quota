@@ -101,9 +101,16 @@ impl MuseAdapter {
                 answers: Answers::Success,
             })
             .await?;
-        serde_json::from_value(reply.body).map_err(|_| ProviderError::UnsupportedSchema {
-            detail: "the payload did not match the supported Muse Code shape".to_owned(),
-        })
+        let answer = <wire::SubscriptionAnswer as serde::Deserialize>::deserialize(&reply.body)
+            .map_err(|_| ProviderError::UnsupportedSchema {
+                detail: "the payload did not match the supported Muse Code shape".to_owned(),
+            })?;
+        if answer.account_id().is_none() {
+            // Field names only: the answer also carries a model API key.
+            let fields = field_names(&reply.body);
+            tracing::warn!(?fields, "the Muse Code answer named no account");
+        }
+        Ok(answer)
     }
 
     #[tracing::instrument(
@@ -117,13 +124,9 @@ impl MuseAdapter {
         token: &Secret,
     ) -> Result<FetchOutcome, ProviderError> {
         let answer = self.subscription(token, context.deadline).await?;
-        decode::ensure_binding(
-            binding,
-            ProviderId::MuseCode,
-            answer.user_id.as_deref(),
-            None,
-        )?;
-        let seed = answer.user_id.clone().unwrap_or_else(|| "muse".to_owned());
+        let account = answer.account_id();
+        decode::ensure_binding(binding, ProviderId::MuseCode, account.as_deref(), None)?;
+        let seed = account.unwrap_or_else(|| "muse".to_owned());
         let pool = decode::pool_id(ProviderId::MuseCode, &seed);
         let decoded = mapping::decode(&answer, &pool, Utc::now())?;
         Ok(decoded.into_outcome(identity(&answer)))
@@ -141,8 +144,7 @@ impl MuseAdapter {
             return Err(ProviderError::Authorization);
         }
         let principal = answer
-            .user_id
-            .clone()
+            .account_id()
             .and_then(|id| ProviderPrincipalId::new(id).ok())
             .ok_or_else(decode::missing_identity)?;
         Ok(vec![DiscoveredAccount {
@@ -158,6 +160,14 @@ impl MuseAdapter {
             nickname: "Muse Code".to_owned(),
         }])
     }
+}
+
+/// The field names of a JSON object, never its values.
+fn field_names(value: &serde_json::Value) -> Vec<String> {
+    value
+        .as_object()
+        .map(|object| object.keys().cloned().collect())
+        .unwrap_or_default()
 }
 
 /// What the person confirms: the Meta account and its plan.

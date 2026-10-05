@@ -30,6 +30,22 @@ pub(crate) struct SubscriptionAnswer {
     pub(crate) subs_usage: Option<SubscriptionUsage>,
 }
 
+impl SubscriptionAnswer {
+    /// The account's stable identity: Meta's user id, otherwise the account's
+    /// address, as oh-my-pi does. Meta leaves the id out for some accounts.
+    pub(crate) fn account_id(&self) -> Option<String> {
+        let present = |value: &Option<String>| {
+            value
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .map(str::to_owned)
+        };
+        present(&self.user_id)
+            .or_else(|| present(&self.user_email).map(|address| address.to_lowercase()))
+    }
+}
+
 /// The two windows.
 #[derive(Debug, Default, Deserialize)]
 pub(crate) struct SubscriptionUsage {
