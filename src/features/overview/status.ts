@@ -7,6 +7,7 @@
  */
 import type { AccountSnapshot, QuotaWindow } from "../../generated/bindings";
 import { remainingPercent, type Severity } from "../../shared/format/allowance";
+import { isRankable } from "../../shared/format/balance";
 import { formatAge, instantOf } from "../../shared/format/duration";
 
 /** A short status statement, its tone, and the icon that carries it. */
@@ -23,7 +24,8 @@ export function lowestWindow(account: AccountSnapshot): QuotaWindow | null {
   for (const window of account.windows) {
     // An extra-spend cap is a ceiling on spending beyond the plan, not an
     // allowance, so it never decides how close to exhaustion an account is.
-    if (window.metric_role !== "included_allowance") {
+    // A prepaid balance measured from its last top-up runs out like one.
+    if (!isRankable(window)) {
       continue;
     }
     const percent = remainingPercent(window.measurement);

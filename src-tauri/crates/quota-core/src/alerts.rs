@@ -9,7 +9,7 @@ use chrono::{DateTime, Utc};
 
 use quota_domain::ids::{AccountId, DefinitionVersion, QuotaPoolId, QuotaWindowId};
 use quota_domain::percent::Percent;
-use quota_domain::quota::window::{MetricRole, QuotaWindow};
+use quota_domain::quota::window::QuotaWindow;
 
 use crate::ports::AlertLevel;
 
@@ -201,7 +201,7 @@ pub fn evaluate(
 /// Whether a window is eligible to alert at all.
 #[must_use]
 pub fn is_alertable(window: &QuotaWindow) -> bool {
-    window.metric_role == MetricRole::IncludedAllowance && window.measurement.has_number()
+    window.metric_role.is_rankable() && window.measurement.has_number()
 }
 
 #[cfg(test)]
@@ -211,7 +211,7 @@ mod tests {
     use quota_domain::quota::scope::QuotaScope;
     use quota_domain::quota::units::DecimalPrecision;
     use quota_domain::quota::window::{
-        Completeness, Enforcement, QuotaCategory, SourceKind, WindowSemantics,
+        Completeness, Enforcement, MetricRole, QuotaCategory, SourceKind, WindowSemantics,
     };
 
     use super::*;
@@ -309,6 +309,17 @@ mod tests {
             "a",
             None,
             MetricRole::IncludedAllowance
+        )));
+        // A prepaid balance measured from its last top-up runs out the same way.
+        assert!(is_alertable(&fixture_window(
+            "a",
+            Some(15.0),
+            MetricRole::PrepaidBalance
+        )));
+        assert!(!is_alertable(&fixture_window(
+            "a",
+            Some(15.0),
+            MetricRole::CreditBalance
         )));
     }
 

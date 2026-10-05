@@ -8,6 +8,7 @@ use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
 
 use quota_domain::account::MAX_NICKNAME_LEN;
+use quota_domain::balance::{BalanceLedger, BalanceReading};
 use quota_domain::ids::{AccountId, QuotaWindowId};
 use quota_domain::quota::window::QuotaWindow;
 
@@ -204,6 +205,48 @@ impl AccountRegistry {
         let entry = self.entry_mut(account_id)?;
         entry.stored.windows = windows;
         entry.stored.expected_but_missing_window_ids = expected_but_missing;
+        Ok(())
+    }
+
+    /// Records one reading's prepaid balance in the account's ledger, and
+    /// measures the reading's balance windows from the last top-up.
+    ///
+    /// A reading without a balance, such as one from a key that may not read
+    /// it, leaves the ledger as it was.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn record_balance(
+        &mut self,
+        account_id: &AccountId,
+        reading: Option<&BalanceReading>,
+        windows: &mut [QuotaWindow],
+        now: DateTime<Utc>,
+    ) -> Result<(), CoreError> {
+        let entry = self.entry_mut(account_id)?;
+        if let Some(reading) = reading {
+            entry.stored.balance = Some(BalanceLedger::record(
+                entry.stored.balance.as_ref(),
+                reading,
+                now,
+            ));
+        }
+        if let Some(ledger) = entry.stored.balance.as_ref() {
+            ledger.apply_to(windows);
+        }
+        Ok(())
+    }
+
+    /// Shows or hides one account's API key spend limit.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn set_show_key_limit(
+        &mut self,
+        account_id: &AccountId,
+        shown: bool,
+    ) -> Result<(), CoreError> {
+        self.entry_mut(account_id)?.stored.show_key_limit = shown;
         Ok(())
     }
 

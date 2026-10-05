@@ -101,6 +101,9 @@ pub enum MetricRole {
     ExtraSpendCap,
     /// An informational balance. Not included quota.
     CreditBalance,
+    /// A prepaid balance measured from its last top-up. Not included quota,
+    /// but it runs out the same way, so it ranks and alerts like one.
+    PrepaidBalance,
 }
 
 impl MetricRole {
@@ -108,6 +111,14 @@ impl MetricRole {
     #[must_use]
     pub const fn is_included_allowance(self) -> bool {
         matches!(self, Self::IncludedAllowance)
+    }
+
+    /// Whether this role takes part in the least-remaining ranking and in
+    /// alerts: an included allowance, or a prepaid balance measured from its
+    /// last top-up.
+    #[must_use]
+    pub const fn is_rankable(self) -> bool {
+        matches!(self, Self::IncludedAllowance | Self::PrepaidBalance)
     }
 }
 
@@ -275,6 +286,15 @@ mod tests {
         assert!(MetricRole::IncludedAllowance.is_included_allowance());
         assert!(!MetricRole::ExtraSpendCap.is_included_allowance());
         assert!(!MetricRole::CreditBalance.is_included_allowance());
+        assert!(!MetricRole::PrepaidBalance.is_included_allowance());
+    }
+
+    #[test]
+    fn a_prepaid_balance_ranks_like_an_allowance() {
+        assert!(MetricRole::IncludedAllowance.is_rankable());
+        assert!(MetricRole::PrepaidBalance.is_rankable());
+        assert!(!MetricRole::ExtraSpendCap.is_rankable());
+        assert!(!MetricRole::CreditBalance.is_rankable());
     }
 
     #[test]

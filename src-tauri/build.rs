@@ -18,6 +18,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "reconnect_account",
         "set_account_enabled",
         "rename_account",
+        "set_key_limit_shown",
         "disconnect_account",
         "refresh_accounts",
         "set_monitoring_state",

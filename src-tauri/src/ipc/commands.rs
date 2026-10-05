@@ -225,6 +225,39 @@ pub async fn rename_account(
     state.monitor.publish().await
 }
 
+/// Shows or hides one account's API key spend limit on its card.
+///
+/// A key that exists only so Quota can read the account has a limit nobody
+/// needs to see, so the limit is hidden until the person turns it on.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_key_limit_shown(
+    state: State<'_, AppState>,
+    account_ref: AccountRef,
+    shown: bool,
+) -> Result<(), CommandError> {
+    let account_id = account_ref.into_id();
+    {
+        let _commit = state.monitor.commit().await;
+        let mut registry = state.registry.write().await;
+        registry
+            .set_show_key_limit(&account_id, shown)
+            .map_err(map_core_error)?;
+        let stored = registry
+            .get(&account_id)
+            .map(|entry| entry.stored.clone())
+            .ok_or(CommandError::AccountNotFound)?;
+        state
+            .accounts
+            .upsert_account(stored)
+            .await
+            .map_err(|error| CommandError::PersistenceUnavailable {
+                owner: error.owner.into(),
+            })?;
+    }
+    state.monitor.publish().await
+}
+
 /// Removes the application's local reference to one account.
 ///
 /// It does not log out, unlink, or otherwise disturb the owning tool.

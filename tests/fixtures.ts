@@ -7,6 +7,7 @@
 import type {
   AccountSnapshot,
   AppSnapshot,
+  BalanceSummary,
   BoundaryKind,
   ConnectionProgress,
   Measurement,
@@ -79,6 +80,96 @@ export function percent(remaining: number): Measurement {
   };
 }
 
+/**
+ * An OpenRouter-style prepaid balance, in cents: $37.20 left of a $50.00
+ * top-up on 28 Sep, two top-ups seen, $3.10 a day, so about twelve days left.
+ * The host's ledger gives the summary; the window is measured from it.
+ */
+export function prepaidBalance(
+  options: {
+    readonly balance?: number;
+    readonly baseline?: number;
+    readonly baselineKind?: BalanceSummary["baseline_kind"];
+    readonly runway?: BalanceSummary["runway"];
+    readonly topUps?: BalanceSummary["top_ups"];
+  } = {},
+): { readonly window: QuotaWindow; readonly summary: BalanceSummary } {
+  const balance = options.balance ?? 3720;
+  const baseline = options.baseline ?? 5000;
+  const summary: BalanceSummary = {
+    currency: "USD",
+    scale: 2,
+    balance_minor: balance,
+    baseline_minor: baseline,
+    baseline_at: "2026-09-28T12:00:00.000Z",
+    baseline_kind: options.baselineKind ?? "top_up",
+    loaded_minor: 12500,
+    spent_minor: 12500 - balance,
+    top_ups: options.topUps ?? [
+      {
+        detected_at: "2026-09-28T12:00:00.000Z",
+        amount_minor: 5000,
+        balance_after_minor: baseline,
+      },
+      {
+        detected_at: "2026-09-02T12:00:00.000Z",
+        amount_minor: 2500,
+        balance_after_minor: 3100,
+      },
+    ],
+    runway:
+      options.runway === undefined
+        ? { spend_per_day_minor: 310, days_left: 12 }
+        : options.runway,
+    key_spend: { today_minor: 42, week_minor: 905, month_minor: 1280 },
+  };
+  const window_: QuotaWindow = window(
+    "or-balance",
+    "custom",
+    {
+      kind: "money",
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: Math.max(0, baseline - balance),
+        remaining_minor_units: balance,
+        limit_minor_units: baseline,
+      },
+    },
+    {
+      label: "Credit balance",
+      resource: "credits",
+      role: "prepaid_balance",
+      boundaryAt: null,
+    },
+  );
+  return { window: window_, summary };
+}
+
+/** An OpenRouter key's monthly spend limit, in cents: $11.60 left of $20.00. */
+export function keyLimit(): QuotaWindow {
+  return window(
+    "or-key",
+    "monthly",
+    {
+      kind: "money",
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: 840,
+        remaining_minor_units: 1160,
+        limit_minor_units: 2000,
+      },
+    },
+    {
+      label: "API key limit",
+      role: "extra_spend_cap",
+      boundaryAt: "2026-11-01T00:00:00.000Z",
+      boundaryKind: "billing_boundary",
+    },
+  );
+}
+
 /** A reading the source could not provide. */
 export function unavailable(): Measurement {
   return { kind: "unavailable", value: "not_reported" };
@@ -96,6 +187,8 @@ export function account(
     readonly connectionState?: AccountSnapshot["connection_state"];
     readonly rank?: number | null;
     readonly unrankedReason?: UnrankedReason;
+    readonly balance?: BalanceSummary | null;
+    readonly showKeyLimit?: boolean;
   } = {},
 ): AccountSnapshot {
   const rank = options.rank === undefined ? null : options.rank;
@@ -138,6 +231,8 @@ export function account(
               rule_version: 1,
             },
           },
+    balance: options.balance ?? null,
+    show_key_limit: options.showKeyLimit ?? false,
   };
 }
 

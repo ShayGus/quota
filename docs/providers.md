@@ -117,16 +117,30 @@ the plan does not report, such as the session window on a free plan, is left out
 | Access method             | `GET https://openrouter.ai/api/v1/key` and `GET https://openrouter.ai/api/v1/credits`, each with `Authorization: Bearer <key>`. Both are documented in OpenRouter's API reference.                                                                                                                                                                                                                                                                                                                             |
 | Identity source           | The key's own `label`, which OpenRouter writes as a masked form of the key, and `is_free_tier` as the plan. The response names no account, so each key is its own connection.                                                                                                                                                                                                                                                                                                                                  |
 | Credential path and owner | Quota owns it. The person pastes an API key from openrouter.ai/settings/keys on the add-account page. It is held in memory while the account is verified, written to the system credential store (Windows Credential Manager, the Secret Service, or the macOS Keychain, entry named for the connection in the [application credential namespace](../CONTRIBUTING.md#development-identity)) only when the account is added, and deleted on disconnect. It never reaches SQLite, the Store, logs, or snapshots. |
-| Response fields           | `data.limit`, `data.limit_remaining` and `data.limit_reset` (`daily`, `weekly`, `monthly` or `null`) become the key's spend cap; a `null` limit is unlimited. `data.total_credits` less `data.total_usage` is the credit balance. Amounts are US dollars, rounded to the cent.                                                                                                                                                                                                                                 |
+| Response fields           | `data.limit`, `data.limit_remaining` and `data.limit_reset` (`daily`, `weekly`, `monthly` or `null`) become the key's spend cap; a `null` limit is unlimited. `data.total_credits` (everything loaded) and `data.total_usage` (everything spent) are the prepaid balance. `data.usage_daily`, `data.usage_weekly` and `data.usage_monthly` are what the key spent in the current UTC day, week and month, for the detail. Amounts are US dollars, rounded to the cent.                                         |
 | Polling cadence           | 300 s                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | Multi-account support     | Yes: each pasted key is an independent connection.                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
 | Live verification         | The sign-in flow, the credential store, and a refused key were checked in the running app on Windows; a reading with a real key is listed in the pull request.                                                                                                                                                                                                                                                                                                                                                 |
 | Undocumented-schema risk  | Low. Both endpoints are documented. OpenRouter documents the credits endpoint for management keys, so an ordinary key that is refused there still connects, with its key limit only.                                                                                                                                                                                                                                                                                                                           |
 
-OpenRouter is pay as you go, so neither window is included quota: the balance is a credit
-balance and the key limit is a spend cap. An account with no included allowance draws its
-balance and caps on its card, balance first, and they never take part in the
-least-remaining ranking.
+OpenRouter is pay as you go, so neither window is included quota. The balance is a prepaid
+balance, measured from the last top-up Quota saw (`quota_domain::balance`):
+
+- Spending never raises `total_credits`; only a top-up does. A rise between two readings
+  is a top-up of exactly that much, recorded with the balance right after it (the balance
+  before plus the amount), and the balance is measured from it. A fall is a refund or a
+  correction, and the balance is measured from that reading. Before Quota has seen a
+  top-up, the balance is measured from the first reading after the account was added.
+- The ledger, with the last 20 top-ups and an hourly sample of `total_usage` over the last
+  week, is kept per account in the `account_balances` table and is deleted with the
+  account. The spending pace is the spend over that week, or over the history there is,
+  divided by its length; it is shown only after a day of history with some spending.
+- Measured this way the balance is a share of the last top-up, so it ranks, counts as low
+  and alerts like an included allowance (`MetricRole::PrepaidBalance`).
+- The key limit is a spend cap and never ranks. It is hidden by default and shown per
+  account with **Show this key's spend limit** (`accounts.show_key_limit`), because a key
+  is often created only so Quota can read the account. A key that the credits endpoint
+  refuses has no balance, so its limit is always shown.
 
 ## Z.ai GLM Coding Plan
 

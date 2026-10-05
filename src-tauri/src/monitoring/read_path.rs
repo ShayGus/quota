@@ -214,7 +214,7 @@ pub(super) async fn commit_reading(
     target: &ReadTarget,
     read: &quota_core::ports::QuotaRead,
 ) -> Result<(), String> {
-    let windows = read.windows.clone();
+    let mut windows = read.windows.clone();
     let expected_missing = read.expected_but_missing.clone();
     let identity = read.identity.clone();
     let now = state.clock.now();
@@ -229,6 +229,14 @@ pub(super) async fn commit_reading(
         if !live.binding.accepts(&target.entry.binding) {
             return Err("stale_connection_generation".to_owned());
         }
+        registry
+            .record_balance(
+                &request.account_id,
+                read.balance.as_ref(),
+                &mut windows,
+                now,
+            )
+            .map_err(|error| error.to_string())?;
         registry
             .apply_reading(&request.account_id, windows, expected_missing)
             .map_err(|error| error.to_string())?;

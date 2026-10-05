@@ -14,6 +14,7 @@ import type {
   Preferences,
 } from "../../../generated/bindings";
 import { accountLabel, displayName } from "../../../shared/format/alias";
+import { hasHideableKeyLimit } from "../../../shared/format/balance";
 import { providerLabel } from "../../../shared/format/provider";
 import { launch } from "../../../shared/ipc/report";
 import { Dialog } from "../../../shared/ui/Dialog";
@@ -76,6 +77,28 @@ function ManagedAccount({
           : ` · ${account.identity.workspace_label}`}{" "}
         · {windows} {windows === 1 ? "window" : "windows"}
       </div>
+      {hasHideableKeyLimit(account) ? (
+        <div className="account-manage-option">
+          <span>
+            <span className="account-manage-option-label">
+              Show this key's spend limit
+            </span>
+            <small>
+              Off when the key is only for Quota. The account balance is shown either way.
+            </small>
+          </span>
+          <button
+            type="button"
+            role="switch"
+            className="switch"
+            aria-checked={account.show_key_limit}
+            aria-label={`Show the key spend limit of ${provider} ${label}`}
+            onClick={() => {
+              actions.setKeyLimitShown(account.account_id, !account.show_key_limit);
+            }}
+          />
+        </div>
+      ) : null}
       <div className="account-manage-actions">
         <button
           type="button"

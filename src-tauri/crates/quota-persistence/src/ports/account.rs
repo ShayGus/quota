@@ -63,6 +63,12 @@ impl SqliteAccountPortAdapter {
                     _ => None,
                 })
                 .collect();
+            let balance = self
+                .repositories
+                .accounts()
+                .balance_ledger(&record.id)
+                .await
+                .map_err(|e| map_error(&e))?;
             accounts.push(StoredAccount {
                 account_id: record.id,
                 connection: ConnectionSummary {
@@ -88,6 +94,8 @@ impl SqliteAccountPortAdapter {
                 identity: record.verified_identity,
                 windows,
                 expected_but_missing_window_ids,
+                balance,
+                show_key_limit: record.show_key_limit,
             });
         }
         Ok(accounts)
@@ -107,6 +115,7 @@ impl SqliteAccountPortAdapter {
         store_connection(&mut transaction, &account).await?;
         store_account_row(&mut transaction, &account).await?;
         store_windows(&mut transaction, &account).await?;
+        store_balance(&mut transaction, &account).await?;
         transaction
             .commit()
             .await
@@ -188,6 +197,27 @@ async fn store_account_row(
         account.last_attempt_at,
         account.last_success_at,
         account.next_attempt_at,
+    )
+    .await
+    .map_err(|e| map_error(&e))
+}
+
+/// The account's prepaid-balance ledger and its key-limit switch.
+async fn store_balance(
+    transaction: &mut Transaction<'_>,
+    account: &StoredAccount,
+) -> Result<(), RepositoryError> {
+    AccountRepository::set_show_key_limit_on(
+        &mut **transaction,
+        &account.account_id,
+        account.show_key_limit,
+    )
+    .await
+    .map_err(|e| map_error(&e))?;
+    AccountRepository::store_balance_on(
+        &mut **transaction,
+        &account.account_id,
+        account.balance.as_ref(),
     )
     .await
     .map_err(|e| map_error(&e))
@@ -309,6 +339,8 @@ impl AccountPort for SqliteAccountPortAdapter {
             windows: account.windows,
             expected_but_missing_window_ids: account.expected_but_missing_window_ids,
             order,
+            balance: account.balance.as_ref().map(|ledger| ledger.summary(now)),
+            show_key_limit: account.show_key_limit,
         }))
     }
 }

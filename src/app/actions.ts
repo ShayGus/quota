@@ -69,6 +69,10 @@ export const actions = {
   async renameAccount(accountId: AccountId, nickname: string): Promise<void> {
     await reportAsync(commands.renameAccount({ id: accountId }, nickname));
   },
+  /** Shows or hides one account's API key spend limit on its card. */
+  async setKeyLimitShown(accountId: AccountId, shown: boolean): Promise<void> {
+    await reportAsync(commands.setKeyLimitShown({ id: accountId }, shown));
+  },
   /** Disconnects one account, leaving its same-provider siblings alone. */
   async disconnectAccount(accountId: AccountId): Promise<void> {
     await reportAsync(commands.disconnectAccount({ id: accountId }));

@@ -49,7 +49,7 @@ async fn migrations_are_idempotent_on_reopen() {
             .await
             .unwrap();
 
-    assert_eq!(versions, vec![1, 2]);
+    assert_eq!(versions, vec![1, 2, 3]);
     assert_eq!(versions, again, "a reopen must not re-record a version");
     second.close().await;
 }
@@ -123,6 +123,7 @@ async fn every_declared_table_exists_after_migration() {
         "notification_outbox",
         "refresh_backoff",
         "monitoring_preferences",
+        "account_balances",
     ] {
         assert!(
             names.iter().any(|name| name == required),

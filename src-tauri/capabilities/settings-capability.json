@@ -20,6 +20,7 @@
     "allow-reconnect-account",
     "allow-set-account-enabled",
     "allow-rename-account",
+    "allow-set-key-limit-shown",
     "allow-disconnect-account",
     "allow-clear-local-history",
     "allow-export-sanitized-diagnostics",

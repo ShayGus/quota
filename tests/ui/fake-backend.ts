@@ -266,6 +266,12 @@ export function installFakeBackend(config: FakeConfig): void {
           nickname: args?.nickname as string,
         }));
         return null;
+      case "set_key_limit_shown":
+        updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
+          ...entry,
+          show_key_limit: args?.shown as boolean,
+        }));
+        return null;
       case "disconnect_account": {
         const id = (args?.accountRef as { id: string }).id;
         snapshot = {
@@ -434,6 +440,8 @@ function confirmedAccount(
     next_attempt_at: null,
     windows: held.windows,
     expected_but_missing_window_ids: [],
+    balance: null,
+    show_key_limit: false,
     order: {
       kind: "ranked",
       value: {

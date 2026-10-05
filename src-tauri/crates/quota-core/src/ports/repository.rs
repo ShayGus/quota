@@ -40,6 +40,10 @@ pub struct StoredAccount {
     pub windows: Vec<QuotaWindow>,
     /// Windows the provider expected to report but did not.
     pub expected_but_missing_window_ids: Vec<quota_domain::ids::QuotaWindowId>,
+    /// The prepaid-balance ledger, when the account has a prepaid balance.
+    pub balance: Option<quota_domain::balance::BalanceLedger>,
+    /// Whether the card shows the account's API key spend limit.
+    pub show_key_limit: bool,
 }
 
 /// A persisted rate-limit or backoff deadline.

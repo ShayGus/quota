@@ -146,7 +146,7 @@ first, by remaining allowance, and a card keeps its place while a new reading ar
 
 <table>
   <tr>
-    <td valign="top" width="33%"><img src="images/overview-rings.png" alt="The overview: Codex low on its 5-hour window, Cursor rate limited, Claude current"><br><sub>Rings, dark theme</sub></td>
+    <td valign="top" width="33%"><img src="images/overview-rings.png" alt="The overview: Codex low on its 5-hour window, Claude current, and an OpenRouter balance of $37.20"><br><sub>Rings, dark theme</sub></td>
     <td valign="top" width="33%"><img src="images/overview-bars-light.png" alt="The compact layout with bars, in the light theme"><br><sub>Compact bars, light theme</sub></td>
     <td valign="top" width="33%"><img src="images/attention-filter.png" alt="The Attention filter showing only accounts that need attention"><br><sub>The Attention filter</sub></td>
   </tr>
@@ -202,6 +202,38 @@ The badge in each card's corner says how the account is doing:
 Click a ring, or **Details**, for that account's detail: a tab for each window, when it
 resets in your time zone, how much is used and left, when it was last checked, and where
 the reading came from.
+
+### Prepaid balances
+
+OpenRouter is pay as you go: you load money, then spend it. Its card shows one ring, the
+balance, measured from the last top-up Quota saw.
+
+- The centre shows the money left, such as **$37.20**. The ring drains from the last
+  top-up to zero and fills again when you load more.
+- Under the ring: what the balance is measured from, such as **of $50.00 loaded on Sep
+  28**, and how long it lasts at your recent pace, such as **≈ 12 days at $3.10/day**. The
+  pace appears once Quota has a day of readings with some spending in it.
+- Quota notices a top-up when the total OpenRouter reports as loaded goes up between two
+  readings, and records exactly that amount. Until it has seen one, the balance is
+  measured from when you added the account; after a refund, from the refund.
+- The balance is low at 20% of the last top-up. Like any other window, it then turns the
+  badge amber, counts for **Attention**, sends the notifications you chose, and moves the
+  card up the closest-to-running-out order.
+- The key you connected with may have its own spend limit. It is hidden until you turn on
+  **Show this key's spend limit** for that account in **Settings → Accounts**: a key made
+  only for Quota has a limit nobody needs to see. A key that cannot read the account
+  balance always shows its limit, since that is its only reading.
+
+The detail adds the share of the last top-up, what the key spent today, this week and this
+month, the totals loaded and spent since the account opened, and every top-up Quota has
+seen.
+
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/openrouter-card.png" alt="An OpenRouter card: $37.20 left of $50.00 loaded on Sep 28, about 12 days at $3.10 a day"><br><sub>The balance on its card</sub></td>
+    <td valign="top" width="50%"><img src="images/openrouter-detail.png" alt="OpenRouter detail: 74% of the last top-up left, the key's spending, the totals and two top-ups"><br><sub>Its detail</sub></td>
+  </tr>
+</table>
 
 ### Refresh
 
@@ -280,6 +312,8 @@ operating system, the view and the provider names, such as `claude` or `codex`.
 - **Disconnect** removes the account from Quota and deletes any key Quota kept for it from
   the credential store. It does not sign you out of the provider's own apps.
 - The arrows move the account up or down in this list.
+- For an OpenRouter account, **Show this key's spend limit** adds the key's own limit to
+  its card. It is off by default; see [Prepaid balances](#prepaid-balances).
 
 <br clear="right">
 

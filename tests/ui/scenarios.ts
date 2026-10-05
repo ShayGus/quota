@@ -17,7 +17,9 @@ import type {
 import {
   account,
   candidate,
+  keyLimit,
   percent,
+  prepaidBalance,
   preferences as basePreferences,
   snapshot as baseSnapshot,
   unavailable,
@@ -43,6 +45,34 @@ function sessionAndWeekly(prefix: string, session: number, weekly: number) {
   ];
 }
 
+/**
+ * An OpenRouter account as the host shows it: a prepaid balance of $37.20 out
+ * of a $50.00 top-up, with its key's monthly spend limit, which is hidden until
+ * the person chooses to show it.
+ */
+export function openRouterAccount(
+  options: { readonly showKeyLimit?: boolean } = {},
+): AccountSnapshot {
+  const { window, summary } = prepaidBalance();
+  return account("acct-openrouter", "openrouter", 4, [window, keyLimit()], {
+    nickname: "Side project",
+    rank: 74.4,
+    balance: summary,
+    showKeyLimit: options.showKeyLimit ?? false,
+  });
+}
+
+/**
+ * The README's overview: a Codex account running low, a Claude account with
+ * room left, and an OpenRouter prepaid balance.
+ */
+export function heroAccounts(): AccountSnapshot[] {
+  const [claude, codex] = overviewAccounts();
+  return [claude, codex, openRouterAccount()].filter(
+    (entry): entry is AccountSnapshot => entry !== undefined,
+  );
+}
+
 /** The seven accounts the overview scenario shows, one per interesting state. */
 export function overviewAccounts(): AccountSnapshot[] {
   const healthy = account("acct-claude", "claude", 1, sessionAndWeekly("c", 82, 61), {
@@ -61,13 +91,7 @@ export function overviewAccounts(): AccountSnapshot[] {
     fetch_state: "backoff" as const,
     next_attempt_at: "2026-10-01T12:05:00.000Z",
   };
-  const offline = {
-    ...account("acct-openrouter", "openrouter", 4, sessionAndWeekly("o", 70, 70), {
-      nickname: "Side project",
-      rank: 70,
-    }),
-    fetch_state: "offline" as const,
-  };
+  const offline = { ...openRouterAccount(), fetch_state: "offline" as const };
   const failed = {
     ...account("acct-zai", "zai", 5, sessionAndWeekly("z", 55, 55), {
       nickname: "Team Z.ai",

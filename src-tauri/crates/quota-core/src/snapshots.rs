@@ -80,7 +80,7 @@ impl SnapshotBuilder {
         let accounts: Vec<AccountSnapshot> = registry
             .iter()
             .map(|entry| {
-                let mut account = project(entry);
+                let mut account = project(entry, now);
                 account.order = ranked
                     .get(&account.account_id)
                     .cloned()
@@ -113,7 +113,7 @@ fn unnamed() -> AccountOrder {
     })
 }
 
-fn project(entry: &RegisteredAccount) -> AccountSnapshot {
+fn project(entry: &RegisteredAccount, now: DateTime<Utc>) -> AccountSnapshot {
     AccountSnapshot {
         account_id: entry.stored.account_id.clone(),
         connection_id: entry.stored.connection.id.clone(),
@@ -131,5 +131,11 @@ fn project(entry: &RegisteredAccount) -> AccountSnapshot {
         windows: entry.stored.windows.clone(),
         expected_but_missing_window_ids: entry.stored.expected_but_missing_window_ids.clone(),
         order: unnamed(),
+        balance: entry
+            .stored
+            .balance
+            .as_ref()
+            .map(|ledger| ledger.summary(now)),
+        show_key_limit: entry.stored.show_key_limit,
     }
 }

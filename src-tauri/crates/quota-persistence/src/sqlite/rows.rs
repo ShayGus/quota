@@ -68,6 +68,7 @@ pub(crate) fn map_account(row: &sqlx::sqlite::SqliteRow) -> PersistenceResult<Ac
         last_success_at: instant(row, "last_success_at", "accounts")?,
         next_attempt_at: instant(row, "next_attempt_at", "accounts")?,
         verified_identity,
+        show_key_limit: row.try_get::<bool, _>("show_key_limit").table("accounts")?,
     })
 }
 

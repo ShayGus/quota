@@ -75,6 +75,9 @@ const settingsActions: SettingsActions = {
   renameAccount: (accountId, nickname) => {
     launch(actions.renameAccount(accountId, nickname));
   },
+  setKeyLimitShown: (accountId, shown) => {
+    launch(actions.setKeyLimitShown(accountId, shown));
+  },
   disconnectAccount: (accountId) => {
     launch(actions.disconnectAccount(accountId));
   },

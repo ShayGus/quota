@@ -16,6 +16,9 @@ pub const INITIAL_VERSION: u32 = 1;
 /// The version that adds the durable operational settings columns.
 pub const OPERATIONAL_PREFERENCES_VERSION: u32 = 2;
 
+/// The version that adds prepaid balances and the key-limit switch.
+pub const PREPAID_BALANCE_VERSION: u32 = 3;
+
 /// Every migration, in application order.
 ///
 /// Each entry is `(version, statements)`. A statement list is executed as one
@@ -28,6 +31,10 @@ pub const MIGRATIONS: &[(u32, &str)] = &[
     (
         OPERATIONAL_PREFERENCES_VERSION,
         include_str!("../../migrations/0002_operational_preferences.sql"),
+    ),
+    (
+        PREPAID_BALANCE_VERSION,
+        include_str!("../../migrations/0003_prepaid_balance.sql"),
     ),
 ];
 

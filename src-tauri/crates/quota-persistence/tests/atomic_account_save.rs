@@ -59,6 +59,8 @@ fn confirmed_account() -> StoredAccount {
         }),
         windows: vec![window("weekly-new", "pool-new", 41.0, at(2))],
         expected_but_missing_window_ids: Vec::new(),
+        balance: None,
+        show_key_limit: false,
     }
 }
 

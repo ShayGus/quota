@@ -106,6 +106,12 @@ cascade into another account's rows. Every history statement is scoped by `accou
 `measurement_history(window_id, observed_at)` index the retention queries, and pruning
 never touches `accounts`, `alert_episodes`, `notification_outbox`, or `refresh_backoff`.
 
+`account_balances` is different: it is not history but the state a prepaid balance is
+measured from (the last top-up, the top-ups seen, and a week of hourly spending samples),
+so it carries a foreign key and leaves with its account, and clearing reading history
+leaves it alone. It is written in the same transaction as the rest of the account, as is
+the account's `show_key_limit` switch.
+
 ## Tests
 
 The SQLite integration tests under `tests/` run against real migrated on-disk files in
