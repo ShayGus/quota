@@ -57,31 +57,79 @@ pub(in crate::monitoring) fn fake_browser(
     let listener = TcpListener::bind("127.0.0.1:0").expect("a port");
     let port = listener.local_addr().expect("an address").port();
     let server = std::thread::spawn(move || {
-        let (stream, _) = listener.accept().expect("a connection");
-        let mut socket = tungstenite::accept(stream).expect("a websocket");
         let mut methods = Vec::new();
-        while let Ok(message) = socket.read() {
-            let Message::Text(text) = message else {
-                continue;
-            };
-            let request: Value = serde_json::from_str(text.as_str()).expect("JSON");
-            let method = request["method"].as_str().unwrap_or_default().to_owned();
-            let result = match method.as_str() {
-                "Target.getTargets" => json!({ "targetInfos":
-                    (0..pages).map(|_| json!({ "type": "page", "url": "https://console.example.test/settings/billing" })).chain([json!({ "type": "service_worker" })]).collect::<Vec<_>>() }),
-                "Storage.getCookies" => json!({ "cookies": [
-                    { "name": "session", "value": "fictional", "domain": "console.example.test", "path": "/" }
-                ]}),
-                _ => json!({}),
-            };
-            drop(socket.send(Message::text(json!({ "method": "Page.event" }).to_string())));
-            drop(socket.send(Message::text(
-                json!({ "id": request["id"], "result": result }).to_string(),
-            )));
-            methods.push(method.clone());
-            if method == "Browser.close" {
+        // Page lists arrive as plain requests; the one `DevTools` client, if
+        // any, arrives as a websocket. The stand-in records both, in order.
+        loop {
+            let Ok((mut stream, _)) = listener.accept() else {
                 break;
+            };
+            // Wait until the request's first line has arrived before deciding.
+            let mut head = [0_u8; 16];
+            let mut seen = 0;
+            for _ in 0..200 {
+                seen = stream.peek(&mut head).unwrap_or(0);
+                if seen == head.len() {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
             }
+            if head[..seen].starts_with(b"GET /json/list") {
+                // Read the whole request before answering, so closing the
+                // connection never discards unread bytes.
+                let mut request = Vec::new();
+                let mut byte = [0_u8; 1];
+                while !request.ends_with(b"\r\n\r\n") {
+                    match std::io::Read::read(&mut stream, &mut byte) {
+                        Ok(1) => request.push(byte[0]),
+                        _ => break,
+                    }
+                }
+                let body = Value::Array(
+                    (0..pages)
+                        .map(|_| json!({ "type": "page", "url": "https://console.example.test/settings/billing" }))
+                        .chain([json!({ "type": "service_worker", "url": "" })])
+                        .collect(),
+                )
+                .to_string();
+                drop(std::io::Write::write_all(
+                    &mut stream,
+                    format!(
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
+                    )
+                    .as_bytes(),
+                ));
+                methods.push("/json/list".to_owned());
+                if pages == 0 && methods.len() > 1 {
+                    // The window is closed; nothing more will be asked.
+                    return methods;
+                }
+                continue;
+            }
+            let mut socket = tungstenite::accept(stream).expect("a websocket");
+            while let Ok(message) = socket.read() {
+                let Message::Text(text) = message else {
+                    continue;
+                };
+                let request: Value = serde_json::from_str(text.as_str()).expect("JSON");
+                let method = request["method"].as_str().unwrap_or_default().to_owned();
+                let result = match method.as_str() {
+                    "Storage.getCookies" => json!({ "cookies": [
+                        { "name": "session", "value": "fictional", "domain": "console.example.test", "path": "/" }
+                    ]}),
+                    _ => json!({}),
+                };
+                drop(socket.send(Message::text(json!({ "method": "Page.event" }).to_string())));
+                drop(socket.send(Message::text(
+                    json!({ "id": request["id"], "result": result }).to_string(),
+                )));
+                methods.push(method.clone());
+                if method == "Browser.close" {
+                    return methods;
+                }
+            }
+            break;
         }
         methods
     });
@@ -117,7 +165,12 @@ fn the_session_reads_the_sites_cookies_then_closes_the_browser() {
     session.close();
     assert_eq!(
         server.join().expect("the stand-in"),
-        ["Target.getTargets", "Storage.getCookies", "Browser.close"]
+        [
+            "/json/list",
+            "/json/list",
+            "Storage.getCookies",
+            "Browser.close"
+        ]
     );
 }
 

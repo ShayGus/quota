@@ -5,13 +5,18 @@
 //! profile folder of Quota's own, never the person's usual one. The browser is
 //! started with its `DevTools` connection on the loopback address only, on a
 //! port the browser picks and writes into the profile (`DevToolsActivePort`).
-//! Through that connection Quota does two things only: asks for the profile's
-//! cookies for the provider's site, and closes the browser once they work.
+//! While the person signs in, nothing is connected to the browser: Quota only
+//! reads the list of open pages from the browser's local `/json/list` address,
+//! which does not attach to any page. A connected `DevTools` client during the
+//! sign-in made `TypeSafe`'s human check refuse it again and again, while the
+//! same browser with nothing connected passed. Only once a page has left the
+//! sign-in does Quota connect, to ask for the profile's cookies for the
+//! provider's site and to close the browser once they work.
 //! Quota never runs anything in the page, clicks, or types, and reads no file
 //! the browser writes other than that port file. The profile stays, so the
 //! next sign-in usually needs one click; disconnecting the account deletes it.
 
-use std::io;
+use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::path::Path;
 use std::process::{Child, Command, Stdio};
@@ -37,10 +42,12 @@ const START_LIMIT: Duration = Duration::from_secs(20);
 /// How long the browser has to close before Quota stops the process it started.
 const CLOSE_LIMIT: Duration = Duration::from_secs(5);
 
-/// The browser Quota started and the connection to it.
+/// The browser Quota started, and the connection to it once there is one.
 pub(super) struct BrowserSession {
     child: Child,
-    socket: WebSocket<TcpStream>,
+    port: u16,
+    path: String,
+    socket: Option<WebSocket<TcpStream>>,
     next_id: u64,
 }
 
@@ -227,10 +234,14 @@ impl BrowserSession {
     /// Returns the reason the loopback connection could not be made.
     /// A connection that cannot be made stops the browser Quota started.
     pub(super) fn connect(mut child: Child, port: u16, path: &str) -> io::Result<Self> {
-        match open_socket(port, path) {
-            Ok(socket) => Ok(Self {
+        // The page list proves the browser answers on the loopback address,
+        // without connecting a `DevTools` client to it yet.
+        match page_list(port) {
+            Ok(_) => Ok(Self {
                 child,
-                socket,
+                port,
+                path: path.to_owned(),
+                socket: None,
                 next_id: 0,
             }),
             Err(error) => {
@@ -245,12 +256,16 @@ impl BrowserSession {
         self.next_id += 1;
         let id = self.next_id;
         let request = json!({ "id": id, "method": method, "params": params });
-        self.socket
+        if self.socket.is_none() {
+            self.socket = Some(open_socket(self.port, &self.path).map_err(|_| Ended::Closed)?);
+        }
+        let socket = self.socket.as_mut().ok_or(Ended::Closed)?;
+        socket
             .send(Message::text(request.to_string()))
             .map_err(|_| Ended::Closed)?;
         let started = Instant::now();
         while started.elapsed() < ANSWER_LIMIT {
-            let message = self.socket.read().map_err(|_| Ended::Closed)?;
+            let message = socket.read().map_err(|_| Ended::Closed)?;
             let Message::Text(text) = message else {
                 continue;
             };
@@ -267,8 +282,7 @@ impl BrowserSession {
     /// The addresses of the profile's open pages; `Ended::Closed` once no
     /// window of the profile is open. Reading them does not touch the pages.
     pub(super) fn pages(&mut self) -> Result<Vec<String>, Ended> {
-        let targets = self.call("Target.getTargets", &json!({}))?;
-        let pages = page_urls(&targets);
+        let pages = page_urls(&page_list(self.port).map_err(|_| Ended::Closed)?);
         if pages.is_empty() {
             return Err(Ended::Closed);
         }
@@ -318,11 +332,30 @@ fn open_socket(port: u16, path: &str) -> io::Result<WebSocket<TcpStream>> {
         .map_err(|_| io::Error::other("the browser refused the DevTools connection"))
 }
 
-/// The addresses of the pages the browser has open.
+/// The browser's open targets from its local `/json/list` address, which lists
+/// them without attaching to any.
+fn page_list(port: u16) -> io::Result<Value> {
+    let mut stream = TcpStream::connect(("127.0.0.1", port))?;
+    stream.set_read_timeout(Some(ANSWER_LIMIT))?;
+    stream.set_write_timeout(Some(ANSWER_LIMIT))?;
+    write!(
+        stream,
+        "GET /json/list HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
+    )?;
+    let mut answer = String::new();
+    stream.read_to_string(&mut answer)?;
+    let body = answer
+        .split_once("\r\n\r\n")
+        .map(|(_, body)| body)
+        .ok_or_else(|| io::Error::other("the browser's page list had no body"))?;
+    serde_json::from_str(body)
+        .map_err(|_| io::Error::other("the browser's page list was unreadable"))
+}
+
+/// The addresses of the pages in a `/json/list` answer.
 fn page_urls(targets: &Value) -> Vec<String> {
     targets
-        .get("targetInfos")
-        .and_then(Value::as_array)
+        .as_array()
         .map(|targets| {
             targets
                 .iter()
