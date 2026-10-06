@@ -25,10 +25,10 @@ use quota_contracts::events::ConnectionProgress;
 use quota_core::ports::{ConsoleSignIn, ProviderAdapter, ProviderError, Secret};
 use quota_domain::ids::{AccountId, ConnectionAttemptId, ConnectionId};
 use quota_domain::provider::ProviderId;
-use tauri::{Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::Manager;
 use tokio::sync::watch;
 
-use super::browser_session::{self, Opened, Running};
+use super::browser_session::{self, Plain};
 use super::connection::{AttemptReporter, attempt_error};
 use super::{MonitoringRuntime, REMOTE_TIMEOUT};
 use crate::platform::browser;
@@ -44,13 +44,6 @@ const STORAGE_FOLDER: &str = "console-sign-in";
 /// The folder, under the app's local data folder, of the browser profiles
 /// Quota owns, one per provider.
 const PROFILE_FOLDER: &str = "browser-sign-in";
-
-/// How often the session is tried.
-const POLL_INTERVAL: Duration = Duration::from_secs(3);
-
-/// How long a page that did not give a working session waits before the
-/// same page is tried again.
-const RETRY_AFTER: Duration = Duration::from_secs(30);
 
 /// How long a person has to sign in.
 const SIGN_IN_LIMIT: Duration = Duration::from_secs(15 * 60);
@@ -147,217 +140,72 @@ async fn capture(
     cancelled: &mut watch::Receiver<bool>,
 ) -> Result<Option<String>, CommandError> {
     let cookie_url = tauri::Url::parse(console.cookie_url).map_err(|_| refused())?;
-    let source = match browser::find() {
-        Some(browser) => {
-            let profile = profile_folder(app, adapter.provider_id())?;
-            match browser_session::start(&browser, &profile, console.sign_in_url, cancelled).await {
-                Opened::Session(session) => Source::Browser(Running::new(*session)),
-                Opened::Cancelled => return Ok(None),
-                Opened::Failed => open_window(app, key, console)?,
+    if let Some(browser) = browser::find() {
+        let profile = profile_folder(app, adapter.provider_id())?;
+        match browser_session::sign_in(
+            &browser,
+            &profile,
+            console.sign_in_url,
+            SIGN_IN_LIMIT,
+            cancelled,
+        )
+        .await
+        {
+            Plain::Closed => {
+                let cookies = browser_session::read_cookies(
+                    &browser,
+                    &profile,
+                    cookie_url.host_str().unwrap_or_default(),
+                    cookie_url.path(),
+                )
+                .await;
+                let Some(header) = cookies.and_then(|cookies| cookie_header(cookies.into_iter()))
+                else {
+                    return Err(internal("console_sign_in_closed"));
+                };
+                return match try_session(adapter, &header, cancelled).await? {
+                    Tried::Accepted => Ok(Some(header)),
+                    Tried::Cancelled => Ok(None),
+                    Tried::NotYet => Err(internal("console_sign_in_closed")),
+                };
             }
+            Plain::Cancelled => return Ok(None),
+            Plain::TimedOut => return Err(internal("browser_sign_in_timeout")),
+            Plain::Failed => {}
         }
-        None => open_window(app, key, console)?,
-    };
-    let outcome = wait(adapter, &source, &cookie_url, cancelled).await;
-    source.finish().await;
+    }
+    let source = window::open_window(app, key, console)?;
+    let outcome = window::wait(adapter, &source, &cookie_url, cancelled).await;
+    source.finish();
     outcome
 }
 
-/// Where the session is read from while the person signs in.
-enum Source {
-    Window {
-        window: Box<WebviewWindow>,
-        folder: PathBuf,
-    },
-    Browser(Running),
+/// What one try of a session came to.
+enum Tried {
+    Accepted,
+    /// Not signed in yet, or a passing failure.
+    NotYet,
+    Cancelled,
 }
 
-/// The person closed the browser or the window before the sign-in finished.
-struct Closed;
-
-impl Source {
-    /// The addresses of the source's open pages.
-    async fn pages(&self) -> Result<Vec<String>, Closed> {
-        match self {
-            Self::Window { window, .. } => window
-                .app_handle()
-                .get_webview_window(window.label())
-                .and_then(|open| open.url().ok())
-                .map(|url| vec![url.to_string()])
-                .ok_or(Closed),
-            Self::Browser(running) => running.pages().await.map_err(|_| Closed),
-        }
-    }
-
-    /// The provider's cookies as one `Cookie` header, `None` while there are
-    /// none.
-    async fn header(&self, url: &tauri::Url) -> Result<Option<String>, Closed> {
-        match self {
-            Self::Window { window, .. } => {
-                if window
-                    .app_handle()
-                    .get_webview_window(window.label())
-                    .is_none()
-                {
-                    return Err(Closed);
-                }
-                Ok(session_header(window, url).await)
-            }
-            Self::Browser(running) => running
-                .cookies(url.host_str().unwrap_or_default(), url.path())
-                .await
-                .map(|cookies| cookie_header(cookies.into_iter()))
-                .map_err(|_| Closed),
-        }
-    }
-
-    /// Closes the browser or the window, and deletes a window's storage.
-    async fn finish(self) {
-        match self {
-            Self::Window { window, folder } => {
-                if window.close().is_err() {
-                    warn("the console sign-in window did not close");
-                }
-                forget_later(folder);
-            }
-            Self::Browser(running) => running.close().await,
-        }
-    }
-}
-
-/// Opens the provider's sign-in page in a window with its own storage.
-fn open_window(
-    app: &tauri::AppHandle,
-    key: &str,
-    console: &ConsoleSignIn,
-) -> Result<Source, CommandError> {
-    let storage = storage_root(app)?;
-    forget_leftovers(&storage);
-    let folder = storage.join(key);
-    let url = tauri::Url::parse(console.sign_in_url).map_err(|_| refused())?;
-    let window = WebviewWindowBuilder::new(
-        app,
-        format!("{LABEL_PREFIX}{key}"),
-        WebviewUrl::External(url),
-    )
-    .title("Sign in to TypeSafe · Quota")
-    .inner_size(1000.0, 820.0)
-    .center()
-    .focused(true)
-    .data_directory(folder.clone())
-    .build()
-    .map_err(|error| {
-        tracing::warn!(%error, "the console sign-in window did not open");
-        refused()
-    })?;
-    Ok(Source::Window {
-        window: Box::new(window),
-        folder,
-    })
-}
-
-/// Waits until the source holds a working session, the person closes it, the
-/// attempt is cancelled, or time runs out.
-async fn wait(
+/// Tries `header` on the provider once.
+async fn try_session(
     adapter: &Arc<dyn ProviderAdapter>,
-    source: &Source,
-    cookie_url: &tauri::Url,
+    header: &str,
     cancelled: &mut watch::Receiver<bool>,
-) -> Result<Option<String>, CommandError> {
-    let started = tokio::time::Instant::now();
-    let mut last_try: Option<(String, tokio::time::Instant)> = None;
-    loop {
-        tokio::select! {
-            _ = cancelled.changed() => return Ok(None),
-            () = tokio::time::sleep(POLL_INTERVAL) => {}
-        }
-        if started.elapsed() > SIGN_IN_LIMIT {
-            return Err(internal("browser_sign_in_timeout"));
-        }
-        // Nothing is sent to the provider until the page itself has left
-        // sign-in: a request beside the person's sign-in, with the cookies a
-        // human check just handed out, makes the check refuse them.
-        let pages = source
-            .pages()
-            .await
-            .map_err(|Closed| internal("console_sign_in_closed"))?;
-        let Some(page) = pages
-            .into_iter()
-            .find(|page| past_sign_in(page, cookie_url))
-        else {
-            continue;
-        };
-        if last_try
-            .as_ref()
-            .is_some_and(|(tried, at)| *tried == page && at.elapsed() < RETRY_AFTER)
-        {
-            continue;
-        }
-        last_try = Some((page, tokio::time::Instant::now()));
-        let Some(header) = source
-            .header(cookie_url)
-            .await
-            .map_err(|Closed| internal("console_sign_in_closed"))?
-        else {
-            continue;
-        };
-        let session = Secret::new(header.clone());
-        let tried = tokio::select! {
-            _ = cancelled.changed() => return Ok(None),
-            tried = tokio::time::timeout(REMOTE_TIMEOUT, adapter.discover_with(&session)) => tried,
-        };
-        match tried {
-            Ok(Ok(accounts)) if !accounts.is_empty() => return Ok(Some(header)),
-            Ok(Err(
-                error @ (ProviderError::Blocked { .. } | ProviderError::UnsupportedSchema { .. }),
-            )) => {
-                return Err(attempt_error(&error));
-            }
-            // Not signed in yet, or a passing failure: keep waiting.
-            _ => {}
-        }
-    }
-}
-
-/// Whether a page is on the provider's console and past its sign-in.
-fn past_sign_in(page: &str, console: &tauri::Url) -> bool {
-    let Ok(page) = tauri::Url::parse(page) else {
-        return false;
+) -> Result<Tried, CommandError> {
+    let session = Secret::new(header.to_owned());
+    let tried = tokio::select! {
+        _ = cancelled.changed() => return Ok(Tried::Cancelled),
+        tried = tokio::time::timeout(REMOTE_TIMEOUT, adapter.discover_with(&session)) => tried,
     };
-    let path = page.path().to_ascii_lowercase();
-    page.scheme() == "https"
-        && page.host_str() == console.host_str()
-        && ![
-            "/login",
-            "/signin",
-            "/sign-in",
-            "/signup",
-            "/sign-up",
-            "/auth",
-            "/callback",
-            "/sso",
-        ]
-        .iter()
-        .any(|prefix| path.starts_with(prefix))
-}
-
-/// The window's cookies for the provider as one `Cookie` header, or `None`
-/// while it has none.
-///
-/// Reading cookies blocks on the webview, and on Windows it deadlocks on the
-/// main thread, so it runs on a blocking thread.
-async fn session_header(window: &WebviewWindow, url: &tauri::Url) -> Option<String> {
-    let window = window.clone();
-    let url = url.clone();
-    let cookies = tokio::task::spawn_blocking(move || window.cookies_for_url(url))
-        .await
-        .ok()?
-        .ok()?;
-    cookie_header(
-        cookies
-            .iter()
-            .map(|cookie| (cookie.name().to_owned(), cookie.value().to_owned())),
-    )
+    match tried {
+        Ok(Ok(accounts)) if !accounts.is_empty() => Ok(Tried::Accepted),
+        Ok(Err(
+            error @ (ProviderError::Blocked { .. } | ProviderError::UnsupportedSchema { .. }),
+        )) => Err(attempt_error(&error)),
+        _ => Ok(Tried::NotYet),
+    }
 }
 
 /// Joins cookies into one header, leaving out any with an empty name or a
@@ -432,6 +280,9 @@ fn refused() -> CommandError {
 fn internal(code: &str) -> CommandError {
     CommandError::Internal { code: code.into() }
 }
+
+#[path = "console_window.rs"]
+mod window;
 
 #[cfg(test)]
 #[path = "console_tests.rs"]

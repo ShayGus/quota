@@ -13,6 +13,7 @@ use quota_domain::polling::{FixedIntervalPolicy, PollingStrategy, ProviderPollin
 use quota_domain::provider::ProviderCapabilities;
 use quota_domain::quota::window::SourceKind;
 
+use super::window::past_sign_in;
 use super::*;
 use crate::monitoring::browser_session::BrowserSession;
 use crate::monitoring::browser_session::tests::{fake_browser, idle_child};
@@ -103,36 +104,37 @@ fn site() -> tauri::Url {
 }
 
 #[tokio::test]
-async fn the_wait_ends_with_the_session_the_provider_accepts() {
-    let (port, server) = fake_browser(1);
-    let session =
-        BrowserSession::connect(idle_child(), port, "/devtools/browser/test").expect("connected");
-    let source = Source::Browser(Running::new(session));
+async fn a_session_the_provider_accepts_ends_the_sign_in() {
     let adapter: Arc<dyn ProviderAdapter> = Arc::new(AcceptsFictional);
     let (_keep, mut cancelled) = watch::channel(false);
-    let outcome = wait(&adapter, &source, &site(), &mut cancelled).await;
-    assert_eq!(outcome, Ok(Some("session=fictional".to_owned())));
-    source.finish().await;
-    drop(server.join());
+    let tried = try_session(&adapter, "session=fictional", &mut cancelled).await;
+    assert!(matches!(tried, Ok(Tried::Accepted)));
 }
 
 #[tokio::test]
-async fn closing_the_browser_first_ends_the_sign_in() {
-    let (port, server) = fake_browser(0);
-    let session =
-        BrowserSession::connect(idle_child(), port, "/devtools/browser/test").expect("connected");
-    let source = Source::Browser(Running::new(session));
+async fn a_session_the_provider_refuses_is_not_signed_in_yet() {
     let adapter: Arc<dyn ProviderAdapter> = Arc::new(AcceptsFictional);
     let (_keep, mut cancelled) = watch::channel(false);
-    let outcome = wait(&adapter, &source, &site(), &mut cancelled).await;
-    assert_eq!(
-        outcome,
-        Err(CommandError::Internal {
-            code: "console_sign_in_closed".into()
-        })
-    );
-    source.finish().await;
+    let tried = try_session(&adapter, "session=other", &mut cancelled).await;
+    assert!(matches!(tried, Ok(Tried::NotYet)));
+}
+
+/// The cookies the closed browser's profile is read for reach the provider as
+/// one header, which it accepts.
+#[test]
+fn the_profiles_cookies_read_afterwards_make_the_session() {
+    let (port, server) = fake_browser(1);
+    let mut session =
+        BrowserSession::connect(idle_child(), port, "/devtools/browser/test").expect("connected");
+    let cookies = session
+        .cookies("console.example.test", "/settings/billing")
+        .expect("cookies");
+    session.close();
     drop(server.join());
+    assert_eq!(
+        cookie_header(cookies.into_iter()),
+        Some("session=fictional".to_owned())
+    );
 }
 
 #[test]

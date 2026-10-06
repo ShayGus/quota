@@ -87,21 +87,21 @@ These apply to TypeSafe.
 front of Quota's requests. Quota never tries to pass one, so nothing was added. Try again
 later; if it keeps happening, [report it](#getting-help).
 
-**"The sign-in window was closed before the sign-in finished."** Closing the TypeSafe
-window cancels the sign-in. Press **Sign in to TypeSafe** again and leave the window open
-until it closes by itself.
+**"The sign-in window was closed before Quota found a finished sign-in in it."** The
+TypeSafe window was closed before the console had loaded. Press **Sign in to TypeSafe**
+again, sign in until the console shows, then close the window.
 
 **The TypeSafe card says Reconnect.** The console session ended. Choose **Reconnect**: the
-same Chrome or Edge window opens, usually still signed in, and closes by itself once Quota
-can read your credit.
+same Chrome or Edge window opens, usually still signed in. Close it once the console
+shows.
 
 **Google says "This browser or app may not be secure".** Quota found no Chrome or Edge, so
 it opened its own window, where Google refuses to sign in. Install Chrome or Edge, or sign
 in to TypeSafe another way, then press **Sign in to TypeSafe** again.
 
 **A Chrome window opened that I did not ask for.** That is the TypeSafe sign-in, in a
-profile of Quota's own. It closes by itself once you are signed in; your usual Chrome and
-its tabs are untouched.
+profile of Quota's own. Close it once you are signed in; your usual Chrome and its tabs
+are untouched.
 
 **"The provider answered in a format this version of Quota cannot read yet."** TypeSafe
 changed its website. Check for a newer Quota version.

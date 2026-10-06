@@ -23,15 +23,38 @@ fn the_port_file_names_a_port_and_a_browser_path() {
 }
 
 #[test]
-fn the_browser_gets_its_own_profile_and_a_loopback_connection() {
-    let args = arguments(Path::new("/q/profile"), "https://example.test/login");
+fn the_person_signs_in_with_an_ordinary_browser_and_nothing_attached() {
+    let args = plain_arguments(Path::new("/q/profile"), "https://example.test/login");
     assert!(args.contains(&"--user-data-dir=/q/profile".to_owned()));
-    assert!(args.contains(&"--remote-debugging-address=127.0.0.1".to_owned()));
-    assert!(args.contains(&"--remote-debugging-port=0".to_owned()));
+    assert!(
+        args.iter()
+            .all(|arg| !arg.contains("remote-debugging") && !arg.contains("headless")),
+        "the sign-in browser must have no DevTools connection: {args:?}"
+    );
     assert_eq!(
         args.last().map(String::as_str),
         Some("https://example.test/login")
     );
+}
+
+#[test]
+fn the_profile_is_read_afterwards_without_a_window_on_a_loopback_connection() {
+    let args = headless_arguments(Path::new("/q/profile"));
+    assert!(args.contains(&"--user-data-dir=/q/profile".to_owned()));
+    assert!(args.contains(&"--headless=new".to_owned()));
+    assert!(args.contains(&"--remote-debugging-address=127.0.0.1".to_owned()));
+    assert!(args.contains(&"--remote-debugging-port=0".to_owned()));
+}
+
+#[test]
+fn a_profile_without_a_browser_lock_is_free() {
+    let profile = std::env::temp_dir().join(format!("quota-profile-lock-{}", std::process::id()));
+    std::fs::create_dir_all(&profile).expect("a folder");
+    assert!(!profile_in_use(&profile));
+    // A lock nobody holds is a leftover, not a running browser.
+    std::fs::write(profile.join("lockfile"), b"").expect("a lock");
+    assert!(!profile_in_use(&profile));
+    std::fs::remove_dir_all(&profile).expect("removed");
 }
 
 #[test]

@@ -581,8 +581,7 @@ function WebsiteSignInBox({
       <div className="sign-in-code" role="status">
         <span className="field-label">Sign in to {site} in the window Quota opened</span>
         <span className="form-hint">
-          It closes by itself once Quota can read your credit. Closing it cancels the
-          sign-in.
+          Once you are signed in, close that window. Quota then reads your credit from it.
         </span>
       </div>
     );
@@ -593,9 +592,9 @@ function WebsiteSignInBox({
       <p>
         {provider} shows its credit only on its website, so Quota opens {site} in a
         separate Chrome or Edge window, just for Quota: your usual tabs and sign-ins are
-        not in it. Sign in there as you usually do, Google included. Quota keeps the
-        website session in {credentialStoreName()}, reads only the credit on the billing
-        page, and never sees your password.
+        not in it. Sign in there as you usually do, Google included, then close that
+        window. Quota keeps the website session in {credentialStoreName()}, reads only the
+        credit on the billing page, and never sees your password.
       </p>
       <p className="form-hint">
         Without Chrome or Edge, Quota opens a window of its own instead, where Google

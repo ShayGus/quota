@@ -119,13 +119,15 @@ address shown yourself; Quota keeps waiting.
 **A website sign-in** (TypeSafe): TypeSafe shows its credit only on its website, so **Sign
 in to TypeSafe** opens console.typesafe.ai in a separate Chrome or Edge window, just for
 Quota. It uses a profile of Quota's own, so your usual tabs and sign-ins are not in it.
-Sign in there as you usually do, with Google or otherwise; the window closes by itself
-once Quota can read your credit, and closing it yourself cancels the sign-in. Quota keeps
-that website session in your system's credential store and reads only the billing page's
-credit. When the session ends, **Reconnect** opens the same window again, usually signed
-in already. Without Chrome or Edge, Quota opens a window of its own instead, where Google
-sign-in does not work. If TypeSafe answers Quota with a bot check, the sign-in stops and
-says so: Quota never tries to pass one.
+Sign in there as you usually do, with Google or otherwise, and close the window once the
+console shows. While you sign in, Quota leaves that window alone, because the console's
+Cloudflare check refuses a browser that anything is watching; once it is closed, Quota
+reads the sign-in from it. Quota keeps that website session in your system's credential
+store and reads only the billing page's credit. When the session ends, **Reconnect** opens
+the same window again, usually signed in already; close it once the console shows. Without
+Chrome or Edge, Quota opens a window of its own instead, where Google sign-in does not
+work. If TypeSafe answers Quota with a bot check, the sign-in stops and says so: Quota
+never tries to pass one.
 
 <table>
   <tr>
