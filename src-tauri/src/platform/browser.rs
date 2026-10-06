@@ -62,7 +62,10 @@ fn candidates(
             for (name, relative) in installs {
                 for root in roots {
                     if let Some(base) = variable(root).filter(|base| !base.trim().is_empty()) {
-                        found.push((name, Path::new(&base).join(relative)));
+                        // A Windows path, built as one so the list reads the
+                        // same when its tests run on another system.
+                        let base = base.trim_end_matches('\\');
+                        found.push((name, PathBuf::from(format!("{base}\\{relative}"))));
                     }
                 }
             }
