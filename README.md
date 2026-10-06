@@ -24,8 +24,8 @@ one small window, with when each resets and how recently it was checked.
 </table>
 
 - **Every subscription in one place**: Codex, Claude, Cursor, OpenCode Go, OpenRouter,
-  Z.ai, MiniMax, Kimi, Ollama Cloud, Grok and Muse Code, with as many accounts of each as
-  you have.
+  Z.ai, MiniMax, Kimi, Ollama Cloud, Grok, Muse Code and TypeSafe, with as many accounts
+  of each as you have.
 - **Closest to running out first**: cards are ordered by remaining allowance, and the
   Attention filter shows only the accounts that need something from you.
 - **Alerts before you hit a limit**: optional notifications at 20%, 10% and 0% left, and
@@ -50,7 +50,7 @@ The screenshots use fictional accounts.
     <td width="33%" valign="top"><img src="docs/images/attention-filter.png" alt="The Attention filter"><br><b>Attention.</b> Only the accounts that need something from you: low, exhausted, failing or signed out.</td>
   </tr>
   <tr>
-    <td valign="top"><img src="docs/images/wizard-provider.png" alt="Add a subscription: the list of eleven providers"><br><b>Add an account.</b> Eleven providers, each with the windows it reports.</td>
+    <td valign="top"><img src="docs/images/wizard-provider.png" alt="Add a subscription: the list of twelve providers"><br><b>Add an account.</b> Twelve providers, each with the windows it reports.</td>
     <td valign="top"><img src="docs/images/wizard-browser-code.png" alt="Browser sign-in for Grok with a sign-in code"><br><b>Browser sign-in.</b> Approve in your browser; Quota never asks for a password.</td>
     <td valign="top"><img src="docs/images/wizard-verify.png" alt="Add this account? The verified account and its readings"><br><b>Verify first.</b> See the account and its readings before anything is saved.</td>
   </tr>

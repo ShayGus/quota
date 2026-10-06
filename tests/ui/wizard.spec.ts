@@ -16,7 +16,7 @@ test.describe("add-account wizard", () => {
     await expect(page.getByRole("heading", { name: "Add a subscription" })).toBeVisible();
     await expect(page.locator(".step.selected")).toHaveText("1");
     await expect(page.getByRole("button", { name: /Codex/ })).toBeVisible();
-    await expect(page.locator(".provider-pick")).toHaveCount(11);
+    await expect(page.locator(".provider-pick")).toHaveCount(12);
     await host.screenshot("wizard-1-provider");
     await host.screenshotFull("wizard-provider");
     await page.getByRole("button", { name: "Cancel" }).click();
@@ -260,6 +260,45 @@ test.describe("add-account wizard", () => {
       request: { browser_sign_in: boolean };
     };
     expect(begin.request.browser_sign_in).toBe(true);
+  });
+
+  test("a website sign-in opens the provider's site in a window and waits", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("settings", {
+        connection: {
+          progress: [
+            { kind: "started" },
+            { kind: "awaiting_user", context: { sign_in: null } },
+          ],
+        },
+      }),
+      CONNECT,
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /TypeSafe/ }).click();
+    await expect(page.locator(".badge")).toHaveText("WEBSITE SIGN-IN");
+    await expect(
+      page.getByRole("heading", { name: "Sign in on console.typesafe.ai" }),
+    ).toBeVisible();
+    await host.screenshotFull("wizard-website-sign-in");
+    await page.getByRole("button", { name: "Sign in to TypeSafe" }).click();
+    await expect(
+      page.getByText("Sign in to console.typesafe.ai in the window Quota opened"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Waiting for the sign-in…" }),
+    ).toBeDisabled();
+    await expect(
+      page.getByText("Finish signing in with the provider's own tool."),
+    ).toHaveCount(0);
+    await host.screenshotFull("wizard-website-waiting");
+    const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
+      request: { browser_sign_in: boolean; credential: string | null };
+    };
+    expect(begin.request.browser_sign_in).toBe(true);
+    expect(begin.request.credential).toBeNull();
   });
 
   test("a sign-in the provider refuses explains how to recover", async ({ open }) => {

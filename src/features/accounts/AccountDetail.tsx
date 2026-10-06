@@ -350,7 +350,12 @@ function SelectedWindow({
           <dd>
             {SOURCE_WORDS[selected.source]}
             <br />
-            <span className="muted">{ROLE_WORDS[selected.metric_role]}</span>
+            <span className="muted">
+              {selected.metric_role === "prepaid_balance" &&
+              balance?.baseline_kind === "credits"
+                ? "Prepaid balance, measured from the active credits"
+                : ROLE_WORDS[selected.metric_role]}
+            </span>
           </dd>
         </div>
       </dl>

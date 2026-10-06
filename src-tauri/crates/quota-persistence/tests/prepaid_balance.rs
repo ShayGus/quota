@@ -33,6 +33,8 @@ fn reading(loaded: i64, spent: i64) -> BalanceReading {
         loaded_minor: loaded,
         spent_minor: spent,
         key_spend: None,
+        credits: Vec::new(),
+        cycle_spend: None,
     }
 }
 

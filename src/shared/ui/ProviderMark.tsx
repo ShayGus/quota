@@ -87,6 +87,7 @@ const MARKS: Record<ProviderId, JSX.Element | string> = {
   muse_code: META_MARK,
   cursor: CURSOR_MARK,
   ollama_cloud: OLLAMA_MARK,
+  typesafe: "TS",
   fixture: "FX",
 };
 

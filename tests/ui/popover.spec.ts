@@ -2,7 +2,12 @@
  * The main popover: several accounts, each in the state the UI really has.
  */
 import { expect, test } from "./harness";
-import { overviewAccounts, scenario, unavailableAccount } from "./scenarios";
+import {
+  overviewAccounts,
+  scenario,
+  typeSafeAccount,
+  unavailableAccount,
+} from "./scenarios";
 
 test.describe("popover", () => {
   test("lists every account with its own state", async ({ open }) => {
@@ -108,5 +113,23 @@ test.describe("popover", () => {
       scenario("overview", { accounts: [...overviewAccounts(), unavailableAccount()] }),
     );
     await expect(host.page.getByRole("article")).toHaveCount(8);
+  });
+
+  test("a TypeSafe credit balance shows what is left and the first credit to expire", async ({
+    open,
+  }) => {
+    const host = await open(scenario("overview", { accounts: [typeSafeAccount()] }));
+    const { page } = host;
+    const card = page.getByLabel(/TypeSafe TypeSafe allowance/);
+    await expect(card).toContainText("$37.20");
+    await expect(card).toContainText("$4.20 expires Oct 31");
+    await host.screenshotFull("typesafe-card");
+    await page.getByRole("button", { name: /Details for TypeSafe TypeSafe/ }).click();
+    await expect(page.getByText("LEFT OF ACTIVE CREDITS")).toBeVisible();
+    await expect(
+      page.getByRole("list", { name: "Credits" }).getByRole("listitem"),
+    ).toHaveCount(2);
+    await expect(page.getByText("Spent in October 2026")).toBeVisible();
+    await host.screenshotFull("typesafe-detail");
   });
 });

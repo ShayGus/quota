@@ -82,7 +82,7 @@ pub(super) async fn run_connection_attempt(
     mut cancelled: watch::Receiver<bool>,
     reporter: Arc<AttemptReporter>,
 ) -> Result<(), CommandError> {
-    let Some(request) = super::device::sign_in(
+    let Some(request) = sign_in(
         &runtime,
         &adapter,
         request,
@@ -203,6 +203,25 @@ async fn discover_connection_candidates(
     Ok(Some(candidates))
 }
 
+/// Runs the sign-in an attempt asked for, on the provider's website or with a
+/// browser code, and answers the request carrying the credential it granted.
+/// `None` means the attempt was cancelled.
+async fn sign_in(
+    runtime: &MonitoringRuntime,
+    adapter: &Arc<dyn ProviderAdapter>,
+    request: BeginConnectionRequest,
+    attempt_id: &ConnectionAttemptId,
+    cancelled: &mut watch::Receiver<bool>,
+    reporter: &AttemptReporter,
+) -> Result<Option<BeginConnectionRequest>, CommandError> {
+    let Some(request) =
+        super::console::sign_in(runtime, adapter, request, attempt_id, cancelled, reporter).await?
+    else {
+        return Ok(None);
+    };
+    super::device::sign_in(runtime, adapter, request, attempt_id, cancelled, reporter).await
+}
+
 /// Reads one candidate binding with a timeout.
 ///
 /// Returns `None` when cancellation wins the permit or read race.
@@ -287,6 +306,9 @@ pub(super) fn attempt_error(error: &ProviderError) -> CommandError {
         ProviderError::RateLimited { .. } => {
             "The provider is asking for less traffic, so nothing was added. Try again shortly"
         }
+        ProviderError::Blocked { .. } => {
+            "The provider refused requests from Quota as automated, so nothing was added"
+        }
     };
     CommandError::ProviderRefused {
         reason: detail.into(),
@@ -302,6 +324,7 @@ fn report_attempt_failure(
             "browser_sign_in_timeout" => "The provider did not answer the sign-in in time. Try again.",
             "browser_sign_in_declined" => "The sign-in was declined on the provider's page. Nothing was added.",
             "browser_sign_in_expired" => "The sign-in code expired before it was entered. Start again for a new code.",
+            "console_sign_in_closed" => "The sign-in window was closed before the sign-in finished. Nothing was added.",
             "connection_discovery_timeout" => "The provider did not finish discovering the account in time. Nothing was added. Try again.",
             "connection_read_timeout" => "The provider did not finish verifying the quota in time. Nothing was added. Try again.",
             "unsupported_schema" => "The provider answered in a format this version of Quota cannot read yet.",

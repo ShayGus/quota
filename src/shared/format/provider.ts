@@ -21,6 +21,7 @@ const LABELS: Record<ProviderId, string> = {
   muse_code: "Muse Code",
   cursor: "Cursor",
   ollama_cloud: "Ollama Cloud",
+  typesafe: "TypeSafe",
   fixture: "Fixture",
 };
 

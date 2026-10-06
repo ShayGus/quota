@@ -14,7 +14,8 @@ use quota_domain::quota::window::QuotaWindow;
 
 use crate::decode::{self, DecodedUsage};
 use crate::{
-    claude, codex, cursor, grok, kimi, minimax, muse, ollama, opencode_go, openrouter, zai,
+    claude, codex, cursor, grok, kimi, minimax, muse, ollama, opencode_go, openrouter, typesafe,
+    zai,
 };
 
 /// A decoded payload, before an identity is attached.
@@ -162,6 +163,15 @@ fn decode_document(
         ProviderId::OllamaCloud => {
             let body = offline_shape::<ollama::wire::UsageBody>(document, "Ollama usage")?;
             ollama::mapping::decode(&body, pool, received_at)?
+        }
+        ProviderId::Typesafe => {
+            let result =
+                offline_shape::<typesafe::wire::BillingResult>(document, "TypeSafe billing")?;
+            let billing = result
+                .data
+                .and_then(|data| data.billing)
+                .ok_or_else(|| unsupported("TypeSafe billing"))?;
+            typesafe::mapping::decode(&billing, pool, received_at)?
         }
         ProviderId::Fixture => {
             return Err(ProviderError::UnsupportedSchema {

@@ -77,6 +77,7 @@ export function ConnectionWizard({
   // A provider whose own CLI can sign it in takes a key, but does not need one.
   const needsKey = takesKey && signIn.cli === undefined;
   const browser = signIn?.kind === "browser" ? signIn : null;
+  const website = signIn?.kind === "console" ? signIn : null;
   const [attempt, setAttempt] = useState<AttemptRef | null>(null);
   const [starting, setStarting] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -224,9 +225,9 @@ export function ConnectionWizard({
         ))}
         <div className="note">
           Codex, Claude and Cursor use the sign-in their own apps keep on this computer.
-          Grok and Muse Code sign in on their own page in your browser, and the others
-          take an API key. Quota keeps what it is given in {credentialStoreName()} and
-          never asks for a password.
+          Grok and Muse Code sign in on their own page in your browser, TypeSafe in a
+          window Quota opens on its website, and the others take an API key. Quota keeps
+          what it is given in {credentialStoreName()} and never asks for a password.
         </div>
       </>
     );
@@ -312,7 +313,9 @@ export function ConnectionWizard({
             ? `Paste an API key from ${signIn.keyPage}. Quota checks it with ${providerLabel(provider)} before anything is saved.`
             : signIn?.kind === "browser"
               ? `Sign in to your ${signIn.account} account in your browser. Quota checks the account before anything is saved.`
-              : "Quota uses this provider's existing local sign-in to read your quota."}
+              : signIn?.kind === "console"
+                ? `Sign in to ${signIn.site} in a window Quota opens. Quota checks the account before anything is saved.`
+                : "Quota uses this provider's existing local sign-in to read your quota."}
         </p>
         <div className="connection-box">
           <div className="identity">
@@ -324,7 +327,9 @@ export function ConnectionWizard({
                   ? "API key"
                   : browser
                     ? "Browser sign-in"
-                    : "Existing local sign-in"}
+                    : website
+                      ? "Website sign-in"
+                      : "Existing local sign-in"}
               </span>
             </span>
           </div>
@@ -336,6 +341,12 @@ export function ConnectionWizard({
               cli={signIn.cli}
               disabled={busy}
               onChange={setApiKey}
+            />
+          ) : website ? (
+            <WebsiteSignInBox
+              provider={providerLabel(provider)}
+              site={website.site}
+              waiting={progress?.kind === "awaiting_user"}
             />
           ) : browser ? (
             <BrowserSignInBox
@@ -355,7 +366,9 @@ export function ConnectionWizard({
             </>
           )}
         </div>
-        {progress?.kind === "awaiting_user" && progress.context.sign_in === null ? (
+        {progress?.kind === "awaiting_user" &&
+        progress.context.sign_in === null &&
+        website === null ? (
           <div className="note" role="status">
             Finish signing in with the provider's own tool.
           </div>
@@ -417,17 +430,21 @@ export function ConnectionWizard({
             className="button primary"
             disabled={busy || (needsKey && apiKey.trim() === "")}
             onClick={() => {
-              launch(connect(browser !== null));
+              launch(connect(browser !== null || website !== null));
             }}
           >
             <Icon name={busy ? "clock" : "arrow-right"} />
             {busy
               ? progress?.kind === "awaiting_user" && progress.context.sign_in !== null
                 ? "Waiting for the browser…"
-                : "Verifying…"
+                : progress?.kind === "awaiting_user" && website !== null
+                  ? "Waiting for the sign-in…"
+                  : "Verifying…"
               : browser
                 ? "Sign in with browser"
-                : "Connect"}
+                : website
+                  ? `Sign in to ${providerLabel(provider)}`
+                  : "Connect"}
           </button>
         </div>
       </>
@@ -457,7 +474,13 @@ export function ConnectionWizard({
           Cancel
         </button>
         <span className="badge">
-          {takesKey ? "API KEY" : browser ? "BROWSER SIGN-IN" : "LOCAL SIGN-IN"}
+          {takesKey
+            ? "API KEY"
+            : browser
+              ? "BROWSER SIGN-IN"
+              : website
+                ? "WEBSITE SIGN-IN"
+                : "LOCAL SIGN-IN"}
         </span>
       </div>
       <div className="wizard">
@@ -536,6 +559,43 @@ function ApiKeyField({
         to read your quota. It never submits a request to a model.
       </div>
     </div>
+  );
+}
+
+/**
+ * What a website sign-in shows: how it works, then, once the window is open,
+ * where to sign in.
+ */
+function WebsiteSignInBox({
+  provider,
+  site,
+  waiting,
+}: {
+  readonly provider: string;
+  readonly site: string;
+  readonly waiting: boolean;
+}): JSX.Element {
+  if (waiting) {
+    return (
+      <div className="sign-in-code" role="status">
+        <span className="field-label">Sign in to {site} in the window Quota opened</span>
+        <span className="form-hint">
+          The window closes by itself once Quota can read your credit. Closing it cancels
+          the sign-in.
+        </span>
+      </div>
+    );
+  }
+  return (
+    <>
+      <h3>Sign in on {site}</h3>
+      <p>
+        {provider} shows its credit only on its website, so Quota opens {site} in a window
+        of its own, with its own browser storage, apart from your browser. Sign in there
+        as you usually do. Quota keeps the website session in {credentialStoreName()},
+        reads only the credit on the billing page, and never sees your password.
+      </p>
+    </>
   );
 }
 

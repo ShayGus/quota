@@ -9,6 +9,7 @@
 import type {
   AccountSnapshot,
   BalanceSummary,
+  CreditKind,
   QuotaWindow,
 } from "../../generated/bindings";
 import { instantOf } from "./duration";
@@ -103,6 +104,34 @@ export function baselineLine(balance: BalanceSummary): string | null {
       return `of ${amount} since you added it`;
     case "adjusted":
       return day === null ? `of ${amount}` : `of ${amount} since ${day}`;
+    case "credits":
+      return `of ${amount} in active credits`;
+  }
+}
+
+/**
+ * The credit that expires first, for a provider that lists its grants:
+ * `$4.20 expires Oct 31`. `null` without one.
+ */
+export function expiryLine(balance: BalanceSummary): string | null {
+  const soonest = balance.credits[0];
+  if (soonest === undefined) {
+    return null;
+  }
+  const left = formatAmount(soonest.remaining_minor, balance.scale, balance.currency);
+  const day = formatDay(soonest.expires_at);
+  return left === null || day === null ? null : `${left} expires ${day}`;
+}
+
+/** What a credit grant was for, in words. */
+export function creditKindLabel(kind: CreditKind): string {
+  switch (kind) {
+    case "free":
+      return "Free credit";
+    case "purchased":
+      return "Purchased";
+    case "other":
+      return "Credit";
   }
 }
 

@@ -320,6 +320,10 @@ export type BalanceSummary = {
 	runway: Runway | null,
 	/**  What the key spent in the current periods, when reported. */
 	key_spend: PeriodSpend | null,
+	/**  The active credit grants, soonest to expire first. */
+	credits: CreditGrant[],
+	/**  What the account spent in its current cycle, when reported. */
+	cycle_spend: CycleSpend | null,
 };
 
 /**  What the balance is measured from. */
@@ -329,7 +333,9 @@ export type BaselineKind =
 /**  The last top-up. */
 "top_up" | 
 /**  A refund or a correction lowered the amount loaded. */
-"adjusted";
+"adjusted" | 
+/**  The sum of the active credit grants the provider lists. */
+"credits";
 
 /**
  *  Arguments for starting an authorized connection attempt.
@@ -601,8 +607,37 @@ export type CredentialOwnership =
 /**  Another client owns the credential; Quota only reads it. */
 "external_client";
 
+/**  One credit grant: how much it was, how much is left, and when it lapses. */
+export type CreditGrant = {
+	/**  What the grant was for. */
+	kind: CreditKind,
+	/**  How much it granted, in minor units. */
+	amount_minor: number | null,
+	/**  How much of it is left, in minor units. */
+	remaining_minor: number | null,
+	/**  When it expires. */
+	expires_at: string,
+};
+
+/**  What a credit grant was for. */
+export type CreditKind = 
+/**  Credit the provider gives for free. */
+"free" | 
+/**  Credit the person bought. */
+"purchased" | 
+/**  Any other grant, such as a promotion. */
+"other";
+
 /**  An ISO 4217-style currency code. */
 export type CurrencyCode = string;
+
+/**  What the account spent in its current billing cycle. */
+export type CycleSpend = {
+	/**  The cycle, as the provider names it, for example `October 2026`. */
+	label: string,
+	/**  Spent in it, in minor units. */
+	spent_minor: number | null,
+};
 
 /**  Decimal places a provider used when it reported a number. */
 export type DecimalPrecision = number;
@@ -1024,6 +1059,8 @@ export type ProviderId =
 "cursor" | 
 /**  Ollama Cloud, read with Ollama's own sign-in or an API key. */
 "ollama_cloud" | 
+/**  `TypeSafe` credits, read with a console session Quota signs in to itself. */
+"typesafe" | 
 /**
  *  A deterministic local provider used only by tests and developer runs.
  * 

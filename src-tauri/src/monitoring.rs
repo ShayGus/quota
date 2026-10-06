@@ -40,6 +40,7 @@ struct AttemptHandle {
 
 mod confirm;
 mod connection;
+mod console;
 pub(crate) mod credentials;
 mod device;
 mod policy;

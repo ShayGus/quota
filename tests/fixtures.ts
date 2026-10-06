@@ -92,6 +92,8 @@ export function prepaidBalance(
     readonly baselineKind?: BalanceSummary["baseline_kind"];
     readonly runway?: BalanceSummary["runway"];
     readonly topUps?: BalanceSummary["top_ups"];
+    readonly credits?: BalanceSummary["credits"];
+    readonly cycleSpend?: BalanceSummary["cycle_spend"];
   } = {},
 ): { readonly window: QuotaWindow; readonly summary: BalanceSummary } {
   const balance = options.balance ?? 3720;
@@ -122,6 +124,8 @@ export function prepaidBalance(
         ? { spend_per_day_minor: 310, days_left: 12 }
         : options.runway,
     key_spend: { today_minor: 42, week_minor: 905, month_minor: 1280 },
+    credits: options.credits ?? [],
+    cycle_spend: options.cycleSpend ?? null,
   };
   const window_: QuotaWindow = window(
     "or-balance",

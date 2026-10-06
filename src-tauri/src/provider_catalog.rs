@@ -61,6 +61,15 @@ pub fn capabilities_of(provider_id: ProviderId) -> ProviderCapabilities {
                 300
             },
         },
+        // Signed in on the provider's own website, in a window Quota opens.
+        ProviderId::Typesafe => ProviderCapabilities {
+            provider_id,
+            cardinality: AccountCardinality::Independent,
+            supports_app_owned_authorization: true,
+            supports_external_profile: false,
+            reports_monthly_window: false,
+            minimum_interval_seconds: 600,
+        },
         ProviderId::Fixture => ProviderCapabilities {
             provider_id,
             cardinality: AccountCardinality::SingleProfile,
@@ -91,6 +100,7 @@ pub const fn is_compiled(provider_id: ProviderId) -> bool {
             | ProviderId::MuseCode
             | ProviderId::Cursor
             | ProviderId::OllamaCloud
+            | ProviderId::Typesafe
     )
 }
 
