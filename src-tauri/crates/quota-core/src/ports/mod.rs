@@ -10,7 +10,7 @@ pub mod publisher;
 pub mod repository;
 pub mod secrets;
 
-pub use device::{DeviceAuthorization, DevicePoll};
+pub use device::{ConsoleSignIn, DeviceAuthorization, DevicePoll};
 pub use provider::{
     ConnectionBinding, DiscoveredAccount, FetchOutcome, ProviderAdapter, ProviderError,
     ProviderFuture, QuotaRead, ReadContext,

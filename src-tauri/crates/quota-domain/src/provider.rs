@@ -37,6 +37,8 @@ pub enum ProviderId {
     Cursor,
     /// Ollama Cloud, read with Ollama's own sign-in or an API key.
     OllamaCloud,
+    /// `TypeSafe` credits, read with a console session Quota signs in to itself.
+    Typesafe,
     /// A deterministic local provider used only by tests and developer runs.
     ///
     /// The adapter for this identifier is compiled only under the non-default
@@ -47,7 +49,7 @@ pub enum ProviderId {
 
 impl ProviderId {
     /// Every identifier, in a stable order.
-    pub const ALL: [Self; 12] = [
+    pub const ALL: [Self; 13] = [
         Self::Codex,
         Self::Claude,
         Self::OpenCodeGo,
@@ -59,6 +61,7 @@ impl ProviderId {
         Self::MuseCode,
         Self::Cursor,
         Self::OllamaCloud,
+        Self::Typesafe,
         Self::Fixture,
     ];
 
@@ -88,6 +91,7 @@ impl ProviderId {
             Self::MuseCode => "muse_code",
             Self::Cursor => "cursor",
             Self::OllamaCloud => "ollama_cloud",
+            Self::Typesafe => "typesafe",
             Self::Fixture => "fixture",
         }
     }

@@ -63,6 +63,45 @@ export function openRouterAccount(
 }
 
 /**
+ * A TypeSafe console account: a credit balance made of two grants, a free one
+ * that runs out first and a purchased one, all fictional.
+ */
+export function typeSafeAccount(): AccountSnapshot {
+  const { window, summary } = prepaidBalance({
+    balance: 3720,
+    baseline: 5000,
+    baselineKind: "credits",
+    topUps: [],
+    runway: { spend_per_day_minor: 310, days_left: 12 },
+    credits: [
+      {
+        kind: "free",
+        amount_minor: 1000,
+        remaining_minor: 420,
+        expires_at: "2026-10-31T12:00:00.000Z",
+      },
+      {
+        kind: "purchased",
+        amount_minor: 4000,
+        remaining_minor: 3300,
+        expires_at: "2027-09-28T12:00:00.000Z",
+      },
+    ],
+    cycleSpend: { label: "October 2026", spent_minor: 1280 },
+  });
+  const balance = {
+    ...window,
+    id: "ts-balance",
+    source: "observed_web_endpoint" as const,
+  };
+  return account("acct-typesafe", "typesafe", 8, [balance], {
+    nickname: "TypeSafe",
+    rank: 74.4,
+    balance: { ...summary, loaded_minor: 5000, spent_minor: 1280, key_spend: null },
+  });
+}
+
+/**
  * The README's overview: a Codex account running low, a Claude account with
  * room left, and an OpenRouter prepaid balance.
  */
@@ -159,6 +198,7 @@ export function providers(): RegisteredProvider[] {
       "grok",
       "muse_code",
       "ollama_cloud",
+      "typesafe",
     ] as const
   ).map((id) => ({
     provider_id: id,

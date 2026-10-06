@@ -21,6 +21,7 @@ import {
 } from "../../shared/format/allowance";
 import {
   baselineLine,
+  expiryLine,
   isPrepaidBalance,
   isWindowShown,
   runwayShort,
@@ -261,7 +262,12 @@ export function resetLine(
   balance: BalanceSummary | null = null,
 ): { readonly lead: string; readonly time: string | null } {
   if (view === "current" && isPrepaidBalance(window) && balance !== null) {
-    return { lead: baselineLine(balance) ?? "No reported reset", time: null };
+    // A balance made of credit grants says which credit runs out first; the
+    // amount it is measured from is in the detail.
+    const lead =
+      (balance.baseline_kind === "credits" ? expiryLine(balance) : null) ??
+      baselineLine(balance);
+    return { lead: lead ?? "No reported reset", time: null };
   }
   switch (view) {
     case "pending":

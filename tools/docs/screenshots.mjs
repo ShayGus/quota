@@ -46,6 +46,9 @@ const IMAGES = [
   ["openrouter-card.png", "openrouter-card.png"],
   ["openrouter-detail.png", "openrouter-detail.png"],
   ["settings-key-limit.png", "settings-accounts-openrouter.png"],
+  ["wizard-website-sign-in.png", "wizard-website-sign-in.png"],
+  ["typesafe-card.png", "typesafe-card.png"],
+  ["typesafe-detail.png", "typesafe-detail.png"],
 ];
 
 mkdirSync(TARGET, { recursive: true });

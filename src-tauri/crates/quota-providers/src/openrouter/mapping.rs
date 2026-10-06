@@ -77,6 +77,8 @@ fn balance_reading(
         loaded_minor: loaded,
         spent_minor: spent,
         key_spend: (key_spend != PeriodSpend::default()).then_some(key_spend),
+        credits: Vec::new(),
+        cycle_spend: None,
     }))
 }
 

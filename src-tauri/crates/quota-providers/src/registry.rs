@@ -21,6 +21,7 @@ use crate::muse::MuseAdapter;
 use crate::ollama::OllamaAdapter;
 use crate::opencode_go::OpenCodeGoAdapter;
 use crate::openrouter::OpenRouterAdapter;
+use crate::typesafe::TypesafeAdapter;
 use crate::zai::ZaiAdapter;
 
 /// The adapters this build contains.
@@ -49,6 +50,7 @@ impl ProviderRegistry {
                 Arc::new(MuseAdapter::new(Arc::clone(&secrets))?),
                 Arc::new(CursorAdapter::new()?),
                 Arc::new(OllamaAdapter::new(Arc::clone(&secrets))?),
+                Arc::new(TypesafeAdapter::new(Arc::clone(&secrets))?),
             ],
             secrets,
         })
@@ -127,6 +129,7 @@ mod tests {
             ProviderId::MuseCode,
             ProviderId::Cursor,
             ProviderId::OllamaCloud,
+            ProviderId::Typesafe,
         ] {
             let adapter = registry.provider(id).expect("a compiled adapter exists");
             assert_eq!(adapter.provider_id(), id);

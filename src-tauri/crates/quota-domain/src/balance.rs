@@ -10,6 +10,11 @@
 //! be guessed from the balance. A fall is a refund or a correction, and the
 //! balance is measured from that moment. Before Quota has seen a top-up, the
 //! balance is measured from the first reading after the account was added.
+//!
+//! A provider that lists its credit grants, such as `TypeSafe`, reports the
+//! amount loaded as the sum of its active grants instead. The balance is then
+//! measured from that sum, the grants are kept for the detail view, and a new
+//! grant is still recorded as a top-up.
 
 use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
@@ -45,6 +50,48 @@ pub struct BalanceReading {
     pub spent_minor: i64,
     /// What the key spent in the current calendar periods, when reported.
     pub key_spend: Option<PeriodSpend>,
+    /// The active credit grants, for a provider that lists them. When any are
+    /// listed, the balance is measured from their sum.
+    pub credits: Vec<CreditGrant>,
+    /// What the account spent in its current billing cycle, when reported.
+    pub cycle_spend: Option<CycleSpend>,
+}
+
+/// One credit grant: how much it was, how much is left, and when it lapses.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CreditGrant {
+    /// What the grant was for.
+    pub kind: CreditKind,
+    /// How much it granted, in minor units.
+    #[specta(type = f64)]
+    pub amount_minor: i64,
+    /// How much of it is left, in minor units.
+    #[specta(type = f64)]
+    pub remaining_minor: i64,
+    /// When it expires.
+    pub expires_at: DateTime<Utc>,
+}
+
+/// What a credit grant was for.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum CreditKind {
+    /// Credit the provider gives for free.
+    Free,
+    /// Credit the person bought.
+    Purchased,
+    /// Any other grant, such as a promotion.
+    Other,
+}
+
+/// What the account spent in its current billing cycle.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct CycleSpend {
+    /// The cycle, as the provider names it, for example `October 2026`.
+    pub label: String,
+    /// Spent in it, in minor units.
+    #[specta(type = f64)]
+    pub spent_minor: i64,
 }
 
 /// What a key spent today, this week and this month, in minor units.
@@ -71,6 +118,8 @@ pub enum BaselineKind {
     TopUp,
     /// A refund or a correction lowered the amount loaded.
     Adjusted,
+    /// The sum of the active credit grants the provider lists.
+    Credits,
 }
 
 /// One top-up, as Quota saw it.
@@ -118,6 +167,12 @@ pub struct BalanceLedger {
     pub samples: Vec<SpendSample>,
     /// What the key spent in the current periods, at the last reading.
     pub key_spend: Option<PeriodSpend>,
+    /// The active credit grants, at the last reading.
+    #[serde(default)]
+    pub credits: Vec<CreditGrant>,
+    /// What the account spent in its current cycle, at the last reading.
+    #[serde(default)]
+    pub cycle_spend: Option<CycleSpend>,
 }
 
 /// The spending pace, and how long the balance lasts at it.
@@ -159,6 +214,10 @@ pub struct BalanceSummary {
     pub runway: Option<Runway>,
     /// What the key spent in the current periods, when reported.
     pub key_spend: Option<PeriodSpend>,
+    /// The active credit grants, soonest to expire first.
+    pub credits: Vec<CreditGrant>,
+    /// What the account spent in its current cycle, when reported.
+    pub cycle_spend: Option<CycleSpend>,
 }
 
 impl BalanceLedger {
@@ -193,7 +252,10 @@ impl BalanceLedger {
                     spent_minor: reading.spent_minor,
                 }],
                 key_spend: reading.key_spend,
-            };
+                credits: Vec::new(),
+                cycle_spend: None,
+            }
+            .with_grants(reading, now);
         };
         let mut next = previous.clone();
         next.loaded_minor = reading.loaded_minor;
@@ -223,7 +285,27 @@ impl BalanceLedger {
         // never shows more than full.
         next.baseline_minor = next.baseline_minor.max(balance);
         next.samples = next_samples(&previous.samples, reading.spent_minor, now);
-        next
+        next.with_grants(reading, now)
+    }
+
+    /// Keeps the reading's credit grants and cycle spend and, when it lists any
+    /// grants, measures the balance from their sum.
+    fn with_grants(mut self, reading: &BalanceReading, now: DateTime<Utc>) -> Self {
+        let mut credits = reading.credits.clone();
+        credits.sort_by_key(|grant| grant.expires_at);
+        self.cycle_spend.clone_from(&reading.cycle_spend);
+        if !credits.is_empty() {
+            let granted = credits
+                .iter()
+                .fold(0_i64, |sum, grant| sum.saturating_add(grant.amount_minor));
+            if self.baseline_kind != BaselineKind::Credits || self.baseline_minor != granted {
+                self.baseline_at = now;
+            }
+            self.baseline_minor = granted.max(self.balance_minor());
+            self.baseline_kind = BaselineKind::Credits;
+        }
+        self.credits = credits;
+        self
     }
 
     /// The gauge's reading: what is left of the balance it is measured from.
@@ -291,6 +373,8 @@ impl BalanceLedger {
             top_ups: self.top_ups.clone(),
             runway: self.runway(now),
             key_spend: self.key_spend,
+            credits: self.credits.clone(),
+            cycle_spend: self.cycle_spend.clone(),
         }
     }
 }
@@ -322,165 +406,5 @@ fn next_samples(previous: &[SpendSample], spent: i64, now: DateTime<Utc>) -> Vec
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn usd() -> CurrencyCode {
-        CurrencyCode::new("USD").expect("a currency")
-    }
-
-    fn reading(loaded: i64, spent: i64) -> BalanceReading {
-        BalanceReading {
-            currency: usd(),
-            scale: 2,
-            loaded_minor: loaded,
-            spent_minor: spent,
-            key_spend: None,
-        }
-    }
-
-    fn at(hours: i64) -> DateTime<Utc> {
-        DateTime::<Utc>::from_timestamp(1_790_000_000, 0).expect("an instant")
-            + Duration::hours(hours)
-    }
-
-    fn left(ledger: &BalanceLedger) -> (Option<i64>, Option<i64>) {
-        match ledger.measurement() {
-            Measurement::Money(money) => (money.remaining_minor_units, money.limit_minor_units),
-            other => panic!("not money: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn before_a_top_up_the_balance_is_measured_from_the_first_reading() {
-        let first = BalanceLedger::record(None, &reading(10_000, 6_000), at(0));
-        assert_eq!(first.baseline_kind, BaselineKind::SinceAdded);
-        assert_eq!(left(&first), (Some(4_000), Some(4_000)));
-        let later = BalanceLedger::record(Some(&first), &reading(10_000, 7_000), at(1));
-        assert_eq!(later.baseline_kind, BaselineKind::SinceAdded);
-        assert_eq!(left(&later), (Some(3_000), Some(4_000)));
-        assert!(later.top_ups.is_empty());
-    }
-
-    #[test]
-    fn a_rise_in_the_amount_loaded_is_a_top_up_of_exactly_that_much() {
-        let first = BalanceLedger::record(None, &reading(10_000, 9_000), at(0));
-        // $50 loaded, and $2 spent since the last reading.
-        let topped = BalanceLedger::record(Some(&first), &reading(15_000, 9_200), at(2));
-        assert_eq!(topped.baseline_kind, BaselineKind::TopUp);
-        assert_eq!(topped.baseline_at, at(2));
-        assert_eq!(
-            topped.top_ups,
-            vec![TopUp {
-                detected_at: at(2),
-                amount_minor: 5_000,
-                balance_after_minor: 6_000,
-            }]
-        );
-        assert_eq!(left(&topped), (Some(5_800), Some(6_000)));
-    }
-
-    #[test]
-    fn a_fall_in_the_amount_loaded_measures_the_balance_from_now() {
-        let first = BalanceLedger::record(None, &reading(10_000, 2_000), at(0));
-        let refunded = BalanceLedger::record(Some(&first), &reading(9_000, 2_500), at(1));
-        assert_eq!(refunded.baseline_kind, BaselineKind::Adjusted);
-        assert_eq!(left(&refunded), (Some(6_500), Some(6_500)));
-        assert!(refunded.top_ups.is_empty());
-    }
-
-    #[test]
-    fn a_refunded_charge_never_shows_more_than_full() {
-        let first = BalanceLedger::record(None, &reading(10_000, 4_000), at(0));
-        let lower = BalanceLedger::record(Some(&first), &reading(10_000, 5_000), at(1));
-        let refunded = BalanceLedger::record(Some(&lower), &reading(10_000, 3_000), at(2));
-        assert_eq!(left(&refunded), (Some(7_000), Some(7_000)));
-    }
-
-    #[test]
-    fn an_empty_baseline_has_no_share() {
-        let empty = BalanceLedger::record(None, &reading(500, 500), at(0));
-        assert_eq!(left(&empty), (Some(0), None));
-        assert!(empty.measurement().remaining_percent().is_none());
-    }
-
-    #[test]
-    fn the_top_up_history_is_bounded() {
-        let mut ledger = BalanceLedger::record(None, &reading(0, 0), at(0));
-        for step in 1..=30 {
-            ledger = BalanceLedger::record(Some(&ledger), &reading(step * 100, 0), at(step));
-        }
-        assert_eq!(ledger.top_ups.len(), TOP_UP_HISTORY);
-        assert_eq!(ledger.top_ups[0].amount_minor, 100);
-        assert_eq!(ledger.top_ups[0].detected_at, at(30));
-    }
-
-    #[test]
-    fn the_runway_needs_a_day_of_history_and_some_spending() {
-        let first = BalanceLedger::record(None, &reading(10_000, 0), at(0));
-        let hours_later = BalanceLedger::record(Some(&first), &reading(10_000, 300), at(6));
-        assert_eq!(hours_later.runway(at(6)), None);
-        let idle = BalanceLedger::record(Some(&first), &reading(10_000, 0), at(48));
-        assert_eq!(idle.runway(at(48)), None);
-        // $6 spent over two days is $3 a day, and $94 lasts 31 more days.
-        let spending = BalanceLedger::record(Some(&first), &reading(10_000, 600), at(48));
-        assert_eq!(
-            spending.runway(at(48)),
-            Some(Runway {
-                spend_per_day_minor: 300,
-                days_left: 31,
-            })
-        );
-    }
-
-    #[test]
-    fn the_pace_is_measured_over_the_last_week_only() {
-        let mut ledger = BalanceLedger::record(None, &reading(100_000, 0), at(0));
-        // A big week, then a quiet one at $1 a day.
-        ledger = BalanceLedger::record(Some(&ledger), &reading(100_000, 50_000), at(24 * 7));
-        for day in 8..=14 {
-            ledger = BalanceLedger::record(
-                Some(&ledger),
-                &reading(100_000, 50_000 + (day - 7) * 100),
-                at(24 * day),
-            );
-        }
-        let runway = ledger.runway(at(24 * 14)).expect("a pace");
-        assert_eq!(runway.spend_per_day_minor, 100);
-        assert!(ledger.samples.len() <= 9, "older samples are dropped");
-    }
-
-    #[test]
-    fn samples_are_kept_at_most_hourly() {
-        let mut ledger = BalanceLedger::record(None, &reading(10_000, 0), at(0));
-        for minutes in [5, 10, 30, 59] {
-            ledger = BalanceLedger::record(
-                Some(&ledger),
-                &reading(10_000, minutes),
-                at(0) + Duration::minutes(minutes),
-            );
-        }
-        assert_eq!(ledger.samples.len(), 1);
-        ledger = BalanceLedger::record(Some(&ledger), &reading(10_000, 70), at(1));
-        assert_eq!(ledger.samples.len(), 2);
-    }
-
-    #[test]
-    fn a_new_currency_starts_a_new_ledger() {
-        let first = BalanceLedger::record(None, &reading(10_000, 0), at(0));
-        let mut euros = reading(20_000, 0);
-        euros.currency = CurrencyCode::new("EUR").expect("a currency");
-        let next = BalanceLedger::record(Some(&first), &euros, at(1));
-        assert_eq!(next.baseline_kind, BaselineKind::SinceAdded);
-        assert!(next.top_ups.is_empty());
-    }
-
-    #[test]
-    fn the_summary_carries_the_balance_and_lifetime_amounts() {
-        let ledger = BalanceLedger::record(None, &reading(10_000, 2_500), at(0));
-        let summary = ledger.summary(at(0));
-        assert_eq!(summary.balance_minor, 7_500);
-        assert_eq!(summary.loaded_minor, 10_000);
-        assert_eq!(summary.runway, None);
-    }
-}
+#[path = "balance_tests.rs"]
+mod tests;

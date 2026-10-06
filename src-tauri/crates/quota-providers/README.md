@@ -211,6 +211,19 @@ boundary as every GET, and a sign-in poll reads the OAuth refusal body
 (`http::Answers::AnyJson`). Endpoints and fields are in
 [the provider reference](../../../docs/providers.md#grok-supergrok).
 
+## TypeSafe
+
+Read from the console's billing page with a website session Quota owns: the host opens the
+sign-in in a window with its own storage (`ConsoleSignIn`, declared by
+`ProviderAdapter::console_sign_in`) and keeps the window's cookies as one `Cookie` header.
+`typesafe::transport` is its own client, because the console is a website: answers are
+text, no redirect is followed, and no cookie jar is kept. `typesafe::page` finds the
+billing action in the page's scripts and its result in the React Server Components rows,
+and tells a bot check (`ProviderError::Blocked`) from an ended session. `typesafe::wire`
+has no field for the billing address, invoice address, card or tax identifier the answer
+also carries. Endpoints and fields are in
+[the provider reference](../../../docs/providers.md#typesafe).
+
 ## Fixture
 
 A deterministic local provider for tests and developer runs. It performs no I/O at all:
@@ -233,7 +246,7 @@ only native units with no denominator, and an account with an unlimited window.
 
 ## Registry
 
-`ProviderRegistry::production(secrets)` holds the eleven real adapters and the credential
+`ProviderRegistry::production(secrets)` holds the twelve real adapters and the credential
 store Quota's own sign-ins live in. Async callers obtain it with
 `secrets::system(identifier).await`; [the `secrets` API documentation](src/secrets.rs)
 owns the identifier isolation, unavailable-store behavior, and runtime constraints.

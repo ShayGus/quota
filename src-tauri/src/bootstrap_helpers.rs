@@ -93,6 +93,7 @@ pub fn usage_page_of(provider_id: ProviderId) -> Option<&'static str> {
         ProviderId::MuseCode => Some("https://www.meta.ai/muse-code"),
         ProviderId::Cursor => Some("https://cursor.com/dashboard?tab=usage"),
         ProviderId::OllamaCloud => Some("https://ollama.com/settings"),
+        ProviderId::Typesafe => Some("https://console.typesafe.ai/settings/billing"),
         ProviderId::Fixture => None,
     }
 }

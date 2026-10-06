@@ -17,17 +17,18 @@ system.
 read or the key you pasted was refused. Sign in again with the provider's own tool, or
 create a new key, then press **Connect** again:
 
-| Provider        | Sign in again with                                              |
-| --------------- | --------------------------------------------------------------- |
-| Codex           | `codex login`                                                   |
-| Claude          | `claude`, then sign in to Claude Code                           |
-| Cursor          | The Cursor app                                                  |
-| OpenCode Go     | A new key from opencode.ai/auth, or `opencode auth login`       |
-| OpenRouter      | A new key from openrouter.ai/settings/keys                      |
-| Z.ai, MiniMax   | A new key from the provider's console                           |
-| Kimi for Coding | A new key from kimi.com/code/console, or `kimi`, then `/login`  |
-| Ollama Cloud    | A new key from ollama.com/settings/keys, or `ollama signin`     |
-| Grok, Muse Code | Start the browser sign-in again, or `grok login` / `muse login` |
+| Provider        | Sign in again with                                                                             |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| Codex           | `codex login`                                                                                  |
+| Claude          | `claude`, then sign in to Claude Code                                                          |
+| Cursor          | The Cursor app                                                                                 |
+| OpenCode Go     | A new key from opencode.ai/auth, or `opencode auth login`                                      |
+| OpenRouter      | A new key from openrouter.ai/settings/keys                                                     |
+| Z.ai, MiniMax   | A new key from the provider's console                                                          |
+| Kimi for Coding | A new key from kimi.com/code/console, or `kimi`, then `/login`                                 |
+| Ollama Cloud    | A new key from ollama.com/settings/keys, or `ollama signin`                                    |
+| Grok, Muse Code | Start the browser sign-in again, or `grok login` / `muse login`                                |
+| TypeSafe        | Disconnect the account, then add it again and sign in to the console in the window Quota opens |
 
 **"The provider declined this account, so nothing was added."** The sign-in works, but the
 account has no subscription Quota can read, for example an inactive or expired plan.
@@ -77,6 +78,25 @@ cancelled on the provider's page. Start again if that was a mistake.
 
 **"The provider did not answer the sign-in in time."** Try again; if the browser page
 never loads, check that the provider's site is reachable.
+
+## Website sign-in
+
+These apply to TypeSafe.
+
+**"The provider refused requests from Quota as automated"** TypeSafe put a bot check in
+front of Quota's requests. Quota never tries to pass one, so nothing was added. Try again
+later; if it keeps happening, [report it](#getting-help).
+
+**"The sign-in window was closed before the sign-in finished."** Closing the TypeSafe
+window cancels the sign-in. Press **Sign in to TypeSafe** again and leave the window open
+until it closes by itself.
+
+**The TypeSafe card says Reconnect.** The console session ended. Disconnect the account in
+**Settings → Accounts**, then add it again and sign in in the window Quota opens. Signing
+in again without disconnecting is not possible yet.
+
+**"The provider answered in a format this version of Quota cannot read yet."** TypeSafe
+changed its website. Check for a newer Quota version.
 
 ## An account card
 

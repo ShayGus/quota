@@ -226,6 +226,11 @@ pub(crate) async fn send(
     })
 }
 
+/// Installs the crypto provider before a client of another shape is built.
+pub(crate) fn install_crypto_provider() {
+    LazyLock::force(&CRYPTO_PROVIDER);
+}
+
 /// Installs the process-wide rustls crypto provider once, on first use.
 ///
 /// A second install of a different provider fails harmlessly and leaves the

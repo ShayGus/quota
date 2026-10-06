@@ -55,6 +55,13 @@ pub enum ProviderError {
     /// The work was deliberately cancelled.
     #[error("the read was cancelled")]
     Cancelled,
+    /// The provider refused the request as automated traffic: a bot check or a
+    /// challenge page. Quota never tries to pass one, so this is not retried.
+    #[error("the provider refused requests from Quota: {detail}")]
+    Blocked {
+        /// A sanitized description.
+        detail: String,
+    },
 }
 
 impl ProviderError {
@@ -75,6 +82,7 @@ impl ProviderError {
             Self::UnsupportedSchema { .. } => "unsupported_schema",
             Self::InvalidData { .. } => "invalid_data",
             Self::Cancelled => "cancelled",
+            Self::Blocked { .. } => "blocked",
         }
     }
 }
@@ -253,6 +261,13 @@ pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
         Box::pin(async { Err(ProviderError::Authorization) })
     }
 
+    /// The provider's own website sign-in, for an adapter that reads usage with
+    /// a website session Quota signs in to itself. `None` for every other
+    /// adapter.
+    fn console_sign_in(&self) -> Option<super::ConsoleSignIn> {
+        None
+    }
+
     /// Asks once whether the person has finished a started browser sign-in.
     fn poll_device_sign_in<'a>(
         &'a self,
@@ -300,5 +315,8 @@ mod tests {
         assert!(ProviderError::RateLimited { retry_after: None }.is_retryable());
         assert!(!ProviderError::Authentication.is_retryable());
         assert!(!ProviderError::InvalidData { detail: "x".into() }.is_retryable());
+        let blocked = ProviderError::Blocked { detail: "x".into() };
+        assert!(!blocked.is_retryable(), "a bot check is never retried into");
+        assert_eq!(blocked.diagnostic_code(), "blocked");
     }
 }

@@ -10,6 +10,8 @@ import type { BalanceSummary, QuotaWindow } from "../../generated/bindings";
 import { remainingPercent } from "../../shared/format/allowance";
 import {
   baselineLine,
+  creditKindLabel,
+  expiryLine,
   formatAmount,
   formatDay,
   runwayLine,
@@ -25,11 +27,14 @@ export function balanceSummaryCopy(
   readonly lines: readonly string[];
 } {
   const percent = remainingPercent(window.measurement);
-  const lines = [baselineLine(balance), runwayLine(balance)].filter(
-    (line): line is string => line !== null,
-  );
+  const credits = balance.baseline_kind === "credits";
+  const lines = [
+    baselineLine(balance),
+    credits ? expiryLine(balance) : null,
+    runwayLine(balance),
+  ].filter((line): line is string => line !== null);
   return {
-    eyebrow: "LEFT OF LAST TOP-UP",
+    eyebrow: credits ? "LEFT OF ACTIVE CREDITS" : "LEFT OF LAST TOP-UP",
     headline: percent === null ? "Not reported" : `${percentWords(percent)} left`,
     lines: lines.length > 0 ? lines : ["Measured from the last top-up Quota saw"],
   };
@@ -74,10 +79,18 @@ export function BalanceDetail({
   const money = (minor: number | null | undefined): string =>
     formatAmount(minor ?? null, balance.scale, balance.currency) ?? "Not reported";
   const spend = balance.key_spend;
+  const credits = balance.baseline_kind === "credits";
+  const cycle = balance.cycle_spend;
   return (
     <>
       <h3 className="section-title">Balance</h3>
       <dl className="detail-list" aria-label="Balance">
+        {cycle === null ? null : (
+          <div>
+            <dt>Spent in {cycle.label}</dt>
+            <dd>{money(cycle.spent_minor)}</dd>
+          </div>
+        )}
         {spend === null ? null : (
           <div>
             <dt>This key spent</dt>
@@ -96,21 +109,43 @@ export function BalanceDetail({
           <dd>{runwayLine(balance) ?? "Shown after a day of readings with spending"}</dd>
         </div>
         <div>
-          <dt>Since the account opened</dt>
+          <dt>{credits ? "Active credits" : "Since the account opened"}</dt>
           <dd>
-            {money(balance.loaded_minor)} loaded
+            {money(balance.loaded_minor)} {credits ? "granted" : "loaded"}
             <br />
-            <span className="muted">{money(balance.spent_minor)} spent</span>
+            <span className="muted">
+              {money(balance.spent_minor)} {credits ? "used" : "spent"}
+            </span>
           </dd>
         </div>
       </dl>
+      {balance.credits.length === 0 ? null : (
+        <>
+          <h3 className="section-title">Credits</h3>
+          <ul className="top-up-list" aria-label="Credits">
+            {balance.credits.map((credit) => (
+              <li key={`${credit.expires_at}-${String(credit.amount_minor)}`}>
+                <span>
+                  {creditKindLabel(credit.kind)} · expires{" "}
+                  {formatDay(credit.expires_at) ?? "Not reported"}
+                </span>
+                <strong>
+                  {money(credit.remaining_minor)} of {money(credit.amount_minor)}
+                </strong>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
       <h3 className="section-title">Top-ups</h3>
       {balance.top_ups.length === 0 ? (
         <div className="note">
           No top-up seen yet. The balance is measured from{" "}
           {balance.baseline_kind === "adjusted"
             ? "the last time it was adjusted"
-            : "when you added the account"}
+            : credits
+              ? "the credits that are still active"
+              : "when you added the account"}
           .
         </div>
       ) : (

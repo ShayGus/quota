@@ -58,6 +58,7 @@ pub(crate) mod opencode_go;
 pub(crate) mod openrouter;
 pub mod platform;
 pub(crate) mod post;
+pub(crate) mod typesafe;
 pub(crate) mod zai;
 
 #[cfg(feature = "test-fixtures")]

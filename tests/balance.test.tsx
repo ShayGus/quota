@@ -17,6 +17,8 @@ import { widgetAccounts } from "../src/features/widget/model";
 import type { AccountSnapshot } from "../src/generated/bindings";
 import {
   baselineLine,
+  creditKindLabel,
+  expiryLine,
   formatAmount,
   isWindowShown,
   runwayLine,
@@ -195,5 +197,84 @@ describe("a prepaid balance in quota detail", () => {
       />,
     );
     expect(screen.getByText(/No top-up seen yet/)).toBeTruthy();
+  });
+});
+
+/** A TypeSafe-style balance made of credit grants. */
+function typeSafe(): AccountSnapshot {
+  const { window, summary } = prepaidBalance({
+    baselineKind: "credits",
+    topUps: [],
+    runway: null,
+    credits: [
+      {
+        kind: "free",
+        amount_minor: 1000,
+        remaining_minor: 420,
+        expires_at: "2026-10-31T12:00:00.000Z",
+      },
+      {
+        kind: "purchased",
+        amount_minor: 4000,
+        remaining_minor: 3300,
+        expires_at: "2027-10-01T12:00:00.000Z",
+      },
+    ],
+    cycleSpend: { label: "October 2026", spent_minor: 1280 },
+  });
+  return account("ts", "typesafe", 1, [window], {
+    nickname: "TypeSafe",
+    rank: 74,
+    balance: { ...summary, key_spend: null },
+  });
+}
+
+describe("a balance made of credit grants", () => {
+  it("says it is measured from the active credits, and which runs out first", () => {
+    const { summary } = prepaidBalance({
+      baselineKind: "credits",
+      credits: [
+        {
+          kind: "free",
+          amount_minor: 1000,
+          remaining_minor: 420,
+          expires_at: "2026-10-31T12:00:00.000Z",
+        },
+      ],
+    });
+    expect(baselineLine(summary)).toBe("of $50.00 in active credits");
+    expect(expiryLine(summary)).toBe("$4.20 expires Oct 31");
+    expect(expiryLine({ ...summary, credits: [] })).toBeNull();
+    expect(creditKindLabel("purchased")).toBe("Purchased");
+  });
+
+  it("puts the first credit to expire under the ring", () => {
+    card(typeSafe());
+    expect(screen.getByText("$4.20 expires Oct 31")).toBeTruthy();
+  });
+
+  it("lists each credit and the cycle's spend in quota detail", () => {
+    const shown = typeSafe();
+    render(
+      <AccountDetail
+        account={shown}
+        windowId={null}
+        now={NOW}
+        onBack={vi.fn()}
+        onUsagePage={vi.fn()}
+        onManageAccounts={vi.fn()}
+        accounts={[shown]}
+        preferences={preferences()}
+      />,
+    );
+    expect(screen.getByText("LEFT OF ACTIVE CREDITS")).toBeTruthy();
+    expect(screen.getByText("Spent in October 2026")).toBeTruthy();
+    const credits = screen.getByRole("list", { name: "Credits" });
+    expect(within(credits).getAllByRole("listitem")).toHaveLength(2);
+    expect(within(credits).getByText("$4.20 of $10.00")).toBeTruthy();
+    expect(within(credits).getByText(/Free credit · expires Oct 31/)).toBeTruthy();
+    expect(
+      screen.getByText(/measured from the credits that are still active/),
+    ).toBeTruthy();
   });
 });

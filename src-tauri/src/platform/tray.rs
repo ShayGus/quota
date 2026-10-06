@@ -246,6 +246,7 @@ fn provider_name(provider: ProviderId) -> &'static str {
         ProviderId::MuseCode => "Muse Code",
         ProviderId::Cursor => "Cursor",
         ProviderId::OllamaCloud => "Ollama Cloud",
+        ProviderId::Typesafe => "TypeSafe",
         ProviderId::Fixture => "Fixture",
     }
 }

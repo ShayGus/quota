@@ -41,3 +41,18 @@ pub enum DevicePoll {
     /// The code expired before the person finished.
     Expired,
 }
+
+/// A sign-in the person completes on the provider's own website, in a window
+/// Quota opens for it, for a provider that offers no other way to read usage.
+///
+/// The window keeps its browser storage apart from every other browser, and
+/// the session it ends up with is the credential: Quota builds a `Cookie`
+/// header from the window's cookies for `cookie_url` and keeps that, exactly
+/// like a pasted key. The page in the window has no access to the app.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConsoleSignIn {
+    /// The page the window opens, the provider's own sign-in.
+    pub sign_in_url: &'static str,
+    /// The address whose cookies make up the session.
+    pub cookie_url: &'static str,
+}

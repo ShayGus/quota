@@ -21,6 +21,7 @@ export const PROVIDERS = [
   "grok",
   "muse_code",
   "ollama_cloud",
+  "typesafe",
 ] as const;
 
 export type OfferedProvider = (typeof PROVIDERS)[number];
@@ -39,6 +40,16 @@ export type SignIn =
        * a key: the key is then optional.
        */
       readonly cli?: { readonly name: string; readonly signIn: string };
+    }
+  | {
+      /**
+       * A sign-in on the provider's own website, in a window Quota opens with
+       * its own browser storage, for a provider whose usage only its website
+       * shows.
+       */
+      readonly kind: "console";
+      /** The website the person signs in to, as they would type it. */
+      readonly site: string;
     }
   | {
       readonly kind: "browser";
@@ -95,6 +106,7 @@ export const SIGN_IN: Record<OfferedProvider, SignIn> = {
     account: "Meta",
     cli: { name: "Muse CLI", signIn: "muse login" },
   },
+  typesafe: { kind: "console", site: "console.typesafe.ai" },
 };
 
 /** What each provider reports, as the picker lists it. */
@@ -110,6 +122,7 @@ export const PROVIDER_WINDOWS: Record<OfferedProvider, string> = {
   grok: "Weekly · Monthly · On-demand",
   muse_code: "5-hour · Weekly",
   ollama_cloud: "5-hour · Weekly · Monthly",
+  typesafe: "Credit balance · Credits",
 };
 
 /** What to do when the provider refuses the sign-in. */
@@ -133,6 +146,8 @@ export const AUTHENTICATION_RECOVERY: Record<OfferedProvider, string> = {
   grok: "Grok needs a sign-in. Sign in with the browser, or sign in with the Grok CLI (grok login) and use its sign-in.",
   muse_code:
     "Muse Code needs a sign-in to an account with an active subscription. Sign in with the browser, or with the Muse CLI (muse login) and use its sign-in.",
+  typesafe:
+    "TypeSafe needs a sign-in. Press Sign in to TypeSafe and sign in to the console in the window Quota opens.",
 };
 
 /** How to add a different account of each provider. */
@@ -156,6 +171,8 @@ export const SWITCH_ACCOUNT: Record<OfferedProvider, string> = {
   grok: "To add a different xAI account, sign in with the browser and choose that account on xAI's page.",
   muse_code:
     "To add a different Meta account, sign in with the browser and choose that account on Meta's page.",
+  typesafe:
+    "Quota keeps one TypeSafe console account. To use another, disconnect this one, then sign in to the other in the window Quota opens.",
 };
 
 /** The system credential store's own name, as this computer calls it. */
