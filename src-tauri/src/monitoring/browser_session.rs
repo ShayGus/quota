@@ -342,14 +342,30 @@ fn page_list(port: u16) -> io::Result<Value> {
         stream,
         "GET /json/list HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n"
     )?;
-    let mut answer = String::new();
-    stream.read_to_string(&mut answer)?;
-    let body = answer
-        .split_once("\r\n\r\n")
-        .map(|(_, body)| body)
-        .ok_or_else(|| io::Error::other("the browser's page list had no body"))?;
-    serde_json::from_str(body)
-        .map_err(|_| io::Error::other("the browser's page list was unreadable"))
+    // Chrome keeps the connection open whatever the request says, so the
+    // answer ends where its `Content-Length` says, not where the stream does.
+    let mut answer = Vec::new();
+    let mut chunk = [0_u8; 4096];
+    loop {
+        if let Some(end) = answer.windows(4).position(|window| window == b"\r\n\r\n") {
+            let head =
+                String::from_utf8_lossy(answer.get(..end).unwrap_or_default()).to_ascii_lowercase();
+            let length = head
+                .lines()
+                .find_map(|line| line.strip_prefix("content-length:"))
+                .and_then(|value| value.trim().parse::<usize>().ok());
+            let body = length.and_then(|length| answer.get(end + 4..end + 4 + length));
+            if let Some(body) = body {
+                return serde_json::from_slice(body)
+                    .map_err(|_| io::Error::other("the browser's page list was unreadable"));
+            }
+        }
+        let read = stream.read(&mut chunk)?;
+        if read == 0 {
+            return Err(io::Error::other("the browser's page list ended early"));
+        }
+        answer.extend_from_slice(chunk.get(..read).unwrap_or_default());
+    }
 }
 
 /// The addresses of the pages in a `/json/list` answer.

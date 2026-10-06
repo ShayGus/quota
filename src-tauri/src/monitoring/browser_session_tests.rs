@@ -58,6 +58,9 @@ pub(in crate::monitoring) fn fake_browser(
     let port = listener.local_addr().expect("an address").port();
     let server = std::thread::spawn(move || {
         let mut methods = Vec::new();
+        // Like Chrome, the stand-in keeps a page-list connection open after
+        // answering, so a reader that waits for the stream to end hangs.
+        let mut kept_open = Vec::new();
         // Page lists arrive as plain requests; the one `DevTools` client, if
         // any, arrives as a websocket. The stand-in records both, in order.
         loop {
@@ -95,12 +98,13 @@ pub(in crate::monitoring) fn fake_browser(
                 drop(std::io::Write::write_all(
                     &mut stream,
                     format!(
-                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
                         body.len()
                     )
                     .as_bytes(),
                 ));
                 methods.push("/json/list".to_owned());
+                kept_open.push(stream);
                 if pages == 0 && methods.len() > 1 {
                     // The window is closed; nothing more will be asked.
                     return methods;
