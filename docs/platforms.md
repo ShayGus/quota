@@ -56,6 +56,11 @@ checks text out with LF everywhere, so they run unchanged on any of the three sy
 - Provider credentials are found under `HOME` on every system except Windows, where
   `USERPROFILE` comes first. Codex (`~/.codex/auth.json`) and OpenCode Go
   (`~/.local/share/opencode/auth.json`) use the same files on macOS.
+- The website sign-in's browser is found by
+  [`platform::browser`](../src-tauri/src/platform/browser.rs): Chrome, Edge, Chromium or
+  Brave in the Program Files and local app folders on Windows, in `/Applications` and
+  `~/Applications` on macOS, and on `PATH` on Linux. Each system's list is unit-tested on
+  every system.
 - The renderer's font stack falls back to the macOS system font.
 - The Windows-only build scripts and `windows_subsystem` attribute do nothing elsewhere.
 - The bundle carries `icons/icon.icns`, which a macOS app bundle requires.

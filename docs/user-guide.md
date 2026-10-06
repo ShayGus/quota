@@ -80,20 +80,20 @@ account** in **Settings → Accounts**. The settings window opens on three steps
 Each provider lists the allowance windows it reports. Quota signs in to a provider in one
 of four ways:
 
-| Provider             | How Quota signs in                                              | What to do first                                                                           | Windows                        |
-| -------------------- | --------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------ |
-| Codex                | Reads the Codex CLI's existing sign-in                          | Run `codex login` in a terminal                                                            | 5-hour, weekly                 |
-| Claude               | Reads Claude Code's existing sign-in                            | Run `claude` in a terminal and sign in                                                     | 5-hour, weekly, model-specific |
-| Cursor               | Reads Cursor's existing sign-in                                 | Sign in to the Cursor app                                                                  | Monthly, on-demand             |
-| OpenCode Go          | API key, or the OpenCode CLI's sign-in                          | Create a key at opencode.ai/auth, or run `opencode auth login` and leave the key box empty | 5-hour, weekly, monthly        |
-| OpenRouter           | API key                                                         | Create a key at openrouter.ai/settings/keys                                                | Credit balance, API key limit  |
-| Z.ai GLM Coding Plan | API key                                                         | Create a key at z.ai/manage-apikey/apikey-list                                             | 5-hour, weekly, web tools      |
-| MiniMax Coding Plan  | API key                                                         | Create a key at platform.minimax.io                                                        | 5-hour, weekly                 |
-| Kimi for Coding      | API key, or the Kimi CLI's sign-in                              | Create a key at kimi.com/code/console, or run `kimi`, then `/login`                        | 5-hour, weekly, monthly        |
-| Ollama Cloud         | API key, or the Ollama app's sign-in                            | Create a key at ollama.com/settings/keys, or run `ollama signin`                           | 5-hour, weekly, monthly        |
-| Grok (SuperGrok)     | Browser sign-in to your xAI account, or the Grok CLI's          | Nothing: Quota opens the page. Or run `grok login` and use the CLI sign-in                 | Weekly, monthly, on-demand     |
-| Muse Code            | Browser sign-in to your Meta account, or the Muse CLI's         | Nothing: Quota opens the page. Or run `muse login` and use the CLI sign-in                 | 5-hour, weekly                 |
-| TypeSafe             | Website sign-in to console.typesafe.ai, in a window Quota opens | Nothing: sign in to the console in that window                                             | Credit balance, credits        |
+| Provider             | How Quota signs in                                                                      | What to do first                                                                           | Windows                        |
+| -------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------ |
+| Codex                | Reads the Codex CLI's existing sign-in                                                  | Run `codex login` in a terminal                                                            | 5-hour, weekly                 |
+| Claude               | Reads Claude Code's existing sign-in                                                    | Run `claude` in a terminal and sign in                                                     | 5-hour, weekly, model-specific |
+| Cursor               | Reads Cursor's existing sign-in                                                         | Sign in to the Cursor app                                                                  | Monthly, on-demand             |
+| OpenCode Go          | API key, or the OpenCode CLI's sign-in                                                  | Create a key at opencode.ai/auth, or run `opencode auth login` and leave the key box empty | 5-hour, weekly, monthly        |
+| OpenRouter           | API key                                                                                 | Create a key at openrouter.ai/settings/keys                                                | Credit balance, API key limit  |
+| Z.ai GLM Coding Plan | API key                                                                                 | Create a key at z.ai/manage-apikey/apikey-list                                             | 5-hour, weekly, web tools      |
+| MiniMax Coding Plan  | API key                                                                                 | Create a key at platform.minimax.io                                                        | 5-hour, weekly                 |
+| Kimi for Coding      | API key, or the Kimi CLI's sign-in                                                      | Create a key at kimi.com/code/console, or run `kimi`, then `/login`                        | 5-hour, weekly, monthly        |
+| Ollama Cloud         | API key, or the Ollama app's sign-in                                                    | Create a key at ollama.com/settings/keys, or run `ollama signin`                           | 5-hour, weekly, monthly        |
+| Grok (SuperGrok)     | Browser sign-in to your xAI account, or the Grok CLI's                                  | Nothing: Quota opens the page. Or run `grok login` and use the CLI sign-in                 | Weekly, monthly, on-demand     |
+| Muse Code            | Browser sign-in to your Meta account, or the Muse CLI's                                 | Nothing: Quota opens the page. Or run `muse login` and use the CLI sign-in                 | 5-hour, weekly                 |
+| TypeSafe             | Website sign-in to console.typesafe.ai, in a separate Chrome or Edge window Quota opens | Nothing: sign in to the console in that window, Google included                            | Credit balance, credits        |
 
 Quota never asks for your password. [Providers](providers.md) records exactly which file,
 endpoint and fields each provider uses.
@@ -117,13 +117,15 @@ moves on as soon as you approve. If the browser does not open within ten seconds
 address shown yourself; Quota keeps waiting.
 
 **A website sign-in** (TypeSafe): TypeSafe shows its credit only on its website, so **Sign
-in to TypeSafe** opens console.typesafe.ai in a window of Quota's own. That window keeps
-its own browser storage, apart from your browser, and the website in it cannot reach
-Quota. Sign in there as you usually do; the window closes by itself once Quota can read
-your credit, and closing it yourself cancels the sign-in. Quota keeps that website session
-in your system's credential store and reads only the billing page's credit. If TypeSafe
-answers Quota with a bot check, the sign-in stops and says so: Quota never tries to pass
-one.
+in to TypeSafe** opens console.typesafe.ai in a separate Chrome or Edge window, just for
+Quota. It uses a profile of Quota's own, so your usual tabs and sign-ins are not in it.
+Sign in there as you usually do, with Google or otherwise; the window closes by itself
+once Quota can read your credit, and closing it yourself cancels the sign-in. Quota keeps
+that website session in your system's credential store and reads only the billing page's
+credit. When the session ends, **Reconnect** opens the same window again, usually signed
+in already. Without Chrome or Edge, Quota opens a window of its own instead, where Google
+sign-in does not work. If TypeSafe answers Quota with a bot check, the sign-in stops and
+says so: Quota never tries to pass one.
 
 <table>
   <tr>
@@ -132,7 +134,7 @@ one.
   </tr>
   <tr>
     <td valign="top"><img src="images/wizard-browser-code.png" alt="Connect Grok: the sign-in code, waiting for the browser"><br><sub>A browser sign-in</sub></td>
-    <td valign="top"><img src="images/wizard-website-sign-in.png" alt="Connect TypeSafe: Quota opens console.typesafe.ai in a window of its own"><br><sub>A website sign-in</sub></td>
+    <td valign="top"><img src="images/wizard-website-sign-in.png" alt="Connect TypeSafe: Quota opens console.typesafe.ai in a separate Chrome or Edge window"><br><sub>A website sign-in</sub></td>
   </tr>
 </table>
 

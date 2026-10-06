@@ -276,7 +276,7 @@ pub async fn disconnect_account(
         .get(&account_id)
         .map(|entry| &entry.stored.connection)
         .filter(|connection| connection.credential_ownership == CredentialOwnership::AppOwned)
-        .map(|connection| connection.id.clone());
+        .map(|connection| (connection.id.clone(), connection.provider_id));
     {
         let _commit = state.monitor.commit().await;
         state
@@ -294,8 +294,10 @@ pub async fn disconnect_account(
             .map(|_| ())
             .map_err(map_core_error)?;
     }
-    if let Some(connection) = owned_credential {
+    if let Some((connection, provider)) = owned_credential {
         crate::monitoring::credentials::forget(state.monitor.secrets(), connection).await;
+        // A website sign-in's browser profile goes with its account.
+        state.monitor.forget_website_sign_in(provider);
     }
     // Removing the last account leaves no worker to publish, so the change is
     // published here or the row stays on screen until the next refresh.

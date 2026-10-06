@@ -74,6 +74,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "fmt"] }
+tungstenite = { workspace = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
@@ -198,6 +199,9 @@ tauri-specta = "=2.0.0-rc.25"
 tempfile = "3.27.0"
 thiserror = "2.0.21"
 tokio = { version = "1.53.1", features = ["macros", "rt", "sync", "time"] }
+# The local DevTools connection to the browser window a website sign-in opens.
+# Plain `ws://127.0.0.1` only, so no TLS feature.
+tungstenite = { version = "0.30.0", default-features = false, features = ["handshake"] }
 tracing = "0.1.44"
 uuid = { version = "1.26.1", features = ["serde", "v4"] }
 

@@ -226,8 +226,9 @@ export function ConnectionWizard({
         <div className="note">
           Codex, Claude and Cursor use the sign-in their own apps keep on this computer.
           Grok and Muse Code sign in on their own page in your browser, TypeSafe in a
-          window Quota opens on its website, and the others take an API key. Quota keeps
-          what it is given in {credentialStoreName()} and never asks for a password.
+          separate browser window Quota opens on its website, and the others take an API
+          key. Quota keeps what it is given in {credentialStoreName()} and never asks for
+          a password.
         </div>
       </>
     );
@@ -580,8 +581,8 @@ function WebsiteSignInBox({
       <div className="sign-in-code" role="status">
         <span className="field-label">Sign in to {site} in the window Quota opened</span>
         <span className="form-hint">
-          The window closes by itself once Quota can read your credit. Closing it cancels
-          the sign-in.
+          It closes by itself once Quota can read your credit. Closing it cancels the
+          sign-in.
         </span>
       </div>
     );
@@ -590,10 +591,15 @@ function WebsiteSignInBox({
     <>
       <h3>Sign in on {site}</h3>
       <p>
-        {provider} shows its credit only on its website, so Quota opens {site} in a window
-        of its own, with its own browser storage, apart from your browser. Sign in there
-        as you usually do. Quota keeps the website session in {credentialStoreName()},
-        reads only the credit on the billing page, and never sees your password.
+        {provider} shows its credit only on its website, so Quota opens {site} in a
+        separate Chrome or Edge window, just for Quota: your usual tabs and sign-ins are
+        not in it. Sign in there as you usually do, Google included. Quota keeps the
+        website session in {credentialStoreName()}, reads only the credit on the billing
+        page, and never sees your password.
+      </p>
+      <p className="form-hint">
+        Without Chrome or Edge, Quota opens a window of its own instead, where Google
+        sign-in does not work.
       </p>
     </>
   );

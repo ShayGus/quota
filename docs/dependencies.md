@@ -47,6 +47,14 @@ On Windows, `arboard` uses `clipboard-win` 5.4.1 and `error-code` 3.4.0, which a
 the Boost Software License (BSL-1.0). `deny.toml` allows that licence for those two crates
 only, as named exceptions, rather than adding it to the allow list for the whole graph.
 
+`tungstenite` 0.30.0 was added on 6 October 2026 for the `TypeSafe` sign-in in the
+person's own browser. Google refuses its sign-in inside an app's embedded window, so Quota
+opens the installed Chrome or Edge with a profile of its own and reads that window's
+session through the browser's local DevTools connection, a plain `ws://127.0.0.1`
+websocket. Only the `handshake` feature is enabled, with no TLS. It brings `sha1` 0.11.0
+and `data-encoding` 2.11.1 for the handshake; all three are MIT or Apache-2.0. It is used
+from the host only, on a blocking thread, for the length of one sign-in.
+
 `keyring-core` 1.0.0 and one store crate per system were added on 3 October 2026 for the
 credentials Quota owns itself, such as a pasted OpenRouter key:
 `windows-native-keyring-store` 1.1.0 (Credential Manager),
