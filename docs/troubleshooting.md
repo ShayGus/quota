@@ -17,18 +17,18 @@ system.
 read or the key you pasted was refused. Sign in again with the provider's own tool, or
 create a new key, then press **Connect** again:
 
-| Provider        | Sign in again with                                                                             |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| Codex           | `codex login`                                                                                  |
-| Claude          | `claude`, then sign in to Claude Code                                                          |
-| Cursor          | The Cursor app                                                                                 |
-| OpenCode Go     | A new key from opencode.ai/auth, or `opencode auth login`                                      |
-| OpenRouter      | A new key from openrouter.ai/settings/keys                                                     |
-| Z.ai, MiniMax   | A new key from the provider's console                                                          |
-| Kimi for Coding | A new key from kimi.com/code/console, or `kimi`, then `/login`                                 |
-| Ollama Cloud    | A new key from ollama.com/settings/keys, or `ollama signin`                                    |
-| Grok, Muse Code | Start the browser sign-in again, or `grok login` / `muse login`                                |
-| TypeSafe        | Disconnect the account, then add it again and sign in to the console in the window Quota opens |
+| Provider        | Sign in again with                                               |
+| --------------- | ---------------------------------------------------------------- |
+| Codex           | `codex login`                                                    |
+| Claude          | `claude`, then sign in to Claude Code                            |
+| Cursor          | The Cursor app                                                   |
+| OpenCode Go     | A new key from opencode.ai/auth, or `opencode auth login`        |
+| OpenRouter      | A new key from openrouter.ai/settings/keys                       |
+| Z.ai, MiniMax   | A new key from the provider's console                            |
+| Kimi for Coding | A new key from kimi.com/code/console, or `kimi`, then `/login`   |
+| Ollama Cloud    | A new key from ollama.com/settings/keys, or `ollama signin`      |
+| Grok, Muse Code | Start the browser sign-in again, or `grok login` / `muse login`  |
+| TypeSafe        | Reconnect, then sign in to the console in the window Quota opens |
 
 **"The provider declined this account, so nothing was added."** The sign-in works, but the
 account has no subscription Quota can read, for example an inactive or expired plan.
@@ -87,13 +87,21 @@ These apply to TypeSafe.
 front of Quota's requests. Quota never tries to pass one, so nothing was added. Try again
 later; if it keeps happening, [report it](#getting-help).
 
-**"The sign-in window was closed before the sign-in finished."** Closing the TypeSafe
-window cancels the sign-in. Press **Sign in to TypeSafe** again and leave the window open
-until it closes by itself.
+**"The sign-in window was closed before Quota found a finished sign-in in it."** The
+TypeSafe window was closed before the console had loaded. Press **Sign in to TypeSafe**
+again, sign in until the console shows, then close the window.
 
-**The TypeSafe card says Reconnect.** The console session ended. Disconnect the account in
-**Settings → Accounts**, then add it again and sign in in the window Quota opens. Signing
-in again without disconnecting is not possible yet.
+**The TypeSafe card says Reconnect.** The console session ended. Choose **Reconnect**: the
+same Chrome or Edge window opens, usually still signed in. Close it once the console
+shows.
+
+**Google says "This browser or app may not be secure".** Quota found no Chrome or Edge, so
+it opened its own window, where Google refuses to sign in. Install Chrome or Edge, or sign
+in to TypeSafe another way, then press **Sign in to TypeSafe** again.
+
+**A Chrome window opened that I did not ask for.** That is the TypeSafe sign-in, in a
+profile of Quota's own. Close it once you are signed in; your usual Chrome and its tabs
+are untouched.
 
 **"The provider answered in a format this version of Quota cannot read yet."** TypeSafe
 changed its website. Check for a newer Quota version.

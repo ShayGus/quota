@@ -324,7 +324,7 @@ fn report_attempt_failure(
             "browser_sign_in_timeout" => "The provider did not answer the sign-in in time. Try again.",
             "browser_sign_in_declined" => "The sign-in was declined on the provider's page. Nothing was added.",
             "browser_sign_in_expired" => "The sign-in code expired before it was entered. Start again for a new code.",
-            "console_sign_in_closed" => "The sign-in window was closed before the sign-in finished. Nothing was added.",
+            "console_sign_in_closed" => "The sign-in window was closed before Quota found a finished sign-in in it. Nothing was added. Sign in until the console shows, then close the window.",
             "connection_discovery_timeout" => "The provider did not finish discovering the account in time. Nothing was added. Try again.",
             "connection_read_timeout" => "The provider did not finish verifying the quota in time. Nothing was added. Try again.",
             "unsupported_schema" => "The provider answered in a format this version of Quota cannot read yet.",

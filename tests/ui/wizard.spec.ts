@@ -282,6 +282,11 @@ test.describe("add-account wizard", () => {
     await expect(
       page.getByRole("heading", { name: "Sign in on console.typesafe.ai" }),
     ).toBeVisible();
+    // The sign-in opens the person's own browser, so Google sign-in works there.
+    await expect(
+      page.getByText(/separate Chrome or Edge window, just for Quota/),
+    ).toBeVisible();
+    await expect(page.getByText(/Without Chrome or Edge/)).toBeVisible();
     await host.screenshotFull("wizard-website-sign-in");
     await page.getByRole("button", { name: "Sign in to TypeSafe" }).click();
     await expect(

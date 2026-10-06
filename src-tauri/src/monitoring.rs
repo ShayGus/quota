@@ -17,7 +17,7 @@ use quota_core::accounts::AccountRegistry;
 use quota_core::clock::SystemClock;
 use quota_core::ports::{AccountRepository, BackoffRepository};
 use quota_core::snapshots::SnapshotBuilder;
-use quota_domain::account::ConnectionState;
+use quota_domain::account::{ConnectionState, CredentialOwnership};
 use quota_domain::ids::{AccountId, ConnectionAttemptId};
 use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::snapshot::MonitoringState;
@@ -38,9 +38,10 @@ struct AttemptHandle {
     reporter: Arc<AttemptReporter>,
 }
 
+mod browser_session;
 mod confirm;
 mod connection;
-mod console;
+pub(crate) mod console;
 pub(crate) mod credentials;
 mod device;
 mod policy;
@@ -352,6 +353,19 @@ impl MonitoringRuntime {
         confirm::commit_pending(self, attempt_id, nickname).await
     }
 
+    /// Deletes the browser profile a website sign-in keeps for `provider`,
+    /// once its account is disconnected. Other providers keep none.
+    pub fn forget_website_sign_in(&self, provider: quota_domain::provider::ProviderId) {
+        let website = self
+            .state
+            .providers
+            .provider(provider)
+            .is_some_and(|adapter| adapter.console_sign_in().is_some());
+        if website {
+            console::forget_profile(&self.state.app, provider);
+        }
+    }
+
     /// Where the credentials Quota owns itself are kept.
     #[must_use]
     pub fn secrets(&self) -> &Arc<dyn quota_core::ports::SecretStore> {
@@ -381,8 +395,41 @@ impl MonitoringRuntime {
             .map_err(|code| quota_contracts::CommandError::Internal { code })
     }
 
-    /// Bumps one connection generation, then queues a verified refresh.
+    /// Reconnects one account. A session Quota signs in to on the provider's
+    /// website is signed in to again first, in the background; any other
+    /// account is verified again at once.
     pub async fn reconnect_account(
+        &self,
+        account_id: &AccountId,
+    ) -> Result<u32, quota_contracts::CommandError> {
+        let website = {
+            let registry = self.state.registry.read().await;
+            let entry = registry
+                .get(account_id)
+                .ok_or(quota_contracts::CommandError::AccountNotFound)?;
+            let connection = &entry.stored.connection;
+            self.state
+                .providers
+                .provider(connection.provider_id)
+                .filter(|_| connection.credential_ownership == CredentialOwnership::AppOwned)
+                .and_then(|adapter| Some((adapter.clone(), adapter.console_sign_in()?)))
+                .map(|found| (found, connection.id.clone(), entry.binding.generation))
+        };
+        if let Some(((adapter, console), connection_id, generation)) = website {
+            console::reconnect(
+                self.clone(),
+                adapter,
+                console,
+                account_id.clone(),
+                connection_id,
+            );
+            return Ok(generation);
+        }
+        self.verify_again(account_id).await
+    }
+
+    /// Bumps one connection generation, then queues a verified refresh.
+    pub(crate) async fn verify_again(
         &self,
         account_id: &AccountId,
     ) -> Result<u32, quota_contracts::CommandError> {
