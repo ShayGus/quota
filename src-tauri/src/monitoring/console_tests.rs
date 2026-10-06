@@ -134,3 +134,23 @@ async fn closing_the_browser_first_ends_the_sign_in() {
     source.finish().await;
     drop(server.join());
 }
+
+#[test]
+fn nothing_is_tried_until_the_page_has_left_sign_in() {
+    let console = site();
+    for page in [
+        "https://console.example.test/login?returnTo=%2Fsettings%2Fbilling",
+        "https://console.example.test/auth/callback",
+        "https://accounts.google.com/signin",
+        "http://console.example.test/settings/billing",
+        "not an address",
+    ] {
+        assert!(!past_sign_in(page, &console), "{page} is still sign-in");
+    }
+    for page in [
+        "https://console.example.test/",
+        "https://console.example.test/settings/billing",
+    ] {
+        assert!(past_sign_in(page, &console), "{page} is past sign-in");
+    }
+}
