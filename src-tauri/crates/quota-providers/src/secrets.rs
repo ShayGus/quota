@@ -123,6 +123,89 @@ impl Debug for SystemSecretStore {
     }
 }
 
+/// The longest value one entry holds, in characters.
+///
+/// Windows Credential Manager refuses a secret over 2,560 bytes, and a
+/// website session such as `TypeSafe`'s console cookies is longer. Each
+/// character is stored in two bytes there, so a part stays at 1,200, well
+/// inside the limit. A longer value is kept in numbered parts, and the
+/// connection's own entry names how many there are.
+const PART_LENGTH: usize = 1_200;
+
+/// How a connection's entry says its value is kept in parts. No credential
+/// Quota keeps starts with this.
+const PARTS_MARK: &str = "quota-parts:v1:";
+
+/// The value cut into parts no longer than `PART_LENGTH` characters.
+fn split_parts(value: &str) -> Vec<String> {
+    let characters: Vec<char> = value.chars().collect();
+    characters
+        .chunks(PART_LENGTH)
+        .map(|part| part.iter().collect())
+        .collect()
+}
+
+/// How many parts an entry's value names, when it names any.
+fn part_count(value: &str) -> Option<usize> {
+    value.strip_prefix(PARTS_MARK)?.parse().ok()
+}
+
+/// The entry name of one part of a connection's value.
+fn part_name(connection: &ConnectionId, part: usize) -> String {
+    format!("{}#part-{part}", connection.as_str())
+}
+
+/// An entry by name, under the application identifier.
+fn named(
+    store: Option<&Arc<CredentialStore>>,
+    service: &str,
+    name: &str,
+) -> Result<keyring_core::Entry, SecretStoreError> {
+    store
+        .ok_or(SecretStoreError::Unavailable)?
+        .build(service, name, None)
+        .map_err(|error| classify(&error))
+}
+
+/// One entry's value, `None` when there is no entry.
+fn get(
+    store: Option<&Arc<CredentialStore>>,
+    service: &str,
+    name: &str,
+) -> Result<Option<String>, SecretStoreError> {
+    match named(store, service, name)?.get_password() {
+        Ok(value) => Ok(Some(value)),
+        Err(Error::NoEntry) => Ok(None),
+        Err(error) => Err(classify(&error)),
+    }
+}
+
+/// Removes one entry; a missing one is already removed.
+fn remove(
+    store: Option<&Arc<CredentialStore>>,
+    service: &str,
+    name: &str,
+) -> Result<(), SecretStoreError> {
+    match named(store, service, name)?.delete_credential() {
+        Ok(()) | Err(Error::NoEntry) => Ok(()),
+        Err(error) => Err(classify(&error)),
+    }
+}
+
+/// Removes the parts numbered `from` to `to`.
+fn remove_parts(
+    store: Option<&Arc<CredentialStore>>,
+    service: &str,
+    connection: &ConnectionId,
+    from: usize,
+    to: usize,
+) -> Result<(), SecretStoreError> {
+    for part in from..=to {
+        remove(store, service, &part_name(connection, part))?;
+    }
+    Ok(())
+}
+
 #[async_trait]
 impl SecretStore for SystemSecretStore {
     async fn read(&self, connection: &ConnectionId) -> Result<Option<Secret>, SecretStoreError> {
@@ -130,11 +213,21 @@ impl SecretStore for SystemSecretStore {
         let service = self.service.clone();
         let connection = connection.clone();
         on_blocking_worker(move || {
-            match entry(store.as_ref(), &service, &connection)?.get_password() {
-                Ok(value) => Ok(Some(Secret::new(value))),
-                Err(Error::NoEntry) => Ok(None),
-                Err(error) => Err(classify(&error)),
+            let store = store.as_ref();
+            let Some(value) = get(store, &service, connection.as_str())? else {
+                return Ok(None);
+            };
+            let Some(count) = part_count(&value) else {
+                return Ok(Some(Secret::new(value)));
+            };
+            let mut joined = String::new();
+            for part in 1..=count {
+                // A missing part is a value that cannot be put back together.
+                let piece = get(store, &service, &part_name(&connection, part))?
+                    .ok_or(SecretStoreError::Refused)?;
+                joined.push_str(&piece);
             }
+            Ok(Some(Secret::new(joined)))
         })
         .await
     }
@@ -149,9 +242,32 @@ impl SecretStore for SystemSecretStore {
         let connection = connection.clone();
         let value = secret.expose().to_owned();
         on_blocking_worker(move || {
-            entry(store.as_ref(), &service, &connection)?
-                .set_password(&value)
-                .map_err(|error| classify(&error))
+            let store = store.as_ref();
+            let before = get(store, &service, connection.as_str())?
+                .as_deref()
+                .and_then(part_count)
+                .unwrap_or(0);
+            let parts = split_parts(&value);
+            let written = if parts.len() <= 1 {
+                named(store, &service, connection.as_str())?
+                    .set_password(&value)
+                    .map_err(|error| classify(&error))?;
+                0
+            } else {
+                // The parts first, then the entry that names them, so a
+                // reader never finds an entry naming parts not yet written.
+                for (index, part) in parts.iter().enumerate() {
+                    named(store, &service, &part_name(&connection, index + 1))?
+                        .set_password(part)
+                        .map_err(|error| classify(&error))?;
+                }
+                named(store, &service, connection.as_str())?
+                    .set_password(&format!("{PARTS_MARK}{}", parts.len()))
+                    .map_err(|error| classify(&error))?;
+                parts.len()
+            };
+            // Parts a longer earlier value left behind.
+            remove_parts(store, &service, &connection, written + 1, before)
         })
         .await
     }
@@ -161,10 +277,13 @@ impl SecretStore for SystemSecretStore {
         let service = self.service.clone();
         let connection = connection.clone();
         on_blocking_worker(move || {
-            match entry(store.as_ref(), &service, &connection)?.delete_credential() {
-                Ok(()) | Err(Error::NoEntry) => Ok(()),
-                Err(error) => Err(classify(&error)),
-            }
+            let store = store.as_ref();
+            let count = get(store, &service, connection.as_str())?
+                .as_deref()
+                .and_then(part_count)
+                .unwrap_or(0);
+            remove_parts(store, &service, &connection, 1, count)?;
+            remove(store, &service, connection.as_str())
         })
         .await
     }
@@ -244,18 +363,6 @@ where
     }
 }
 
-/// Builds the store entry for one connection.
-fn entry(
-    store: Option<&Arc<CredentialStore>>,
-    service: &str,
-    connection: &ConnectionId,
-) -> Result<keyring_core::Entry, SecretStoreError> {
-    store
-        .ok_or(SecretStoreError::Unavailable)?
-        .build(service, connection.as_str(), None)
-        .map_err(|error| classify(&error))
-}
-
 /// Maps a store failure onto the port's closed set, dropping its text, which
 /// can name the entry.
 fn classify(error: &Error) -> SecretStoreError {
@@ -266,170 +373,5 @@ fn classify(error: &Error) -> SecretStoreError {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// The identifier `src-tauri/tauri.conf.json` gives a production build and
-    /// the one its development overlay gives a development build.
-    const PRODUCTION: &str = "app.quota.monitor";
-    const DEVELOPMENT: &str = "app.quota.monitor.dev";
-
-    fn memory() -> Arc<CredentialStore> {
-        keyring_core::mock::Store::new().expect("the in-memory store opens")
-    }
-
-    fn connection(id: &str) -> ConnectionId {
-        ConnectionId::new(id).expect("a connection id")
-    }
-
-    fn runtime() -> tokio::runtime::Runtime {
-        tokio::runtime::Builder::new_current_thread()
-            .build()
-            .expect("a runtime")
-    }
-
-    /// The store destruction path runs outside the async runtime.
-    #[cfg(target_os = "linux")]
-    #[derive(Debug)]
-    struct DropReportingStore {
-        inner: Arc<CredentialStore>,
-        dropped: std::sync::mpsc::Sender<bool>,
-    }
-
-    #[cfg(target_os = "linux")]
-    impl keyring_core::api::CredentialStoreApi for DropReportingStore {
-        fn vendor(&self) -> String {
-            self.inner.vendor()
-        }
-
-        fn id(&self) -> String {
-            self.inner.id()
-        }
-
-        fn build(
-            &self,
-            service: &str,
-            user: &str,
-            modifiers: Option<&std::collections::HashMap<&str, &str>>,
-        ) -> keyring_core::Result<keyring_core::Entry> {
-            self.inner.build(service, user, modifiers)
-        }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-    }
-
-    #[cfg(target_os = "linux")]
-    impl Drop for DropReportingStore {
-        fn drop(&mut self) {
-            self.dropped
-                .send(tokio::runtime::Handle::try_current().is_ok())
-                .expect("the drop observer is still listening");
-        }
-    }
-
-    /// A startup failure drops both registries, and the store, off the runtime.
-    #[cfg(all(target_os = "linux", feature = "test-fixtures"))]
-    #[test]
-    fn startup_failure_drops_both_registries_outside_the_runtime() {
-        let runtime = runtime();
-
-        for with_fixture in [false, true] {
-            let (dropped, observer) = std::sync::mpsc::channel();
-            let store = SystemSecretStore::over(
-                Arc::new(DropReportingStore {
-                    inner: memory(),
-                    dropped,
-                }),
-                DEVELOPMENT,
-            );
-            let result = runtime.block_on(async move {
-                let secrets: Arc<dyn SecretStore> = Arc::new(store);
-                let providers = if with_fixture {
-                    crate::ProviderRegistry::with_fixture(secrets)
-                } else {
-                    crate::ProviderRegistry::production(secrets)
-                }
-                .expect("the registry builds");
-                let connection = connection("startup-cleanup");
-                let secrets = providers.secrets();
-                secrets
-                    .write(&connection, &Secret::new("test-key".to_owned()))
-                    .await
-                    .expect("write");
-                assert_eq!(
-                    secrets
-                        .read(&connection)
-                        .await
-                        .expect("read")
-                        .expect("a secret")
-                        .expose(),
-                    "test-key"
-                );
-                secrets.delete(&connection).await.expect("delete");
-                assert!(secrets.read(&connection).await.expect("read").is_none());
-                std::future::ready(Err::<(), &str>("sample_persist:test")).await?;
-                Ok::<(), &str>(())
-            });
-
-            assert_eq!(result, Err("sample_persist:test"));
-            assert!(
-                !observer
-                    .recv_timeout(std::time::Duration::from_secs(5))
-                    .expect("the credential store was destroyed"),
-                "credential store destruction entered the async runtime"
-            );
-        }
-    }
-
-    /// Two identifiers over one store: neither reaches the other's entry.
-    #[test]
-    fn a_development_build_never_reaches_a_production_entry() {
-        runtime().block_on(async {
-            let system = memory();
-            let development = SystemSecretStore::over(system.clone(), DEVELOPMENT);
-            let production = SystemSecretStore::over(system, PRODUCTION);
-            let connection = connection("c1");
-
-            development
-                .write(&connection, &Secret::new("development".to_owned()))
-                .await
-                .expect("write");
-
-            assert!(
-                production.read(&connection).await.expect("read").is_none(),
-                "the production identifier read a development entry"
-            );
-            production.delete(&connection).await.expect("delete");
-            assert!(
-                development.read(&connection).await.expect("read").is_some(),
-                "the production identifier removed a development entry"
-            );
-        });
-    }
-
-    /// Opening the real store from inside a running Tokio runtime never panics.
-    ///
-    /// The Linux Secret Service store drives a runtime of its own, so opening it
-    /// on an async worker used to panic with "Cannot start a runtime from within
-    /// a runtime", before any window was shown. A machine with an unlocked
-    /// keyring reads a generated connection as no entry. A session with no
-    /// Secret Service behind it, with a session bus or without one, reports the
-    /// store as unavailable. Both are stores the application starts on; anything
-    /// else is a store this did not expect.
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn the_system_store_opens_inside_a_running_tokio_runtime() {
-        runtime().block_on(async {
-            // The development identifier, so this never reaches a production
-            // entry. Neither call leaves the runtime.
-            let store = system(DEVELOPMENT).await;
-            let read = store.read(&ConnectionId::generate()).await;
-            assert!(
-                matches!(&read, Ok(None) | Err(SecretStoreError::Unavailable)),
-                "the store neither worked nor reported itself unavailable: {read:?}"
-            );
-        });
-    }
-}
+#[path = "secrets_tests.rs"]
+mod tests;
