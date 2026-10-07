@@ -41,11 +41,11 @@ import { useWidgetChrome } from "./Widget";
 const PER_ROW = 4;
 
 /** A tile's width with up to three a row, and with four, in CSS pixels. */
-const WIDE_TILE = 96;
-const NARROW_TILE = 72;
+const WIDE_TILE = 92;
+const NARROW_TILE = 68;
 
 /** The gaps between tiles, between rows, and between the strip's blocks. */
-const TILE_GAP = 2;
+const TILE_GAP = 8;
 const ROW_GAP = 4;
 const STRIP_GAP = 4;
 
@@ -523,7 +523,7 @@ export function RingStrip({
               <ProviderMark providerId={account.providerId} />
             </span>
             {account.ringValues ? (
-              <span className="widget-readings">
+              <span className={`widget-readings${wide ? "" : " stacked"}`}>
                 {account.rings.map((ring) => (
                   <span
                     key={ring.period}
