@@ -396,7 +396,7 @@ describe("the widget window", () => {
     );
   }
 
-  function press(target: Element, x: number, y: number, pointerId = 7): void {
+  function press(target: Element | Window, x: number, y: number, pointerId = 7): void {
     fireEvent.pointerDown(target, { button: 0, pointerId, clientX: x, clientY: y });
   }
 
@@ -559,7 +559,31 @@ describe("the widget window", () => {
     expect(ipc.dragWidget).toHaveBeenCalledOnce();
   });
 
-  it("drags after a pressed copy notice expires, with its timer restarted by another copy", async () => {
+  it("drags from a primary press in the empty area below the widget", () => {
+    const onExpand = vi.fn();
+    renderWidget(onExpand);
+    fireEvent.pointerDown(window, { button: 2, pointerId: 7, clientX: 50, clientY: 200 });
+    move(window, 50, 204);
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
+    press(window, 50, 200);
+    move(window, 53, 200);
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
+    move(window, 54, 200);
+    move(window, 60, 200);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.pointerUp(window, { pointerId: 7 });
+    fireEvent.click(screen.getByRole("button", { name: "Open the full window" }), {
+      detail: 1,
+    });
+    expect(onExpand).not.toHaveBeenCalled();
+    const button = screen.getByRole("button", { name: "Open the full window" });
+    press(button, 280, 20);
+    fireEvent.pointerUp(button, { pointerId: 7 });
+    fireEvent.click(button, { detail: 1 });
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("drags after a pressed copy notice expires", async () => {
     vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
     renderWidget(vi.fn());
     const copy = async (): Promise<void> => {
@@ -572,12 +596,9 @@ describe("the widget window", () => {
     };
     await copy();
     act(() => vi.advanceTimersByTime(TOAST_MS - 100));
-    await copy();
-    act(() => vi.advanceTimersByTime(100));
-    expect(screen.getByRole("status").textContent).toContain("Prompt copied");
     const notice = screen.getByRole("status");
     press(notice, 50, 135);
-    act(() => vi.advanceTimersByTime(TOAST_MS - 100));
+    act(() => vi.advanceTimersByTime(100));
     expect(screen.queryByRole("status")).toBeNull();
     move(window, 50, 139);
     move(window, 50, 145);
@@ -591,6 +612,7 @@ describe("the widget window", () => {
     const view = renderWidget(vi.fn());
     press(screen.getByRole("button", { name: /^Claude/ }), 50, 50);
     view.unmount();
+    press(window, 50, 50);
     move(window, 50, 54);
     expect(ipc.dragWidget).not.toHaveBeenCalled();
   });

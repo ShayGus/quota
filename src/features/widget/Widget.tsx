@@ -21,8 +21,6 @@ import {
   useRef,
   useState,
   type JSX,
-  type MouseEvent,
-  type PointerEvent,
 } from "react";
 
 import { launch } from "../../shared/ipc/report";
@@ -134,16 +132,11 @@ export function Widget({
   const chrome = useWidgetChromeValue();
   useFitWindow(root, chrome);
   useTransparentPage();
-  const drag = useDragToMove(chrome);
+  useDragToMove(chrome);
   const [copied, showCopied] = useCopiedNotice();
   return (
     <WidgetChromeContext value={chrome}>
-      <div
-        className="widget"
-        ref={root}
-        onPointerDown={drag.onPointerDown}
-        onClickCapture={drag.onClickCapture}
-      >
+      <div className="widget" ref={root}>
         {accounts.length === 0 ? (
           <button type="button" className="widget-empty" onClick={onExpand}>
             <strong>No accounts to show</strong>
@@ -308,13 +301,10 @@ function useTransparentPage(): void {
  * Moves the window when it is dragged from anywhere on it, while a press that
  * does not move stays a click on whatever is under it.
  */
-function useDragToMove(controls: WidgetPressControls): {
-  readonly onPointerDown: (event: PointerEvent) => void;
-  readonly onClickCapture: (event: MouseEvent) => void;
-} {
+function useDragToMove(controls: WidgetPressControls): void {
   const { press, beginPress, markDragging, endPress } = controls;
   const suppressClick = useRef(false);
-  const handlers = useMemo(() => {
+  useEffect(() => {
     const finish = (): void => {
       window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerup", onRelease, true);
@@ -345,36 +335,38 @@ function useDragToMove(controls: WidgetPressControls): {
         finish();
       }
     };
-    return {
-      finish,
-      onPointerDown: (event: PointerEvent) => {
-        if (event.button !== 0) {
-          return;
-        }
+    const onPress = (event: globalThis.PointerEvent): void => {
+      if (event.button !== 0) {
+        return;
+      }
+      suppressClick.current = false;
+      finish();
+      beginPress({
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        dragging: false,
+      });
+      window.addEventListener("pointermove", onMove, true);
+      window.addEventListener("pointerup", onRelease, true);
+      window.addEventListener("pointercancel", onRelease, true);
+      window.addEventListener("blur", finish);
+    };
+    const onClick = (event: globalThis.MouseEvent): void => {
+      // A click that follows a drag is swallowed, on any button. A keyboard
+      // click is never part of a drag, so it is always let through.
+      if (suppressClick.current && event.detail !== 0) {
+        event.preventDefault();
+        event.stopPropagation();
         suppressClick.current = false;
-        finish();
-        beginPress({
-          pointerId: event.pointerId,
-          x: event.clientX,
-          y: event.clientY,
-          dragging: false,
-        });
-        window.addEventListener("pointermove", onMove, true);
-        window.addEventListener("pointerup", onRelease, true);
-        window.addEventListener("pointercancel", onRelease, true);
-        window.addEventListener("blur", finish);
-      },
-      onClickCapture: (event: MouseEvent) => {
-        // A click that follows a drag is swallowed, on any button. A keyboard
-        // click is never part of a drag, so it is always let through.
-        if (suppressClick.current && event.detail !== 0) {
-          event.preventDefault();
-          event.stopPropagation();
-          suppressClick.current = false;
-        }
-      },
+      }
+    };
+    window.addEventListener("pointerdown", onPress, true);
+    window.addEventListener("click", onClick, true);
+    return () => {
+      window.removeEventListener("pointerdown", onPress, true);
+      window.removeEventListener("click", onClick, true);
+      finish();
     };
   }, [press, beginPress, markDragging, endPress]);
-  useEffect(() => handlers.finish, [handlers]);
-  return handlers;
 }
