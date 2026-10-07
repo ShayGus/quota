@@ -296,8 +296,9 @@ test.describe("widget sizes", () => {
     test(`${surface.name}: always ${String(WIDGET_WIDTH)} px wide, and tall exactly as its accounts need`, async ({
       open,
     }) => {
-      // The widget fits its content: it asks the host for exactly the size it
-      // measures. The code sets no minimum or maximum height; the width is fixed.
+      // The widget fits its content: it asks the host to fit the window to
+      // exactly the height it measures, through the fit_widget command. The
+      // code sets no minimum or maximum height; the width is fixed.
       const heights: number[] = [];
       for (const count of COUNT_STEPS) {
         const accounts = Array.from({ length: count }, (_, index) =>
@@ -316,12 +317,10 @@ test.describe("widget sizes", () => {
         heights.push(box?.height ?? 0);
         await expect
           .poll(async () => {
-            const sizes = await host.callsTo("plugin:window|set_size");
+            const sizes = await host.callsTo("fit_widget");
             const last = sizes.at(-1)?.args as
-              { value: { size: { width: number; height: number } } } | undefined;
-            return last === undefined
-              ? null
-              : [last.value.size.width, last.value.size.height];
+              { contentHeight: number; direction: string } | undefined;
+            return last === undefined ? null : [WIDGET_WIDTH, last.contentHeight];
           })
           .toEqual([WIDGET_WIDTH, Math.ceil(box?.height ?? 0)]);
         await host.screenshot(
@@ -397,7 +396,7 @@ test.describe("switching modes", () => {
     await widget.page.getByRole("button", { name: "Open the full window" }).click();
     const after = (await widget.calls())
       .slice(before)
-      .filter((call) => call.command !== "plugin:window|set_size");
+      .filter((call) => call.command !== "fit_widget");
     expect(after.map((call) => [call.command, call.args])).toEqual([
       ["set_app_view", { view: "overview" }],
     ]);
