@@ -167,12 +167,26 @@ export function RingStrip({
     settleDone.current = null;
   }, []);
 
-  const stopHoverTimer = (): void => {
+  const stopHoverTimer = useCallback((): void => {
     if (hoverTimer.current !== null) {
       window.clearTimeout(hoverTimer.current);
       hoverTimer.current = null;
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    chrome.onPressEnd.current = (target): void => {
+      stopHoverTimer();
+      const hit = keyboard.current ? document.activeElement : target;
+      const tile = [...tiles.current].find(
+        ([, element]) => hit !== null && element.contains(hit),
+      );
+      setHovered(tile?.[0] ?? null);
+    };
+    return () => {
+      chrome.onPressEnd.current = null;
+    };
+  }, [chrome, stopHoverTimer]);
 
   /**
    * Shrinks the drawer to `want` first and the window after, for a switch or

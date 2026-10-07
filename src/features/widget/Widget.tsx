@@ -61,6 +61,7 @@ export interface WidgetPress {
  * the host for a size. The strip reads the press to freeze while one is held.
  */
 export interface WidgetChrome {
+  readonly onPressEnd: { current: ((target: Element | null) => void) | null };
   /** The press in progress, or `null` when no button is held. */
   readonly press: { current: WidgetPress | null };
   /** Whether the drawer is open; the window fit then follows the drawer. */
@@ -84,12 +85,13 @@ interface WidgetPressControls {
   readonly press: { current: WidgetPress | null };
   readonly beginPress: (press: WidgetPress) => void;
   readonly markDragging: () => void;
-  readonly endPress: () => void;
+  readonly endPress: (target: Element | null) => void;
 }
 
 const defaultDrawerOpen = { current: false };
 
 const WidgetChromeContext = createContext<WidgetChrome>({
+  onPressEnd: { current: null },
   press: { current: null },
   drawerOpen: defaultDrawerOpen,
   setDrawerOpen: (open) => {
@@ -169,6 +171,7 @@ export function Widget({
 
 /** The window's shared press, drawer flag and deferred fit. */
 function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
+  const onPressEnd = useRef<((target: Element | null) => void) | null>(null);
   const press = useRef<WidgetPress | null>(null);
   const drawerOpen = useRef(false);
   const target = useRef<number | null>(null);
@@ -194,14 +197,21 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
     },
     [send],
   );
-  const endPress = useCallback((): void => {
-    press.current = null;
-    const held = pending.current;
-    pending.current = null;
-    if (held !== null) {
-      send(held.contentHeight, held.direction).then(held.resolve, held.resolve);
-    }
-  }, [send]);
+  const endPress = useCallback(
+    (element: Element | null): void => {
+      const heldPress = press.current;
+      press.current = null;
+      if (heldPress !== null) {
+        onPressEnd.current?.(element);
+      }
+      const held = pending.current;
+      pending.current = null;
+      if (held !== null) {
+        send(held.contentHeight, held.direction).then(held.resolve, held.resolve);
+      }
+    },
+    [send],
+  );
   const beginPress = useCallback(
     (next: WidgetPress): void => {
       press.current = next;
@@ -222,6 +232,7 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
   );
   return useMemo(
     () => ({
+      onPressEnd,
       press,
       drawerOpen,
       setDrawerOpen,
@@ -305,12 +316,16 @@ function useDragToMove(controls: WidgetPressControls): void {
   const { press, beginPress, markDragging, endPress } = controls;
   const suppressClick = useRef(false);
   useEffect(() => {
-    const finish = (): void => {
+    const finish = (event?: Event): void => {
       window.removeEventListener("pointermove", onMove, true);
       window.removeEventListener("pointerup", onRelease, true);
       window.removeEventListener("pointercancel", onRelease, true);
       window.removeEventListener("blur", finish);
-      endPress();
+      endPress(
+        event instanceof window.PointerEvent && event.type !== "pointercancel"
+          ? document.elementFromPoint(event.clientX, event.clientY)
+          : null,
+      );
     };
     const onMove = (event: globalThis.PointerEvent): void => {
       const held = press.current;
@@ -318,7 +333,7 @@ function useDragToMove(controls: WidgetPressControls): void {
         return;
       }
       if ((event.buttons & 1) === 0) {
-        finish();
+        finish(event);
         return;
       }
       if (
@@ -332,7 +347,7 @@ function useDragToMove(controls: WidgetPressControls): void {
     };
     const onRelease = (event: globalThis.PointerEvent): void => {
       if (event.pointerId === press.current?.pointerId) {
-        finish();
+        finish(event);
       }
     };
     const onPress = (event: globalThis.PointerEvent): void => {

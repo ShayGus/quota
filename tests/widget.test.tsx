@@ -370,6 +370,10 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
+  beforeEach(() => {
+    document.elementFromPoint = vi.fn(() => null);
+  });
+
   const report = {
     openIssue: vi.fn(() => Promise.resolve()),
     copyPrompt: vi.fn(() => Promise.resolve(true)),
@@ -460,6 +464,75 @@ describe("the widget window", () => {
     expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
   });
 
+  it.each(["footer", "outside the widget"])(
+    "clears the peek and highlight after dragging into %s",
+    (destination) => {
+      const view = renderWidget(vi.fn());
+      const tile = screen.getByRole("button", { name: /^Kimi/ });
+      const footer = view.container.querySelector(".widget-foot") as HTMLElement;
+      fireEvent.pointerEnter(tile);
+      expect(tile.classList.contains("hover")).toBe(true);
+      press(tile, 50, 79);
+      move(footer, 50, 83);
+      fireEvent.pointerLeave(tile);
+      expect(tile.classList.contains("hover")).toBe(true);
+      vi.mocked(document.elementFromPoint).mockReturnValueOnce(
+        destination === "footer" ? footer : null,
+      );
+      fireEvent.pointerUp(window, { pointerId: 7, clientX: 50, clientY: 83 });
+      expect(document.elementFromPoint).toHaveBeenCalledWith(50, 83);
+      expect(ipc.dragWidget).toHaveBeenCalledOnce();
+      expect(tile.classList.contains("hover")).toBe(false);
+      expect(footer.classList.contains("peeking")).toBe(false);
+    },
+  );
+
+  it("shows the tile under the release after its pointer enter was ignored while pressed", () => {
+    const view = renderWidget(vi.fn());
+    const first = screen.getByRole("button", { name: /^Kimi/ });
+    const second = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.pointerEnter(first);
+    press(first, 50, 50);
+    move(second, 150, 50);
+    fireEvent.pointerLeave(first);
+    fireEvent.pointerEnter(second);
+    expect(first.classList.contains("hover")).toBe(true);
+    expect(second.classList.contains("hover")).toBe(false);
+    vi.mocked(document.elementFromPoint).mockReturnValueOnce(
+      second.querySelector("span"),
+    );
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 150, clientY: 50 });
+    expect(first.classList.contains("hover")).toBe(false);
+    expect(second.classList.contains("hover")).toBe(true);
+    expect(view.container.querySelector(".widget-peek")?.textContent).toContain("Claude");
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+  });
+
+  it.each(["pointercancel", "blur"])(
+    "clears pointer hover when a press ends on %s",
+    (ending) => {
+      renderWidget(vi.fn());
+      const tile = screen.getByRole("button", { name: /^Kimi/ });
+      fireEvent.pointerEnter(tile);
+      press(tile, 50, 50);
+      fireEvent(window, new window.PointerEvent(ending, { pointerId: 7 }));
+      expect(tile.classList.contains("hover")).toBe(false);
+      expect(document.querySelector(".widget-foot.peeking")).toBeNull();
+    },
+  );
+
+  it("keeps a keyboard-focused tile's peek when a press outside the strip ends", () => {
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Kimi/ });
+    fireEvent.keyDown(tile, { key: "Tab" });
+    act(() => tile.focus());
+    press(window, 50, 200);
+    fireEvent.pointerUp(window, { pointerId: 7, clientX: 50, clientY: 200 });
+    expect(document.activeElement).toBe(tile);
+    expect(document.querySelector(".widget-peek")?.textContent).toContain("Kimi");
+    expect(tile.classList.contains("hover")).toBe(true);
+  });
+
   it("drags from the drawer, the key line and the corner button", async () => {
     const onExpand = vi.fn();
     const view = renderWidget(onExpand);
@@ -508,6 +581,9 @@ describe("the widget window", () => {
   it.each(["pointerup", "pointercancel", "blur"])(
     "ends a drag on %s at the window boundary",
     async (release) => {
+      if (release === "blur") {
+        vi.spyOn(document, "hasFocus").mockReturnValue(false);
+      }
       const view = renderWidget(vi.fn());
       const tile = screen.getByRole("button", { name: /^Claude/ });
       fireEvent.click(tile);
