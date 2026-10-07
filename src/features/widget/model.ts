@@ -15,7 +15,11 @@ import type {
   QuotaWindow,
 } from "../../generated/bindings";
 import { displayName } from "../../shared/format/alias";
-import { moneyLeft, remainingPercent } from "../../shared/format/allowance";
+import {
+  moneyLeft,
+  remainingPercent,
+  type Severity,
+} from "../../shared/format/allowance";
 import { isPrepaidBalance, isRankable, isWindowShown } from "../../shared/format/balance";
 import { providerLabel } from "../../shared/format/provider";
 import { placeAccounts } from "../../shared/state/order";
@@ -29,7 +33,7 @@ import {
   windowView,
   type WindowView,
 } from "../overview/reading";
-import { statusOf } from "../overview/status";
+import { statusOf, type StatusStatement } from "../overview/status";
 
 /** A period, which names a ring and gives it its colour. */
 export type Period = QuotaWindow["category"];
@@ -69,6 +73,8 @@ export interface WidgetRow {
   readonly low: boolean;
   /** When it next changes, `in 6d 2h`, or a word on why there is no number. */
   readonly reset: string;
+  /** Whether the value is the last accepted reading, drawn muted. */
+  readonly stale: boolean;
 }
 
 /** One account as the widget draws it. */
@@ -95,6 +101,13 @@ export interface WidgetAccount {
   readonly rows: readonly WidgetRow[];
   /** The sentence an assistive technology reads for the whole account. */
   readonly description: string;
+  /**
+   * The drawer's status chip, for an account whose number cannot be trusted.
+   * `null` when the account reads normally and the drawer has no chip.
+   */
+  readonly chip: { readonly text: string; readonly tone: Severity } | null;
+  /** The peek line's summary, after the account name: its status or reset. */
+  readonly peek: string;
 }
 
 /**
@@ -150,9 +163,13 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
   const others = shown.filter((window) => !isRankable(window));
   const rows = [...included, ...others].map((window) => row(account, window, now));
   const rings = ringsOf(rows.slice(0, included.length));
-  const headline = headlineOf(account, rows, included.length, now);
+  const status = statusOf(account, now);
+  const problem = PROBLEMS.has(status.text)
+    ? { text: status.text, tone: status.tone }
+    : null;
+  const { headline, row: headlineRow } = headlineOf(status, rows, included.length);
   const words = rows.map((entry) => `${entry.name} ${entry.value}`).join(", ");
-  const ringValues = rings.length > 0 && !PROBLEMS.has(statusOf(account, now).text);
+  const ringValues = rings.length > 0 && problem === null;
   return {
     id: account.account_id,
     providerId: account.provider_id,
@@ -162,6 +179,8 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
     ringValues,
     rows,
     description: words === "" ? `${name}: ${headline.value}` : `${name}: ${words}`,
+    chip: problem,
+    peek: peekSummary(problem, rows, headlineRow),
   };
 }
 
@@ -185,6 +204,7 @@ function row(account: AccountSnapshot, window: QuotaWindow, now: number): Widget
   const money = known ? moneyLeft(window.measurement) : null;
   const fraction = money === null || gauge ? viewFraction(view, window) : null;
   const percent = known ? remainingPercent(window.measurement) : null;
+  const reset = resetWords(view, window, now);
   return {
     tag: tagOf(window),
     name: windowLabel(window),
@@ -193,7 +213,8 @@ function row(account: AccountSnapshot, window: QuotaWindow, now: number): Widget
     fraction,
     value: money === null ? viewValue(view, window) : gauge ? money : `${money} left`,
     low: (money === null || gauge) && percent !== null && percent <= LOW_PERCENT,
-    reset: resetWords(view, window, now),
+    reset,
+    stale: reset === "last known",
   };
 }
 
@@ -278,17 +299,20 @@ const LETTERS: Partial<Record<Period, string>> = {
 /**
  * The number under the rings: what is wrong with the account when something
  * is, else the tightest allowance, named so the number and its ring read
- * together, else the money an account without an allowance has left.
+ * together, else the money an account without an allowance has left. The
+ * headline's own row comes back with it, so the peek line can name the same
+ * limit.
  */
 function headlineOf(
-  account: AccountSnapshot,
+  status: StatusStatement,
   rows: readonly WidgetRow[],
   includedCount: number,
-  now: number,
-): WidgetAccount["headline"] {
-  const status = statusOf(account, now);
+): { readonly headline: WidgetAccount["headline"]; readonly row: WidgetRow | null } {
   if (PROBLEMS.has(status.text)) {
-    return { tag: "", value: status.text, low: status.tone !== "pending" };
+    return {
+      headline: { tag: "", value: status.text, low: status.tone !== "pending" },
+      row: null,
+    };
   }
   const shares = rows.slice(0, includedCount).filter((entry) => entry.fraction !== null);
   const tightest = shares.reduce<WidgetRow | null>(
@@ -297,13 +321,51 @@ function headlineOf(
     null,
   );
   if (tightest !== null) {
-    return { tag: tightest.tag, value: tightest.value, low: tightest.low };
+    return {
+      headline: { tag: tightest.tag, value: tightest.value, low: tightest.low },
+      row: tightest,
+    };
   }
   const money = rows.find((entry) => entry.kind === "amount" && entry.value !== "—");
   if (money !== undefined) {
-    return { tag: "", value: money.value.replace(/ left$/, ""), low: false };
+    return {
+      headline: { tag: "", value: money.value.replace(/ left$/, ""), low: false },
+      row: money,
+    };
   }
-  return { tag: "", value: rows[0]?.value ?? "—", low: false };
+  const first = rows[0] ?? null;
+  return {
+    headline: { tag: "", value: first?.value ?? "—", low: false },
+    row: first,
+  };
+}
+
+/**
+ * The peek line's summary for one account: a problem status with its
+ * last-known note, else the headline row's reset, else its amount, else that
+ * no reading was reported.
+ */
+function peekSummary(
+  problem: { readonly text: string; readonly tone: Severity } | null,
+  rows: readonly WidgetRow[],
+  headlineRow: WidgetRow | null,
+): string {
+  if (problem !== null) {
+    const lastKnown = rows.some((entry) => entry.stale);
+    return lastKnown ? `${problem.text} · last known values` : problem.text;
+  }
+  if (headlineRow === null || headlineRow.value === "—") {
+    return "no reading reported";
+  }
+  if (headlineRow.kind === "amount") {
+    return headlineRow.value;
+  }
+  if (headlineRow.reset.startsWith("in ")) {
+    return `${headlineRow.name} resets ${headlineRow.reset}`;
+  }
+  return headlineRow.reset === ""
+    ? headlineRow.name
+    : `${headlineRow.name} ${headlineRow.reset}`;
 }
 
 /** The statuses that replace the number, because the number cannot be trusted. */

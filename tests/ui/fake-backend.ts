@@ -252,6 +252,16 @@ export function installFakeBackend(config: FakeConfig): void {
         return config.overviewWindow;
       case "fit_overview_height":
         return config.overviewWindow;
+      case "fit_widget": {
+        const asked = typeof args?.contentHeight === "number" ? args.contentHeight : 0;
+        const direction = args?.direction === "up" ? "up" : "down";
+        return {
+          height: asked,
+          direction,
+          room_above: 800,
+          room_below: 800,
+        };
+      }
       case "set_account_enabled": {
         const enabled = (args?.request as { enabled: boolean }).enabled;
         updateAccount(accountId(args), (entry) => ({

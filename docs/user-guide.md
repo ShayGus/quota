@@ -278,13 +278,21 @@ and when it can next be checked.
 
 The mini widget is a small window with every account at a glance. It replaces the full
 window rather than opening beside it, stays on top of other windows, and keeps its place
-and its view when Quota restarts. Drag it anywhere.
+and its view when Quota restarts. Drag it anywhere: press on a tile, a detail row, or the
+frame, and move 4 px or more.
 
 Switch to it with the header's **Switch to the mini widget** button, the tray menu's
 **Mini widget**, or **Settings → General → Mini widget**. Its expand button, **Open the
 full window**, switches back. Beside it, **Report a bug** offers the same two choices as
 the header (see [Report a bug](#report-a-bug)). Both buttons show while the pointer is on
 the widget.
+
+In the rings layout, point at a tile and the line under the tiles names the account with
+its status or next reset, without resizing the window or covering content. A click after
+moving less than 4 px opens its details below the tiles, or above them when there is not
+enough room below, such as near the taskbar. When space is limited on both sides, the
+drawer's rows scroll. Click the tile again, its **Close the details** button, or another
+app to close the drawer. Press Esc to close and return to the tile.
 
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
 mini cards.

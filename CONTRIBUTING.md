@@ -339,18 +339,17 @@ to the code like this:
 | Floating bar   | `view: widget` with rings: the ring strip       | `widget-strip`                                                               |
 | Floating cards | `view: widget` with bars: the mini cards        | `widget-cards`                                                               |
 
-Every surface is run against each of these (all of them for both themes; 257 interface
-tests in total, about 250 screenshots):
+Every surface is run against each of these in both themes:
 
-| Axis            | Values                                                                                                                                       |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Account count   | 0, 1, 2, 3 (odd: the last mini card is full width), 7; for the strip, rows of at most four, as even as they can be                           |
-| Account state   | healthy, low, rate limited, offline, check failed, reconnect needed                                                                          |
-| Theme           | light, dark                                                                                                                                  |
-| Privacy aliases | off, on (no account name anywhere in the page, accessible names included)                                                                    |
-| Long names      | two accounts of one provider with 100-character nicknames: nothing is wider than the window                                                  |
-| Widget size     | always 316 px wide; its height is exactly what it asks the host for, from 0 to 12 accounts. The code sets no minimum or maximum height       |
-| Switching       | full window to widget and back, Expand from the widget, the Settings "Mini widget" switch, the pin (docked and floating), the layout buttons |
+| Axis            | Values                                                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Account count   | 0, 1, 2, 3 (odd: the last mini card is full width), 7; for the strip, rows of at most four, as even as they can be                              |
+| Account state   | healthy, low, rate limited, offline, check failed, reconnect needed                                                                             |
+| Theme           | light, dark                                                                                                                                     |
+| Privacy aliases | off, on (no account name anywhere in the page, accessible names included)                                                                       |
+| Long names      | two accounts of one provider with 100-character nicknames: nothing is wider than the window                                                     |
+| Widget size     | 316 px wide, with 0 to 12 accounts in the renderer size scenarios; native fitting follows [The mini widget](docs/user-guide.md#the-mini-widget) |
+| Switching       | full window to widget and back, Expand from the widget, the Settings "Mini widget" switch, the pin (docked and floating), the layout buttons    |
 
 Counts by theme by aliases are 6 surfaces x 5 x 2 x 2 = 120 tests, states by theme are 6 x
 6 x 2 = 72, long names 12, sizes 3, switching 5. `test-results/screenshots/index.html` is
