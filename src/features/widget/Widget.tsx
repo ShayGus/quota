@@ -60,7 +60,7 @@ export interface WidgetPress {
  * the host for a size. The strip reads the press to freeze while one is held.
  */
 export interface WidgetChrome {
-  readonly onPressEnd: { current: ((target: Element | null) => void) | null };
+  readonly setOnPressEnd: (callback: ((target: Element | null) => void) | null) => void;
   /** The press in progress, or `null` when no button is held. */
   readonly press: { current: WidgetPress | null };
   /** Whether the drawer is open; the window fit then follows the drawer. */
@@ -88,9 +88,12 @@ interface WidgetPressControls {
 }
 
 const defaultDrawerOpen = { current: false };
+const defaultOnPressEnd = { current: null as ((target: Element | null) => void) | null };
 
 const WidgetChromeContext = createContext<WidgetChrome>({
-  onPressEnd: { current: null },
+  setOnPressEnd: (callback) => {
+    defaultOnPressEnd.current = callback;
+  },
   press: { current: null },
   drawerOpen: defaultDrawerOpen,
   setDrawerOpen: (open) => {
@@ -171,6 +174,12 @@ export function Widget({
 /** The window's shared press, drawer flag and deferred fit. */
 function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
   const onPressEnd = useRef<((target: Element | null) => void) | null>(null);
+  const setOnPressEnd = useCallback(
+    (callback: ((target: Element | null) => void) | null): void => {
+      onPressEnd.current = callback;
+    },
+    [],
+  );
   const press = useRef<WidgetPress | null>(null);
   const drawerOpen = useRef(false);
   const target = useRef<number | null>(null);
@@ -231,7 +240,7 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
   );
   return useMemo(
     () => ({
-      onPressEnd,
+      setOnPressEnd,
       press,
       drawerOpen,
       setDrawerOpen,
@@ -241,7 +250,7 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
       markDragging,
       endPress,
     }),
-    [requestFit, endPress, beginPress, markDragging, setDrawerOpen],
+    [requestFit, endPress, beginPress, markDragging, setDrawerOpen, setOnPressEnd],
   );
 }
 

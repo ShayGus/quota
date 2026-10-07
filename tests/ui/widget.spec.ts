@@ -72,7 +72,9 @@ test.describe("widget", () => {
       const drawer = page.getByRole("region", { name: "Codex" });
       await expect(drawer).toBeVisible();
       await drawer.evaluate((element) => {
-        element.getAnimations().forEach((animation) => animation.pause());
+        element.getAnimations().forEach((animation) => {
+          animation.pause();
+        });
       });
       const bounds = await page.locator(".widget").boundingBox();
       if (bounds === null) throw new Error("the widget is not visible");

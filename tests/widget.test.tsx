@@ -370,8 +370,10 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
+  let elementFromPoint = vi.fn<(x: number, y: number) => Element | null>(() => null);
   beforeEach(() => {
-    document.elementFromPoint = vi.fn(() => null);
+    elementFromPoint = vi.fn(() => null);
+    document.elementFromPoint = elementFromPoint;
   });
 
   const report = {
@@ -476,11 +478,9 @@ describe("the widget window", () => {
       move(footer, 50, 83);
       fireEvent.pointerLeave(tile);
       expect(tile.classList.contains("hover")).toBe(true);
-      vi.mocked(document.elementFromPoint).mockReturnValueOnce(
-        destination === "footer" ? footer : null,
-      );
+      elementFromPoint.mockReturnValueOnce(destination === "footer" ? footer : null);
       fireEvent.pointerUp(window, { pointerId: 7, clientX: 50, clientY: 83 });
-      expect(document.elementFromPoint).toHaveBeenCalledWith(50, 83);
+      expect(elementFromPoint).toHaveBeenCalledWith(50, 83);
       expect(ipc.dragWidget).toHaveBeenCalledOnce();
       expect(tile.classList.contains("hover")).toBe(false);
       expect(footer.classList.contains("peeking")).toBe(false);
@@ -498,9 +498,7 @@ describe("the widget window", () => {
     fireEvent.pointerEnter(second);
     expect(first.classList.contains("hover")).toBe(true);
     expect(second.classList.contains("hover")).toBe(false);
-    vi.mocked(document.elementFromPoint).mockReturnValueOnce(
-      second.querySelector("span"),
-    );
+    elementFromPoint.mockReturnValueOnce(second.querySelector("span"));
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 150, clientY: 50 });
     expect(first.classList.contains("hover")).toBe(false);
     expect(second.classList.contains("hover")).toBe(true);
@@ -525,7 +523,9 @@ describe("the widget window", () => {
     renderWidget(vi.fn());
     const tile = screen.getByRole("button", { name: /^Kimi/ });
     fireEvent.keyDown(tile, { key: "Tab" });
-    act(() => tile.focus());
+    act(() => {
+      tile.focus();
+    });
     press(window, 50, 200);
     fireEvent.pointerUp(window, { pointerId: 7, clientX: 50, clientY: 200 });
     expect(document.activeElement).toBe(tile);
@@ -664,17 +664,22 @@ describe("the widget window", () => {
     renderWidget(vi.fn());
     const copy = async (): Promise<void> => {
       fireEvent.click(screen.getByRole("button", { name: "Report a bug" }));
-      await act(async () => {
+      await act(() => {
         fireEvent.click(
           screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
         );
+        return Promise.resolve();
       });
     };
     await copy();
-    act(() => vi.advanceTimersByTime(TOAST_MS - 100));
+    act(() => {
+      vi.advanceTimersByTime(TOAST_MS - 100);
+    });
     const notice = screen.getByRole("status");
     press(notice, 50, 135);
-    act(() => vi.advanceTimersByTime(100));
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
     expect(screen.queryByRole("status")).toBeNull();
     move(window, 50, 139);
     move(window, 50, 145);

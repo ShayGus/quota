@@ -102,7 +102,7 @@ export function RingStrip({
   readonly accounts: readonly WidgetAccount[];
 }): JSX.Element {
   const chrome = useWidgetChrome();
-  const { requestFit, setDrawerOpen } = chrome;
+  const { requestFit, setDrawerOpen, setOnPressEnd } = chrome;
   const [hovered, setHovered] = useState<AccountId | null>(null);
   const [selected, setSelected] = useState<AccountId | null>(null);
   const [dir, setDir] = useState<WidgetGrowth>("down");
@@ -175,18 +175,18 @@ export function RingStrip({
   }, []);
 
   useEffect(() => {
-    chrome.onPressEnd.current = (target): void => {
+    setOnPressEnd((target): void => {
       stopHoverTimer();
       const hit = keyboard.current ? document.activeElement : target;
       const tile = [...tiles.current].find(
         ([, element]) => hit !== null && element.contains(hit),
       );
       setHovered(tile?.[0] ?? null);
-    };
+    });
     return () => {
-      chrome.onPressEnd.current = null;
+      setOnPressEnd(null);
     };
-  }, [chrome, stopHoverTimer]);
+  }, [setOnPressEnd, stopHoverTimer]);
 
   /**
    * Shrinks the drawer to `want` first and the window after, for a switch or
