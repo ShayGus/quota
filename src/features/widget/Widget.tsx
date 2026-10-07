@@ -5,11 +5,10 @@
  * It has two looks, picked with the same ring-or-bar choice as the overview:
  * a strip of rings, one ring per period, or mini cards with a bar per limit.
  * It is another way to present the app, never shown beside the full window.
- * The window always fits its accounts exactly, so nothing is ever scrolled or
- * cut off, and it moves wherever it is dragged, from any point on it. A still
- * click on a ring tile opens that account's details drawer; a press that
- * moves is a drag instead. The button in its corner, the tray menu, and
- * Settings switch back to the full window; beside that button, Report a bug
+ * The host fits the window's height, and it moves wherever it is dragged,
+ * from any point on it. RingStrip owns the peek and details drawer. The
+ * button in its corner, the tray menu, and Settings switch back to the full
+ * window; beside that button, Report a bug
  * opens the same two choices as the full window's header.
  */
 import {
@@ -270,8 +269,8 @@ function useCopiedNotice(): readonly [boolean, () => void] {
 }
 
 /**
- * Keeps the window exactly the size of its content, so it never scrolls.
- * While the drawer is open it fits explicitly around its animation instead.
+ * Observes the resting content height. While the drawer is open it fits
+ * explicitly around its animation, so intermediate heights are not sent.
  */
 function useFitWindow(
   root: { readonly current: HTMLElement | null },

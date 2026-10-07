@@ -699,7 +699,7 @@ function Footer({
   );
 }
 
-/** One account's limits, unfolded under the tiles. */
+/** One account's limits, unfolded on the host-confirmed side of the tiles. */
 function Drawer({
   account,
   caret,

@@ -287,9 +287,12 @@ full window**, switches back. Beside it, **Report a bug** offers the same two ch
 the header (see [Report a bug](#report-a-bug)). Both buttons show while the pointer is on
 the widget.
 
-Point at a tile and the line under the tiles names the account with its status or next
-reset. Click a tile to open its details under the tiles; click it again, its **Close the
-details** button, or another app to close them. Press Esc to close and return to the tile.
+In the rings layout, point at a tile and the line under the tiles names the account with
+its status or next reset, without resizing the window or covering content. A click after
+moving less than 4 px opens its details below the tiles, or above them when there is not
+enough room below, such as near the taskbar. When space is limited on both sides, the
+drawer's rows scroll. Click the tile again, its **Close the details** button, or another
+app to close the drawer. Press Esc to close and return to the tile.
 
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
 mini cards.

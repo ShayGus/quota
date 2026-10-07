@@ -1,9 +1,9 @@
 /**
  * The mini widget's own window operations.
  *
- * The widget sizes itself to its accounts, so it never scrolls, and moves
- * when it is dragged. The host saves where it was left. Sizing goes through
- * the host's `fit_widget` command, which owns the monitor's work area: the
+ * The widget requests a height for its content and moves when it is dragged.
+ * The host saves where it was left. Sizing goes through the host's
+ * `fit_widget` command, which owns the monitor's work area: the
  * renderer reports its content height and growth direction, and the host
  * answers with the fitted height, the side it grew, and the room on each
  * side, so the drawer can open upward near the screen's bottom edge.
