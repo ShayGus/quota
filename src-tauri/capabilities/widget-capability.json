@@ -6,10 +6,10 @@
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
-    "core:window:allow-set-size",
     "core:event:default",
     "allow-get-snapshot",
     "allow-set-app-view",
+    "allow-fit-widget",
     "allow-open-bug-report-issue",
     "allow-copy-bug-report-prompt"
   ]

@@ -10,9 +10,9 @@
 )]
 
 use quota_contracts::CommandError;
-use quota_contracts::commands::{SettingsDestination, WindowModeChange};
+use quota_contracts::commands::{FitWidget, SettingsDestination, WidgetGrowth, WindowModeChange};
 use quota_contracts::events::OverviewWindowState as WindowStateResponse;
-use quota_domain::preferences::OverviewMode;
+use quota_domain::preferences::{OverviewMode, WidgetPosition};
 use quota_domain::provider::ProviderId;
 use tauri::{LogicalSize, PhysicalPosition, State};
 
@@ -136,6 +136,86 @@ pub async fn fit_overview_height(
     let confirmed = controller.record_geometry_change();
     window::publish_state(&state.app, &state.app_instance_id, confirmed);
     Ok(window_state_response(confirmed))
+}
+
+/// Fits the mini widget window to its content, growing the drawer's way.
+///
+/// The renderer reports how tall its content is and which way the drawer
+/// opens; the host applies the size inside the monitor's work area and, for
+/// upward growth, moves the top edge so the tiles keep their screen position.
+/// When neither side has room the larger side wins and the fitted height caps
+/// the drawer, which then scrolls its rows. A position reached only because
+/// the drawer opened upward is never saved; an upward close saves the
+/// restored resting position instead.
+#[tauri::command]
+#[specta::specta]
+pub async fn fit_widget(
+    state: State<'_, AppState>,
+    content_height: u32,
+    direction: WidgetGrowth,
+) -> Result<FitWidget, CommandError> {
+    use crate::platform::widget::{self, Placement, WorkArea};
+    let native = window::get(&state.app, widget::LABEL)?;
+    let monitor = native
+        .current_monitor()
+        .map_err(|_| window::failed("read_current_monitor"))?
+        .or(native
+            .primary_monitor()
+            .map_err(|_| window::failed("read_primary_monitor"))?)
+        .ok_or_else(|| window::failed("find_display"))?;
+    let area = monitor.work_area();
+    let scale = monitor.scale_factor();
+    let outer = native
+        .outer_size()
+        .map_err(|_| window::failed("read_window_size"))?;
+    let inner = native
+        .inner_size()
+        .map_err(|_| window::failed("read_window_size"))?;
+    let position = native
+        .outer_position()
+        .map_err(|_| window::failed("read_window_position"))?;
+    let current = f64::from(inner.height) / scale;
+    let fitted = widget::fit(
+        f64::from(content_height),
+        direction,
+        Placement {
+            outer_y: position.y,
+            outer_height: outer.height,
+            inner_height: inner.height,
+        },
+        WorkArea {
+            top: area.position.y,
+            height: area.size.height,
+        },
+        scale,
+    );
+    let width = f64::from(inner.width) / scale;
+    native
+        .set_size(LogicalSize::new(width, fitted.height))
+        .map_err(|_| window::failed("fit_window_size"))?;
+    if fitted.outer_y != position.y {
+        let moved = PhysicalPosition::new(position.x, fitted.outer_y);
+        native
+            .set_position(moved)
+            .map_err(|_| window::failed("fit_window_position"))?;
+        widget::mark_programmatic(moved);
+        if direction == WidgetGrowth::Up && f64::from(content_height) < current {
+            widget::save_resting_position(
+                &state,
+                WidgetPosition {
+                    x: position.x,
+                    y: fitted.outer_y,
+                },
+            )
+            .await;
+        }
+    }
+    Ok(FitWidget {
+        height: fitted.height,
+        direction: fitted.direction,
+        room_above: fitted.room_above,
+        room_below: fitted.room_below,
+    })
 }
 
 /// Switches between the full window and the mini widget, and saves the view.

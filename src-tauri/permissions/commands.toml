@@ -59,6 +59,9 @@ description = "Change only the native topmost flag."
 [allow-fit-overview-height]
 description = "Fit the overview's height to its content inside the work area."
 
+[allow-fit-widget]
+description = "Fit the mini widget window to its content, growing the drawer's way."
+
 [allow-set-app-view]
 description = "Switch between the full window and the mini widget, and save the view."
 

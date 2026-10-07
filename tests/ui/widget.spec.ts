@@ -37,8 +37,23 @@ test.describe("widget", () => {
     await host.screenshotFull("widget-cards");
   });
 
-  test("with no accounts it says so", async ({ open }) => {
-    const host = await open(scenario("widget", { accounts: [] }), "#/widget");
-    await expect(host.page.getByText("No accounts to show")).toBeVisible();
+  test("a hover only peeks, a click opens the drawer once", async ({ open }) => {
+    const host = await open(
+      scenario("widget", { preferences: defaultPreferences({ view: "widget" }) }),
+      "#/widget",
+    );
+    const { page } = host;
+    const tile = page.getByRole("button", { name: /^Codex/ });
+    await tile.hover({ force: true });
+    await expect(page.locator(".widget-foot.peeking")).toBeVisible();
+    const drawer = page.getByRole("region", { name: "Codex" });
+    await expect(drawer).toBeHidden();
+    const sizes = await host.callsTo("fit_widget");
+    await tile.click();
+    await expect(drawer).toBeVisible();
+    await expect(page.locator(".widget-strip .widget-drawer-close")).toBeVisible();
+    const after = await host.callsTo("fit_widget");
+    expect(after.length).toBe(sizes.length + 1);
+    await host.screenshot("widget-drawer");
   });
 });

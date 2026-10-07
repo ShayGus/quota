@@ -178,6 +178,30 @@ pub struct SnapshotResponse {
     pub snapshot: AppSnapshot,
 }
 
+/// Which way the mini widget window grows for its details drawer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum WidgetGrowth {
+    /// The top edge stays and the bottom moves down.
+    Down,
+    /// The bottom edge stays and the top moves up.
+    Up,
+}
+
+/// What fitting the mini widget to its content decided.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize, Type)]
+pub struct FitWidget {
+    /// The fitted content height in logical pixels; below the asked height
+    /// only when neither side had room and the drawer is capped.
+    pub height: f64,
+    /// The side the window grew or shrank on.
+    pub direction: WidgetGrowth,
+    /// The free room above the window in logical pixels.
+    pub room_above: f64,
+    /// The free room below the window in logical pixels.
+    pub room_below: f64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

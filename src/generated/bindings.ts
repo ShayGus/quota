@@ -105,6 +105,18 @@ export const commands = {
 	 */
 	fitOverviewHeight: (contentHeight: number) => typedError<OverviewWindowState, CommandError>(__TAURI_INVOKE("fit_overview_height", { contentHeight })),
 	/**
+	 *  Fits the mini widget window to its content, growing the drawer's way.
+	 * 
+	 *  The renderer reports how tall its content is and which way the drawer
+	 *  opens; the host applies the size inside the monitor's work area and, for
+	 *  upward growth, moves the top edge so the tiles keep their screen position.
+	 *  When neither side has room the larger side wins and the fitted height caps
+	 *  the drawer, which then scrolls its rows. A position reached only because
+	 *  the drawer opened upward is never saved; an upward close saves the
+	 *  restored resting position instead.
+	 */
+	fitWidget: (contentHeight: number, direction: WidgetGrowth) => typedError<FitWidget, CommandError>(__TAURI_INVOKE("fit_widget", { contentHeight, direction })),
+	/**
 	 *  Switches between the full window and the mini widget, and saves the view.
 	 * 
 	 *  The chosen view is shown before the other is put away, so the app never
@@ -679,6 +691,21 @@ export type FetchState =
 "offline" | 
 /**  The last attempt failed. */
 "error";
+
+/**  What fitting the mini widget to its content decided. */
+export type FitWidget = {
+	/**
+	 *  The fitted content height in logical pixels; below the asked height
+	 *  only when neither side had room and the drawer is capped.
+	 */
+	height: number | null,
+	/**  The side the window grew or shrank on. */
+	direction: WidgetGrowth,
+	/**  The free room above the window in logical pixels. */
+	room_above: number | null,
+	/**  The free room below the window in logical pixels. */
+	room_below: number | null,
+};
 
 /**  Separate validated intervals for each display and power mode. */
 export type FixedIntervalPolicy = {
@@ -1469,6 +1496,13 @@ export type VerifiedIdentity = {
 	/**  Where the identity was verified. */
 	source: SourceKind,
 };
+
+/**  Which way the mini widget window grows for its details drawer. */
+export type WidgetGrowth = 
+/**  The top edge stays and the bottom moves down. */
+"down" | 
+/**  The bottom edge stays and the top moves up. */
+"up";
 
 /**
  *  Where the mini widget was last left: its top-left corner in physical

@@ -5,10 +5,11 @@
  * period with the shortest outside, so a lone ring is the outer one; the
  * number under the rings named after its ring; money as money, never a
  * share; mini cards in pairs with an odd last card across the width; and a
- * corner button that switches back to the full window. Clicking an account
- * never opens the full window beside the widget.
+ * corner button that switches back to the full window. Pointing at a tile
+ * only shows its peek line, a still click opens its details drawer, and a
+ * press that moves 4 px drags the window instead.
  */
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MiniCards } from "../src/features/widget/MiniCards";
@@ -27,7 +28,14 @@ import {
 } from "./fixtures";
 
 const ipc = vi.hoisted(() => ({
-  fitWidget: vi.fn(() => Promise.resolve()),
+  fitWidget: vi.fn((contentHeight: number, direction: string) =>
+    Promise.resolve({
+      height: contentHeight,
+      direction,
+      room_above: 800,
+      room_below: 800,
+    }),
+  ),
   dragWidget: vi.fn(() => Promise.resolve()),
 }));
 vi.mock("../src/shared/ipc/widget", () => ipc);
@@ -197,6 +205,68 @@ describe("the widget's model", () => {
     const [shown] = accountsOf(lapsed);
     expect(shown?.headline).toEqual({ tag: "", value: "Reconnect", low: true });
   });
+
+  it("marks last-known values as stale", () => {
+    const stale = account(
+      "stale",
+      "codex",
+      8,
+      [
+        {
+          ...quotaWindow("s", "session", percent(60)),
+          valid_until: "2026-10-01T11:00:00.000Z",
+        },
+      ],
+      { rank: 60 },
+    );
+    const [shown] = accountsOf(stale);
+    expect(shown?.rows).toMatchObject([{ reset: "last known", stale: true }]);
+  });
+
+  it("chips a problem status and peeks it with its last-known note", () => {
+    const connecting = account(
+      "ollama",
+      "ollama_cloud",
+      9,
+      [
+        {
+          ...quotaWindow("o5", "session", percent(100)),
+          valid_until: "2026-10-01T11:00:00.000Z",
+        },
+      ],
+      { connectionState: "connecting", rank: 10 },
+    );
+    const [shown] = accountsOf(connecting);
+    expect(shown?.chip).toEqual({ text: "Connecting", tone: "pending" });
+    expect(shown?.headline.value).toBe("Connecting");
+    expect(shown?.peek).toBe("Connecting · last known values");
+  });
+
+  it("chips a warning status with its warning tone", () => {
+    const limited = {
+      ...account("limited", "cursor", 10, [quotaWindow("l", "session", percent(40))], {
+        rank: 40,
+      }),
+      fetch_state: "backoff" as const,
+    };
+    const [shown] = accountsOf(limited);
+    expect(shown?.chip).toEqual({ text: "Rate limited", tone: "warn" });
+  });
+
+  it("peeks the tightest limit, an amount, or no reading", () => {
+    const [first, second] = accountsOf(claude, openrouter);
+    expect(second?.peek).toBe("$17.54 left");
+    expect(first?.peek).toBe("Fable weekly resets in 2h 0m");
+    const silent = account(
+      "silent",
+      "codex",
+      11,
+      [quotaWindow("v", "session", { kind: "unavailable", value: "not_reported" })],
+      { rank: null },
+    );
+    const [quiet] = accountsOf(silent);
+    expect(quiet?.peek).toBe("no reading reported");
+  });
 });
 
 describe("the mini cards", () => {
@@ -272,12 +342,29 @@ describe("the ring strip", () => {
     }
   });
 
-  it("breaks an account down when it is pointed at", () => {
+  it("shows the peek and no drawer when a tile is pointed at", () => {
     render(<RingStrip accounts={accountsOf(kimi, claude)} />);
     fireEvent.pointerEnter(screen.getByRole("button", { name: /^Claude/ }));
-    const breakdown = screen.getByRole("tooltip");
-    expect(breakdown.textContent).toContain("Fable weekly");
-    expect(breakdown.textContent).toContain("30%");
+    const foot = document.querySelector(".widget-foot");
+    expect(foot?.classList.contains("peeking")).toBe(true);
+    expect(foot?.querySelector(".widget-peek")?.textContent).toContain(
+      "Claude · Fable weekly resets in 2h 0m",
+    );
+    expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    expect(ipc.fitWidget).not.toHaveBeenCalled();
+    expect(
+      screen.getByRole("button", { name: /^Claude/ }).getAttribute("aria-expanded"),
+    ).toBe("false");
+  });
+
+  it("returns the key after the pointer leaves the tiles", async () => {
+    render(<RingStrip accounts={accountsOf(kimi, claude)} />);
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.pointerEnter(tile);
+    fireEvent.pointerLeave(tile);
+    await waitFor(() => {
+      expect(document.querySelector(".widget-foot.peeking")).toBeNull();
+    });
   });
 });
 
@@ -287,17 +374,39 @@ describe("the widget window", () => {
     copyPrompt: vi.fn(() => Promise.resolve(true)),
   };
 
-  function renderWidget(onExpand: () => void): void {
+  function widgetState(accounts: readonly AccountSnapshot[]): RendererState {
+    return {
+      snapshot: snapshot("instance", 1, [...accounts]),
+      preferences: preferences({ view: "widget" }),
+    } as unknown as RendererState;
+  }
+
+  function renderWidget(
+    onExpand: () => void,
+    accounts: readonly AccountSnapshot[] = [kimi, claude],
+  ) {
     globalThis.ResizeObserver = class {
       observe(): void {}
       unobserve(): void {}
       disconnect(): void {}
     };
-    const state = {
-      snapshot: snapshot("instance", 1, [kimi, claude]),
-      preferences: preferences({ view: "widget" }),
-    } as unknown as RendererState;
-    render(<Widget state={state} onExpand={onExpand} report={report} />);
+    return render(
+      <Widget state={widgetState(accounts)} onExpand={onExpand} report={report} />,
+    );
+  }
+
+  function press(target: Element, x: number, y: number, pointerId = 7): void {
+    fireEvent.pointerDown(target, { button: 0, pointerId, clientX: x, clientY: y });
+  }
+
+  function move(target: Element, x: number, y: number, pointerId = 7): void {
+    fireEvent.pointerMove(target, { pointerId, clientX: x, clientY: y, buttons: 1 });
+  }
+
+  function sleep(ms: number): Promise<unknown> {
+    const { promise, resolve } = Promise.withResolvers<unknown>();
+    window.setTimeout(resolve, ms);
+    return promise;
   }
 
   it("keeps its own size fitted to its accounts", () => {
@@ -312,12 +421,212 @@ describe("the widget window", () => {
     expect(onExpand).toHaveBeenCalledOnce();
   });
 
-  it("opens the breakdown when an account is clicked, not the full window", () => {
+  it("opens the drawer when an account is clicked, not the full window", async () => {
     const onExpand = vi.fn();
     renderWidget(onExpand);
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
-    expect(screen.getByRole("tooltip").textContent).toContain("Fable weekly");
+    const drawer = await screen.findByRole("region", { name: "Claude" });
+    expect(within(drawer).getByText("Fable weekly")).toBeTruthy();
     expect(onExpand).not.toHaveBeenCalled();
+  });
+
+  it("opens the drawer on a still click, without dragging", async () => {
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    press(tile, 50, 50);
+    move(tile, 53, 52);
+    fireEvent.pointerUp(tile);
+    fireEvent.click(tile, { detail: 1 });
+    expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
+    expect(tile.getAttribute("aria-expanded")).toBe("true");
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
+    expect(ipc.fitWidget).toHaveBeenLastCalledWith(224, "down");
+  });
+
+  it("drags on a 4 px move and swallows the click after it", async () => {
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    press(tile, 50, 50);
+    move(tile, 54, 50);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    move(tile, 60, 50);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.click(tile, { detail: 1 });
+    expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    press(tile, 60, 50, 8);
+    fireEvent.pointerUp(tile);
+    fireEvent.click(tile, { detail: 1 });
+    expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
+  });
+
+  it("drags from the drawer, the key line and the corner button", async () => {
+    const onExpand = vi.fn();
+    const view = renderWidget(onExpand);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    const drawer = await screen.findByRole("region", { name: "Claude" });
+    const head = within(drawer).getByText("Claude");
+    press(head, 50, 200);
+    move(head, 54, 200);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.pointerUp(head);
+    fireEvent.click(screen.getByRole("button", { name: "Open the full window" }), {
+      detail: 1,
+    });
+    expect(onExpand).not.toHaveBeenCalled();
+    const foot = view.container.querySelector(".widget-foot");
+    expect(foot).toBeTruthy();
+    press(foot as Element, 50, 110);
+    move(foot as Element, 50, 114);
+    expect(ipc.dragWidget).toHaveBeenCalledTimes(2);
+    fireEvent.pointerUp(foot as Element);
+  });
+
+  it("defers a resize while pressed and sends it when the press ends", async () => {
+    const view = renderWidget(vi.fn());
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    await screen.findByRole("region", { name: "Claude" });
+    expect(ipc.fitWidget).toHaveBeenCalledTimes(2);
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    press(tile, 50, 50);
+    const grown = {
+      ...claude,
+      windows: [...claude.windows, quotaWindow("cd", "daily", percent(90))],
+    };
+    view.rerender(
+      <Widget state={widgetState([kimi, grown])} onExpand={vi.fn()} report={report} />,
+    );
+    await sleep(50);
+    expect(ipc.fitWidget).toHaveBeenCalledTimes(2);
+    fireEvent.pointerUp(tile);
+    await waitFor(() => {
+      expect(ipc.fitWidget).toHaveBeenCalledTimes(3);
+    });
+    expect(ipc.fitWidget).toHaveBeenLastCalledWith(244, "down");
+  });
+
+  it("grows first and shrinks after, once per change", async () => {
+    renderWidget(vi.fn(), [kimi, claude, openrouter]);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }), { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    fireEvent.click(screen.getByRole("button", { name: /^OpenRouter/ }), {
+      detail: 1,
+    });
+    await screen.findByRole("region", { name: "OpenRouter" });
+    await waitFor(() => {
+      expect(ipc.fitWidget).toHaveBeenCalledTimes(3);
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^OpenRouter/ }), {
+      detail: 1,
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "OpenRouter" })).toBeNull();
+    });
+    expect(ipc.fitWidget.mock.calls.map((call) => [call[0], call[1]])).toEqual([
+      [0, "down"],
+      [224, "down"],
+      [184, "down"],
+      [116, "down"],
+    ]);
+  });
+
+  it("opens upward when the host has no room below", async () => {
+    renderWidget(vi.fn());
+    ipc.fitWidget.mockResolvedValueOnce({
+      height: 224,
+      direction: "up",
+      room_above: 800,
+      room_below: 10,
+    });
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }), { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    expect(document.querySelector(".widget-strip.up")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Close the details" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+    expect(ipc.fitWidget).toHaveBeenLastCalledWith(116, "up");
+  });
+
+  it("keeps the drawer on its account across a re-rank and closes it when it leaves", async () => {
+    const onExpand = vi.fn();
+    const view = renderWidget(onExpand);
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+    await screen.findByRole("region", { name: "Claude" });
+    view.rerender(
+      <Widget state={widgetState([claude, kimi])} onExpand={onExpand} report={report} />,
+    );
+    expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
+    view.rerender(
+      <Widget state={widgetState([kimi])} onExpand={onExpand} report={report} />,
+    );
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+  });
+
+  it("closes on Esc and puts focus back on the tile", async () => {
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.click(tile, { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+    expect(document.activeElement).toBe(tile);
+  });
+
+  it("ignores the second click of a double-click", async () => {
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.click(tile, { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    fireEvent.click(tile, { detail: 2 });
+    expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
+  });
+
+  it("closes the drawer from its close button", async () => {
+    renderWidget(vi.fn());
+    fireEvent.click(screen.getByRole("button", { name: /^Claude/ }), { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    fireEvent.click(screen.getByRole("button", { name: "Close the details" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+  });
+
+  it("closes when another application takes focus, never mid-press", async () => {
+    vi.spyOn(document, "hasFocus").mockReturnValue(false);
+    renderWidget(vi.fn());
+    const tile = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.click(tile, { detail: 1 });
+    await screen.findByRole("region", { name: "Claude" });
+    press(tile, 50, 50);
+    fireEvent.blur(window);
+    await sleep(200);
+    expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
+    fireEvent.pointerUp(tile);
+    fireEvent.blur(window);
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+  });
+
+  it("moves focus with the keyboard and opens from it", async () => {
+    renderWidget(vi.fn());
+    const kimiTile = screen.getByRole("button", { name: /^Kimi/ });
+    const claudeTile = screen.getByRole("button", { name: /^Claude/ });
+    fireEvent.keyDown(kimiTile, { key: "Tab" });
+    fireEvent.focus(kimiTile);
+    expect(document.querySelector(".widget-foot.peeking")).toBeTruthy();
+    fireEvent.keyDown(kimiTile, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(claudeTile);
+    fireEvent.keyDown(claudeTile, { key: "Home" });
+    expect(document.activeElement).toBe(kimiTile);
+    fireEvent.keyDown(kimiTile, { key: "End" });
+    expect(document.activeElement).toBe(claudeTile);
+    fireEvent.click(claudeTile);
+    expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
   });
 
   it("reports a bug from beside the expand button and confirms a copied prompt", async () => {
