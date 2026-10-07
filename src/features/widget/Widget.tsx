@@ -143,8 +143,6 @@ export function Widget({
         ref={root}
         onPointerDown={drag.onPointerDown}
         onPointerMove={drag.onPointerMove}
-        onPointerUp={drag.onPointerUp}
-        onPointerCancel={drag.onPointerUp}
         onClickCapture={drag.onClickCapture}
       >
         {accounts.length === 0 ? (
@@ -226,8 +224,12 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
   }, [press]);
   useEffect(() => {
     window.addEventListener("focus", endPress);
+    window.addEventListener("pointerup", endPress);
+    window.addEventListener("pointercancel", endPress);
     return () => {
       window.removeEventListener("focus", endPress);
+      window.removeEventListener("pointerup", endPress);
+      window.removeEventListener("pointercancel", endPress);
     };
   }, [endPress]);
   const setDrawerOpen = useCallback(
@@ -256,24 +258,22 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
  * so the notice sits beneath the accounts for as long as a toast would.
  */
 function useCopiedNotice(): readonly [boolean, () => void] {
-  const [copied, setCopied] = useState(false);
+  const [shownAt, setShownAt] = useState<number | null>(null);
   useEffect(() => {
-    if (!copied) {
+    if (shownAt === null) {
       return;
     }
     const timer = window.setTimeout(() => {
-      setCopied(false);
+      setShownAt(null);
     }, TOAST_MS);
     return () => {
       window.clearTimeout(timer);
     };
-  }, [copied]);
-  return [
-    copied,
-    () => {
-      setCopied(true);
-    },
-  ] as const;
+  }, [shownAt]);
+  const show = (): void => {
+    setShownAt(Date.now());
+  };
+  return [shownAt !== null, show];
 }
 
 /**
@@ -322,7 +322,6 @@ function useTransparentPage(): void {
 function useDragToMove(controls: WidgetPressControls): {
   readonly onPointerDown: (event: PointerEvent) => void;
   readonly onPointerMove: (event: PointerEvent) => void;
-  readonly onPointerUp: () => void;
   readonly onClickCapture: (event: MouseEvent) => void;
 } {
   const { press, beginPress, markDragging, endPress } = controls;
@@ -341,6 +340,7 @@ function useDragToMove(controls: WidgetPressControls): {
           y: event.clientY,
           dragging: false,
         });
+        (event.target as Element).setPointerCapture(event.pointerId);
       },
       onPointerMove: (event) => {
         const held = press.current;
@@ -360,7 +360,6 @@ function useDragToMove(controls: WidgetPressControls): {
           launch(dragWidget());
         }
       },
-      onPointerUp: endPress,
       onClickCapture: (event) => {
         // A click that follows a drag is swallowed, on any button. A keyboard
         // click is never part of a drag, so it is always let through.

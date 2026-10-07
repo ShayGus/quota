@@ -369,6 +369,10 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
+  beforeEach(() => {
+    Element.prototype.setPointerCapture = vi.fn();
+  });
+
   const report = {
     openIssue: vi.fn(() => Promise.resolve()),
     copyPrompt: vi.fn(() => Promise.resolve(true)),
@@ -503,6 +507,62 @@ describe("the widget window", () => {
     });
     expect(ipc.fitWidget).toHaveBeenLastCalledWith(244, "down");
   });
+
+  it.each(["pointerup", "pointercancel"])(
+    "ends a captured drag on %s at the window boundary",
+    async (release) => {
+      const view = renderWidget(vi.fn());
+      const tile = screen.getByRole("button", { name: /^Claude/ });
+      fireEvent.click(tile);
+      await screen.findByRole("region", { name: "Claude" });
+      press(tile, 50, 50);
+      expect(tile.setPointerCapture).toHaveBeenCalledWith(7);
+      move(tile, 50, 54);
+      move(tile, 50, 58);
+      expect(ipc.dragWidget).toHaveBeenCalledOnce();
+      view.rerender(
+        <Widget
+          state={widgetState([
+            kimi,
+            {
+              ...claude,
+              windows: [...claude.windows, quotaWindow("cd", "daily", percent(90))],
+            },
+          ])}
+          onExpand={vi.fn()}
+          report={report}
+        />,
+      );
+      await sleep(50);
+      expect(ipc.fitWidget).toHaveBeenCalledTimes(2);
+      fireEvent(window, new window.PointerEvent(release, { pointerId: 7 }));
+      await waitFor(() => {
+        expect(ipc.fitWidget).toHaveBeenLastCalledWith(244, "down");
+      });
+      move(tile, 50, 64);
+      expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    },
+  );
+
+  it.each([116, 144])(
+    "caps the drawer and rows for a host height of %i",
+    async (height) => {
+      renderWidget(vi.fn());
+      ipc.fitWidget.mockResolvedValueOnce({
+        height,
+        direction: "down",
+        room_above: 8,
+        room_below: height - 116,
+      });
+      fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
+      const drawer = await screen.findByRole("region", { name: "Claude" });
+      await waitFor(() => {
+        expect(drawer.style.height).toBe(`${Math.max(0, height - 120)}px`);
+      });
+      const rows = drawer.querySelector<HTMLElement>(".widget-drawer-rows.scroll");
+      expect(rows?.style.maxHeight).toBe("0px");
+    },
+  );
 
   it("grows first and shrinks after, once per change", async () => {
     renderWidget(vi.fn(), [kimi, claude, openrouter]);

@@ -604,7 +604,7 @@ function openHeightOf(rest: number, drawer: number): number {
 
 /** The drawer's height from a fitted window height. */
 function drawerOf(total: number, rest: number): number {
-  return total - rest - STRIP_GAP;
+  return Math.max(0, total - rest - STRIP_GAP);
 }
 
 /**
@@ -753,7 +753,7 @@ function Drawer({
       {account.rows.length === 0 ? null : (
         <div
           className={`widget-drawer-rows${capped ? " scroll" : ""}`}
-          style={capped ? { maxHeight: grown - DRAWER_FIXED } : undefined}
+          style={capped ? { maxHeight: Math.max(0, grown - DRAWER_FIXED) } : undefined}
         >
           {account.rows.map((row) => (
             <div className="widget-drawer-row" key={`${row.name}:${row.tag}`}>
