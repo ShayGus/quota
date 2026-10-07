@@ -142,7 +142,6 @@ export function Widget({
         className="widget"
         ref={root}
         onPointerDown={drag.onPointerDown}
-        onPointerMove={drag.onPointerMove}
         onClickCapture={drag.onClickCapture}
       >
         {accounts.length === 0 ? (
@@ -222,16 +221,6 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
       held.dragging = true;
     }
   }, [press]);
-  useEffect(() => {
-    window.addEventListener("focus", endPress);
-    window.addEventListener("pointerup", endPress);
-    window.addEventListener("pointercancel", endPress);
-    return () => {
-      window.removeEventListener("focus", endPress);
-      window.removeEventListener("pointerup", endPress);
-      window.removeEventListener("pointercancel", endPress);
-    };
-  }, [endPress]);
   const setDrawerOpen = useCallback(
     (open: boolean): void => {
       drawerOpen.current = open;
@@ -321,46 +310,61 @@ function useTransparentPage(): void {
  */
 function useDragToMove(controls: WidgetPressControls): {
   readonly onPointerDown: (event: PointerEvent) => void;
-  readonly onPointerMove: (event: PointerEvent) => void;
   readonly onClickCapture: (event: MouseEvent) => void;
 } {
   const { press, beginPress, markDragging, endPress } = controls;
   const suppressClick = useRef(false);
-  return useMemo(
-    () => ({
-      onPointerDown: (event) => {
+  const handlers = useMemo(() => {
+    const finish = (): void => {
+      window.removeEventListener("pointermove", onMove, true);
+      window.removeEventListener("pointerup", onRelease, true);
+      window.removeEventListener("pointercancel", onRelease, true);
+      window.removeEventListener("blur", finish);
+      endPress();
+    };
+    const onMove = (event: globalThis.PointerEvent): void => {
+      const held = press.current;
+      if (held === null || event.pointerId !== held.pointerId) {
+        return;
+      }
+      if ((event.buttons & 1) === 0) {
+        finish();
+        return;
+      }
+      if (
+        !held.dragging &&
+        Math.hypot(event.clientX - held.x, event.clientY - held.y) >= DRAG_DISTANCE
+      ) {
+        markDragging();
+        suppressClick.current = true;
+        launch(dragWidget());
+      }
+    };
+    const onRelease = (event: globalThis.PointerEvent): void => {
+      if (event.pointerId === press.current?.pointerId) {
+        finish();
+      }
+    };
+    return {
+      finish,
+      onPointerDown: (event: PointerEvent) => {
         if (event.button !== 0) {
           return;
         }
         suppressClick.current = false;
-        endPress();
+        finish();
         beginPress({
           pointerId: event.pointerId,
           x: event.clientX,
           y: event.clientY,
           dragging: false,
         });
-        (event.target as Element).setPointerCapture(event.pointerId);
+        window.addEventListener("pointermove", onMove, true);
+        window.addEventListener("pointerup", onRelease, true);
+        window.addEventListener("pointercancel", onRelease, true);
+        window.addEventListener("blur", finish);
       },
-      onPointerMove: (event) => {
-        const held = press.current;
-        if (held === null || event.pointerId !== held.pointerId) {
-          return;
-        }
-        if ((event.buttons & 1) === 0) {
-          endPress();
-          return;
-        }
-        if (
-          !held.dragging &&
-          Math.hypot(event.clientX - held.x, event.clientY - held.y) >= DRAG_DISTANCE
-        ) {
-          markDragging();
-          suppressClick.current = true;
-          launch(dragWidget());
-        }
-      },
-      onClickCapture: (event) => {
+      onClickCapture: (event: MouseEvent) => {
         // A click that follows a drag is swallowed, on any button. A keyboard
         // click is never part of a drag, so it is always let through.
         if (suppressClick.current && event.detail !== 0) {
@@ -369,7 +373,8 @@ function useDragToMove(controls: WidgetPressControls): {
           suppressClick.current = false;
         }
       },
-    }),
-    [press, beginPress, markDragging, endPress],
-  );
+    };
+  }, [press, beginPress, markDragging, endPress]);
+  useEffect(() => handlers.finish, [handlers]);
+  return handlers;
 }

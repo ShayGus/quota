@@ -57,7 +57,7 @@ test.describe("widget", () => {
     await host.screenshot("widget-drawer");
   });
 
-  test("captures a press that moves below the widget while the drawer unfolds", async ({
+  test("tracks a press that moves below the widget while the drawer unfolds", async ({
     open,
   }) => {
     const host = await open(

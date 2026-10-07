@@ -186,8 +186,15 @@ pub fn fit(
         };
         (current + grown, direction)
     };
+    let frame = f64::from(
+        placement
+            .outer_height
+            .saturating_sub(placement.inner_height),
+    );
+    let height = height.min((f64::from(area.height) - frame).max(0.0) / scale);
+    let outer_height = (height * scale).round() + frame;
     let outer_y = if direction == WidgetGrowth::Up {
-        current_bottom - height * scale
+        current_bottom - outer_height
     } else {
         current_top
     };
@@ -195,7 +202,7 @@ pub fn fit(
         clippy::cast_possible_truncation,
         reason = "the position is rounded from physical pixels already inside an i32 range"
     )]
-    let outer_y = outer_y.round() as i32;
+    let outer_y = outer_y.round().clamp(top, (bottom - outer_height).max(top)) as i32;
     Fitted {
         height,
         direction,
@@ -515,6 +522,65 @@ mod tests {
             );
             assert!((fitted.height - 172.0).abs() < f64::EPSILON);
             assert_eq!(fitted.outer_y, 104);
+        }
+    }
+
+    #[test]
+    fn a_large_resting_widget_grows_only_into_the_available_room() {
+        let fitted = fit(
+            532.0,
+            WidgetGrowth::Down,
+            placed(24, 424),
+            WorkArea {
+                top: 0,
+                height: 480,
+            },
+            1.0,
+        );
+        assert!((fitted.height - 448.0).abs() < f64::EPSILON);
+        assert_eq!(fitted.direction, WidgetGrowth::Down);
+        assert_eq!(fitted.outer_y, 24);
+        assert!(f64::from(fitted.outer_y) + fitted.height <= 480.0);
+    }
+
+    #[test]
+    fn opening_after_a_drag_below_the_work_area_moves_the_window_back_inside() {
+        let fitted = fit(224.0, WidgetGrowth::Down, placed(950, 116), AREA, 1.0);
+        assert!((fitted.height - 224.0).abs() < f64::EPSILON);
+        assert_eq!(fitted.direction, WidgetGrowth::Up);
+        assert_eq!(fitted.outer_y, 808);
+    }
+
+    #[test]
+    fn every_resize_keeps_both_edges_inside_with_scaled_window_frames() {
+        for scale in [1_u16, 2] {
+            let area = WorkArea {
+                top: -200,
+                height: 1032 * u32::from(scale),
+            };
+            for preferred in [WidgetGrowth::Down, WidgetGrowth::Up] {
+                for offset in [-40, 950] {
+                    for current in [116, 1200] {
+                        for content in [80.0, 224.0, 1400.0] {
+                            let frame = 10 * u32::from(scale);
+                            let placement = Placement {
+                                outer_y: area.top + offset * i32::from(scale),
+                                inner_height: current * u32::from(scale),
+                                outer_height: current * u32::from(scale) + frame,
+                            };
+                            let fitted = fit(content, preferred, placement, area, f64::from(scale));
+                            assert!(fitted.outer_y >= area.top);
+                            assert!(
+                                f64::from(fitted.outer_y)
+                                    + (fitted.height * f64::from(scale)).round()
+                                    + f64::from(frame)
+                                    <= f64::from(area.top) + f64::from(area.height)
+                            );
+                            assert!(fitted.height <= content);
+                        }
+                    }
+                }
+            }
         }
     }
 

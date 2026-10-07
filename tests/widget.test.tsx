@@ -9,7 +9,7 @@
  * only shows its peek line, a still click opens its details drawer, and a
  * press that moves 4 px drags the window instead.
  */
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MiniCards } from "../src/features/widget/MiniCards";
@@ -18,6 +18,7 @@ import { RingStrip } from "../src/features/widget/RingStrip";
 import { Widget } from "../src/features/widget/Widget";
 import type { AccountSnapshot, Measurement } from "../src/generated/bindings";
 import type { RendererState } from "../src/shared/state/types";
+import { TOAST_MS } from "../src/shared/ui/RefreshNotice";
 import {
   account,
   NOW,
@@ -369,10 +370,6 @@ describe("the ring strip", () => {
 });
 
 describe("the widget window", () => {
-  beforeEach(() => {
-    Element.prototype.setPointerCapture = vi.fn();
-  });
-
   const report = {
     openIssue: vi.fn(() => Promise.resolve()),
     copyPrompt: vi.fn(() => Promise.resolve(true)),
@@ -403,7 +400,7 @@ describe("the widget window", () => {
     fireEvent.pointerDown(target, { button: 0, pointerId, clientX: x, clientY: y });
   }
 
-  function move(target: Element, x: number, y: number, pointerId = 7): void {
+  function move(target: Element | Window, x: number, y: number, pointerId = 7): void {
     fireEvent.pointerMove(target, { pointerId, clientX: x, clientY: y, buttons: 1 });
   }
 
@@ -439,7 +436,7 @@ describe("the widget window", () => {
     const tile = screen.getByRole("button", { name: /^Claude/ });
     press(tile, 50, 50);
     move(tile, 53, 52);
-    fireEvent.pointerUp(tile);
+    fireEvent.pointerUp(tile, { pointerId: 7 });
     fireEvent.click(tile, { detail: 1 });
     expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
     expect(tile.getAttribute("aria-expanded")).toBe("true");
@@ -458,7 +455,7 @@ describe("the widget window", () => {
     fireEvent.click(tile, { detail: 1 });
     expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
     press(tile, 60, 50, 8);
-    fireEvent.pointerUp(tile);
+    fireEvent.pointerUp(tile, { pointerId: 8 });
     fireEvent.click(tile, { detail: 1 });
     expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
   });
@@ -472,7 +469,7 @@ describe("the widget window", () => {
     press(head, 50, 200);
     move(head, 54, 200);
     expect(ipc.dragWidget).toHaveBeenCalledOnce();
-    fireEvent.pointerUp(head);
+    fireEvent.pointerUp(head, { pointerId: 7 });
     fireEvent.click(screen.getByRole("button", { name: "Open the full window" }), {
       detail: 1,
     });
@@ -482,7 +479,7 @@ describe("the widget window", () => {
     press(foot as Element, 50, 110);
     move(foot as Element, 50, 114);
     expect(ipc.dragWidget).toHaveBeenCalledTimes(2);
-    fireEvent.pointerUp(foot as Element);
+    fireEvent.pointerUp(foot as Element, { pointerId: 7 });
   });
 
   it("defers a resize while pressed and sends it when the press ends", async () => {
@@ -501,24 +498,23 @@ describe("the widget window", () => {
     );
     await sleep(50);
     expect(ipc.fitWidget).toHaveBeenCalledTimes(2);
-    fireEvent.pointerUp(tile);
+    fireEvent.pointerUp(tile, { pointerId: 7 });
     await waitFor(() => {
       expect(ipc.fitWidget).toHaveBeenCalledTimes(3);
     });
     expect(ipc.fitWidget).toHaveBeenLastCalledWith(244, "down");
   });
 
-  it.each(["pointerup", "pointercancel"])(
-    "ends a captured drag on %s at the window boundary",
+  it.each(["pointerup", "pointercancel", "blur"])(
+    "ends a drag on %s at the window boundary",
     async (release) => {
       const view = renderWidget(vi.fn());
       const tile = screen.getByRole("button", { name: /^Claude/ });
       fireEvent.click(tile);
       await screen.findByRole("region", { name: "Claude" });
       press(tile, 50, 50);
-      expect(tile.setPointerCapture).toHaveBeenCalledWith(7);
-      move(tile, 50, 54);
-      move(tile, 50, 58);
+      move(window, 50, 54);
+      move(window, 50, 58);
       expect(ipc.dragWidget).toHaveBeenCalledOnce();
       view.rerender(
         <Widget
@@ -541,8 +537,63 @@ describe("the widget window", () => {
       });
       move(tile, 50, 64);
       expect(ipc.dragWidget).toHaveBeenCalledOnce();
+      if (release === "blur") {
+        await waitFor(() => {
+          expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+        });
+      }
     },
   );
+
+  it("drags when a press near the widget edge moves into empty window space", () => {
+    const view = renderWidget(vi.fn());
+    const widget = view.container.querySelector(".widget") as HTMLElement;
+    press(widget, 50, 115);
+    move(window, 50, 118);
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
+    move(window, 50, 119);
+    move(window, 50, 135);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.pointerUp(window, { pointerId: 7 });
+    move(window, 50, 140);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+  });
+
+  it("drags after a pressed copy notice expires, with its timer restarted by another copy", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
+    renderWidget(vi.fn());
+    const copy = async (): Promise<void> => {
+      fireEvent.click(screen.getByRole("button", { name: "Report a bug" }));
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
+        );
+      });
+    };
+    await copy();
+    act(() => vi.advanceTimersByTime(TOAST_MS - 100));
+    await copy();
+    act(() => vi.advanceTimersByTime(100));
+    expect(screen.getByRole("status").textContent).toContain("Prompt copied");
+    const notice = screen.getByRole("status");
+    press(notice, 50, 135);
+    act(() => vi.advanceTimersByTime(TOAST_MS - 100));
+    expect(screen.queryByRole("status")).toBeNull();
+    move(window, 50, 139);
+    move(window, 50, 145);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.pointerUp(window, { pointerId: 7 });
+    move(window, 50, 149);
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+  });
+
+  it("stops tracking when the pressed widget unmounts", () => {
+    const view = renderWidget(vi.fn());
+    press(screen.getByRole("button", { name: /^Claude/ }), 50, 50);
+    view.unmount();
+    move(window, 50, 54);
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
+  });
 
   it.each([116, 144])(
     "caps the drawer and rows for a host height of %i",
@@ -655,7 +706,7 @@ describe("the widget window", () => {
     });
   });
 
-  it("closes when another application takes focus, never mid-press", async () => {
+  it("closes when another application takes focus during a press", async () => {
     vi.spyOn(document, "hasFocus").mockReturnValue(false);
     renderWidget(vi.fn());
     const tile = screen.getByRole("button", { name: /^Claude/ });
@@ -663,13 +714,11 @@ describe("the widget window", () => {
     await screen.findByRole("region", { name: "Claude" });
     press(tile, 50, 50);
     fireEvent.blur(window);
-    await sleep(200);
-    expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
-    fireEvent.pointerUp(tile);
-    fireEvent.blur(window);
     await waitFor(() => {
       expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
     });
+    move(window, 54, 50);
+    expect(ipc.dragWidget).not.toHaveBeenCalled();
   });
 
   it("moves focus with the keyboard and opens from it", async () => {
