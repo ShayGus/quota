@@ -12,6 +12,7 @@ pub mod settings_window;
 pub mod tray;
 pub mod tray_anchor;
 pub mod widget;
+pub mod widget_screens;
 pub mod window;
 pub mod window_events;
 mod window_transition;
