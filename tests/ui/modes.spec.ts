@@ -196,8 +196,10 @@ test.describe("states", () => {
           if (surface.window === "overview") {
             await expect(page.locator(".provider-card .badge")).toHaveText(BADGE[state]);
           } else if (surface.style === "ring") {
-            // Under the rings the strip writes every ring's value, and when
-            // something is wrong with the account it writes that instead.
+            // Under the rings the strip writes every ring's value. A passing
+            // problem (rate limited, offline, check failed) keeps the last
+            // readings, muted, as the full window does; only an account that
+            // must be reconnected writes its state instead.
             const tile = page.locator(".widget-tile");
             if (state === "healthy") {
               await expect(tile.locator(".widget-readings")).toContainText("82%");
@@ -207,8 +209,11 @@ test.describe("states", () => {
               await expect(
                 tile.locator(".widget-readings .widget-value.low"),
               ).toContainText("8%");
-            } else {
+            } else if (state === "reconnect needed") {
               await expect(tile.locator(".widget-headline")).toContainText(BADGE[state]);
+            } else {
+              await expect(tile.locator(".widget-readings.last-known")).toBeVisible();
+              await expect(tile.locator(".widget-headline")).toHaveCount(0);
             }
           } else {
             // The mini cards draw readings, not statuses: only an account with no

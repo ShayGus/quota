@@ -446,7 +446,7 @@ export function RingStrip({
               }
             }}
             type="button"
-            className={`widget-tile${account.id === hovered && account.id !== selected ? " hover" : ""}${account.id === selected ? " selected" : ""}`}
+            className={`widget-tile${account.id === hovered && account.id !== selected ? " hover" : ""}${account.id === selected ? " selected" : ""}${account.lastKnown ? " last-known" : ""}`}
             style={tileStyle}
             aria-label={account.description}
             aria-expanded={account.id === selected}
@@ -523,7 +523,9 @@ export function RingStrip({
               <ProviderMark providerId={account.providerId} />
             </span>
             {account.ringValues ? (
-              <span className={`widget-readings${wide ? "" : " stacked"}`}>
+              <span
+                className={`widget-readings${wide ? "" : " stacked"}${account.lastKnown ? " last-known" : ""}`}
+              >
                 {account.rings.map((ring) => (
                   <span
                     key={ring.period}
@@ -537,7 +539,9 @@ export function RingStrip({
                 ))}
               </span>
             ) : (
-              <span className="widget-headline">
+              <span
+                className={`widget-headline${account.lastKnown ? " last-known" : ""}`}
+              >
                 {account.headline.tag === "" ? null : (
                   <span className="widget-tag">{account.headline.tag}</span>
                 )}

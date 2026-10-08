@@ -363,11 +363,12 @@ picture is never cut off, and writes it to `test-results/screenshots/docs/`;
 refresh them with `bun run test:ui && bun run docs:screenshots`;
 `tools/docs/screenshots.mjs` lists which capture each picture comes from.
 
-What the screenshots show about the mini widget, as the code stands: the mini cards draw
-readings and not statuses, so a rate-limited, offline or check-failed account looks normal
-there (only an account with no reading at all says "Reconnect"); and in the ring strip
-with four tiles in a row, "Rate limited" and "Check failed" are cut to "Rate limit…" and
-"Check fail…". These tests pin the behaviour as it is; they do not call it wrong.
+What the screenshots show about the mini widget, as the code stands: a rate-limited,
+offline, check-failed, paused or connecting account keeps its last readings in both the
+ring strip and the mini cards, muted (and in the strip its rings faded), as the full
+window keeps them; the peek and the drawer name the status. Only an account with no
+reading, or one that must be reconnected, shows its status ("Reconnect") instead of
+numbers.
 
 ### How this gates a release
 

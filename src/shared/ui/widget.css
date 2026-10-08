@@ -290,6 +290,20 @@
   color: var(--warn);
 }
 
+/*
+ * The last readings, kept while the account is offline or failing: faded
+ * rings and muted numbers, so they never pass for a fresh reading. The peek
+ * and the drawer name the status.
+ */
+.last-known .widget-value,
+.last-known .widget-value.low {
+  color: var(--muted);
+}
+
+.widget-tile.last-known .widget-tile-rings {
+  opacity: 0.45;
+}
+
 .widget-foot {
   position: relative;
   width: 100%;

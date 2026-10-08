@@ -25,6 +25,7 @@ import {
   percent,
   preferences,
   snapshot,
+  unavailable,
   window as quotaWindow,
 } from "./fixtures";
 
@@ -239,8 +240,52 @@ describe("the widget's model", () => {
     );
     const [shown] = accountsOf(connecting);
     expect(shown?.chip).toEqual({ text: "Connecting", tone: "pending" });
-    expect(shown?.headline.value).toBe("Connecting");
+    // The last reading stays on the tile, muted; the status is in the chip and the peek.
+    expect(shown?.headline.value).toBe("100%");
+    expect(shown?.ringValues).toBe(true);
+    expect(shown?.lastKnown).toBe(true);
     expect(shown?.peek).toBe("Connecting · last known values");
+  });
+
+  it("keeps an offline account's last readings, muted, as the full window does", () => {
+    const offline = {
+      ...account("away", "codex", 11, [quotaWindow("a", "session", percent(42))], {
+        rank: 42,
+      }),
+      fetch_state: "offline" as const,
+    };
+    const [shown] = accountsOf(offline);
+    expect(shown?.chip?.text).toBe("Offline");
+    expect(shown?.ringValues).toBe(true);
+    expect(shown?.lastKnown).toBe(true);
+    expect(shown?.rings[0]?.value).toBe("42%");
+  });
+
+  it("shows the status instead of numbers when there is no reading, or a reconnect", () => {
+    const empty = {
+      ...account("none", "codex", 12, [quotaWindow("n", "session", unavailable())], {
+        rank: 50,
+      }),
+      fetch_state: "offline" as const,
+    };
+    const reconnect = account(
+      "old",
+      "kimi",
+      13,
+      [quotaWindow("k", "session", percent(30))],
+      {
+        connectionState: "reauthentication_required",
+        unrankedReason: "reconnect_required",
+      },
+    );
+    for (const [shown, status] of [
+      [accountsOf(empty)[0], "Offline"],
+      [accountsOf(reconnect)[0], "Reconnect"],
+    ] as const) {
+      expect(shown?.headline.value).toBe(status);
+      expect(shown?.ringValues).toBe(false);
+      expect(shown?.lastKnown).toBe(false);
+    }
   });
 
   it("chips a warning status with its warning tone", () => {

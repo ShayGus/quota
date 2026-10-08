@@ -97,6 +97,12 @@ export interface WidgetAccount {
    * there are no rings, as for an account that has only money.
    */
   readonly ringValues: boolean;
+  /**
+   * Whether the numbers shown are the last readings, kept through a passing
+   * problem such as being offline, and drawn muted. The status itself is in
+   * the peek and the drawer's chip.
+   */
+  readonly lastKnown: boolean;
   /** Every limit: the rings' windows first, then money and other limits. */
   readonly rows: readonly WidgetRow[];
   /** The sentence an assistive technology reads for the whole account. */
@@ -167,9 +173,22 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
   const problem = PROBLEMS.has(status.text)
     ? { text: status.text, tone: status.tone }
     : null;
-  const { headline, row: headlineRow } = headlineOf(status, rows, included.length);
+  // A passing problem keeps the last readings on the tile, muted, as the full
+  // window does; only an account with no reading, or one that must be
+  // reconnected, shows the status instead of its numbers.
+  const lastKnown =
+    problem !== null &&
+    !REPLACE_NUMBERS.has(problem.text) &&
+    rows.some((entry) => entry.value !== "—");
+  const replaced = problem !== null && !lastKnown;
+  const { headline, row: headlineRow } = headlineOf(
+    status,
+    rows,
+    included.length,
+    replaced,
+  );
   const words = rows.map((entry) => `${entry.name} ${entry.value}`).join(", ");
-  const ringValues = rings.length > 0 && problem === null;
+  const ringValues = rings.length > 0 && !replaced;
   return {
     id: account.account_id,
     providerId: account.provider_id,
@@ -177,6 +196,7 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
     rings,
     headline,
     ringValues,
+    lastKnown,
     rows,
     description: words === "" ? `${name}: ${headline.value}` : `${name}: ${words}`,
     chip: problem,
@@ -307,8 +327,9 @@ function headlineOf(
   status: StatusStatement,
   rows: readonly WidgetRow[],
   includedCount: number,
+  replaced: boolean,
 ): { readonly headline: WidgetAccount["headline"]; readonly row: WidgetRow | null } {
-  if (PROBLEMS.has(status.text)) {
+  if (replaced) {
     return {
       headline: { tag: "", value: status.text, low: status.tone !== "pending" },
       row: null,
@@ -368,7 +389,13 @@ function peekSummary(
     : `${headlineRow.name} ${headlineRow.reset}`;
 }
 
-/** The statuses that replace the number, because the number cannot be trusted. */
+/**
+ * The statuses that replace the number on the tile: no reading can be shown
+ * for an account that must be reconnected. The others keep the last reading.
+ */
+const REPLACE_NUMBERS: ReadonlySet<string> = new Set(["Reconnect"]);
+
+/** The statuses that say something is wrong with the account. */
 const PROBLEMS: ReadonlySet<string> = new Set([
   "Reconnect",
   "Connecting",

@@ -27,7 +27,7 @@ export function MiniCards({
       {accounts.map((account, index) => (
         <article
           key={account.id}
-          className={`widget-card${odd && index === accounts.length - 1 ? " wide" : ""}`}
+          className={`widget-card${odd && index === accounts.length - 1 ? " wide" : ""}${account.lastKnown ? " last-known" : ""}`}
           aria-label={account.description}
         >
           <span className="widget-card-title">
