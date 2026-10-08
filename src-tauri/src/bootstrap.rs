@@ -438,6 +438,7 @@ pub fn start() -> Result<(), String> {
         crate::file_log::attach(&handle);
         crate::platform::tray::install(&handle)?;
         crate::platform::window_events::install_close_handlers(&handle);
+        crate::platform::widget_screens::watch(&handle);
         // The saved view, the overview or the widget, is the only window a
         // launch opens, once the backend has read which one it is. The
         // settings window was created hidden and waits for a person to ask for

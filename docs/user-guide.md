@@ -279,7 +279,9 @@ and when it can next be checked.
 The mini widget is a small window with every account at a glance. It replaces the full
 window rather than opening beside it, stays on top of other windows, and keeps its place
 and its view when Quota restarts. Drag it anywhere: press on a tile, a detail row, or the
-frame, and move 4 px or more.
+frame, and move 4 px or more. If a screen is unplugged, or a screen's resolution or scale
+changes, and the widget is left partly off the screens, it moves back just inside the
+nearest one; it returns to its saved place when that screen layout does.
 
 Switch to it with the header's **Switch to the mini widget** button, the tray menu's
 **Mini widget**, or **Settings → General → Mini widget**. Its expand button, **Open the
