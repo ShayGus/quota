@@ -8,7 +8,13 @@
  */
 import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
 
-import type { AccountId, IndicatorStyle, QuotaWindowId } from "../../generated/bindings";
+import type {
+  AccountId,
+  AccountSnapshot,
+  GroupSnapshot,
+  IndicatorStyle,
+  QuotaWindowId,
+} from "../../generated/bindings";
 import { applyOrder, placeAccounts, type PlacedAccount } from "../../shared/state/order";
 import { applyPendingOrder } from "../../shared/state/store";
 import type { RendererState } from "../../shared/state/types";
@@ -16,6 +22,8 @@ import { Icon, Logo } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
 import { displayName } from "../../shared/format/alias";
+import { groupById, groupLabel, memberView } from "../../shared/format/group";
+import { GroupCard } from "./GroupCard";
 import { ProviderCard } from "./ProviderCard";
 import { needsAttention } from "./status";
 
@@ -99,6 +107,48 @@ export function overviewRows(
   );
 }
 
+/** One entry of the list: an account on its own, or a group and its keys. */
+export type OverviewItem =
+  | { readonly kind: "account"; readonly entry: PlacedAccount }
+  | {
+      readonly kind: "group";
+      readonly group: GroupSnapshot;
+      readonly members: readonly PlacedAccount[];
+    };
+
+/**
+ * The list, with each group's keys gathered where its first key falls.
+ *
+ * The rows keep their order: a group takes the place of its first row and
+ * lists its keys in row order. A key whose group the snapshot does not list
+ * stays a row of its own, so no account is ever dropped.
+ */
+export function overviewItems(
+  rows: readonly PlacedAccount[],
+  groups: readonly GroupSnapshot[],
+): readonly OverviewItem[] {
+  const items: OverviewItem[] = [];
+  const placed = new Set<string>();
+  for (const entry of rows) {
+    const id = entry.account.group?.id;
+    const group = id === undefined ? undefined : groupById(groups, id);
+    if (group === undefined) {
+      items.push({ kind: "account", entry });
+      continue;
+    }
+    if (placed.has(group.id)) {
+      continue;
+    }
+    placed.add(group.id);
+    items.push({
+      kind: "group",
+      group,
+      members: rows.filter((row) => row.account.group?.id === group.id),
+    });
+  }
+  return items;
+}
+
 /** The overview: every account's card, its limits, and its state. */
 export function Overview({
   state,
@@ -146,6 +196,30 @@ export function Overview({
     needsAttention(entry.account),
   ).length;
   const paused = state.monitoring?.kind === "paused";
+  const groups = state.snapshot?.groups ?? [];
+  const card = (account: AccountSnapshot): JSX.Element => (
+    <ProviderCard
+      key={account.account_id}
+      account={account}
+      label={displayName(state.preferences, accounts, account)}
+      style={style}
+      now={now}
+      expanded={expanded.has(account.account_id)}
+      onExpand={(accountId) => {
+        const next = new Set(expanded);
+        if (next.has(accountId)) {
+          next.delete(accountId);
+        } else {
+          next.add(accountId);
+        }
+        setExpanded(next);
+      }}
+      onOpen={onOpenAccount}
+      onOpenWindow={onOpenWindow}
+      onReconnect={onReconnect}
+      onEnable={onEnable}
+    />
+  );
 
   if (placements.length === 0) {
     return (
@@ -203,29 +277,20 @@ export function Overview({
         </div>
       ) : (
         <div className="cards">
-          {matches.map((entry) => (
-            <ProviderCard
-              key={entry.account.account_id}
-              account={entry.account}
-              label={displayName(state.preferences, accounts, entry.account)}
-              style={style}
-              now={now}
-              expanded={expanded.has(entry.account.account_id)}
-              onExpand={(accountId) => {
-                const next = new Set(expanded);
-                if (next.has(accountId)) {
-                  next.delete(accountId);
-                } else {
-                  next.add(accountId);
-                }
-                setExpanded(next);
-              }}
-              onOpen={onOpenAccount}
-              onOpenWindow={onOpenWindow}
-              onReconnect={onReconnect}
-              onEnable={onEnable}
-            />
-          ))}
+          {overviewItems(matches, groups).map((item) =>
+            item.kind === "account" ? (
+              card(item.entry.account)
+            ) : (
+              <GroupCard
+                key={item.group.id}
+                group={item.group}
+                name={groupLabel(state.preferences, groups, item.group)}
+                keyCount={item.group.account_ids.length}
+              >
+                {item.members.map((entry) => card(memberView(entry.account)))}
+              </GroupCard>
+            ),
+          )}
         </div>
       )}
     </div>

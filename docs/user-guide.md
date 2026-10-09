@@ -355,8 +355,43 @@ operating system, the view and the provider names, such as `claude` or `codex`.
 - The arrows move the account up or down in this list.
 - For an OpenRouter account, **Show this key's spend limit** adds the key's own limit to
   its card. It is off by default; see [Prepaid balances](#prepaid-balances).
+- For OpenRouter and OpenCode Go, **Account group** puts several keys of one provider
+  account together; see [Several keys of one account](#several-keys-of-one-account).
 
 <br clear="right">
+
+### Several keys of one account
+
+OpenRouter and OpenCode Go let one account hold several API keys, such as one for you, one
+for CI and one for an agent. Add each key as its own account, then put them in one group:
+
+1. In **Settings → Accounts**, open **Account group** on one key and choose **New
+   group…**. Name the account, for example **Work**.
+2. On each other key of that account, choose the same group.
+
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account: $37.20 left and what its keys spent, then the Personal, CI and Agent keys, each with its own spend limit"><br><sub>One account, three keys</sub></td>
+    <td valign="top" width="50%"><img src="images/settings-account-group.png" alt="Settings, Accounts: the Account group of each key"><br><sub>Choosing a key's group</sub></td>
+  </tr>
+</table>
+
+The overview then shows the account once, with each key under it:
+
+- **The account** shows the balance and what its keys spent together today, this week and
+  this month. Every key reads the same balance, so it is shown once, never added up.
+- **Each key** shows its own spend limit and its own status. A key that stops working
+  shows it on its own card and the other keys carry on.
+- The mini widget shows the account as one tile, named for the group.
+
+OpenCode Go reports usage for the whole subscription, not per key, so every key of an
+OpenCode Go group shows the same 5-hour, weekly and monthly usage. The group keeps the
+keys together and shows each key's own status; nothing is added up.
+
+The provider does not say which account a key belongs to, so Quota cannot check it: put
+only keys of the same account in one group. Choosing **Not grouped** takes a key out; a
+group with no key left is removed. **Hide account names** shows groups as "Group 1",
+"Group 2".
 
 ## Settings
 

@@ -127,19 +127,24 @@ export function NicknameField({
   hidden,
   onChange,
   hint,
+  label = "Account nickname",
+  placeholder = "For example: Personal",
 }: {
   readonly id: string;
   readonly value: string;
   readonly hidden: boolean;
   readonly onChange: (value: string) => void;
   readonly hint?: string;
+  /** The field's label, for a name that is not an account's. */
+  readonly label?: string;
+  readonly placeholder?: string;
 }): JSX.Element {
   const hintId = useId();
   const note = hidden ? "Hidden while Hide account names is on." : hint;
   return (
     <>
       <label className="field-label" htmlFor={id}>
-        Account nickname
+        {label}
       </label>
       <input
         type="text"
@@ -148,7 +153,7 @@ export function NicknameField({
         autoComplete="off"
         maxLength={32}
         value={value}
-        placeholder={hidden ? undefined : "For example: Personal"}
+        placeholder={hidden ? undefined : placeholder}
         required
         aria-describedby={note === undefined ? undefined : hintId}
         onChange={(event) => {

@@ -62,6 +62,81 @@ export function openRouterAccount(
   });
 }
 
+/** A key's monthly spend limit with `used` of `limit` cents spent. */
+function keyLimitOf(used: number, limit: number) {
+  const base = keyLimit();
+  return {
+    ...base,
+    measurement: {
+      kind: "money" as const,
+      value: {
+        currency: "USD",
+        scale: 2,
+        used_minor_units: used,
+        remaining_minor_units: limit - used,
+        limit_minor_units: limit,
+      },
+    },
+  };
+}
+
+/**
+ * One OpenRouter account with three keys, grouped as "Work": each key reads
+ * the same $37.20 balance and has its own monthly limit and spend.
+ */
+export function openRouterGroup(): AccountSnapshot[] {
+  const keys = [
+    {
+      id: "acct-or-personal",
+      nickname: "Personal",
+      used: 840,
+      limit: 2000,
+      today: 120,
+      month: 840,
+    },
+    {
+      id: "acct-or-ci",
+      nickname: "CI",
+      used: 1720,
+      limit: 2000,
+      today: 310,
+      month: 1720,
+    },
+    {
+      id: "acct-or-agent",
+      nickname: "Agent",
+      used: 150,
+      limit: 5000,
+      today: 0,
+      month: 150,
+    },
+  ];
+  return keys.map((key, index) => {
+    const { window, summary } = prepaidBalance();
+    return {
+      ...account(
+        key.id,
+        "openrouter",
+        10 + index,
+        [window, keyLimitOf(key.used, key.limit)],
+        {
+          nickname: key.nickname,
+          rank: 74.4,
+          balance: {
+            ...summary,
+            key_spend: {
+              today_minor: key.today,
+              week_minor: null,
+              month_minor: key.month,
+            },
+          },
+        },
+      ),
+      group: { id: "group-work", name: "Work" },
+    };
+  });
+}
+
 /**
  * A TypeSafe console account: a credit balance made of two grants, a free one
  * that runs out first and a purchased one, all fictional.

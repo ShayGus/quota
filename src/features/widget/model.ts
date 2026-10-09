@@ -10,11 +10,13 @@
 import type {
   AccountId,
   AccountSnapshot,
+  GroupSnapshot,
   Preferences,
   ProviderId,
   QuotaWindow,
 } from "../../generated/bindings";
 import { displayName } from "../../shared/format/alias";
+import { groupLabel } from "../../shared/format/group";
 import {
   moneyLeft,
   remainingPercent,
@@ -120,28 +122,86 @@ export interface WidgetAccount {
  * The accounts the widget shows, in the overview's order, except that an
  * account with nothing to rank (only money, only unlimited, only native
  * units) follows the ranked ones: it needs no checking, so it is not first.
+ *
+ * A group of keys is one tile, named for the group, where its first key
+ * falls. The tile is drawn from the key that read the account's balance last,
+ * because the balance is the account's and every key reads the same one.
  */
 export function widgetAccounts(
   accounts: readonly AccountSnapshot[],
   preferences: Preferences | null,
   now: number,
+  groups: readonly GroupSnapshot[] = [],
 ): readonly WidgetAccount[] {
   const placed = placeAccounts(accounts)
     .filter((entry) => entry.section !== "monitoring_off")
     .map((entry) => entry.account);
-  const shown = [
+  const ordered = [
     ...placed.filter((account) => !nothingToRank(account)),
     ...placed.filter(nothingToRank),
   ];
-  return shown.map((account) => {
-    const shared = shown.filter((other) => other.provider_id === account.provider_id);
+  const tiles = groupTiles(ordered, groups);
+  return tiles.map(({ account, group }) => {
     const provider = providerLabel(account.provider_id);
+    if (group !== undefined) {
+      return describe(
+        account,
+        `${provider} · ${groupLabel(preferences, groups, group)}`,
+        now,
+      );
+    }
+    const shared = tiles.filter(
+      (other) => other.account.provider_id === account.provider_id,
+    );
     const name =
       shared.length > 1
         ? `${provider} · ${displayName(preferences, accounts, account)}`
         : provider;
     return describe(account, name, now);
   });
+}
+
+/** One tile: an account on its own, or the key that stands for its group. */
+interface Tile {
+  readonly account: AccountSnapshot;
+  readonly group: GroupSnapshot | undefined;
+}
+
+/** The tiles, with each group's keys reduced to one tile where the first falls. */
+function groupTiles(
+  accounts: readonly AccountSnapshot[],
+  groups: readonly GroupSnapshot[],
+): readonly Tile[] {
+  const tiles: Tile[] = [];
+  const placed = new Set<string>();
+  for (const account of accounts) {
+    const group = groups.find((candidate) => candidate.id === account.group?.id);
+    if (group === undefined) {
+      tiles.push({ account, group: undefined });
+      continue;
+    }
+    if (placed.has(group.id)) {
+      continue;
+    }
+    placed.add(group.id);
+    const members = accounts.filter((member) => member.group?.id === group.id);
+    tiles.push({ account: latestBalance(members) ?? account, group });
+  }
+  return tiles;
+}
+
+/** The member that read the balance last, when any member has one. */
+function latestBalance(members: readonly AccountSnapshot[]): AccountSnapshot | undefined {
+  return members
+    .filter((member) => member.balance !== null)
+    .reduce<AccountSnapshot | undefined>(
+      (newest, member) =>
+        newest === undefined ||
+        (member.last_success_at ?? "") > (newest.last_success_at ?? "")
+          ? member
+          : newest,
+      undefined,
+    );
 }
 
 /** Whether an account has no allowance to rank, which is not a problem. */

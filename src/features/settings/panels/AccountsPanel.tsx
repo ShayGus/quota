@@ -11,10 +11,12 @@ import { useState, type JSX } from "react";
 import type {
   AccountId,
   AccountSnapshot,
+  GroupSnapshot,
   Preferences,
 } from "../../../generated/bindings";
 import { accountLabel, displayName } from "../../../shared/format/alias";
 import { hasHideableKeyLimit } from "../../../shared/format/balance";
+import { groupById, groupLabel, isGroupable } from "../../../shared/format/group";
 import { providerLabel } from "../../../shared/format/provider";
 import { launch } from "../../../shared/ipc/report";
 import { Dialog } from "../../../shared/ui/Dialog";
@@ -26,6 +28,12 @@ import type { SettingsActions } from "../Settings";
 /** The confirmation an account action is waiting on, if any. */
 type Pending =
   | { readonly kind: "rename"; readonly account: AccountSnapshot }
+  | { readonly kind: "new-group"; readonly account: AccountSnapshot }
+  | {
+      readonly kind: "rename-group";
+      readonly account: AccountSnapshot;
+      readonly group: GroupSnapshot;
+    }
   | { readonly kind: "reconnect"; readonly account: AccountSnapshot }
   | { readonly kind: "disconnect"; readonly account: AccountSnapshot };
 
@@ -35,17 +43,95 @@ type Pending =
  */
 const ORDER_FIXED = "Order follows the least remaining allowance first";
 
-/** One managed account. */
-function ManagedAccount({
+/** The choice for "New group…" in the group list. */
+const NEW_GROUP = "new";
+
+/**
+ * Which provider account a key belongs to: no group, a group of the same
+ * provider, or a new one. The provider names no account, so the person
+ * decides which keys belong together.
+ */
+function GroupChoice({
   account,
   label,
+  groups,
+  preferences,
   alias,
   actions,
   onPending,
 }: {
   readonly account: AccountSnapshot;
   readonly label: string;
+  readonly groups: readonly GroupSnapshot[];
+  readonly preferences: Preferences | null;
   readonly alias: string;
+  readonly actions: SettingsActions;
+  readonly onPending: (pending: Pending) => void;
+}): JSX.Element {
+  const provider = providerLabel(account.provider_id);
+  const choices = groups.filter((group) => group.provider_id === account.provider_id);
+  const current =
+    account.group === null ? undefined : groupById(groups, account.group.id);
+  return (
+    <div className="account-manage-option">
+      <span>
+        <span className="account-manage-option-label">Account group</span>
+        <small>Put the keys of one {provider} account together to see its total.</small>
+      </span>
+      <span className="account-group-controls">
+        <select
+          aria-label={`Account group of ${provider} ${label}`}
+          value={current?.id ?? ""}
+          onChange={(event) => {
+            const value = event.currentTarget.value;
+            if (value === NEW_GROUP) {
+              onPending({ kind: "new-group", account });
+            } else {
+              actions.setAccountGroup(account.account_id, value === "" ? null : value);
+            }
+          }}
+        >
+          <option value="">Not grouped</option>
+          {choices.map((group) => (
+            <option key={group.id} value={group.id}>
+              {groupLabel(preferences, groups, group)}
+            </option>
+          ))}
+          <option value={NEW_GROUP}>New group…</option>
+        </select>
+        {current === undefined ? null : (
+          <button
+            type="button"
+            className="text-btn"
+            disabled={alias !== ""}
+            title={alias === "" ? undefined : "Show account names to rename"}
+            onClick={() => {
+              onPending({ kind: "rename-group", account, group: current });
+            }}
+          >
+            Rename group
+          </button>
+        )}
+      </span>
+    </div>
+  );
+}
+
+/** One managed account. */
+function ManagedAccount({
+  account,
+  label,
+  alias,
+  groups,
+  preferences,
+  actions,
+  onPending,
+}: {
+  readonly account: AccountSnapshot;
+  readonly label: string;
+  readonly alias: string;
+  readonly groups: readonly GroupSnapshot[];
+  readonly preferences: Preferences | null;
   readonly actions: SettingsActions;
   readonly onPending: (pending: Pending) => void;
 }): JSX.Element {
@@ -77,7 +163,8 @@ function ManagedAccount({
           : ` · ${account.identity.workspace_label}`}{" "}
         · {windows} {windows === 1 ? "window" : "windows"}
       </div>
-      {hasHideableKeyLimit(account) ? (
+      {/* A key in a group always shows its limit, which is what tells the keys apart. */}
+      {hasHideableKeyLimit(account) && account.group === null ? (
         <div className="account-manage-option">
           <span>
             <span className="account-manage-option-label">
@@ -98,6 +185,17 @@ function ManagedAccount({
             }}
           />
         </div>
+      ) : null}
+      {isGroupable(account.provider_id) ? (
+        <GroupChoice
+          account={account}
+          label={label}
+          groups={groups}
+          preferences={preferences}
+          alias={alias}
+          actions={actions}
+          onPending={onPending}
+        />
       ) : null}
       <div className="account-manage-actions">
         <button
@@ -180,7 +278,60 @@ function PendingDialog({
   const { account } = pending;
   const provider = providerLabel(account.provider_id);
   const [nickname, setNickname] = useState(account.nickname);
+  const [groupName, setGroupName] = useState(
+    pending.kind === "rename-group" ? pending.group.name : "",
+  );
   switch (pending.kind) {
+    case "new-group":
+      return (
+        <Dialog
+          title="New account group"
+          confirmLabel="Create group"
+          confirmDisabled={groupName.trim().length === 0}
+          onConfirm={() => {
+            actions.createAccountGroup(groupName.trim(), [account.account_id]);
+          }}
+          onClose={onClose}
+        >
+          <p>
+            Name the {provider} account this key belongs to. Add its other keys to the
+            same group from their own settings.
+          </p>
+          <NicknameField
+            id="group-name-input"
+            label="Group name"
+            placeholder="For example: Work"
+            value={groupName}
+            hidden={alias !== ""}
+            onChange={setGroupName}
+          />
+        </Dialog>
+      );
+    case "rename-group":
+      return (
+        <Dialog
+          title="Rename account group"
+          confirmLabel="Save name"
+          confirmDisabled={groupName.trim().length === 0}
+          onConfirm={() => {
+            const next = groupName.trim();
+            if (next !== pending.group.name) {
+              actions.renameAccountGroup(pending.group.id, next);
+            }
+          }}
+          onClose={onClose}
+        >
+          <p>The new name applies to every key in the group.</p>
+          <NicknameField
+            id="group-name-input"
+            label="Group name"
+            placeholder="For example: Work"
+            value={groupName}
+            hidden={alias !== ""}
+            onChange={setGroupName}
+          />
+        </Dialog>
+      );
     case "rename":
       return (
         <Dialog
@@ -250,11 +401,14 @@ function PendingDialog({
 /** The account management panel. */
 export function AccountsPanel({
   accounts,
+  groups,
   preferences,
   actions,
   onAddAccount,
 }: {
   readonly accounts: readonly AccountSnapshot[];
+  /** The account groups, for the group choice of each key. */
+  readonly groups: readonly GroupSnapshot[];
   readonly preferences: Preferences | null;
   readonly actions: SettingsActions;
   /** Opens the add-account page of this window. */
@@ -289,6 +443,8 @@ export function AccountsPanel({
             account={account}
             label={displayName(preferences, accounts, account)}
             alias={aliasOf(account.account_id)}
+            groups={groups}
+            preferences={preferences}
             actions={actions}
             onPending={setPending}
           />
