@@ -19,6 +19,9 @@ pub const OPERATIONAL_PREFERENCES_VERSION: u32 = 2;
 /// The version that adds prepaid balances and the key-limit switch.
 pub const PREPAID_BALANCE_VERSION: u32 = 3;
 
+/// The version that adds account groups.
+pub const ACCOUNT_GROUPS_VERSION: u32 = 4;
+
 /// Every migration, in application order.
 ///
 /// Each entry is `(version, statements)`. A statement list is executed as one
@@ -35,6 +38,10 @@ pub const MIGRATIONS: &[(u32, &str)] = &[
     (
         PREPAID_BALANCE_VERSION,
         include_str!("../../migrations/0003_prepaid_balance.sql"),
+    ),
+    (
+        ACCOUNT_GROUPS_VERSION,
+        include_str!("../../migrations/0004_account_groups.sql"),
     ),
 ];
 

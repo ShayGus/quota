@@ -237,6 +237,7 @@ export function account(
           },
     balance: options.balance ?? null,
     show_key_limit: options.showKeyLimit ?? false,
+    group: null,
   };
 }
 
@@ -258,6 +259,7 @@ export function snapshot(
     connections: [],
     accounts: [...accounts],
     order: [],
+    groups: [],
   };
 }
 

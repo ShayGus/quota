@@ -95,6 +95,11 @@ validated_id!(
     ConnectionId
 );
 validated_id!(
+    /// A group of accounts the person treats as one provider account, such as
+    /// several API keys of one `OpenRouter` account.
+    AccountGroupId
+);
+validated_id!(
     /// One attempt to establish a connection.
     ConnectionAttemptId
 );

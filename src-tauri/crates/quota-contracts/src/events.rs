@@ -179,6 +179,7 @@ mod tests {
                 connections: Vec::new(),
                 accounts: Vec::new(),
                 order: Vec::new(),
+                groups: Vec::new(),
             },
         };
         let json = serde_json::to_value(&event).unwrap();

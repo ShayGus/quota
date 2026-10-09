@@ -69,6 +69,12 @@ impl SqliteAccountPortAdapter {
                 .balance_ledger(&record.id)
                 .await
                 .map_err(|e| map_error(&e))?;
+            let group = self
+                .repositories
+                .accounts()
+                .group_of(&record.id)
+                .await
+                .map_err(|e| map_error(&e))?;
             accounts.push(StoredAccount {
                 account_id: record.id,
                 connection: ConnectionSummary {
@@ -96,6 +102,7 @@ impl SqliteAccountPortAdapter {
                 expected_but_missing_window_ids,
                 balance,
                 show_key_limit: record.show_key_limit,
+                group,
             });
         }
         Ok(accounts)
@@ -202,7 +209,7 @@ async fn store_account_row(
     .map_err(|e| map_error(&e))
 }
 
-/// The account's prepaid-balance ledger and its key-limit switch.
+/// The account's prepaid-balance ledger, its key-limit switch and its group.
 async fn store_balance(
     transaction: &mut Transaction<'_>,
     account: &StoredAccount,
@@ -218,6 +225,14 @@ async fn store_balance(
         &mut **transaction,
         &account.account_id,
         account.balance.as_ref(),
+    )
+    .await
+    .map_err(|e| map_error(&e))?;
+    AccountRepository::set_group_in(
+        transaction,
+        &account.account_id,
+        account.connection.provider_id,
+        account.group.as_ref(),
     )
     .await
     .map_err(|e| map_error(&e))
@@ -341,6 +356,7 @@ impl AccountPort for SqliteAccountPortAdapter {
             order,
             balance: account.balance.as_ref().map(|ledger| ledger.summary(now)),
             show_key_limit: account.show_key_limit,
+            group: account.group,
         }))
     }
 }

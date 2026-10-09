@@ -12,8 +12,8 @@ use crate::ipc::events::{
 };
 
 use crate::ipc::{
-    commands, commands_connection, commands_prefs, commands_report, commands_update,
-    commands_window,
+    commands, commands_connection, commands_groups, commands_prefs, commands_report,
+    commands_update, commands_window,
 };
 
 /// Builds the registry with every command and event type collected.
@@ -28,6 +28,9 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands::set_account_enabled,
             commands::rename_account,
             commands::set_key_limit_shown,
+            commands_groups::create_account_group,
+            commands_groups::set_account_group,
+            commands_groups::rename_account_group,
             commands::disconnect_account,
             commands::refresh_accounts,
             commands_connection::begin_connection,

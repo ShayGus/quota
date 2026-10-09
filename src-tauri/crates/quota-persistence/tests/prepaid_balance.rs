@@ -74,6 +74,7 @@ fn account(id: &str, ordinal: u32) -> StoredAccount {
         expected_but_missing_window_ids: Vec::new(),
         balance: Some(topped),
         show_key_limit: true,
+        group: None,
     }
 }
 

@@ -112,6 +112,13 @@ so it carries a foreign key and leaves with its account, and clearing reading hi
 leaves it alone. It is written in the same transaction as the rest of the account, as is
 the account's `show_key_limit` switch.
 
+`account_groups` holds the provider accounts the person puts keys together under: an id,
+the provider and a name, never a key. An account names at most one group through
+`accounts.group_id`, saved in the same transaction as the account. Every account write and
+every account delete ends by deleting the groups no account names, so a group lives
+exactly as long as it has members; deleting a group by any other path leaves its accounts
+ungrouped (`ON DELETE SET NULL`), never deleted.
+
 ## Tests
 
 The SQLite integration tests under `tests/` run against real migrated on-disk files in

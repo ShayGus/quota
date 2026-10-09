@@ -44,6 +44,8 @@ pub struct StoredAccount {
     pub balance: Option<quota_domain::balance::BalanceLedger>,
     /// Whether the card shows the account's API key spend limit.
     pub show_key_limit: bool,
+    /// The provider account this account belongs to, when it is grouped.
+    pub group: Option<quota_domain::group::AccountGroup>,
 }
 
 /// A persisted rate-limit or backoff deadline.

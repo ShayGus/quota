@@ -452,6 +452,7 @@ function confirmedAccount(
     expected_but_missing_window_ids: [],
     balance: null,
     show_key_limit: false,
+    group: null,
     order: {
       kind: "ranked",
       value: {
