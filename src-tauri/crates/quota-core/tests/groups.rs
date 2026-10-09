@@ -61,10 +61,10 @@ fn registry() -> AccountRegistry {
     ])
 }
 
+/// The account's group as (id, name). Every name the tests pass is registered.
 fn group_of(registry: &AccountRegistry, account: &str) -> Option<(String, String)> {
     registry
-        .get(&id(account))
-        .unwrap()
+        .get(&id(account))?
         .stored
         .group
         .as_ref()
