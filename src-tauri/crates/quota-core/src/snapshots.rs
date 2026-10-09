@@ -88,6 +88,15 @@ impl SnapshotBuilder {
                 account
             })
             .collect();
+        let in_order: Vec<&AccountSnapshot> = order
+            .iter()
+            .filter_map(|entry| {
+                accounts
+                    .iter()
+                    .find(|account| account.account_id == entry.account_id)
+            })
+            .collect();
+        let groups = quota_domain::group::group_snapshots(&in_order);
 
         AppSnapshot {
             schema_version: SNAPSHOT_SCHEMA_VERSION,
@@ -102,6 +111,7 @@ impl SnapshotBuilder {
                 .collect(),
             accounts,
             order,
+            groups,
         }
     }
 }
@@ -137,5 +147,6 @@ fn project(entry: &RegisteredAccount, now: DateTime<Utc>) -> AccountSnapshot {
             .as_ref()
             .map(|ledger| ledger.summary(now)),
         show_key_limit: entry.stored.show_key_limit,
+        group: entry.stored.group.clone(),
     }
 }

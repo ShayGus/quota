@@ -61,6 +61,7 @@ fn confirmed_account() -> StoredAccount {
         expected_but_missing_window_ids: Vec::new(),
         balance: None,
         show_key_limit: false,
+        group: None,
     }
 }
 

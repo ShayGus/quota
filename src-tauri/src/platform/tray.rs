@@ -440,6 +440,7 @@ mod tests {
             order,
             balance: None,
             show_key_limit: false,
+            group: None,
         }
     }
 
@@ -463,6 +464,7 @@ mod tests {
             connections: Vec::new(),
             accounts,
             order: Vec::new(),
+            groups: Vec::new(),
         }
     }
 

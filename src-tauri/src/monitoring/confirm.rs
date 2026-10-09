@@ -266,6 +266,7 @@ async fn commit_candidate(
         expected_but_missing_window_ids: read.expected_but_missing,
         balance,
         show_key_limit: false,
+        group: None,
     };
     let new_account = quota_core::accounts::NewAccount {
         account_id: ids.account_id.clone(),

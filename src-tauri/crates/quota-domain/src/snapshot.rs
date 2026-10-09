@@ -6,6 +6,7 @@ use specta::Type;
 
 use crate::account::{ConnectionState, ConnectionSummary, FetchState, VerifiedIdentity};
 use crate::balance::BalanceSummary;
+use crate::group::{AccountGroup, GroupSnapshot};
 use crate::ids::{AccountId, AppInstanceId, ConnectionId, QuotaWindowId};
 use crate::provider::ProviderId;
 use crate::quota::window::QuotaWindow;
@@ -77,6 +78,8 @@ pub struct AccountSnapshot {
     pub balance: Option<BalanceSummary>,
     /// Whether the card shows the account's API key spend limit.
     pub show_key_limit: bool,
+    /// The provider account this account belongs to, when it is grouped.
+    pub group: Option<AccountGroup>,
 }
 
 /// The complete application state at one revision.
@@ -100,6 +103,8 @@ pub struct AppSnapshot {
     pub accounts: Vec<AccountSnapshot>,
     /// The canonical account order, in presentation sections.
     pub order: Vec<OrderEntry>,
+    /// The account groups, each with its members and its account total.
+    pub groups: Vec<GroupSnapshot>,
 }
 
 impl AppSnapshot {
@@ -146,6 +151,7 @@ mod tests {
             }),
             balance: None,
             show_key_limit: false,
+            group: None,
         }
     }
 
@@ -164,6 +170,7 @@ mod tests {
             connections: Vec::new(),
             accounts: vec![account(&first), account(&second)],
             order: Vec::new(),
+            groups: Vec::new(),
         };
         assert_eq!(
             snapshot.account(&second).map(|a| a.nickname.as_str()),

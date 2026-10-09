@@ -40,6 +40,20 @@ export const commands = {
 	 */
 	setKeyLimitShown: (accountRef: AccountRef, shown: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_key_limit_shown", { accountRef, shown })),
 	/**
+	 *  Puts accounts of one provider in a new group, and returns the group.
+	 * 
+	 *  An account already in another group moves to the new one.
+	 */
+	createAccountGroup: (name: string, accountRefs: AccountRef[]) => typedError<AccountGroupId, CommandError>(__TAURI_INVOKE("create_account_group", { name, accountRefs })),
+	/**
+	 *  Moves one account into an existing group, or out of its group with `None`.
+	 * 
+	 *  A group left with no account is deleted.
+	 */
+	setAccountGroup: (accountRef: AccountRef, groupId: string | null) => typedError<null, CommandError>(__TAURI_INVOKE("set_account_group", { accountRef, groupId })),
+	/**  Renames a group without touching its members. */
+	renameAccountGroup: (groupId: AccountGroupId, name: string) => typedError<null, CommandError>(__TAURI_INVOKE("rename_account_group", { groupId, name })),
+	/**
 	 *  Removes the application's local reference to one account.
 	 * 
 	 *  It does not log out, unlink, or otherwise disturb the owning tool.
@@ -191,6 +205,20 @@ export type AccountCardinality =
 /**  The provider exposes a single externally owned profile. */
 "single_profile";
 
+/**  The group an account belongs to. */
+export type AccountGroup = {
+	/**  The group's immutable identity. */
+	id: AccountGroupId,
+	/**  The person's name for the provider account. */
+	name: string,
+};
+
+/**
+ *  A group of accounts the person treats as one provider account, such as
+ *  several API keys of one `OpenRouter` account.
+ */
+export type AccountGroupId = string;
+
 /**  A monitored subscription account. */
 export type AccountId = string;
 
@@ -254,6 +282,8 @@ export type AccountSnapshot = {
 	balance: BalanceSummary | null,
 	/**  Whether the card shows the account's API key spend limit. */
 	show_key_limit: boolean,
+	/**  The provider account this account belongs to, when it is grouped. */
+	group: AccountGroup | null,
 };
 
 /**  Bounds and signals for an adaptive strategy. */
@@ -289,6 +319,8 @@ export type AppSnapshot = {
 	accounts: AccountSnapshot[],
 	/**  The canonical account order, in presentation sections. */
 	order: OrderEntry[],
+	/**  The account groups, each with its members and its account total. */
+	groups: GroupSnapshot[],
 };
 
 /**
@@ -717,6 +749,22 @@ export type FixedIntervalPolicy = {
 	battery_saver_seconds: number,
 	/**  The provider's floor. No other interval may be shorter. */
 	minimum_seconds: number,
+};
+
+/**  One group as the renderer sees it: its members and the account total. */
+export type GroupSnapshot = {
+	/**  The group's immutable identity. */
+	id: AccountGroupId,
+	/**  The provider every member belongs to. */
+	provider_id: ProviderId,
+	/**  The person's name for the provider account. */
+	name: string,
+	/**  The members, in the snapshot's account order. */
+	account_ids: AccountId[],
+	/**  The account-wide balance, from the member that read it last. */
+	balance: BalanceSummary | null,
+	/**  What every member key spent together, per period any member reports. */
+	key_spend: PeriodSpend | null,
 };
 
 /**  How a remaining allowance is drawn. */

@@ -320,7 +320,7 @@ pub async fn get_connection_progress(
         .ok_or(CommandError::AccountNotFound)
 }
 
-fn map_core_error(error: quota_core::CoreError) -> CommandError {
+pub(crate) fn map_core_error(error: quota_core::CoreError) -> CommandError {
     match error {
         quota_core::CoreError::AccountNotFound(_)
         | quota_core::CoreError::ConnectionNotFound(_) => CommandError::AccountNotFound,

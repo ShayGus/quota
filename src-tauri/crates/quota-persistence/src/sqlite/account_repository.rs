@@ -346,6 +346,7 @@ impl AccountRepository {
             .await
             .table("accounts")?
             .rows_affected();
+        Self::delete_empty_groups_on(&mut *transaction).await?;
 
         transaction.commit().await.table("accounts")?;
         Ok(deleted == 1)
