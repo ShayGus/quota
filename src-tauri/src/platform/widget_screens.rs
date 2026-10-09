@@ -7,17 +7,30 @@
 //! widget's own scale changes; when the widget is no longer wholly inside a
 //! screen's work area, it moves the least distance that puts it back inside
 //! the work area it overlaps most. The saved position is left as it was, so the
-//! widget goes back there when that screen layout returns.
+//! widget goes back there as soon as its screen is there again.
+//!
+//! The screens change at sign-in too: Quota can start before Windows has set
+//! up every screen, so the widget is first placed on the screens there are,
+//! and returns to its saved spot when that screen arrives. A widget that is
+//! the view but not showing after a change is shown again.
+//!
+//! Every few seconds a shown widget is also put back above the other windows,
+//! because the system can drop it below them and never says so.
 
 use std::time::Duration;
 
+use quota_domain::preferences::{AppView, WidgetPosition};
 use tauri::{AppHandle, Manager, PhysicalPosition};
 
 use super::tray_anchor::Rect;
 use super::widget;
+use crate::state::AppState;
 
 /// How often the screens are checked while the widget is shown.
 const CHECK_EVERY: Duration = Duration::from_secs(2);
+
+/// How often a shown widget is put back above the other windows, in checks.
+const RAISE_EVERY_CHECKS: u32 = 3;
 
 /// How long after a scale change the widget is checked, once the window has
 /// taken its new size.
@@ -47,6 +60,25 @@ pub fn keep_inside(window: Rect, areas: &[Rect]) -> Option<(f64, f64)> {
     Some((x, y))
 }
 
+/// Where a shown widget at `window` goes after the screens change: back to
+/// its `saved` spot while that spot is on one of `screens`, else wholly inside
+/// one of `areas`, or `None` when it stays where it is.
+#[must_use]
+pub fn resettle(
+    window: Rect,
+    saved: Option<(f64, f64)>,
+    screens: &[Rect],
+    areas: &[Rect],
+) -> Option<(f64, f64)> {
+    if let Some(saved) = saved
+        && saved != (window.x, window.y)
+        && widget::on_screen(saved, (window.width, window.height), screens)
+    {
+        return Some(saved);
+    }
+    keep_inside(window, areas)
+}
+
 fn inside(window: Rect, area: Rect) -> bool {
     window.x >= area.x
         && window.y >= area.y
@@ -73,12 +105,17 @@ pub fn watch(app: &AppHandle) {
         // Only a change of screens moves the widget: one the person parked
         // part off an edge on purpose stays there until the screens change.
         let mut last = screens_layout(&app);
+        let mut checks: u32 = 0;
         loop {
             std::thread::sleep(CHECK_EVERY);
             let layout = screens_layout(&app);
             if layout != last {
                 last = layout;
                 check(&app);
+            }
+            checks = checks.wrapping_add(1);
+            if checks.is_multiple_of(RAISE_EVERY_CHECKS) {
+                keep_on_top(&app);
             }
         }
     });
@@ -117,12 +154,20 @@ fn screens_layout(app: &AppHandle) -> String {
         .unwrap_or_default()
 }
 
-/// Moves a shown widget back inside a screen's work area when it has left it.
+/// Moves a shown widget back to its saved spot, or inside a screen's work
+/// area when it has left it, and shows a widget that is the view but hidden.
 fn check(app: &AppHandle) {
     let Some(native) = app.get_webview_window(widget::LABEL) else {
         return;
     };
+    let Some((view, saved)) = saved_view(app) else {
+        return;
+    };
+    if view != AppView::Widget {
+        return;
+    }
     if !native.is_visible().unwrap_or(false) {
+        show_again(app, saved);
         return;
     }
     let (Ok(position), Ok(size), Ok(monitors)) = (
@@ -138,30 +183,83 @@ fn check(app: &AppHandle) {
         width: f64::from(size.width),
         height: f64::from(size.height),
     };
+    let screens: Vec<Rect> = monitors
+        .iter()
+        .map(|monitor| rect_of(*monitor.position(), *monitor.size()))
+        .collect();
     let areas: Vec<Rect> = monitors
         .iter()
         .map(|monitor| {
             let area = monitor.work_area();
-            Rect {
-                x: f64::from(area.position.x),
-                y: f64::from(area.position.y),
-                width: f64::from(area.size.width),
-                height: f64::from(area.size.height),
-            }
+            rect_of(area.position, area.size)
         })
         .collect();
-    let Some((x, y)) = keep_inside(window, &areas) else {
+    let saved = saved.map(|WidgetPosition { x, y }| (f64::from(x), f64::from(y)));
+    let Some((x, y)) = resettle(window, saved, &screens, &areas) else {
         return;
     };
     #[expect(
         clippy::cast_possible_truncation,
-        reason = "the position lies inside a monitor's work area, well inside i32"
+        reason = "the position lies on a screen, well inside i32"
     )]
     let moved = PhysicalPosition::new(x.round() as i32, y.round() as i32);
     // A move the host makes is not the person's choice of position.
     widget::mark_programmatic(moved);
+    tracing::info!(
+        x = moved.x,
+        y = moved.y,
+        screens = screens.len(),
+        "the screens changed; the widget moved"
+    );
     if let Err(error) = native.set_position(moved) {
         tracing::warn!(%error, "the widget could not be moved back onto a screen");
+    }
+}
+
+/// Puts a shown widget back above the other windows while it is the view.
+fn keep_on_top(app: &AppHandle) {
+    let Some(native) = app.get_webview_window(widget::LABEL) else {
+        return;
+    };
+    if !native.is_visible().unwrap_or(false)
+        || saved_view(app).is_none_or(|(view, _)| view != AppView::Widget)
+    {
+        return;
+    }
+    if let Err(error) = widget::raise(&native) {
+        tracing::warn!(
+            code = error.diagnostic_code(),
+            "the widget could not be put back on top"
+        );
+    }
+}
+
+/// The saved view and widget position, once the backend has read them.
+fn saved_view(app: &AppHandle) -> Option<(AppView, Option<WidgetPosition>)> {
+    let state = app.try_state::<AppState>()?;
+    Some(tauri::async_runtime::block_on(async {
+        let preferences = state.preferences_state.read().await;
+        (preferences.view, preferences.widget_position)
+    }))
+}
+
+/// Shows the widget again when it is the view but is not showing; `show`
+/// logs where it went.
+fn show_again(app: &AppHandle, saved: Option<WidgetPosition>) {
+    if let Err(error) = widget::show(app, saved) {
+        tracing::warn!(
+            code = error.diagnostic_code(),
+            "the widget could not be shown after the screens changed"
+        );
+    }
+}
+
+fn rect_of(position: PhysicalPosition<i32>, size: tauri::PhysicalSize<u32>) -> Rect {
+    Rect {
+        x: f64::from(position.x),
+        y: f64::from(position.y),
+        width: f64::from(size.width),
+        height: f64::from(size.height),
     }
 }
 
@@ -213,6 +311,40 @@ mod tests {
         assert_eq!(
             keep_inside(widget, &[LAPTOP, MONITOR]),
             Some((1920.0, 100.0))
+        );
+    }
+
+    #[test]
+    fn a_widget_returns_to_its_saved_spot_when_its_screen_arrives() {
+        // Placed on the laptop at sign-in, before the monitor was set up.
+        let widget = rect(1501.0, 24.0, 395.0, 145.0);
+        let screens = [LAPTOP, rect(1920.0, 0.0, 2560.0, 1440.0)];
+        assert_eq!(
+            resettle(widget, Some((4000.0, 100.0)), &screens, &[LAPTOP, MONITOR]),
+            Some((4000.0, 100.0))
+        );
+    }
+
+    #[test]
+    fn a_saved_spot_still_off_every_screen_only_keeps_the_widget_inside() {
+        let widget = rect(1700.0, 950.0, 395.0, 145.0);
+        assert_eq!(
+            resettle(widget, Some((4000.0, 100.0)), &[LAPTOP], &[LAPTOP]),
+            keep_inside(widget, &[LAPTOP])
+        );
+    }
+
+    #[test]
+    fn a_widget_at_its_saved_spot_stays_there() {
+        let widget = rect(4000.0, 100.0, 395.0, 145.0);
+        assert_eq!(
+            resettle(
+                widget,
+                Some((4000.0, 100.0)),
+                &[MONITOR],
+                &[LAPTOP, MONITOR]
+            ),
+            None
         );
     }
 

@@ -60,14 +60,7 @@ pub fn place(
 ) -> (f64, f64) {
     if let Some(saved) = saved {
         let (x, y) = (f64::from(saved.x), f64::from(saved.y));
-        let grip = (x + size.0 / 2.0, y + VISIBLE_GRIP.min(size.1) / 2.0);
-        let on_screen = screens.iter().any(|screen| {
-            grip.0 >= screen.x
-                && grip.0 < screen.x + screen.width
-                && grip.1 >= screen.y
-                && grip.1 < screen.y + screen.height
-        });
-        if on_screen {
+        if on_screen((x, y), size, screens) {
             return (x, y);
         }
     }
@@ -75,6 +68,22 @@ pub fn place(
         main_work_area.x + main_work_area.width - size.0 - margin,
         main_work_area.y + margin,
     )
+}
+
+/// Whether a widget of `size` at `position` has its top edge on a screen, so
+/// a person can see it and drag it.
+#[must_use]
+pub fn on_screen(position: (f64, f64), size: (f64, f64), screens: &[Rect]) -> bool {
+    let grip = (
+        position.0 + size.0 / 2.0,
+        position.1 + VISIBLE_GRIP.min(size.1) / 2.0,
+    );
+    screens.iter().any(|screen| {
+        grip.0 >= screen.x
+            && grip.0 < screen.x + screen.width
+            && grip.1 >= screen.y
+            && grip.1 < screen.y + screen.height
+    })
 }
 
 /// The gap kept between a grown widget and the work area's edge.
@@ -240,13 +249,43 @@ pub fn show(app: &AppHandle, saved: Option<WidgetPosition>) -> Result<(), Comman
         physical_rect(area.position, area.size),
         MARGIN * main.scale_factor(),
     );
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the position lies on a screen or its saved spot, well inside i32"
+    )]
+    let placed = PhysicalPosition::new(x.round() as i32, y.round() as i32);
+    // Placing is not the person's choice: a fallback corner, used while the
+    // saved spot's screen is not there yet, must not replace the saved spot.
+    mark_programmatic(placed);
     native
-        .set_position(PhysicalPosition::new(x, y))
+        .set_position(placed)
         .map_err(|_| failed("place_widget"))?;
-    native
-        .set_always_on_top(true)
-        .map_err(|_| failed("set_always_on_top"))?;
+    tracing::info!(
+        x = placed.x,
+        y = placed.y,
+        saved = saved.is_some(),
+        at_saved = saved.is_some_and(|saved| saved.x == placed.x && saved.y == placed.y),
+        screens = screens.len(),
+        "the widget is shown"
+    );
+    raise(&native)?;
     native.show().map_err(|_| failed("show_widget"))
+}
+
+/// Puts the widget back above every other window.
+///
+/// The window library tells the system only when the setting changes, so
+/// asking again for "always on top" does nothing to a widget the system has
+/// since put below other windows, as can happen at sign-in. Turning it off
+/// and on makes the system place it above them again, without taking focus.
+///
+/// # Errors
+/// Returns the native failure when the window refuses.
+pub fn raise(native: &tauri::WebviewWindow) -> Result<(), CommandError> {
+    native
+        .set_always_on_top(false)
+        .and_then(|()| native.set_always_on_top(true))
+        .map_err(|_| failed("set_always_on_top"))
 }
 
 /// Puts the widget away, when the full window becomes the view.
