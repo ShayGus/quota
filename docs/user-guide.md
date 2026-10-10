@@ -159,7 +159,8 @@ Claude, as long as each has its own sign-in or key.
 
 Each account is a card. A ring shows how much of a window is **left**, not how much is
 used, with the time until it resets underneath. Cards are ordered closest to running out
-first, by remaining allowance, and a card keeps its place while a new reading arrives.
+first, by remaining allowance, and a card keeps its place while a new reading arrives. You
+can choose your own order instead; see [Account order](#account-order).
 
 <table>
   <tr>
@@ -445,7 +446,27 @@ this computer and applies immediately.
 - **Theme**: Light, Dark, or System, which follows your operating system.
 - **Overview layout**: **Donuts** (rings) or **Compact** (bars). This also picks the mini
   widget's look.
+- **Account order**: how the overview and the mini widget list accounts. See below.
 - **Reduce motion**: turns off small transitions; values still change, without movement.
+
+#### Account order
+
+- **Least left** (the default): accounts that need checking first, then the one with the
+  least allowance left. The list follows the readings.
+- **My order**: you arrange the accounts with the **↑** and **↓** buttons on each account
+  in **Settings → Accounts**. It starts from the order on screen, and readings never move
+  an account. A new account goes at the end. A group's keys stay together: the arrows move
+  a key among its group's keys, and at the group's edge they move the whole group.
+- **Provider**: accounts by provider name, then in the order you added them.
+
+With **My order** or **Provider**, an account whose monitoring is off still goes last.
+
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/settings-account-order.png" alt="Settings, Appearance: Account order set to My order"><br><sub>Choosing the order</sub></td>
+    <td valign="top" width="50%"><img src="images/settings-accounts-arranged.png" alt="Settings, Accounts: the up and down buttons on each account"><br><sub>Arranging accounts</sub></td>
+  </tr>
+</table>
 
 ### Notifications
 

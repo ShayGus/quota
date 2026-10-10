@@ -25,6 +25,7 @@ import { AccountsPanel } from "./panels/AccountsPanel";
 import { AppearancePanel } from "./panels/AppearancePanel";
 import { DiagnosticsPanel } from "./panels/DiagnosticsPanel";
 import { PrivacyPanel } from "./panels/PrivacyPanel";
+import { arrangedOrder } from "../../shared/state/order";
 import { ConnectionWizard } from "./ConnectionWizard";
 import { NotificationsPanel } from "./panels/NotificationsPanel";
 import { WindowPanel } from "./panels/WindowPanel";
@@ -197,11 +198,15 @@ export function Settings({
             actions={actions}
           />
         ) : selected === "appearance" ? (
-          <AppearancePanel preferences={preferences} actions={actions} />
+          <AppearancePanel
+            preferences={preferences}
+            accounts={state.snapshot?.accounts ?? []}
+            actions={actions}
+          />
         ) : selected === "accounts" ? (
           <AccountsPanel
             key={route}
-            accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+            accounts={accountsForManagement(state.snapshot?.accounts ?? [], preferences)}
             groups={state.snapshot?.groups ?? []}
             preferences={preferences}
             actions={actions}
@@ -233,10 +238,21 @@ export function Settings({
   );
 }
 
-/** The accounts a management panel lists, in a stable order. */
+/**
+ * The accounts a management panel lists, in a stable order: the person's own
+ * arrangement while they use it, so the arrows move what they see, else the
+ * order the accounts were added.
+ */
 export function accountsForManagement(
   accounts: readonly AccountSnapshot[],
+  preferences: Preferences | null = null,
 ): readonly AccountSnapshot[] {
+  if (preferences?.account_sort === "manual") {
+    const arranged = arrangedOrder(accounts, preferences.account_order);
+    return arranged.flatMap((id) =>
+      accounts.filter((account) => account.account_id === id),
+    );
+  }
   return [...accounts].sort((a, b) =>
     a.connection_ordinal === b.connection_ordinal
       ? a.account_id < b.account_id

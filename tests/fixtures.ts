@@ -289,6 +289,8 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
     always_on_top: false,
     view: "overview",
     widget_position: null,
+    account_sort: "least_remaining",
+    account_order: [],
     launch_behavior: "quiet_in_tray",
     reduce_motion: false,
     notifications: {

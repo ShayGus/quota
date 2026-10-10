@@ -30,7 +30,7 @@ import {
 } from "../../shared/format/allowance";
 import { isPrepaidBalance, isRankable, isWindowShown } from "../../shared/format/balance";
 import { providerLabel } from "../../shared/format/provider";
-import { placeAccounts } from "../../shared/state/order";
+import { placeAccounts, sortOf } from "../../shared/state/order";
 import { boundaryCountdown } from "../../shared/format/duration";
 import {
   ACCOUNT_RESOURCE,
@@ -145,13 +145,17 @@ export function widgetAccounts(
   now: number,
   groups: readonly GroupSnapshot[] = [],
 ): readonly WidgetAccount[] {
-  const placed = placeAccounts(accounts)
+  const placed = placeAccounts(accounts, preferences)
     .filter((entry) => entry.section !== "monitoring_off")
     .map((entry) => entry.account);
-  const ordered = [
-    ...placed.filter((account) => !nothingToRank(account)),
-    ...placed.filter(nothingToRank),
-  ];
+  // An order the person chose is kept as it is.
+  const ordered =
+    sortOf(preferences) === "least_remaining"
+      ? [
+          ...placed.filter((account) => !nothingToRank(account)),
+          ...placed.filter(nothingToRank),
+        ]
+      : placed;
   const tiles: WidgetAccount[] = [];
   const done = new Set<string>();
   for (const account of ordered) {

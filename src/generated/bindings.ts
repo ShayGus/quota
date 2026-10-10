@@ -313,6 +313,15 @@ export type AccountSnapshot = {
 	group: AccountGroup | null,
 };
 
+/**  The order accounts are listed in, in the overview and the widget. */
+export type AccountSort = 
+/**  Whatever needs checking first, then the least remaining allowance. */
+"least_remaining" | 
+/**  The order the person arranged, which readings never change. */
+"manual" | 
+/**  By provider, then in the order the accounts were added. */
+"provider";
+
 /**  Bounds and signals for an adaptive strategy. */
 export type AdaptivePolicy = {
 	/**  The provider's floor. */
@@ -1108,6 +1117,10 @@ export type Preferences = {
 	 *  the renderer carries it through a save unchanged.
 	 */
 	widget_position: WidgetPosition | null,
+	/**  The order accounts are listed in. */
+	account_sort: AccountSort,
+	/**  The arranged order, used when `account_sort` is `manual`. */
+	account_order: AccountId[],
 	/**  Notification behaviour. */
 	notifications: NotificationPolicy,
 	/**  Retention and export behaviour. */

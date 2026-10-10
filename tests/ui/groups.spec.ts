@@ -8,6 +8,20 @@ import { expect, test } from "./harness";
 import { candidate, keyLimit } from "../fixtures";
 import { defaultPreferences, openRouterGroup, scenario } from "./scenarios";
 
+/** The Work group with its spend line hidden and its CI key left out. */
+function hiddenCi() {
+  return openRouterGroup().map((key) => {
+    const group = key.group === null ? null : { ...key.group, spend_shown: false };
+    return {
+      ...key,
+      group:
+        key.account_id === "acct-or-ci" && group !== null
+          ? { ...group, key_shown: false }
+          : group,
+    };
+  });
+}
+
 /** A host that verifies one new OpenRouter key and holds it for the person. */
 function newOpenRouterKey() {
   return {
@@ -167,17 +181,8 @@ test.describe("account groups", () => {
     await host.screenshotFull("settings-group-display");
   });
 
-  test("a hidden key and spend line leave the card and the widget", async ({ open }) => {
-    const accounts = openRouterGroup().map((key) => {
-      const group = key.group === null ? null : { ...key.group, spend_shown: false };
-      return {
-        ...key,
-        group:
-          key.account_id === "acct-or-ci" && group !== null
-            ? { ...group, key_shown: false }
-            : group,
-      };
-    });
+  test("a hidden key and spend line leave the card", async ({ open }) => {
+    const accounts = hiddenCi();
     const host = await open(scenario("overview", { accounts }));
     const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
     await expect(group).toContainText("3 keys · 1 hidden");
@@ -186,15 +191,18 @@ test.describe("account groups", () => {
     // The balance is still the account's whole balance.
     await expect(group).toContainText("$37.20");
     await host.screenshot("group-overview-hidden");
+  });
 
-    const widget = await open(
+  // A test opens one host: a second one in the same test can keep the first's.
+  test("a hidden key leaves the widget", async ({ open }) => {
+    const host = await open(
       scenario("widget", {
-        accounts,
+        accounts: hiddenCi(),
         preferences: defaultPreferences({ view: "widget" }),
       }),
       "#/widget",
     );
-    await expect(widget.page.locator(".widget-tile")).toHaveCount(3);
+    await expect(host.page.locator(".widget-tile")).toHaveCount(3);
   });
 
   test("a new key joins an existing group from the wizard", async ({ open }) => {

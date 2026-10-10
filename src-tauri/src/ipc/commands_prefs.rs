@@ -73,6 +73,12 @@ async fn persist_preferences_locked(
             reason: "the renderer sent an unsupported preference schema".into(),
         });
     }
+    if preferences.account_order.len() > quota_domain::preferences::MAX_ACCOUNT_ORDER_LEN {
+        return Err(CommandError::ValidationFailed {
+            field: "account_order".into(),
+            reason: "the arranged order lists too many accounts".into(),
+        });
+    }
     // Two settings changed before the first confirmation arrived both carry the
     // same revision, so the second whole-object save would silently restore the
     // first one's other fields. A stale aggregate is refused instead.
