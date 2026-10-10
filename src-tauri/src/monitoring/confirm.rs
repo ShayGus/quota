@@ -271,6 +271,7 @@ async fn commit_candidate(
         windows,
         expected_but_missing_window_ids: read.expected_but_missing,
         balance,
+        key_spend: read.key_spend,
         show_key_limit: false,
         group: ids.group,
     };

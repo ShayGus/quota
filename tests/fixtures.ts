@@ -5,6 +5,7 @@
  * contract breaks these fixtures at compile time rather than at run time.
  */
 import type {
+  KeySpend,
   AccountSnapshot,
   AppSnapshot,
   BalanceSummary,
@@ -123,7 +124,6 @@ export function prepaidBalance(
       options.runway === undefined
         ? { spend_per_day_minor: 310, days_left: 12 }
         : options.runway,
-    key_spend: { today_minor: 42, week_minor: 905, month_minor: 1280 },
     credits: options.credits ?? [],
     cycle_spend: options.cycleSpend ?? null,
   };
@@ -174,6 +174,19 @@ export function keyLimit(): QuotaWindow {
   );
 }
 
+/** What a key spent, in US cents. */
+export function usdSpend(
+  today: number | null,
+  week: number | null,
+  month: number | null,
+): KeySpend {
+  return {
+    currency: "USD",
+    scale: 2,
+    periods: { today_minor: today, week_minor: week, month_minor: month },
+  };
+}
+
 /** A reading the source could not provide. */
 export function unavailable(): Measurement {
   return { kind: "unavailable", value: "not_reported" };
@@ -193,6 +206,7 @@ export function account(
     readonly unrankedReason?: UnrankedReason;
     readonly balance?: BalanceSummary | null;
     readonly showKeyLimit?: boolean;
+    readonly keySpend?: KeySpend | null;
   } = {},
 ): AccountSnapshot {
   const rank = options.rank === undefined ? null : options.rank;
@@ -236,6 +250,7 @@ export function account(
             },
           },
     balance: options.balance ?? null,
+    key_spend: options.keySpend ?? null,
     show_key_limit: options.showKeyLimit ?? false,
     group: null,
   };

@@ -378,6 +378,7 @@ async fn sample_account(
         windows: read.windows,
         expected_but_missing_window_ids: read.expected_but_missing,
         balance: None,
+        key_spend: None,
         show_key_limit: false,
         group: None,
     })

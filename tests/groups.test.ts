@@ -20,7 +20,14 @@ import {
   keyLimitOf,
 } from "../src/shared/format/group";
 import { placeAccounts } from "../src/shared/state/order";
-import { account, keyLimit, NOW, preferences, prepaidBalance } from "./fixtures";
+import {
+  account,
+  keyLimit,
+  NOW,
+  preferences,
+  prepaidBalance,
+  usdSpend,
+} from "./fixtures";
 
 const WORK = { id: "group-work", name: "Work", spend_shown: true, key_shown: true };
 
@@ -30,10 +37,8 @@ function key(id: string, ordinal: number, readAt: string): AccountSnapshot {
     ...account(id, "openrouter", ordinal, [window, keyLimit()], {
       nickname: id,
       rank: 74.4,
-      balance: {
-        ...summary,
-        key_spend: { today_minor: 100, week_minor: null, month_minor: 900 },
-      },
+      balance: summary,
+      keySpend: usdSpend(100, null, 900),
     }),
     last_success_at: readAt,
     group: WORK,
@@ -47,7 +52,7 @@ function group(overrides: Partial<GroupSnapshot> = {}): GroupSnapshot {
     name: WORK.name,
     account_ids: ["a", "b"],
     balance: prepaidBalance().summary,
-    key_spend: { today_minor: 150, week_minor: null, month_minor: 2010 },
+    key_spend: usdSpend(150, null, 2010),
     spend_shown: true,
     ...overrides,
   };

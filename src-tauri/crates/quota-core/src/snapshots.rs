@@ -146,6 +146,7 @@ fn project(entry: &RegisteredAccount, now: DateTime<Utc>) -> AccountSnapshot {
             .balance
             .as_ref()
             .map(|ledger| ledger.summary(now)),
+        key_spend: entry.stored.key_spend.clone(),
         show_key_limit: entry.stored.show_key_limit,
         group: entry.stored.group.clone(),
     }

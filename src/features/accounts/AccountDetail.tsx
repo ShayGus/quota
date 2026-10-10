@@ -37,7 +37,12 @@ import {
 } from "../overview/reading";
 import { statusOf } from "../overview/status";
 import { isPrepaidBalance } from "../../shared/format/balance";
-import { BalanceDetail, balanceMeasurement, balanceSummaryCopy } from "./BalanceDetail";
+import {
+  BalanceDetail,
+  balanceMeasurement,
+  balanceSummaryCopy,
+  KeySpendDetail,
+} from "./BalanceDetail";
 
 /** The time zone used for exact boundary times. */
 export const DISPLAY_TIME_ZONE = "Asia/Jerusalem";
@@ -359,6 +364,7 @@ function SelectedWindow({
           </dd>
         </div>
       </dl>
+      {account.key_spend === null ? null : <KeySpendDetail spend={account.key_spend} />}
       {balance === null ? null : <BalanceDetail balance={balance} />}
       {others.length === 0 ? null : (
         <>

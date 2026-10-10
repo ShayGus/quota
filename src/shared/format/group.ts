@@ -67,9 +67,10 @@ export function groupReader<T extends AccountSnapshot>(
 
 /** What one key spent this month, `$9.00`, or `null` when it reports none. */
 export function keyMonthSpend(account: AccountSnapshot): string | null {
-  const balance = account.balance;
-  const month = balance?.key_spend?.month_minor ?? null;
-  return balance === null ? null : formatAmount(month, balance.scale, balance.currency);
+  const spend = account.key_spend;
+  return spend === null
+    ? null
+    : formatAmount(spend.periods.month_minor, spend.scale, spend.currency);
 }
 
 /** The group with this identity, when the snapshot has it. */
@@ -106,17 +107,17 @@ export function groupLabel(
  */
 export function groupSpendLine(group: GroupSnapshot): string | null {
   const spend = group.key_spend;
-  const balance = group.balance;
-  if (spend === null || balance === null) {
+  if (spend === null) {
     return null;
   }
+  const { periods } = spend;
   const parts = [
-    [spend.today_minor, "today"],
-    [spend.week_minor, "this week"],
-    [spend.month_minor, "this month"],
+    [periods.today_minor, "today"],
+    [periods.week_minor, "this week"],
+    [periods.month_minor, "this month"],
   ] as const;
   const shown = parts.flatMap(([minor, period]) => {
-    const amount = formatAmount(minor, balance.scale, balance.currency);
+    const amount = formatAmount(minor, spend.scale, spend.currency);
     return amount === null ? [] : [`${amount} ${period}`];
   });
   return shown.length === 0 ? null : `Keys spent ${shown.join(" · ")}`;

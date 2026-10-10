@@ -266,6 +266,7 @@ impl ProviderAdapter for FixtureAdapter {
                 windows: windows(profile, &pool, received_at)?,
                 expected_but_missing: Vec::new(),
                 balance: None,
+                key_spend: None,
                 debug_metadata: None,
             }))
         })

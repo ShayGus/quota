@@ -42,6 +42,9 @@ pub struct StoredAccount {
     pub expected_but_missing_window_ids: Vec<quota_domain::ids::QuotaWindowId>,
     /// The prepaid-balance ledger, when the account has a prepaid balance.
     pub balance: Option<quota_domain::balance::BalanceLedger>,
+    /// What the account's API key spent in the current periods, at the last
+    /// reading that reported it.
+    pub key_spend: Option<quota_domain::balance::KeySpend>,
     /// Whether the card shows the account's API key spend limit.
     pub show_key_limit: bool,
     /// The provider account this account belongs to, when it is grouped.

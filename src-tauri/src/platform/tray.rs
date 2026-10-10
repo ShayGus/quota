@@ -439,6 +439,7 @@ mod tests {
             expected_but_missing_window_ids: Vec::new(),
             order,
             balance: None,
+            key_spend: None,
             show_key_limit: false,
             group: None,
         }

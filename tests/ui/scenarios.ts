@@ -23,6 +23,7 @@ import {
   preferences as basePreferences,
   snapshot as baseSnapshot,
   unavailable,
+  usdSpend,
   window as quotaWindow,
 } from "../fixtures";
 import type { ConnectionScript, FakeConfig, WindowLabel } from "./fake-backend";
@@ -58,6 +59,7 @@ export function openRouterAccount(
     nickname: "Side project",
     rank: 74.4,
     balance: summary,
+    keySpend: usdSpend(42, 905, 1280),
     showKeyLimit: options.showKeyLimit ?? false,
   });
 }
@@ -122,14 +124,8 @@ export function openRouterGroup(): AccountSnapshot[] {
         {
           nickname: key.nickname,
           rank: 74.4,
-          balance: {
-            ...summary,
-            key_spend: {
-              today_minor: key.today,
-              week_minor: null,
-              month_minor: key.month,
-            },
-          },
+          balance: summary,
+          keySpend: usdSpend(key.today, null, key.month),
         },
       ),
       group: { id: "group-work", name: "Work", spend_shown: true, key_shown: true },
@@ -172,7 +168,7 @@ export function typeSafeAccount(): AccountSnapshot {
   return account("acct-typesafe", "typesafe", 8, [balance], {
     nickname: "TypeSafe",
     rank: 74.4,
-    balance: { ...summary, loaded_minor: 5000, spent_minor: 1280, key_spend: null },
+    balance: { ...summary, loaded_minor: 5000, spent_minor: 1280 },
   });
 }
 

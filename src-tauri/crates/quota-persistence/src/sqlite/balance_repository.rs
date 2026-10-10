@@ -1,12 +1,12 @@
-//! Prepaid balances and the key-limit switch: per-account state that leaves
-//! with its account.
+//! Prepaid balances, the key's own spend and the key-limit switch: per-account
+//! state that leaves with its account.
 //!
 //! The ledger row carries a foreign key with `ON DELETE CASCADE`, so deleting
 //! an account deletes its ledger, and every statement here addresses one
 //! account by its primary key. These are `impl` blocks on the same
 //! [`AccountRepository`] as [`crate::sqlite::account_repository`].
 
-use quota_domain::balance::BalanceLedger;
+use quota_domain::balance::{BalanceLedger, KeySpend};
 use quota_domain::ids::AccountId;
 
 use crate::error::{PersistenceError, PersistenceResult, TableContext};
@@ -35,6 +35,51 @@ impl AccountRepository {
     ) -> PersistenceResult<()> {
         let updated = sqlx::query("UPDATE accounts SET show_key_limit = ? WHERE id = ?")
             .bind(i64::from(shown))
+            .bind(account_id.as_str())
+            .execute(executor)
+            .await
+            .table("accounts")?
+            .rows_affected();
+        rows::require_one(updated, "accounts")
+    }
+
+    /// What one account's key spent, at the last reading that reported it.
+    ///
+    /// # Errors
+    /// Returns [`PersistenceError::RowRejected`] when the stored amount is not
+    /// one this build can read.
+    pub async fn key_spend(&self, account_id: &AccountId) -> PersistenceResult<Option<KeySpend>> {
+        let stored: Option<Option<String>> =
+            sqlx::query_scalar("SELECT key_spend_json FROM accounts WHERE id = ?")
+                .bind(account_id.as_str())
+                .fetch_optional(&self.pool)
+                .await
+                .table("accounts")?;
+        stored
+            .flatten()
+            .map(|json| {
+                serde_json::from_str(&json).map_err(|_| PersistenceError::RowRejected {
+                    table: "accounts",
+                    reason: "the stored key spend could not be read",
+                })
+            })
+            .transpose()
+    }
+
+    /// Writes what one account's key spent, or clears it.
+    pub(crate) async fn set_key_spend_on<'e>(
+        executor: impl sqlx::SqliteExecutor<'e>,
+        account_id: &AccountId,
+        spent: Option<&KeySpend>,
+    ) -> PersistenceResult<()> {
+        let json = spent.map(serde_json::to_string).transpose().map_err(|_| {
+            PersistenceError::RowRejected {
+                table: "accounts",
+                reason: "the key spend could not be encoded",
+            }
+        })?;
+        let updated = sqlx::query("UPDATE accounts SET key_spend_json = ? WHERE id = ?")
+            .bind(json)
             .bind(account_id.as_str())
             .execute(executor)
             .await

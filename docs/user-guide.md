@@ -385,7 +385,8 @@ The overview then shows the account as one card:
 
 - **The account** is the ring at the top: the balance, and what its keys spent together
   today, this week and this month. Every key reads the same balance, so it is shown once,
-  never added up.
+  never added up. A key that may not read the balance, such as one made only for a script,
+  still counts in what the keys spent.
 - **Each key** has its own smaller ring under it: what is left of its spend limit, with
   the money left under the ring. Select a key's ring to open that key's details. A key
   that stops working shows it on its own ring, the card's badge names it, and the other

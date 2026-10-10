@@ -32,7 +32,6 @@ fn reading(loaded: i64, spent: i64) -> BalanceReading {
         scale: 2,
         loaded_minor: loaded,
         spent_minor: spent,
-        key_spend: None,
         credits: Vec::new(),
         cycle_spend: None,
     }
@@ -73,6 +72,7 @@ fn account(id: &str, ordinal: u32) -> StoredAccount {
         )],
         expected_but_missing_window_ids: Vec::new(),
         balance: Some(topped),
+        key_spend: None,
         show_key_limit: true,
         group: None,
     }
@@ -161,4 +161,46 @@ async fn a_failed_ledger_write_saves_nothing_of_the_account() {
     assert!(port.upsert_account(account("acct-or", 1)).await.is_err());
     assert!(port.load_accounts().await.unwrap().is_empty());
     pool.close().await;
+}
+
+#[tokio::test]
+async fn a_key_spend_loads_back_and_an_older_ledger_that_held_it_still_reads() {
+    let directory = TempDir::new("balance-key-spend");
+    let pool = migrated(&directory).await;
+    let port = SqliteAccountPortAdapter::new(SqliteRepositories::new(pool.clone()));
+    let mut saved = account("acct-or", 1);
+    saved.key_spend = Some(quota_domain::balance::KeySpend {
+        currency: CurrencyCode::new("USD").unwrap(),
+        scale: 2,
+        periods: quota_domain::balance::PeriodSpend {
+            today_minor: Some(42),
+            week_minor: None,
+            month_minor: Some(900),
+        },
+    });
+    port.upsert_account(saved.clone()).await.unwrap();
+    // A ledger an earlier build saved kept the key's spend inside it.
+    let json: String =
+        sqlx::query_scalar("SELECT ledger_json FROM account_balances WHERE account_id = ?")
+            .bind("acct-or")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    let mut older: serde_json::Value = serde_json::from_str(&json).unwrap();
+    older["key_spend"] =
+        serde_json::json!({ "today_minor": 1, "week_minor": null, "month_minor": 2 });
+    sqlx::query("UPDATE account_balances SET ledger_json = ? WHERE account_id = ?")
+        .bind(older.to_string())
+        .bind("acct-or")
+        .execute(&pool)
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let reopened = migrated(&directory).await;
+    let port = SqliteAccountPortAdapter::new(SqliteRepositories::new(reopened.clone()));
+    let loaded = port.load_accounts().await.unwrap();
+    assert_eq!(loaded[0].key_spend, saved.key_spend);
+    assert_eq!(loaded[0].balance, saved.balance);
+    reopened.close().await;
 }

@@ -42,6 +42,7 @@ fn registry() -> (AccountRegistry, AccountId, ConnectionId) {
         windows: Vec::new(),
         expected_but_missing_window_ids: Vec::new(),
         balance: None,
+        key_spend: None,
         show_key_limit: false,
         group: None,
     };

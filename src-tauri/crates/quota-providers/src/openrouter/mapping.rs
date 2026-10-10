@@ -10,7 +10,7 @@
 
 use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
-use quota_domain::balance::{BalanceReading, PeriodSpend};
+use quota_domain::balance::{BalanceReading, KeySpend, PeriodSpend};
 use quota_domain::ids::QuotaPoolId;
 use quota_domain::provider::ProviderId;
 use quota_domain::quota::issue::QuotaIssue;
@@ -41,8 +41,10 @@ pub(crate) fn decode(
     let mut decoded = DecodedUsage::new();
     if let Some(credits) = credits {
         decoded.push(documented(credit_window(credits, pool, received_at)?));
-        decoded.balance = balance_reading(key, credits)?;
+        decoded.balance = balance_reading(credits)?;
     }
+    // Every key reports its own spend, whether or not it may read the credits.
+    decoded.key_spend = key_spend(key)?;
     decoded.push(documented(key_window(key, pool, received_at)?));
     Ok(decoded)
 }
@@ -55,30 +57,39 @@ fn documented(mut window: QuotaWindow) -> QuotaWindow {
 
 /// What the answers say about the prepaid balance, for the host's ledger, or
 /// `None` when either total is missing or unusable.
-fn balance_reading(
-    key: &KeyData,
-    credits: &CreditsData,
-) -> Result<Option<BalanceReading>, ProviderError> {
+fn balance_reading(credits: &CreditsData) -> Result<Option<BalanceReading>, ProviderError> {
     let (Ok(Some(loaded)), Ok(Some(spent))) = (
         cents(credits.total_credits.as_ref()),
         cents(credits.total_usage.as_ref()),
     ) else {
         return Ok(None);
     };
-    let period = |reported: Option<&Numberish>| cents(reported).ok().flatten();
-    let key_spend = PeriodSpend {
-        today_minor: period(key.usage_daily.as_ref()),
-        week_minor: period(key.usage_weekly.as_ref()),
-        month_minor: period(key.usage_monthly.as_ref()),
-    };
     Ok(Some(BalanceReading {
         currency: usd()?,
         scale: SCALE,
         loaded_minor: loaded,
         spent_minor: spent,
-        key_spend: (key_spend != PeriodSpend::default()).then_some(key_spend),
         credits: Vec::new(),
         cycle_spend: None,
+    }))
+}
+
+/// What the key spent today, this week and this month, or `None` when it
+/// reports no period. An unusable amount leaves its period unreported.
+fn key_spend(key: &KeyData) -> Result<Option<KeySpend>, ProviderError> {
+    let period = |reported: Option<&Numberish>| cents(reported).ok().flatten();
+    let periods = PeriodSpend {
+        today_minor: period(key.usage_daily.as_ref()),
+        week_minor: period(key.usage_weekly.as_ref()),
+        month_minor: period(key.usage_monthly.as_ref()),
+    };
+    if periods == PeriodSpend::default() {
+        return Ok(None);
+    }
+    Ok(Some(KeySpend {
+        currency: usd()?,
+        scale: SCALE,
+        periods,
     }))
 }
 
@@ -240,7 +251,7 @@ mod tests {
         assert_eq!(money.remaining_minor_units, Some(1754));
         let reading = usage.balance.expect("a balance for the host's ledger");
         assert_eq!((reading.loaded_minor, reading.spent_minor), (2500, 746));
-        assert_eq!(reading.key_spend, None);
+        assert_eq!(usage.key_spend, None);
     }
 
     #[test]
@@ -255,20 +266,32 @@ mod tests {
             total_credits: Some(number(50.0)),
             total_usage: Some(number(12.8)),
         };
-        let reading = decoded(&key, Some(&credits)).balance.expect("a balance");
+        let spend = decoded(&key, Some(&credits))
+            .key_spend
+            .expect("a key spend");
+        assert_eq!(spend.currency.as_str(), "USD");
+        assert_eq!(spend.scale, 2);
         assert_eq!(
-            reading.key_spend,
-            Some(PeriodSpend {
+            spend.periods,
+            PeriodSpend {
                 today_minor: Some(42),
                 week_minor: Some(310),
                 month_minor: Some(1200),
-            })
+            }
         );
     }
 
     #[test]
-    fn a_key_that_cannot_read_the_balance_reports_none() {
-        assert_eq!(decoded(&KeyData::default(), None).balance, None);
+    fn a_key_that_cannot_read_the_balance_still_reports_its_spend() {
+        let key = KeyData {
+            usage_monthly: Some(number(9.0)),
+            ..KeyData::default()
+        };
+        let usage = decoded(&key, None);
+        assert_eq!(usage.balance, None);
+        let spend = usage.key_spend.expect("the key's own spend");
+        assert_eq!(spend.periods.month_minor, Some(900));
+        assert_eq!(spend.periods.today_minor, None);
     }
 
     #[test]

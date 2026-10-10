@@ -292,4 +292,30 @@ test.describe("account groups", () => {
       .click();
     await expect(page.getByRole("heading", { name: "Add a key to Work" })).toBeVisible();
   });
+
+  test("a key that may not read the balance still counts in what the keys spent", async ({
+    open,
+  }) => {
+    // CI's key may not read the credits: no balance and no balance window.
+    const accounts = openRouterGroup().map((key) =>
+      key.account_id === "acct-or-ci"
+        ? {
+            ...key,
+            balance: null,
+            windows: key.windows.filter(
+              (window) => window.metric_role !== "prepaid_balance",
+            ),
+          }
+        : key,
+    );
+    const host = await open(scenario("overview", { accounts }));
+    const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
+    await expect(group).toContainText("Keys spent $4.30 today · $27.10 this month");
+    const ci = group.getByRole("button", { name: /^Key OpenRouter CI/ });
+    await expect(ci).toContainText("$2.80 left");
+    // Its details say what it spent, though it has no balance to show.
+    await ci.click();
+    await expect(host.page.getByLabel("This key")).toContainText("$17.20 this month");
+    await host.screenshotFull("key-detail-no-balance");
+  });
 });

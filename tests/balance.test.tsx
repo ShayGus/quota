@@ -24,7 +24,14 @@ import {
   runwayLine,
   runwayShort,
 } from "../src/shared/format/balance";
-import { account, keyLimit, NOW, preferences, prepaidBalance } from "./fixtures";
+import {
+  account,
+  keyLimit,
+  NOW,
+  preferences,
+  prepaidBalance,
+  usdSpend,
+} from "./fixtures";
 
 function openRouter(
   options: Parameters<typeof prepaidBalance>[0] & {
@@ -40,6 +47,7 @@ function openRouter(
     nickname: "Side project",
     rank: share,
     balance: summary,
+    keySpend: usdSpend(42, 905, 1280),
     showKeyLimit: options.showKeyLimit ?? false,
   });
 }
@@ -198,6 +206,28 @@ describe("a prepaid balance in quota detail", () => {
     );
     expect(screen.getByText(/No top-up seen yet/)).toBeTruthy();
   });
+
+  it("shows what a key spent even when it may not read the balance", () => {
+    const shown = account("or-key", "openrouter", 1, [keyLimit()], {
+      nickname: "CI",
+      keySpend: usdSpend(null, null, 900),
+    });
+    render(
+      <AccountDetail
+        account={shown}
+        windowId={null}
+        now={NOW}
+        onBack={vi.fn()}
+        onUsagePage={vi.fn()}
+        onManageAccounts={vi.fn()}
+        accounts={[shown]}
+        preferences={preferences()}
+      />,
+    );
+    const key = screen.getByLabelText("This key");
+    expect(within(key).getByText(/\$9\.00 this month/)).toBeTruthy();
+    expect(screen.queryByText("Spending pace")).toBeNull();
+  });
 });
 
 /** A TypeSafe-style balance made of credit grants. */
@@ -225,7 +255,7 @@ function typeSafe(): AccountSnapshot {
   return account("ts", "typesafe", 1, [window], {
     nickname: "TypeSafe",
     rank: 74,
-    balance: { ...summary, key_spend: null },
+    balance: summary,
   });
 }
 

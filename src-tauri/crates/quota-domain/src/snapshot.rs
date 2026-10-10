@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::account::{ConnectionState, ConnectionSummary, FetchState, VerifiedIdentity};
-use crate::balance::BalanceSummary;
+use crate::balance::{BalanceSummary, KeySpend};
 use crate::group::{AccountGroup, GroupSnapshot};
 use crate::ids::{AccountId, AppInstanceId, ConnectionId, QuotaWindowId};
 use crate::provider::ProviderId;
@@ -76,6 +76,9 @@ pub struct AccountSnapshot {
     pub order: AccountOrder,
     /// A prepaid balance, measured from its last top-up, when the account has one.
     pub balance: Option<BalanceSummary>,
+    /// What the account's API key spent in the current periods, when its
+    /// provider reports it.
+    pub key_spend: Option<KeySpend>,
     /// Whether the card shows the account's API key spend limit.
     pub show_key_limit: bool,
     /// The provider account this account belongs to, when it is grouped.
@@ -150,6 +153,7 @@ mod tests {
                 rule_version: 1,
             }),
             balance: None,
+            key_spend: None,
             show_key_limit: false,
             group: None,
         }

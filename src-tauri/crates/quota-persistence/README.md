@@ -109,8 +109,10 @@ never touches `accounts`, `alert_episodes`, `notification_outbox`, or `refresh_b
 `account_balances` is different: it is not history but the state a prepaid balance is
 measured from (the last top-up, the top-ups seen, and a week of hourly spending samples),
 so it carries a foreign key and leaves with its account, and clearing reading history
-leaves it alone. It is written in the same transaction as the rest of the account, as is
-the account's `show_key_limit` switch.
+leaves it alone. It is written in the same transaction as the rest of the account, as are
+the account's `show_key_limit` switch and `key_spend_json`, what its API key spent in the
+current periods. That is the key's own reading, kept apart from the balance, so a key that
+may not read the balance keeps it too.
 
 `account_groups` holds the provider accounts the person puts keys together under: an id,
 the provider, a name and whether the group shows what its keys spent, never a key. An
