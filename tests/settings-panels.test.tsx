@@ -46,6 +46,11 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       setAccountEnabled: vi.fn(),
       renameAccount: vi.fn(),
       setKeyLimitShown: vi.fn(),
+      setGroupSpendShown: vi.fn(),
+      setGroupKeyShown: vi.fn(),
+      createAccountGroup: vi.fn(),
+      setAccountGroup: vi.fn(),
+      renameAccountGroup: vi.fn(),
       disconnectAccount: vi.fn(),
       openUsagePage: vi.fn(),
       beginConnection: vi.fn(() => Promise.resolve({ id: "attempt-1" })),
@@ -315,6 +320,7 @@ describe("account management identities", () => {
     const panel = (confirmed: Preferences) => (
       <AccountsPanel
         accounts={accounts}
+        groups={[]}
         preferences={confirmed}
         actions={actions}
         onAddAccount={vi.fn()}
@@ -364,6 +370,7 @@ describe("account management identities", () => {
     const { rerender } = render(
       <AccountsPanel
         accounts={accounts}
+        groups={[]}
         preferences={aliased}
         actions={actions}
         onAddAccount={vi.fn()}
@@ -376,6 +383,7 @@ describe("account management identities", () => {
     rerender(
       <AccountsPanel
         accounts={accounts}
+        groups={[]}
         preferences={preferences()}
         actions={actions}
         onAddAccount={vi.fn()}
@@ -388,6 +396,7 @@ describe("account management identities", () => {
     rerender(
       <AccountsPanel
         accounts={accounts}
+        groups={[]}
         preferences={aliased}
         actions={actions}
         onAddAccount={vi.fn()}
@@ -408,6 +417,7 @@ describe("account management identities", () => {
     render(
       <AccountsPanel
         accounts={accounts}
+        groups={[]}
         preferences={preferences()}
         actions={actions}
         onAddAccount={vi.fn()}
@@ -449,6 +459,7 @@ describe("account management identities", () => {
     render(
       <AccountsPanel
         accounts={[account("a1", "codex", 1, [])]}
+        groups={[]}
         preferences={preferences()}
         actions={actions}
         onAddAccount={onAddAccount}

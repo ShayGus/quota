@@ -23,8 +23,8 @@ impl AccountRepository {
         &self,
         account_id: &AccountId,
     ) -> PersistenceResult<Option<AccountGroup>> {
-        let stored: Option<(String, String)> = sqlx::query_as(
-            "SELECT g.id, g.name
+        let stored: Option<(String, String, bool, bool)> = sqlx::query_as(
+            "SELECT g.id, g.name, g.spend_shown, a.group_key_shown
                FROM accounts a
                JOIN account_groups g ON g.id = a.group_id
               WHERE a.id = ?",
@@ -34,9 +34,14 @@ impl AccountRepository {
         .await
         .table("account_groups")?;
         stored
-            .map(|(id, name)| {
+            .map(|(id, name, spend_shown, key_shown)| {
                 AccountGroupId::new(id)
                     .and_then(|id| AccountGroup::new(id, &name))
+                    .map(|group| AccountGroup {
+                        spend_shown,
+                        key_shown,
+                        ..group
+                    })
                     .map_err(|_| PersistenceError::RowRejected {
                         table: "account_groups",
                         reason: "the stored group could not be read",
@@ -45,7 +50,7 @@ impl AccountRepository {
             .transpose()
     }
 
-    /// Puts one account in `group`, creating or renaming the group row, or
+    /// Puts one account in `group`, creating or updating the group row, or
     /// takes it out of every group, then deletes the groups left empty.
     pub(crate) async fn set_group_in(
         transaction: &mut sqlx::Transaction<'_, sqlx::Sqlite>,
@@ -55,23 +60,28 @@ impl AccountRepository {
     ) -> PersistenceResult<()> {
         if let Some(group) = group {
             sqlx::query(
-                "INSERT INTO account_groups (id, provider_id, name) VALUES (?, ?, ?)
-                 ON CONFLICT (id) DO UPDATE SET name = excluded.name",
+                "INSERT INTO account_groups (id, provider_id, name, spend_shown)
+                 VALUES (?, ?, ?, ?)
+                 ON CONFLICT (id) DO UPDATE
+                    SET name = excluded.name, spend_shown = excluded.spend_shown",
             )
             .bind(group.id.as_str())
             .bind(provider_id.as_str())
             .bind(group.name.as_str())
+            .bind(group.spend_shown)
             .execute(&mut **transaction)
             .await
             .table("account_groups")?;
         }
-        let updated = sqlx::query("UPDATE accounts SET group_id = ? WHERE id = ?")
-            .bind(group.map(|group| group.id.as_str()))
-            .bind(account_id.as_str())
-            .execute(&mut **transaction)
-            .await
-            .table("accounts")?
-            .rows_affected();
+        let updated =
+            sqlx::query("UPDATE accounts SET group_id = ?, group_key_shown = ? WHERE id = ?")
+                .bind(group.map(|group| group.id.as_str()))
+                .bind(group.is_none_or(|group| group.key_shown))
+                .bind(account_id.as_str())
+                .execute(&mut **transaction)
+                .await
+                .table("accounts")?
+                .rows_affected();
         rows::require_one(updated, "accounts")?;
         Self::delete_empty_groups_on(&mut **transaction).await
     }

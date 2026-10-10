@@ -7,6 +7,7 @@
  */
 import {
   commands,
+  type AccountGroupId,
   type AccountId,
   type AppView,
   type AttemptRef,
@@ -72,6 +73,37 @@ export const actions = {
   /** Shows or hides one account's API key spend limit on its card. */
   async setKeyLimitShown(accountId: AccountId, shown: boolean): Promise<void> {
     await reportAsync(commands.setKeyLimitShown({ id: accountId }, shown));
+  },
+  /** Puts accounts of one provider in a new group named `name`. */
+  async createAccountGroup(
+    name: string,
+    accountIds: readonly AccountId[],
+  ): Promise<void> {
+    await reportAsync(
+      commands.createAccountGroup(
+        name,
+        accountIds.map((id) => ({ id })),
+      ),
+    );
+  },
+  /** Moves one account into a group, or out of its group with `null`. */
+  async setAccountGroup(
+    accountId: AccountId,
+    groupId: AccountGroupId | null,
+  ): Promise<void> {
+    await reportAsync(commands.setAccountGroup({ id: accountId }, groupId));
+  },
+  /** Shows or hides what a group's keys spent together. */
+  async setGroupSpendShown(groupId: AccountGroupId, shown: boolean): Promise<void> {
+    await reportAsync(commands.setGroupSpendShown(groupId, shown));
+  },
+  /** Shows or hides one key in its group. */
+  async setGroupKeyShown(accountId: AccountId, shown: boolean): Promise<void> {
+    await reportAsync(commands.setGroupKeyShown({ id: accountId }, shown));
+  },
+  /** Renames a group. */
+  async renameAccountGroup(groupId: AccountGroupId, name: string): Promise<void> {
+    await reportAsync(commands.renameAccountGroup(groupId, name));
   },
   /** Disconnects one account, leaving its same-provider siblings alone. */
   async disconnectAccount(accountId: AccountId): Promise<void> {

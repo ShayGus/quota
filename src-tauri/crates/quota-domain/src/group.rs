@@ -30,10 +30,15 @@ pub struct AccountGroup {
     pub id: AccountGroupId,
     /// The person's name for the provider account.
     pub name: String,
+    /// Whether the group shows what its keys spent together.
+    pub spend_shown: bool,
+    /// Whether this account's key is shown in its group. A key left out
+    /// still counts in the account's total.
+    pub key_shown: bool,
 }
 
 impl AccountGroup {
-    /// A group with a checked name.
+    /// A group with a checked name, showing its spend and this key.
     ///
     /// # Errors
     /// Returns [`DomainError::InvalidIdentifier`] for a blank name and
@@ -42,6 +47,8 @@ impl AccountGroup {
         Ok(Self {
             id,
             name: group_name(name)?,
+            spend_shown: true,
+            key_shown: true,
         })
     }
 }
@@ -81,7 +88,10 @@ pub struct GroupSnapshot {
     /// The account-wide balance, from the member that read it last.
     pub balance: Option<BalanceSummary>,
     /// What every member key spent together, per period any member reports.
+    /// Every key counts, shown or not, because the spend is the account's.
     pub key_spend: Option<PeriodSpend>,
+    /// Whether the group shows what its keys spent together.
+    pub spend_shown: bool,
 }
 
 /// Builds the group snapshots from `accounts`, given in display order.
@@ -105,6 +115,7 @@ pub fn group_snapshots(accounts: &[&AccountSnapshot]) -> Vec<GroupSnapshot> {
                 account_ids: vec![account.account_id.clone()],
                 balance: None,
                 key_spend: None,
+                spend_shown: group.spend_shown,
             });
         }
     }

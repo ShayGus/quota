@@ -21,6 +21,8 @@ import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks"
 import type {
   AccountSnapshot,
   AppSnapshot,
+  GroupSnapshot,
+  PeriodSpend,
   CommandError,
   ConnectionProgress,
   MonitoringState,
@@ -97,9 +99,63 @@ declare global {
 
 type Args = Record<string, unknown> | undefined;
 
+/**
+ * The groups the host would publish for these accounts: in account order,
+ * the balance once from the member that read it last, the key spend added up
+ * per period (`quota_domain::group::group_snapshots`).
+ */
+export function groupsOf(accounts: readonly AccountSnapshot[]): GroupSnapshot[] {
+  const groups: GroupSnapshot[] = [];
+  for (const account of accounts) {
+    if (account.group === null) {
+      continue;
+    }
+    const existing = groups.find((group) => group.id === account.group?.id);
+    if (existing !== undefined) {
+      existing.account_ids.push(account.account_id);
+      continue;
+    }
+    groups.push({
+      id: account.group.id,
+      provider_id: account.provider_id,
+      name: account.group.name,
+      account_ids: [account.account_id],
+      balance: null,
+      key_spend: null,
+      spend_shown: account.group.spend_shown,
+    });
+  }
+  for (const group of groups) {
+    const members = accounts.filter((account) => account.group?.id === group.id);
+    const withBalance = members
+      .filter((account) => account.balance !== null)
+      .sort((a, b) => (b.last_success_at ?? "").localeCompare(a.last_success_at ?? ""));
+    group.balance = withBalance[0]?.balance ?? null;
+    const spends = members.flatMap((account) =>
+      account.balance?.key_spend == null ? [] : [account.balance.key_spend],
+    );
+    if (spends.length > 0) {
+      const sum = (period: keyof PeriodSpend): number | null => {
+        const values = spends.flatMap((spend) => {
+          const value = spend[period];
+          return value === null ? [] : [value];
+        });
+        return values.length === 0 ? null : values.reduce((a, b) => a + b, 0);
+      };
+      group.key_spend = {
+        today_minor: sum("today_minor"),
+        week_minor: sum("week_minor"),
+        month_minor: sum("month_minor"),
+      };
+    }
+  }
+  return groups;
+}
+
 /** Installs the faked host into the current page. */
 export function installFakeBackend(config: FakeConfig): void {
   let snapshot: AppSnapshot = structuredClone(config.snapshot);
+  snapshot = { ...snapshot, groups: groupsOf(snapshot.accounts) };
   let preferences: Preferences = structuredClone(config.preferences);
   let launchAtLogin = config.launchAtLogin;
   let monitoringRevision = 1;
@@ -139,7 +195,11 @@ export function installFakeBackend(config: FakeConfig): void {
   };
 
   const publishSnapshot = (): void => {
-    snapshot = { ...snapshot, revision: snapshot.revision + 1 };
+    snapshot = {
+      ...snapshot,
+      revision: snapshot.revision + 1,
+      groups: groupsOf(snapshot.accounts),
+    };
     publishLater("snapshot-updated", {
       app_instance_id: instance,
       revision: snapshot.revision,
@@ -280,6 +340,72 @@ export function installFakeBackend(config: FakeConfig): void {
         updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
           ...entry,
           show_key_limit: args?.shown as boolean,
+        }));
+        return null;
+      case "create_account_group": {
+        const id = `group-${String(snapshot.revision)}`;
+        const name = (args?.name as string).trim();
+        const members = (args?.accountRefs as { id: string }[]).map((ref) => ref.id);
+        snapshot = {
+          ...snapshot,
+          accounts: snapshot.accounts.map((entry) =>
+            members.includes(entry.account_id)
+              ? { ...entry, group: { id, name, spend_shown: true, key_shown: true } }
+              : entry,
+          ),
+        };
+        publishSnapshot();
+        return id;
+      }
+      case "set_account_group": {
+        const groupId = args?.groupId as string | null;
+        const group =
+          groupId === null
+            ? null
+            : (snapshot.accounts
+                .map((entry) => entry.group)
+                .find((candidate) => candidate?.id === groupId) ?? null);
+        updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
+          ...entry,
+          group: group === null ? null : { ...group, key_shown: true },
+        }));
+        return null;
+      }
+      case "rename_account_group": {
+        const groupId = args?.groupId as string;
+        const name = (args?.name as string).trim();
+        snapshot = {
+          ...snapshot,
+          accounts: snapshot.accounts.map((entry) =>
+            entry.group?.id === groupId
+              ? { ...entry, group: { ...entry.group, name } }
+              : entry,
+          ),
+        };
+        publishSnapshot();
+        return null;
+      }
+      case "set_group_spend_shown": {
+        const groupId = args?.groupId as string;
+        const shown = args?.shown as boolean;
+        snapshot = {
+          ...snapshot,
+          accounts: snapshot.accounts.map((entry) =>
+            entry.group?.id === groupId
+              ? { ...entry, group: { ...entry.group, spend_shown: shown } }
+              : entry,
+          ),
+        };
+        publishSnapshot();
+        return null;
+      }
+      case "set_group_key_shown":
+        updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
+          ...entry,
+          group:
+            entry.group === null
+              ? null
+              : { ...entry.group, key_shown: args?.shown as boolean },
         }));
         return null;
       case "disconnect_account": {

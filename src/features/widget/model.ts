@@ -10,11 +10,19 @@
 import type {
   AccountId,
   AccountSnapshot,
+  GroupSnapshot,
   Preferences,
   ProviderId,
   QuotaWindow,
 } from "../../generated/bindings";
 import { displayName } from "../../shared/format/alias";
+import {
+  accountView,
+  groupLabel,
+  groupReader,
+  keyLimitOf,
+  keyMonthSpend,
+} from "../../shared/format/group";
 import {
   moneyLeft,
   remainingPercent,
@@ -79,10 +87,16 @@ export interface WidgetRow {
 
 /** One account as the widget draws it. */
 export interface WidgetAccount {
+  /** The tile's identity: the account's, or `group:` and a group's for its total. */
   readonly id: AccountId;
   readonly providerId: ProviderId;
   /** The provider, with the account's own name when there are two of them. */
   readonly name: string;
+  /**
+   * The words inside the rings in place of the provider's mark: a group's
+   * key is named there, because its group's tiles all share one mark.
+   */
+  readonly mark: string | null;
   /** The rings, outer first; empty for an account that has only money. */
   readonly rings: readonly WidgetRing[];
   /** The number under the rings, and the label that says which ring it is. */
@@ -120,28 +134,67 @@ export interface WidgetAccount {
  * The accounts the widget shows, in the overview's order, except that an
  * account with nothing to rank (only money, only unlimited, only native
  * units) follows the ranked ones: it needs no checking, so it is not first.
+ *
+ * A group of keys is a tile for the account's total, where its first key
+ * falls, named for the group and drawn from the key that read the balance
+ * last; then a tile for each key the person shows, its own spend limit.
  */
 export function widgetAccounts(
   accounts: readonly AccountSnapshot[],
   preferences: Preferences | null,
   now: number,
+  groups: readonly GroupSnapshot[] = [],
 ): readonly WidgetAccount[] {
   const placed = placeAccounts(accounts)
     .filter((entry) => entry.section !== "monitoring_off")
     .map((entry) => entry.account);
-  const shown = [
+  const ordered = [
     ...placed.filter((account) => !nothingToRank(account)),
     ...placed.filter(nothingToRank),
   ];
-  return shown.map((account) => {
-    const shared = shown.filter((other) => other.provider_id === account.provider_id);
+  const tiles: WidgetAccount[] = [];
+  const done = new Set<string>();
+  for (const account of ordered) {
     const provider = providerLabel(account.provider_id);
-    const name =
-      shared.length > 1
-        ? `${provider} · ${displayName(preferences, accounts, account)}`
-        : provider;
-    return describe(account, name, now);
-  });
+    const group = groups.find((candidate) => candidate.id === account.group?.id);
+    if (group === undefined) {
+      const shared = ordered.filter((other) => other.provider_id === account.provider_id);
+      const name =
+        shared.length > 1
+          ? `${provider} · ${displayName(preferences, accounts, account)}`
+          : provider;
+      tiles.push(describe(account, name, now, "whole"));
+      continue;
+    }
+    if (done.has(group.id)) {
+      continue;
+    }
+    done.add(group.id);
+    const label = groupLabel(preferences, groups, group);
+    const members = ordered.filter((member) => member.group?.id === group.id);
+    const reader = groupReader(members) ?? account;
+    tiles.push({
+      ...describe(accountView(reader), `${provider} · ${label}`, now, "whole"),
+      id: `group:${group.id}`,
+    });
+    for (const member of members.filter((entry) => entry.group?.key_shown !== false)) {
+      const keyName = displayName(preferences, accounts, member);
+      tiles.push({
+        ...describe(member, `${label} · ${keyName}`, now, "key"),
+        mark: keyMark(keyName),
+      });
+    }
+  }
+  return tiles;
+}
+
+/** The most letters of a key's name drawn inside its ring. */
+const KEY_MARK_LENGTH = 5;
+
+/** A key's name as its ring holds it: its first word, at most five letters. */
+function keyMark(name: string): string {
+  const word = name.trim().split(/\s+/)[0] ?? "";
+  return word.slice(0, KEY_MARK_LENGTH);
 }
 
 /** Whether an account has no allowance to rank, which is not a problem. */
@@ -160,14 +213,44 @@ const UNRANKABLE: ReadonlySet<string> = new Set([
   "native_units_only",
 ]);
 
-/** One account's rings, rows and headline. */
-function describe(account: AccountSnapshot, name: string, now: number): WidgetAccount {
+/**
+ * One account's rings, rows and headline. A group's key is drawn as its own
+ * spend limit alone, as a ring, because that limit is what is the key's.
+ */
+function describe(
+  account: AccountSnapshot,
+  name: string,
+  now: number,
+  part: "whole" | "key",
+): WidgetAccount {
   // A prepaid balance measured from its last top-up is drawn as a ring, like
   // an allowance; a key limit beside it only when the person chose to show it.
-  const shown = account.windows.filter((window) => isWindowShown(account, window));
-  const included = ordered(shown.filter(isRankable));
-  const others = shown.filter((window) => !isRankable(window));
-  const rows = [...included, ...others].map((window) => row(account, window, now));
+  const limit = part === "key" ? keyLimitOf(account) : null;
+  const shown =
+    part === "key"
+      ? limit === null
+        ? []
+        : [limit]
+      : account.windows.filter((window) => isWindowShown(account, window));
+  const included = part === "key" ? shown : ordered(shown.filter(isRankable));
+  const others = part === "key" ? [] : shown.filter((window) => !isRankable(window));
+  const rows = [...included, ...others].map((window) =>
+    row(account, window, now, part === "key"),
+  );
+  if (part === "key" && limit === null) {
+    const spent = keyMonthSpend(account);
+    rows.push({
+      tag: "Spent",
+      name: "Spent this month",
+      kind: "amount",
+      period: "monthly",
+      fraction: null,
+      value: spent ?? "—",
+      low: false,
+      reset: "no spend limit",
+      stale: false,
+    });
+  }
   const rings = ringsOf(rows.slice(0, included.length));
   const status = statusOf(account, now);
   const problem = PROBLEMS.has(status.text)
@@ -193,6 +276,7 @@ function describe(account: AccountSnapshot, name: string, now: number): WidgetAc
     id: account.account_id,
     providerId: account.provider_id,
     name,
+    mark: null,
     rings,
     headline,
     ringValues,
@@ -215,18 +299,26 @@ function ordered(windows: readonly QuotaWindow[]): readonly QuotaWindow[] {
   );
 }
 
-/** One window as a row. */
-function row(account: AccountSnapshot, window: QuotaWindow, now: number): WidgetRow {
+/**
+ * One window as a row. A gauge, a prepaid balance or a key's own limit, is a
+ * share drawn as a ring and shown as its money left.
+ */
+function row(
+  account: AccountSnapshot,
+  window: QuotaWindow,
+  now: number,
+  keyGauge = false,
+): WidgetRow {
   const view = windowView(account, window, now);
   const known = viewKnown(view);
   // A prepaid balance is a share of its last top-up, shown as its money left.
-  const gauge = isPrepaidBalance(window);
+  const gauge = keyGauge || isPrepaidBalance(window);
   const money = known ? moneyLeft(window.measurement) : null;
   const fraction = money === null || gauge ? viewFraction(view, window) : null;
   const percent = known ? remainingPercent(window.measurement) : null;
   const reset = resetWords(view, window, now);
   return {
-    tag: tagOf(window),
+    tag: keyGauge ? "Key" : tagOf(window),
     name: windowLabel(window),
     kind: gauge || (money === null && (fraction !== null || !known)) ? "share" : "amount",
     period: window.category,

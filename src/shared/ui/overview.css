@@ -187,6 +187,67 @@
   padding: 9px 12px 0;
 }
 
+/*
+ * A provider account with several keys: one card, the account's total on
+ * top and a smaller ring for each key under a light rule.
+ */
+.group-spend {
+  margin: -1px 0 6px;
+  font-size: 9px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.group-keys-title {
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.key-grid {
+  row-gap: 8px;
+  margin-top: 6px;
+}
+
+.key-grid .ring {
+  width: 54px;
+  height: 54px;
+}
+
+.key-grid .ring-value {
+  font-size: 16px;
+  letter-spacing: -0.5px;
+}
+
+.key-grid .ring-value span {
+  font-size: 10px;
+}
+
+.key-grid .ring-caption {
+  margin-top: 1px;
+  font-size: 8px;
+}
+
+.key-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 550;
+}
+
+.key-problem {
+  color: var(--warn);
+}
+
+.group-key-rows {
+  margin-top: 6px;
+}
+
 .provider-head {
   display: flex;
   align-items: center;

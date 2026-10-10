@@ -355,8 +355,57 @@ operating system, the view and the provider names, such as `claude` or `codex`.
 - The arrows move the account up or down in this list.
 - For an OpenRouter account, **Show this key's spend limit** adds the key's own limit to
   its card. It is off by default; see [Prepaid balances](#prepaid-balances).
+- For OpenRouter and OpenCode Go, **Account group** puts several keys of one provider
+  account together; see [Several keys of one account](#several-keys-of-one-account).
 
 <br clear="right">
+
+### Several keys of one account
+
+OpenRouter and OpenCode Go let one account hold several API keys, such as one for you, one
+for CI and one for an agent. Add each key as its own account, then put them in one group:
+
+1. In **Settings → Accounts**, open **Account group** on one key and choose **New
+   group…**. Name the account, for example **Work**.
+2. On each other key of that account, choose the same group.
+
+<table>
+  <tr>
+    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account card: a $37.20 balance ring and what its keys spent, then a ring for each of the Personal, CI and Agent keys"><br><sub>One account, three keys</sub></td>
+    <td valign="top" width="50%"><img src="images/settings-account-group.png" alt="Settings, Accounts: the Account group of each key"><br><sub>Choosing a key's group</sub></td>
+  </tr>
+</table>
+
+The overview then shows the account as one card:
+
+- **The account** is the ring at the top: the balance, and what its keys spent together
+  today, this week and this month. Every key reads the same balance, so it is shown once,
+  never added up.
+- **Each key** has its own smaller ring under it: what is left of its spend limit, with
+  the money left under the ring. Select a key's ring to open that key's details. A key
+  that stops working shows it on its own ring, the card's badge names it, and the other
+  keys carry on.
+- The mini widget shows a tile for the account's balance, then a tile for each key with
+  the key's name inside its ring.
+
+You choose what the group shows. On each grouped key in **Settings → Accounts**:
+
+- **Show this key in …** off leaves the key's ring out of the overview and the widget, for
+  a key you don't need to watch. The card then says how many keys are hidden. The key
+  still counts in the account's total, because the money is the account's.
+- **Show what the keys spent** off leaves out the "Keys spent" line. It applies to the
+  whole group, so it reads the same on every key of the group.
+
+<img src="images/settings-group-display.png" width="380" alt="Settings, Accounts: each grouped key's Show this key in Work and Show what the keys spent switches">
+
+OpenCode Go reports usage for the whole subscription, not per key, so its group shows the
+5-hour, weekly and monthly usage once at the top, and each key's ring shows only whether
+that key is working.
+
+The provider does not say which account a key belongs to, so Quota cannot check it: put
+only keys of the same account in one group. Choosing **Not grouped** takes a key out; a
+group with no key left is removed. **Hide account names** shows groups as "Group 1",
+"Group 2".
 
 ## Settings
 

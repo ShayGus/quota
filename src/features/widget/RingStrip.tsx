@@ -520,7 +520,13 @@ export function RingStrip({
               className={`widget-tile-rings logo-${String(Math.max(1, account.rings.length))}`}
             >
               <Rings rings={account.rings} size={44} stroke={3} />
-              <ProviderMark providerId={account.providerId} />
+              {account.mark === null ? (
+                <ProviderMark providerId={account.providerId} />
+              ) : (
+                <span className="widget-key-mark" aria-hidden="true">
+                  {account.mark}
+                </span>
+              )}
             </span>
             {account.ringValues ? (
               <span

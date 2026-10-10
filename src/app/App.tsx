@@ -78,6 +78,21 @@ const settingsActions: SettingsActions = {
   setKeyLimitShown: (accountId, shown) => {
     launch(actions.setKeyLimitShown(accountId, shown));
   },
+  createAccountGroup: (name, accountIds) => {
+    launch(actions.createAccountGroup(name, accountIds));
+  },
+  setAccountGroup: (accountId, groupId) => {
+    launch(actions.setAccountGroup(accountId, groupId));
+  },
+  setGroupSpendShown: (groupId, shown) => {
+    launch(actions.setGroupSpendShown(groupId, shown));
+  },
+  setGroupKeyShown: (accountId, shown) => {
+    launch(actions.setGroupKeyShown(accountId, shown));
+  },
+  renameAccountGroup: (groupId, name) => {
+    launch(actions.renameAccountGroup(groupId, name));
+  },
   disconnectAccount: (accountId) => {
     launch(actions.disconnectAccount(accountId));
   },

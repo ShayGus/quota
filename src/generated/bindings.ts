@@ -53,6 +53,13 @@ export const commands = {
 	setAccountGroup: (accountRef: AccountRef, groupId: string | null) => typedError<null, CommandError>(__TAURI_INVOKE("set_account_group", { accountRef, groupId })),
 	/**  Renames a group without touching its members. */
 	renameAccountGroup: (groupId: AccountGroupId, name: string) => typedError<null, CommandError>(__TAURI_INVOKE("rename_account_group", { groupId, name })),
+	/**  Shows or hides the line of what a group's keys spent together. */
+	setGroupSpendShown: (groupId: AccountGroupId, shown: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_group_spend_shown", { groupId, shown })),
+	/**
+	 *  Shows or hides one key in its group's card and in the widget. A hidden
+	 *  key still counts in the account's total.
+	 */
+	setGroupKeyShown: (accountRef: AccountRef, shown: boolean) => typedError<null, CommandError>(__TAURI_INVOKE("set_group_key_shown", { accountRef, shown })),
 	/**
 	 *  Removes the application's local reference to one account.
 	 * 
@@ -211,6 +218,13 @@ export type AccountGroup = {
 	id: AccountGroupId,
 	/**  The person's name for the provider account. */
 	name: string,
+	/**  Whether the group shows what its keys spent together. */
+	spend_shown: boolean,
+	/**
+	 *  Whether this account's key is shown in its group. A key left out
+	 *  still counts in the account's total.
+	 */
+	key_shown: boolean,
 };
 
 /**
@@ -763,8 +777,13 @@ export type GroupSnapshot = {
 	account_ids: AccountId[],
 	/**  The account-wide balance, from the member that read it last. */
 	balance: BalanceSummary | null,
-	/**  What every member key spent together, per period any member reports. */
+	/**
+	 *  What every member key spent together, per period any member reports.
+	 *  Every key counts, shown or not, because the spend is the account's.
+	 */
 	key_spend: PeriodSpend | null,
+	/**  Whether the group shows what its keys spent together. */
+	spend_shown: boolean,
 };
 
 /**  How a remaining allowance is drawn. */

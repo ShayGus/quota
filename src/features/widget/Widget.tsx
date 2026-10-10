@@ -129,7 +129,13 @@ export function Widget({
 }): JSX.Element {
   const now = useNow();
   const accounts = useMemo(
-    () => widgetAccounts(state.snapshot?.accounts ?? [], state.preferences, now),
+    () =>
+      widgetAccounts(
+        state.snapshot?.accounts ?? [],
+        state.preferences,
+        now,
+        state.snapshot?.groups ?? [],
+      ),
     [state.snapshot, state.preferences, now],
   );
   const root = useRef<HTMLDivElement | null>(null);

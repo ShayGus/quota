@@ -2,8 +2,8 @@
 //! members.
 //!
 //! A group is saved in the same transaction as each member, loads back the
-//! same after a restart, keeps one name for every member, and is deleted when
-//! its last member leaves it or is removed.
+//! same after a restart, keeps one name for every member, keeps what it
+//! shows, and is deleted when its last member leaves it or is removed.
 
 #![expect(
     clippy::tests_outside_test_module,
@@ -162,4 +162,53 @@ async fn a_group_is_deleted_when_its_last_member_leaves_or_is_removed() {
     assert_eq!(loaded.len(), 1);
     assert_eq!(loaded[0].group, None);
     pool.close().await;
+}
+
+#[tokio::test]
+async fn what_a_group_shows_loads_back_after_a_restart() {
+    let directory = TempDir::new("groups-display");
+    let pool = migrated(&directory).await;
+    let port = SqliteAccountPortAdapter::new(SqliteRepositories::new(pool.clone()));
+    let quiet = AccountGroup {
+        spend_shown: false,
+        ..group("Work")
+    };
+    port.upsert_account(key("personal", 1, Some(quiet.clone())))
+        .await
+        .unwrap();
+    let hidden = AccountGroup {
+        key_shown: false,
+        ..quiet.clone()
+    };
+    port.upsert_account(key("ci", 2, Some(hidden.clone())))
+        .await
+        .unwrap();
+    pool.close().await;
+
+    let reopened = migrated(&directory).await;
+    let port = SqliteAccountPortAdapter::new(SqliteRepositories::new(reopened.clone()));
+    let loaded = port.load_accounts().await.unwrap();
+    let group_of = |id: &str| {
+        loaded
+            .iter()
+            .find(|account| account.account_id.as_str() == id)
+            .unwrap()
+            .group
+            .clone()
+    };
+    assert_eq!(group_of("personal"), Some(quiet));
+    assert_eq!(group_of("ci"), Some(hidden));
+
+    // Leaving the group forgets that the key was hidden in it.
+    port.upsert_account(key("ci", 2, None)).await.unwrap();
+    port.upsert_account(key("ci", 2, Some(group("Work"))))
+        .await
+        .unwrap();
+    let reloaded = port.load_accounts().await.unwrap();
+    let ci = reloaded
+        .iter()
+        .find(|account| account.account_id.as_str() == "ci")
+        .unwrap();
+    assert!(ci.group.as_ref().unwrap().key_shown);
+    reopened.close().await;
 }

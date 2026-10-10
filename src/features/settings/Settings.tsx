@@ -8,6 +8,7 @@
 import { useCallback, useSyncExternalStore, type JSX } from "react";
 
 import type {
+  AccountGroupId,
   AccountId,
   AccountSnapshot,
   AttemptRef,
@@ -52,6 +53,14 @@ export interface SettingsActions {
   readonly setAccountEnabled: (accountId: AccountId, enabled: boolean) => void;
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;
   readonly setKeyLimitShown: (accountId: AccountId, shown: boolean) => void;
+  readonly createAccountGroup: (name: string, accountIds: readonly AccountId[]) => void;
+  readonly setAccountGroup: (
+    accountId: AccountId,
+    groupId: AccountGroupId | null,
+  ) => void;
+  readonly renameAccountGroup: (groupId: AccountGroupId, name: string) => void;
+  readonly setGroupSpendShown: (groupId: AccountGroupId, shown: boolean) => void;
+  readonly setGroupKeyShown: (accountId: AccountId, shown: boolean) => void;
   readonly disconnectAccount: (accountId: AccountId) => void;
   readonly openUsagePage: (accountId: AccountId) => void;
   /**
@@ -168,6 +177,7 @@ export function Settings({
           <AccountsPanel
             key={route}
             accounts={accountsForManagement(state.snapshot?.accounts ?? [])}
+            groups={state.snapshot?.groups ?? []}
             preferences={preferences}
             actions={actions}
             onAddAccount={() => {

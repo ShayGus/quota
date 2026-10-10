@@ -33,10 +33,15 @@ export function isRankable(window: QuotaWindow): boolean {
  * An API key's spend limit beside a prepaid balance belongs to a key that often
  * exists only so Quota can read the account, so it is hidden until the person
  * turns it on for that account. Without a balance it is the only reading and is
- * always shown.
+ * always shown, and so it is for a key in a group, where the limit is what
+ * tells the account's keys apart.
  */
 export function isWindowShown(account: AccountSnapshot, window: QuotaWindow): boolean {
-  if (window.metric_role !== "extra_spend_cap" || account.show_key_limit) {
+  if (
+    window.metric_role !== "extra_spend_cap" ||
+    account.show_key_limit ||
+    account.group !== null
+  ) {
     return true;
   }
   return !account.windows.some(isPrepaidBalance);
