@@ -18,6 +18,8 @@ import type {
 import { accountLabel, displayName } from "../../../shared/format/alias";
 import { hasHideableKeyLimit } from "../../../shared/format/balance";
 import { groupById, groupLabel, isGroupable } from "../../../shared/format/group";
+import { moveInOrder } from "../../../shared/state/order";
+import { withAccountOrder } from "../preferences";
 import { providerLabel } from "../../../shared/format/provider";
 import { launch } from "../../../shared/ipc/report";
 import { Dialog } from "../../../shared/ui/Dialog";
@@ -39,10 +41,10 @@ type Pending =
   | { readonly kind: "disconnect"; readonly account: AccountSnapshot };
 
 /**
- * Why the order buttons cannot move an account. The host ranks accounts by
- * their least remaining allowance and has no command to reorder them.
+ * Why the order buttons cannot move an account: only the person's own order
+ * is arranged by hand.
  */
-const ORDER_FIXED = "Order follows the least remaining allowance first";
+const ORDER_FIXED = "Choose My order in Appearance to arrange accounts";
 
 /** The choice for "New group…" in the group list. */
 const NEW_GROUP = "new";
@@ -190,6 +192,8 @@ function ManagedAccount({
   actions,
   onPending,
   onAddKey,
+  arranging,
+  onMove,
 }: {
   readonly account: AccountSnapshot;
   readonly label: string;
@@ -199,6 +203,10 @@ function ManagedAccount({
   readonly actions: SettingsActions;
   readonly onPending: (pending: Pending) => void;
   readonly onAddKey: (groupId: AccountGroupId) => void;
+  /** Whether the person arranges the accounts, so the arrows apply. */
+  readonly arranging: boolean;
+  /** The move one step up or down, or `null` when the account cannot move so. */
+  readonly onMove: (accountId: AccountId, direction: -1 | 1) => (() => void) | null;
 }): JSX.Element {
   const provider = providerLabel(account.provider_id);
   const windows = account.windows.length;
@@ -303,24 +311,25 @@ function ManagedAccount({
           Disconnect
         </button>
         <span className="spacer">
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={`Move ${provider} ${label} up`}
-            title={ORDER_FIXED}
-            disabled
-          >
-            <Icon name="chevron-up" />
-          </button>
-          <button
-            type="button"
-            className="icon-btn"
-            aria-label={`Move ${provider} ${label} down`}
-            title={ORDER_FIXED}
-            disabled
-          >
-            <Icon name="chevron-down" />
-          </button>
+          {([-1, 1] as const).map((direction) => {
+            const moved = onMove(account.account_id, direction);
+            const word = direction === -1 ? "up" : "down";
+            return (
+              <button
+                key={word}
+                type="button"
+                className="icon-btn"
+                aria-label={`Move ${provider} ${label} ${word}`}
+                title={arranging ? undefined : ORDER_FIXED}
+                disabled={moved === null}
+                onClick={() => {
+                  if (moved !== null) moved();
+                }}
+              >
+                <Icon name={direction === -1 ? "chevron-up" : "chevron-down"} />
+              </button>
+            );
+          })}
         </span>
       </div>
     </article>
@@ -485,6 +494,16 @@ export function AccountsPanel({
 }): JSX.Element {
   const [pending, setPending] = useState<Pending | null>(null);
   const aliasOf = (id: AccountId): string => accountLabel(preferences, accounts, id);
+  const arranging = preferences?.account_sort === "manual";
+  const move = (accountId: AccountId, direction: -1 | 1): (() => void) | null => {
+    if (preferences === null || !arranging) return null;
+    const next = moveInOrder(accounts, preferences.account_order, accountId, direction);
+    return next === null
+      ? null
+      : () => {
+          actions.savePreferences(withAccountOrder(preferences, next));
+        };
+  };
   return (
     <>
       <SettingsTitle
@@ -517,6 +536,8 @@ export function AccountsPanel({
             actions={actions}
             onPending={setPending}
             onAddKey={onAddKey}
+            arranging={arranging}
+            onMove={move}
           />
         ))
       )}

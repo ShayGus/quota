@@ -7,11 +7,15 @@
  * (spec 13.2).
  */
 import type {
+  AccountId,
+  AccountSnapshot,
+  AccountSort,
   IndicatorStyle,
   Preferences,
   PrivacyAliasMode,
   Theme,
 } from "../../generated/bindings";
+import { canonicalOrder } from "../../shared/state/order";
 
 /** The next preferences with a different colour scheme. */
 export function withTheme(preferences: Preferences, theme: Theme): Preferences {
@@ -56,4 +60,29 @@ export function withExportIdentities(
   export_identities: boolean,
 ): Preferences {
   return { ...preferences, privacy: { ...preferences.privacy, export_identities } };
+}
+
+/**
+ * The next preferences with accounts listed in `account_sort`. The first time
+ * the person chooses their own order, it starts from the order on screen, so
+ * nothing jumps.
+ */
+export function withAccountSort(
+  preferences: Preferences,
+  account_sort: AccountSort,
+  accounts: readonly AccountSnapshot[],
+): Preferences {
+  const seeded =
+    account_sort === "manual" && preferences.account_order.length === 0
+      ? canonicalOrder(accounts, preferences)
+      : preferences.account_order;
+  return { ...preferences, account_sort, account_order: [...seeded] };
+}
+
+/** The next preferences with the accounts arranged in `order`. */
+export function withAccountOrder(
+  preferences: Preferences,
+  order: readonly AccountId[],
+): Preferences {
+  return { ...preferences, account_order: [...order] };
 }

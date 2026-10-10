@@ -33,6 +33,22 @@ pub enum IndicatorStyle {
     Bar,
 }
 
+/// The order accounts are listed in, in the overview and the widget.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum AccountSort {
+    /// Whatever needs checking first, then the least remaining allowance.
+    #[default]
+    LeastRemaining,
+    /// The order the person arranged, which readings never change.
+    Manual,
+    /// By provider, then in the order the accounts were added.
+    Provider,
+}
+
+/// The most accounts an arranged order lists.
+pub const MAX_ACCOUNT_ORDER_LEN: usize = 512;
+
 /// Where the overview lives.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
@@ -242,6 +258,14 @@ pub struct PresentationPreferences {
     /// back to the same place after a restart or an update.
     #[serde(default)]
     pub widget_position: Option<WidgetPosition>,
+    /// The order accounts are listed in. A preference file written before
+    /// the choice existed reads as the least remaining first.
+    #[serde(default)]
+    pub account_sort: AccountSort,
+    /// The arranged order, for [`AccountSort::Manual`]. An account it does
+    /// not list follows the ones it does.
+    #[serde(default)]
+    pub account_order: Vec<crate::ids::AccountId>,
 }
 
 impl Default for PresentationPreferences {
@@ -258,6 +282,8 @@ impl Default for PresentationPreferences {
             reduce_motion: false,
             view: AppView::default(),
             widget_position: None,
+            account_sort: AccountSort::default(),
+            account_order: Vec::new(),
         }
     }
 }
@@ -307,6 +333,33 @@ mod tests {
         assert!(json.contains("\"view\":\"widget\""));
         let restored: PresentationPreferences = serde_json::from_str(&json).unwrap();
         assert_eq!(restored, saved);
+    }
+
+    #[test]
+    fn a_file_from_before_account_ordering_lists_the_least_remaining_first() {
+        let mut json = serde_json::to_value(PresentationPreferences::default()).unwrap();
+        let object = json.as_object_mut().unwrap();
+        object.remove("account_sort");
+        object.remove("account_order");
+        let restored: PresentationPreferences = serde_json::from_value(json).unwrap();
+        assert_eq!(restored.account_sort, AccountSort::LeastRemaining);
+        assert!(restored.account_order.is_empty());
+    }
+
+    #[test]
+    fn an_arranged_order_survives_a_round_trip() {
+        let arranged = PresentationPreferences {
+            account_sort: AccountSort::Manual,
+            account_order: vec![
+                crate::ids::AccountId::new("b").unwrap(),
+                crate::ids::AccountId::new("a").unwrap(),
+            ],
+            ..PresentationPreferences::default()
+        };
+        let json = serde_json::to_string(&arranged).unwrap();
+        assert!(json.contains("\"account_sort\":\"manual\""));
+        let restored: PresentationPreferences = serde_json::from_str(&json).unwrap();
+        assert_eq!(restored, arranged);
     }
 
     #[test]

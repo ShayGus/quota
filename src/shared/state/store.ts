@@ -86,7 +86,7 @@ export function acceptSnapshot(snapshot: AppSnapshot): void {
   ) {
     return;
   }
-  const staged = canonicalOrder(snapshot.accounts);
+  const staged = canonicalOrder(snapshot.accounts, state.preferences);
   commit({
     ...state,
     link: "live",
@@ -97,9 +97,30 @@ export function acceptSnapshot(snapshot: AppSnapshot): void {
   });
 }
 
-/** Replaces the confirmed preferences. The aggregate arrives only after a save. */
+/**
+ * Replaces the confirmed preferences. The aggregate arrives only after a save.
+ *
+ * A new account order is the person's own change, so it applies at once
+ * rather than waiting for the list to be idle.
+ */
 export function acceptPreferences(preferences: Preferences): void {
-  commit({ ...state, preferences, link: "live" });
+  const previous = state.preferences;
+  const reordered =
+    state.snapshot !== null &&
+    (previous === null ||
+      previous.account_sort !== preferences.account_sort ||
+      previous.account_order.join() !== preferences.account_order.join());
+  if (!reordered || state.snapshot === null) {
+    commit({ ...state, preferences, link: "live" });
+    return;
+  }
+  commit({
+    ...state,
+    preferences,
+    link: "live",
+    appliedOrder: canonicalOrder(state.snapshot.accounts, preferences),
+    pendingOrder: null,
+  });
 }
 
 /** Replaces the confirmed monitoring state. */
@@ -175,7 +196,7 @@ export function applyPendingOrder(): void {
  * clearing accounts or restarting polling.
  */
 export function orderFor(snapshot: AppSnapshot): readonly AccountId[] {
-  return canonicalOrder(snapshot.accounts);
+  return canonicalOrder(snapshot.accounts, state.preferences);
 }
 
 /** Clears every cached value. Used only when the backend instance is replaced. */

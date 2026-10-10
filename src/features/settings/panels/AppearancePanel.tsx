@@ -7,10 +7,21 @@
  */
 import type { JSX } from "react";
 
-import type { IndicatorStyle, Preferences, Theme } from "../../../generated/bindings";
+import type {
+  AccountSnapshot,
+  AccountSort,
+  IndicatorStyle,
+  Preferences,
+  Theme,
+} from "../../../generated/bindings";
 import { SettingRow, SettingsTitle, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import { withIndicatorStyle, withReduceMotion, withTheme } from "../preferences";
+import {
+  withAccountSort,
+  withIndicatorStyle,
+  withReduceMotion,
+  withTheme,
+} from "../preferences";
 
 /** The three colour-scheme options, in the wireframe's order. */
 const THEMES: readonly (readonly [Theme, string])[] = [
@@ -25,12 +36,22 @@ const LAYOUTS: readonly (readonly [IndicatorStyle, string])[] = [
   ["bar", "Compact"],
 ];
 
+/** The account orders, the automatic one first. */
+const SORTS: readonly (readonly [AccountSort, string])[] = [
+  ["least_remaining", "Least left"],
+  ["manual", "My order"],
+  ["provider", "Provider"],
+];
+
 /** The appearance settings panel. */
 export function AppearancePanel({
   preferences,
+  accounts,
   actions,
 }: {
   readonly preferences: Preferences;
+  /** The accounts, so "My order" can start from the order on screen. */
+  readonly accounts: readonly AccountSnapshot[];
   readonly actions: SettingsActions;
 }): JSX.Element {
   return (
@@ -74,6 +95,33 @@ export function AppearancePanel({
                 aria-pressed={preferences.indicator_style === style}
                 onClick={() => {
                   actions.savePreferences(withIndicatorStyle(preferences, style));
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        }
+      />
+      <SettingRow
+        label="Account order"
+        description={
+          preferences.account_sort === "manual"
+            ? "Arrange accounts with the arrows in Accounts. Readings never move them."
+            : preferences.account_sort === "provider"
+              ? "Grouped by provider, in the order you added them."
+              : "What needs checking first, then the least allowance left."
+        }
+        control={
+          <div className="tabs" role="group" aria-label="Account order">
+            {SORTS.map(([sort, label]) => (
+              <button
+                key={sort}
+                type="button"
+                className={preferences.account_sort === sort ? "selected" : ""}
+                aria-pressed={preferences.account_sort === sort}
+                onClick={() => {
+                  actions.savePreferences(withAccountSort(preferences, sort, accounts));
                 }}
               >
                 {label}
