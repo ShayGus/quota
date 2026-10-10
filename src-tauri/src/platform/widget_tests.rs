@@ -242,3 +242,15 @@ fn room_is_measured_in_logical_pixels() {
     assert_eq!(fitted.outer_y, 48);
     assert!((fitted.room_below - 836.0).abs() < f64::EPSILON);
 }
+
+#[test]
+fn the_fitted_width_is_the_configured_widget_width() {
+    let config: serde_json::Value =
+        serde_json::from_str(include_str!("../../tauri.conf.json")).expect("the configuration");
+    let windows = config["app"]["windows"].as_array().expect("the windows");
+    let widget = windows
+        .iter()
+        .find(|window| window["label"] == LABEL)
+        .expect("the widget window");
+    assert_eq!(widget["width"].as_f64(), Some(WIDTH));
+}

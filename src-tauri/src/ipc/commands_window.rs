@@ -164,7 +164,12 @@ pub async fn fit_widget(
             .map_err(|_| window::failed("read_primary_monitor"))?)
         .ok_or_else(|| window::failed("find_display"))?;
     let area = monitor.work_area();
-    let scale = monitor.scale_factor();
+    // The window's own scale, not its screen's: the size is set in the
+    // window's scale, and while it is dragged across screens of different
+    // scales the two differ, which would shrink the widget's width.
+    let scale = native
+        .scale_factor()
+        .unwrap_or_else(|_| monitor.scale_factor());
     let outer = native
         .outer_size()
         .map_err(|_| window::failed("read_window_size"))?;
@@ -189,9 +194,8 @@ pub async fn fit_widget(
         },
         scale,
     );
-    let width = f64::from(inner.width) / scale;
     native
-        .set_size(LogicalSize::new(width, fitted.height))
+        .set_size(LogicalSize::new(widget::WIDTH, fitted.height))
         .map_err(|_| window::failed("fit_window_size"))?;
     if fitted.outer_y != position.y {
         let moved = PhysicalPosition::new(position.x, fitted.outer_y);
