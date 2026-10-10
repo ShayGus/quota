@@ -49,7 +49,9 @@ test.describe("account groups", () => {
     await expect(keys).toHaveCount(3);
     await expect(keys.nth(0)).toContainText("Personal");
     await expect(keys.nth(0)).toContainText("58%");
-    await expect(keys.nth(0)).toContainText("$11.60 left");
+    await expect(keys.nth(0)).toContainText("$11.60");
+    // A key's ring shows its numbers alone, with no "left" after them.
+    await expect(keys.nth(0)).not.toContainText("left");
     await expect(keys.nth(1)).toContainText("14%");
     // The balance is the account's, so it is drawn once, not for each key.
     await expect(group.getByText("of $50.00 loaded")).toHaveCount(1);
@@ -312,7 +314,7 @@ test.describe("account groups", () => {
     const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
     await expect(group).toContainText("Keys spent $4.30 today · $27.10 this month");
     const ci = group.getByRole("button", { name: /^Key OpenRouter CI/ });
-    await expect(ci).toContainText("$2.80 left");
+    await expect(ci).toContainText("$2.80");
     // Its details say what it spent, though it has no balance to show.
     await ci.click();
     await expect(host.page.getByLabel("This key")).toContainText("$17.20 this month");
