@@ -49,7 +49,8 @@ const NEW_GROUP = "new";
 /**
  * Which provider account a key belongs to: no group, a group of the same
  * provider, or a new one. The provider names no account, so the person
- * decides which keys belong together.
+ * decides which keys belong together. A grouped key also chooses whether it
+ * is shown in its group, and whether the group shows what its keys spent.
  */
 function GroupChoice({
   account,
@@ -72,48 +73,96 @@ function GroupChoice({
   const choices = groups.filter((group) => group.provider_id === account.provider_id);
   const current =
     account.group === null ? undefined : groupById(groups, account.group.id);
+  const groupName = current === undefined ? "" : groupLabel(preferences, groups, current);
   return (
-    <div className="account-manage-option">
-      <span>
-        <span className="account-manage-option-label">Account group</span>
-        <small>Put the keys of one {provider} account together to see its total.</small>
-      </span>
-      <span className="account-group-controls">
-        <select
-          aria-label={`Account group of ${provider} ${label}`}
-          value={current?.id ?? ""}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            if (value === NEW_GROUP) {
-              onPending({ kind: "new-group", account });
-            } else {
-              actions.setAccountGroup(account.account_id, value === "" ? null : value);
-            }
-          }}
-        >
-          <option value="">Not grouped</option>
-          {choices.map((group) => (
-            <option key={group.id} value={group.id}>
-              {groupLabel(preferences, groups, group)}
-            </option>
-          ))}
-          <option value={NEW_GROUP}>New group…</option>
-        </select>
-        {current === undefined ? null : (
-          <button
-            type="button"
-            className="text-btn"
-            disabled={alias !== ""}
-            title={alias === "" ? undefined : "Show account names to rename"}
-            onClick={() => {
-              onPending({ kind: "rename-group", account, group: current });
+    <>
+      <div className="account-manage-option">
+        <span>
+          <span className="account-manage-option-label">Account group</span>
+          <small>Put the keys of one {provider} account together to see its total.</small>
+        </span>
+        <span className="account-group-controls">
+          <select
+            aria-label={`Account group of ${provider} ${label}`}
+            value={current?.id ?? ""}
+            onChange={(event) => {
+              const value = event.currentTarget.value;
+              if (value === NEW_GROUP) {
+                onPending({ kind: "new-group", account });
+              } else {
+                actions.setAccountGroup(account.account_id, value === "" ? null : value);
+              }
             }}
           >
-            Rename group
-          </button>
-        )}
-      </span>
-    </div>
+            <option value="">Not grouped</option>
+            {choices.map((group) => (
+              <option key={group.id} value={group.id}>
+                {groupLabel(preferences, groups, group)}
+              </option>
+            ))}
+            <option value={NEW_GROUP}>New group…</option>
+          </select>
+          {current === undefined ? null : (
+            <button
+              type="button"
+              className="text-btn"
+              disabled={alias !== ""}
+              title={alias === "" ? undefined : "Show account names to rename"}
+              onClick={() => {
+                onPending({ kind: "rename-group", account, group: current });
+              }}
+            >
+              Rename group
+            </button>
+          )}
+        </span>
+      </div>
+      {current === undefined || account.group === null ? null : (
+        <>
+          <div className="account-manage-option">
+            <span>
+              <span className="account-manage-option-label">
+                Show this key in {groupName}
+              </span>
+              <small>
+                Off hides its ring in the overview and the widget. It still counts in the
+                account's total.
+              </small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              className="switch"
+              aria-checked={account.group.key_shown}
+              aria-label={`Show ${provider} ${label} in its group`}
+              onClick={() => {
+                actions.setGroupKeyShown(account.account_id, !account.group?.key_shown);
+              }}
+            />
+          </div>
+          <div className="account-manage-option">
+            <span>
+              <span className="account-manage-option-label">
+                Show what the keys spent
+              </span>
+              <small>
+                The "Keys spent" line under {groupName}'s balance, for all its keys.
+              </small>
+            </span>
+            <button
+              type="button"
+              role="switch"
+              className="switch"
+              aria-checked={current.spend_shown}
+              aria-label={`Show what the ${groupName} keys spent`}
+              onClick={() => {
+                actions.setGroupSpendShown(current.id, !current.spend_shown);
+              }}
+            />
+          </div>
+        </>
+      )}
+    </>
   );
 }
 

@@ -46,6 +46,8 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       setAccountEnabled: vi.fn(),
       renameAccount: vi.fn(),
       setKeyLimitShown: vi.fn(),
+      setGroupSpendShown: vi.fn(),
+      setGroupKeyShown: vi.fn(),
       createAccountGroup: vi.fn(),
       setAccountGroup: vi.fn(),
       renameAccountGroup: vi.fn(),

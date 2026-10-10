@@ -122,6 +122,7 @@ export function groupsOf(accounts: readonly AccountSnapshot[]): GroupSnapshot[] 
       account_ids: [account.account_id],
       balance: null,
       key_spend: null,
+      spend_shown: account.group.spend_shown,
     });
   }
   for (const group of groups) {
@@ -349,7 +350,7 @@ export function installFakeBackend(config: FakeConfig): void {
           ...snapshot,
           accounts: snapshot.accounts.map((entry) =>
             members.includes(entry.account_id)
-              ? { ...entry, group: { id, name } }
+              ? { ...entry, group: { id, name, spend_shown: true, key_shown: true } }
               : entry,
           ),
         };
@@ -361,11 +362,12 @@ export function installFakeBackend(config: FakeConfig): void {
         const group =
           groupId === null
             ? null
-            : (snapshot.accounts.find((entry) => entry.group?.id === groupId)?.group ??
-              null);
+            : (snapshot.accounts
+                .map((entry) => entry.group)
+                .find((candidate) => candidate?.id === groupId) ?? null);
         updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
           ...entry,
-          group,
+          group: group === null ? null : { ...group, key_shown: true },
         }));
         return null;
       }
@@ -376,13 +378,36 @@ export function installFakeBackend(config: FakeConfig): void {
           ...snapshot,
           accounts: snapshot.accounts.map((entry) =>
             entry.group?.id === groupId
-              ? { ...entry, group: { id: groupId, name } }
+              ? { ...entry, group: { ...entry.group, name } }
               : entry,
           ),
         };
         publishSnapshot();
         return null;
       }
+      case "set_group_spend_shown": {
+        const groupId = args?.groupId as string;
+        const shown = args?.shown as boolean;
+        snapshot = {
+          ...snapshot,
+          accounts: snapshot.accounts.map((entry) =>
+            entry.group?.id === groupId
+              ? { ...entry, group: { ...entry.group, spend_shown: shown } }
+              : entry,
+          ),
+        };
+        publishSnapshot();
+        return null;
+      }
+      case "set_group_key_shown":
+        updateAccount((args?.accountRef as { id: string }).id, (entry) => ({
+          ...entry,
+          group:
+            entry.group === null
+              ? null
+              : { ...entry.group, key_shown: args?.shown as boolean },
+        }));
+        return null;
       case "disconnect_account": {
         const id = (args?.accountRef as { id: string }).id;
         snapshot = {

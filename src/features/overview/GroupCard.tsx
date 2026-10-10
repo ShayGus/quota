@@ -6,7 +6,8 @@
  * together. Under it each key has a ring of its own, its spend limit, so a
  * key running low stands out without the account's numbers repeated for it.
  * A key opens its own details, and one that must be reconnected says so on
- * its own ring.
+ * its own ring. The person can leave a key out, or the spend line; a key left
+ * out still counts in the total, which is the account's.
  */
 import type { CSSProperties, JSX } from "react";
 
@@ -291,8 +292,10 @@ export function GroupCard({
   const reader = groupReader(keys.map((item) => item.account));
   const total = reader === undefined ? undefined : accountView(reader);
   const main = total === undefined ? [] : cardWindows(total).main;
-  const spend = groupSpendLine(group);
+  const spend = group.spend_shown ? groupSpendLine(group) : null;
   const count = group.account_ids.length;
+  const shown = keys.filter((item) => item.account.group?.key_shown !== false);
+  const hidden = keys.length - shown.length;
   const keyProps = { provider, now, onOpen, onOpenWindow, onReconnect };
   return (
     <article
@@ -317,6 +320,7 @@ export function GroupCard({
             <span className="provider-name">{name}</span>
             <span className="provider-meta">
               {provider} · {count} {count === 1 ? "key" : "keys"}
+              {hidden === 0 ? null : ` · ${String(hidden)} hidden`}
             </span>
           </span>
         </button>
@@ -355,10 +359,14 @@ export function GroupCard({
         </div>
       )}
       {spend === null ? null : <div className="group-spend">{spend}</div>}
-      <div className="group-keys-title">{count === 1 ? "Key" : "Keys"} · spend limit</div>
-      {style === "bar" ? (
+      {shown.length === 0 ? null : (
+        <div className="group-keys-title">
+          {shown.length === 1 ? "Key" : "Keys"} · spend limit
+        </div>
+      )}
+      {shown.length === 0 ? null : style === "bar" ? (
         <div className="ledger-rows group-key-rows">
-          {keys.map((item) => (
+          {shown.map((item) => (
             <KeyRow key={item.account.account_id} item={item} {...keyProps} />
           ))}
         </div>
@@ -366,10 +374,10 @@ export function GroupCard({
         <div
           className="quota-grid key-grid"
           style={
-            { "--cols": String(Math.min(keys.length, KEYS_PER_ROW)) } as CSSProperties
+            { "--cols": String(Math.min(shown.length, KEYS_PER_ROW)) } as CSSProperties
           }
         >
-          {keys.map((item) => (
+          {shown.map((item) => (
             <KeyRing key={item.account.account_id} item={item} {...keyProps} />
           ))}
         </div>

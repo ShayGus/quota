@@ -85,6 +85,46 @@ pub async fn rename_account_group(
     state.monitor.publish().await
 }
 
+/// Shows or hides the line of what a group's keys spent together.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_group_spend_shown(
+    state: State<'_, AppState>,
+    group_id: AccountGroupId,
+    shown: bool,
+) -> Result<(), CommandError> {
+    {
+        let _commit = state.monitor.commit().await;
+        let mut registry = state.registry.write().await;
+        let changed = registry
+            .set_group_spend_shown(&group_id, shown)
+            .map_err(map_core_error)?;
+        save(&state, &registry, &changed).await?;
+    }
+    state.monitor.publish().await
+}
+
+/// Shows or hides one key in its group's card and in the widget. A hidden
+/// key still counts in the account's total.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_group_key_shown(
+    state: State<'_, AppState>,
+    account_ref: AccountRef,
+    shown: bool,
+) -> Result<(), CommandError> {
+    let account_id = account_ref.into_id();
+    {
+        let _commit = state.monitor.commit().await;
+        let mut registry = state.registry.write().await;
+        registry
+            .set_group_key_shown(&account_id, shown)
+            .map_err(map_core_error)?;
+        save(&state, &registry, std::slice::from_ref(&account_id)).await?;
+    }
+    state.monitor.publish().await
+}
+
 /// Saves each changed account as the registry now holds it.
 async fn save(
     state: &AppState,

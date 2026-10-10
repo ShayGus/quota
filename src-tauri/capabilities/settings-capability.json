@@ -24,6 +24,8 @@
     "allow-create-account-group",
     "allow-set-account-group",
     "allow-rename-account-group",
+    "allow-set-group-spend-shown",
+    "allow-set-group-key-shown",
     "allow-disconnect-account",
     "allow-clear-local-history",
     "allow-export-sanitized-diagnostics",

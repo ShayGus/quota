@@ -137,7 +137,7 @@ export interface WidgetAccount {
  *
  * A group of keys is a tile for the account's total, where its first key
  * falls, named for the group and drawn from the key that read the balance
- * last; then a tile for each key, its own spend limit.
+ * last; then a tile for each key the person shows, its own spend limit.
  */
 export function widgetAccounts(
   accounts: readonly AccountSnapshot[],
@@ -177,7 +177,7 @@ export function widgetAccounts(
       ...describe(accountView(reader), `${provider} · ${label}`, now, "whole"),
       id: `group:${group.id}`,
     });
-    for (const member of members) {
+    for (const member of members.filter((entry) => entry.group?.key_shown !== false)) {
       const keyName = displayName(preferences, accounts, member);
       tiles.push({
         ...describe(member, `${label} · ${keyName}`, now, "key"),

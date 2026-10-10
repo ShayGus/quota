@@ -168,3 +168,53 @@ fn renaming_a_group_renames_it_for_every_member() {
         Err(CoreError::Validation { field: "group", .. })
     ));
 }
+
+#[test]
+fn a_group_hides_its_spend_line_for_every_member() {
+    let mut registry = registry();
+    registry
+        .create_group(group_id("g"), "Work", &[id("personal"), id("ci")])
+        .unwrap();
+    let changed = registry
+        .set_group_spend_shown(&group_id("g"), false)
+        .unwrap();
+    assert_eq!(changed.len(), 2);
+    for account in ["personal", "ci"] {
+        let group = registry.get(&id(account)).unwrap().stored.group.clone();
+        assert!(!group.unwrap().spend_shown);
+    }
+    let error = registry
+        .set_group_spend_shown(&group_id("missing"), false)
+        .unwrap_err();
+    assert!(matches!(error, CoreError::Validation { .. }));
+}
+
+#[test]
+fn a_key_is_hidden_in_its_group_and_shown_again_when_it_rejoins() {
+    let mut registry = registry();
+    registry
+        .create_group(group_id("g"), "Work", &[id("personal"), id("ci")])
+        .unwrap();
+    registry.set_group_key_shown(&id("ci"), false).unwrap();
+    let shown = |registry: &AccountRegistry, account: &str| {
+        registry
+            .get(&id(account))
+            .unwrap()
+            .stored
+            .group
+            .as_ref()
+            .map(|group| group.key_shown)
+    };
+    assert_eq!(shown(&registry, "ci"), Some(false));
+    assert_eq!(shown(&registry, "personal"), Some(true));
+    // A key that joins copies the group from a hidden member, yet joins shown.
+    registry
+        .set_group(&id("agent"), Some(&group_id("g")))
+        .unwrap();
+    assert_eq!(shown(&registry, "agent"), Some(true));
+    // An ungrouped account has no group to be shown in.
+    let error = registry
+        .set_group_key_shown(&id("claude"), false)
+        .unwrap_err();
+    assert!(matches!(error, CoreError::Validation { .. }));
+}

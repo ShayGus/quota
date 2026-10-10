@@ -93,6 +93,14 @@ export const actions = {
   ): Promise<void> {
     await reportAsync(commands.setAccountGroup({ id: accountId }, groupId));
   },
+  /** Shows or hides what a group's keys spent together. */
+  async setGroupSpendShown(groupId: AccountGroupId, shown: boolean): Promise<void> {
+    await reportAsync(commands.setGroupSpendShown(groupId, shown));
+  },
+  /** Shows or hides one key in its group. */
+  async setGroupKeyShown(accountId: AccountId, shown: boolean): Promise<void> {
+    await reportAsync(commands.setGroupKeyShown({ id: accountId }, shown));
+  },
   /** Renames a group. */
   async renameAccountGroup(groupId: AccountGroupId, name: string): Promise<void> {
     await reportAsync(commands.renameAccountGroup(groupId, name));

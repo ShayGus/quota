@@ -132,7 +132,7 @@ export function openRouterGroup(): AccountSnapshot[] {
           },
         },
       ),
-      group: { id: "group-work", name: "Work" },
+      group: { id: "group-work", name: "Work", spend_shown: true, key_shown: true },
     };
   });
 }

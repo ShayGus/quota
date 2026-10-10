@@ -123,4 +123,63 @@ test.describe("account groups", () => {
     await expect(ci).toHaveValue(joined?.groupId ?? "");
     await host.screenshotFull("settings-account-group");
   });
+
+  test("a key and the spend line are hidden from Settings", async ({ open }) => {
+    const host = await open(
+      scenario("settings", { accounts: openRouterGroup() }),
+      "#/settings/accounts",
+    );
+    const { page } = host;
+    const ci = page.getByRole("switch", { name: "Show OpenRouter CI in its group" });
+    await expect(ci).toHaveAttribute("aria-checked", "true");
+    await ci.click();
+    expect((await host.callsTo("set_group_key_shown")).at(-1)?.args).toEqual({
+      accountRef: { id: "acct-or-ci" },
+      shown: false,
+    });
+    await expect(ci).toHaveAttribute("aria-checked", "false");
+    const spend = page.getByRole("switch", { name: "Show what the Work keys spent" });
+    await spend.first().click();
+    expect((await host.callsTo("set_group_spend_shown")).at(-1)?.args).toEqual({
+      groupId: "group-work",
+      shown: false,
+    });
+    // The spend line is the group's, so every key's switch follows it.
+    for (const entry of await spend.all()) {
+      await expect(entry).toHaveAttribute("aria-checked", "false");
+    }
+    // The switches slide; the picture waits for them to settle.
+    await page.waitForTimeout(300);
+    await host.screenshotFull("settings-group-display");
+  });
+
+  test("a hidden key and spend line leave the card and the widget", async ({ open }) => {
+    const accounts = openRouterGroup().map((key) => {
+      const group = key.group === null ? null : { ...key.group, spend_shown: false };
+      return {
+        ...key,
+        group:
+          key.account_id === "acct-or-ci" && group !== null
+            ? { ...group, key_shown: false }
+            : group,
+      };
+    });
+    const host = await open(scenario("overview", { accounts }));
+    const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
+    await expect(group).toContainText("3 keys · 1 hidden");
+    await expect(group).not.toContainText("Keys spent");
+    await expect(group.getByRole("button", { name: /^Key OpenRouter / })).toHaveCount(2);
+    // The balance is still the account's whole balance.
+    await expect(group).toContainText("$37.20");
+    await host.screenshot("group-overview-hidden");
+
+    const widget = await open(
+      scenario("widget", {
+        accounts,
+        preferences: defaultPreferences({ view: "widget" }),
+      }),
+      "#/widget",
+    );
+    await expect(widget.page.locator(".widget-tile")).toHaveCount(3);
+  });
 });

@@ -22,6 +22,9 @@ pub const PREPAID_BALANCE_VERSION: u32 = 3;
 /// The version that adds account groups.
 pub const ACCOUNT_GROUPS_VERSION: u32 = 4;
 
+/// The version that adds what a group shows: its spend line and each key.
+pub const GROUP_DISPLAY_VERSION: u32 = 5;
+
 /// Every migration, in application order.
 ///
 /// Each entry is `(version, statements)`. A statement list is executed as one
@@ -42,6 +45,10 @@ pub const MIGRATIONS: &[(u32, &str)] = &[
     (
         ACCOUNT_GROUPS_VERSION,
         include_str!("../../migrations/0004_account_groups.sql"),
+    ),
+    (
+        GROUP_DISPLAY_VERSION,
+        include_str!("../../migrations/0005_group_display.sql"),
     ),
 ];
 

@@ -31,6 +31,8 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_groups::create_account_group,
             commands_groups::set_account_group,
             commands_groups::rename_account_group,
+            commands_groups::set_group_spend_shown,
+            commands_groups::set_group_key_shown,
             commands::disconnect_account,
             commands::refresh_accounts,
             commands_connection::begin_connection,

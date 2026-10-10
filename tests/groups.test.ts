@@ -22,7 +22,7 @@ import {
 import { placeAccounts } from "../src/shared/state/order";
 import { account, keyLimit, NOW, preferences, prepaidBalance } from "./fixtures";
 
-const WORK = { id: "group-work", name: "Work" };
+const WORK = { id: "group-work", name: "Work", spend_shown: true, key_shown: true };
 
 function key(id: string, ordinal: number, readAt: string): AccountSnapshot {
   const { window, summary } = prepaidBalance();
@@ -48,6 +48,7 @@ function group(overrides: Partial<GroupSnapshot> = {}): GroupSnapshot {
     account_ids: ["a", "b"],
     balance: prepaidBalance().summary,
     key_spend: { today_minor: 150, week_minor: null, month_minor: 2010 },
+    spend_shown: true,
     ...overrides,
   };
 }
@@ -121,5 +122,15 @@ describe("account groups", () => {
     expect(tiles[1]?.rows.map((entry) => entry.tag)).toEqual(["Key"]);
     expect(tiles[1]?.rings).toHaveLength(1);
     expect(tiles[1]?.headline.value).toBe("$11.60");
+  });
+
+  it("leaves a hidden key out of the widget but keeps it in the total", () => {
+    const shown = key("a", 1, "2026-10-01T10:00:00.000Z");
+    const hidden = {
+      ...key("b", 2, "2026-10-01T11:00:00.000Z"),
+      group: { ...WORK, key_shown: false },
+    };
+    const tiles = widgetAccounts([shown, hidden], preferences(), NOW, [group()]);
+    expect(tiles.map((tile) => tile.id)).toEqual(["group:group-work", "a"]);
   });
 });

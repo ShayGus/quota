@@ -22,6 +22,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "create_account_group",
         "set_account_group",
         "rename_account_group",
+        "set_group_spend_shown",
+        "set_group_key_shown",
         "disconnect_account",
         "refresh_accounts",
         "set_monitoring_state",

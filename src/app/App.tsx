@@ -84,6 +84,12 @@ const settingsActions: SettingsActions = {
   setAccountGroup: (accountId, groupId) => {
     launch(actions.setAccountGroup(accountId, groupId));
   },
+  setGroupSpendShown: (groupId, shown) => {
+    launch(actions.setGroupSpendShown(groupId, shown));
+  },
+  setGroupKeyShown: (accountId, shown) => {
+    launch(actions.setGroupKeyShown(accountId, shown));
+  },
   renameAccountGroup: (groupId, name) => {
     launch(actions.renameAccountGroup(groupId, name));
   },

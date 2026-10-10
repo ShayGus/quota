@@ -49,7 +49,7 @@ async fn migrations_are_idempotent_on_reopen() {
             .await
             .unwrap();
 
-    assert_eq!(versions, vec![1, 2, 3, 4]);
+    assert_eq!(versions, vec![1, 2, 3, 4, 5]);
     assert_eq!(versions, again, "a reopen must not re-record a version");
     second.close().await;
 }

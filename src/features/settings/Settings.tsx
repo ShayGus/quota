@@ -59,6 +59,8 @@ export interface SettingsActions {
     groupId: AccountGroupId | null,
   ) => void;
   readonly renameAccountGroup: (groupId: AccountGroupId, name: string) => void;
+  readonly setGroupSpendShown: (groupId: AccountGroupId, shown: boolean) => void;
+  readonly setGroupKeyShown: (accountId: AccountId, shown: boolean) => void;
   readonly disconnectAccount: (accountId: AccountId) => void;
   readonly openUsagePage: (accountId: AccountId) => void;
   /**

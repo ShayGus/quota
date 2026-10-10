@@ -388,6 +388,16 @@ The overview then shows the account as one card:
 - The mini widget shows a tile for the account's balance, then a tile for each key with
   the key's name inside its ring.
 
+You choose what the group shows. On each grouped key in **Settings → Accounts**:
+
+- **Show this key in …** off leaves the key's ring out of the overview and the widget, for
+  a key you don't need to watch. The card then says how many keys are hidden. The key
+  still counts in the account's total, because the money is the account's.
+- **Show what the keys spent** off leaves out the "Keys spent" line. It applies to the
+  whole group, so it reads the same on every key of the group.
+
+<img src="images/settings-group-display.png" width="380" alt="Settings, Accounts: each grouped key's Show this key in Work and Show what the keys spent switches">
+
 OpenCode Go reports usage for the whole subscription, not per key, so its group shows the
 5-hour, weekly and monthly usage once at the top, and each key's ring shows only whether
 that key is working.
