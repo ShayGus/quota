@@ -231,7 +231,8 @@ export function viewCaption(view: WindowView, window: QuotaWindow): string {
     case "unavailable":
       return window.measurement.kind === "not_entitled" ? "not included" : "no reading";
     case "current":
-      return window.measurement.kind === "unlimited" ? "unlimited" : "left";
+      // A current reading is its number alone, with no word under it.
+      return window.measurement.kind === "unlimited" ? "unlimited" : "";
   }
 }
 

@@ -76,7 +76,7 @@ export interface WidgetRow {
   readonly kind: "share" | "amount";
   readonly period: Period;
   readonly fraction: number | null;
-  /** `41%`, `$15.00 left`, `—`. */
+  /** `41%`, `$15.00`, `—`. */
   readonly value: string;
   readonly low: boolean;
   /** When it next changes, `in 6d 2h`, or a word on why there is no number. */
@@ -327,7 +327,7 @@ function row(
     kind: gauge || (money === null && (fraction !== null || !known)) ? "share" : "amount",
     period: window.category,
     fraction,
-    value: money === null ? viewValue(view, window) : gauge ? money : `${money} left`,
+    value: money ?? viewValue(view, window),
     low: (money === null || gauge) && percent !== null && percent <= LOW_PERCENT,
     reset,
     stale: reset === "last known",
@@ -446,7 +446,7 @@ function headlineOf(
   const money = rows.find((entry) => entry.kind === "amount" && entry.value !== "—");
   if (money !== undefined) {
     return {
-      headline: { tag: "", value: money.value.replace(/ left$/, ""), low: false },
+      headline: { tag: "", value: money.value, low: false },
       row: money,
     };
   }

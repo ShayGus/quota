@@ -59,9 +59,9 @@ interface KeyReading {
   readonly severity: ReturnType<typeof viewSeverity>;
   /** The ring's centre: `58%`, or `—`. */
   readonly value: string;
-  /** The word under the value: `left`, `no limit`, `off`. */
+  /** The word under the value: none, `no limit`, `off`. */
   readonly caption: string;
-  /** The line under the ring: `$11.60 left`, `$9.00 this month`, a problem. */
+  /** The line under the ring: `$11.60`, `$9.00 this month`, a problem. */
   readonly line: string;
   /** Whether the line is a problem, drawn in the warning colour. */
   readonly problem: boolean;

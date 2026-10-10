@@ -157,13 +157,13 @@ describe("the widget's model", () => {
     expect(shown?.rings).toEqual([]);
     expect(shown?.headline.value).toBe("$17.54");
     expect(shown?.rows).toMatchObject([
-      { tag: "Credit", kind: "amount", value: "$17.54 left" },
+      { tag: "Credit", kind: "amount", value: "$17.54" },
     ]);
     const [withCap] = accountsOf(cursor);
     expect(withCap?.rows[2]).toMatchObject({
       tag: "Extra",
       kind: "amount",
-      value: "$15.00 left",
+      value: "$15.00",
     });
   });
 
@@ -301,7 +301,7 @@ describe("the widget's model", () => {
 
   it("peeks the tightest limit, an amount, or no reading", () => {
     const [first, second] = accountsOf(claude, openrouter);
-    expect(second?.peek).toBe("$17.54 left");
+    expect(second?.peek).toBe("$17.54");
     expect(first?.peek).toBe("Fable weekly resets in 2h 0m");
     const silent = account(
       "silent",
@@ -331,7 +331,7 @@ describe("the mini cards", () => {
 
   it("show money in a card as an amount", () => {
     render(<MiniCards accounts={accountsOf(openrouter)} />);
-    expect(screen.getByText("$17.54 left")).toBeTruthy();
+    expect(screen.getByText("$17.54")).toBeTruthy();
     expect(screen.queryByText(/%/)).toBeNull();
   });
 });
