@@ -35,9 +35,6 @@ pub fn install_close_handlers(app: &AppHandle) {
             tauri::WindowEvent::Moved(position) if label == super::widget::LABEL => {
                 super::widget::remember(&app, *position);
             }
-            tauri::WindowEvent::ScaleFactorChanged { .. } if label == super::widget::LABEL => {
-                super::widget_screens::check_soon(&app);
-            }
             _ => {}
         });
     }
