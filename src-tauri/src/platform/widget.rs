@@ -26,6 +26,11 @@ use crate::state::AppState;
 /// The widget window's label in `tauri.conf.json`.
 pub const LABEL: &str = "widget";
 
+/// The widget's width in logical pixels, as `tauri.conf.json` and the
+/// renderer's card have it. It never changes, so every fit sets it again,
+/// and a width a screen change left wrong is put right on the next fit.
+pub const WIDTH: f64 = 316.0;
+
 /// The gap kept between a placed widget and the edge of the work area.
 const MARGIN: f64 = 24.0;
 

@@ -3,11 +3,17 @@
 //! The widget is placed when it is shown. Unplugging a monitor, or changing a
 //! screen's resolution or scale while Quota runs, can leave it partly off
 //! every screen, cut off at an edge, until Quota restarts. So while the widget
-//! is shown, the screens are checked every few seconds and whenever the
-//! widget's own scale changes; when the widget is no longer wholly inside a
-//! screen's work area, it moves the least distance that puts it back inside
-//! the work area it overlaps most. The saved position is left as it was, so the
-//! widget goes back there as soon as its screen is there again.
+//! is shown, the screens are checked every few seconds; when the widget is no
+//! longer wholly inside a screen's work area, it moves the least distance that
+//! puts it back inside the work area it overlaps most. The saved position is
+//! left as it was, so the widget goes back there as soon as its screen is there
+//! again.
+//!
+//! The widget's own scale changing is not a change of screens: it changes
+//! whenever the person drags the widget onto a screen with another scale.
+//! Mid-drag the saved position is still where the drag began, so checking then
+//! would pull the widget back to it. A screen whose scale changes is noticed by
+//! the regular check instead.
 //!
 //! The screens change at sign-in too: Quota can start before Windows has set
 //! up every screen, so the widget is first placed on the screens there are,
@@ -31,10 +37,6 @@ const CHECK_EVERY: Duration = Duration::from_secs(2);
 
 /// How often a shown widget is put back above the other windows, in checks.
 const RAISE_EVERY_CHECKS: u32 = 3;
-
-/// How long after a scale change the widget is checked, once the window has
-/// taken its new size.
-const AFTER_SCALE_CHANGE: Duration = Duration::from_millis(300);
 
 /// Where a window at `window` must move to be wholly inside one of `areas`,
 /// or `None` when it already is, or when there are no areas to move into.
@@ -118,15 +120,6 @@ pub fn watch(app: &AppHandle) {
                 keep_on_top(&app);
             }
         }
-    });
-}
-
-/// Checks the widget shortly after its scale changed.
-pub fn check_soon(app: &AppHandle) {
-    let app = app.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(AFTER_SCALE_CHANGE);
-        check(&app);
     });
 }
 
