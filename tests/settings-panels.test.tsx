@@ -324,6 +324,7 @@ describe("account management identities", () => {
         preferences={confirmed}
         actions={actions}
         onAddAccount={vi.fn()}
+        onAddKey={vi.fn()}
       />
     );
     const { rerender } = render(panel(base));
@@ -374,6 +375,7 @@ describe("account management identities", () => {
         preferences={aliased}
         actions={actions}
         onAddAccount={vi.fn()}
+        onAddKey={vi.fn()}
       />,
     );
     expect(
@@ -387,6 +389,7 @@ describe("account management identities", () => {
         preferences={preferences()}
         actions={actions}
         onAddAccount={vi.fn()}
+        onAddKey={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole("button", { name: "Rename" }));
@@ -400,6 +403,7 @@ describe("account management identities", () => {
         preferences={aliased}
         actions={actions}
         onAddAccount={vi.fn()}
+        onAddKey={vi.fn()}
       />,
     );
     expect(field.classList.contains("masked")).toBe(true);
@@ -421,6 +425,7 @@ describe("account management identities", () => {
         preferences={preferences()}
         actions={actions}
         onAddAccount={vi.fn()}
+        onAddKey={vi.fn()}
       />,
     );
     const card = screen.getByRole("article", { name: "Manage Claude Home" });
@@ -463,6 +468,7 @@ describe("account management identities", () => {
         preferences={preferences()}
         actions={actions}
         onAddAccount={onAddAccount}
+        onAddKey={vi.fn()}
       />,
     );
     fireEvent.click(screen.getByRole("switch", { name: "Monitor Codex a1" }));

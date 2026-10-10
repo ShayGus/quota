@@ -183,6 +183,14 @@
   font-weight: 600;
 }
 
+/* A key's group, and the group's own actions beside it. */
+.account-group-controls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 12px;
+}
+
 .account-manage-actions {
   display: flex;
   align-items: center;

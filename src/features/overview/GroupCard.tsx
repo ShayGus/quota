@@ -12,6 +12,7 @@
 import type { CSSProperties, JSX } from "react";
 
 import type {
+  AccountGroupId,
   AccountId,
   AccountSnapshot,
   GroupSnapshot,
@@ -276,6 +277,7 @@ export function GroupCard({
   onOpen,
   onOpenWindow,
   onReconnect,
+  onAddKey,
 }: {
   readonly group: GroupSnapshot;
   /** The group's name, or an alias under the privacy setting. */
@@ -287,6 +289,8 @@ export function GroupCard({
   readonly onOpen: (accountId: AccountId) => void;
   readonly onOpenWindow: (accountId: AccountId, windowId: QuotaWindowId) => void;
   readonly onReconnect: (accountId: AccountId) => void;
+  /** Opens the add-account wizard on this group. */
+  readonly onAddKey: (groupId: AccountGroupId) => void;
 }): JSX.Element {
   const provider = providerLabel(group.provider_id);
   const reader = groupReader(keys.map((item) => item.account));
@@ -384,17 +388,29 @@ export function GroupCard({
       )}
       <div className="card-foot">
         <span>{reader === undefined ? "Not checked yet" : checkedLine(reader, now)}</span>
-        {reader === undefined ? null : (
+        <span className="card-foot-actions">
           <button
             type="button"
+            aria-label={`Add a key to ${provider} ${name}`}
             onClick={() => {
-              onOpen(reader.account_id);
+              onAddKey(group.id);
             }}
           >
-            Details
-            <Icon name="chevron-right" />
+            <Icon name="plus" />
+            Add key
           </button>
-        )}
+          {reader === undefined ? null : (
+            <button
+              type="button"
+              onClick={() => {
+                onOpen(reader.account_id);
+              }}
+            >
+              Details
+              <Icon name="chevron-right" />
+            </button>
+          )}
+        </span>
       </div>
     </article>
   );

@@ -256,6 +256,24 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
     }
 }
 
+/// The script that moves the settings window to `section`, under a fresh
+/// request so the same section opens anew, with the group a new key joins.
+///
+/// The group id is the renderer's, so it enters the script only as a JSON
+/// string literal, URI-encoded by the page: it can never end the string.
+fn route_script(section: &str, group: Option<&str>) -> Result<String, CommandError> {
+    let request = uuid::Uuid::new_v4();
+    let Some(group) = group else {
+        return Ok(format!(
+            "window.location.hash = '#/settings/{section}/{request}';"
+        ));
+    };
+    let literal = serde_json::to_string(group).map_err(|_| window::failed("navigate_settings"))?;
+    Ok(format!(
+        "window.location.hash = '#/settings/{section}/{request}/' + encodeURIComponent({literal});"
+    ))
+}
+
 /// Shows and focuses the settings window, placed over the overview or, when
 /// the overview is hidden, beside the tray.
 ///
@@ -273,20 +291,28 @@ pub async fn open_settings_window(
     let native = window::get(&state.app, "settings")?;
     let script = match destination {
         SettingsDestination::General => "window.location.hash = '#/settings';".to_owned(),
-        SettingsDestination::Accounts | SettingsDestination::Connect => {
-            let section = if destination == SettingsDestination::Accounts {
-                "accounts"
-            } else {
-                "connect"
-            };
-            format!(
-                "window.location.hash = '#/settings/{section}/{}';",
-                uuid::Uuid::new_v4()
-            )
+        SettingsDestination::Accounts => route_script("accounts", None)?,
+        SettingsDestination::Connect => route_script("connect", None)?,
+        SettingsDestination::AddKey { group_id } => {
+            route_script("connect", Some(group_id.as_str()))?
         }
     };
     native
         .eval(&script)
         .map_err(|_| window::failed("navigate_settings"))?;
     crate::platform::settings_window::show(&state.app)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::route_script;
+
+    #[test]
+    fn a_group_id_enters_the_settings_route_only_as_a_string() {
+        let plain = route_script("connect", None).unwrap();
+        assert!(plain.starts_with("window.location.hash = '#/settings/connect/"));
+        assert!(plain.ends_with("';"));
+        let hostile = route_script("connect", Some("x\"); alert(1); //'")).unwrap();
+        assert!(hostile.ends_with(r#"encodeURIComponent("x\"); alert(1); //'");"#));
+    }
 }

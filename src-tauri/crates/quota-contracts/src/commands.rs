@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use quota_domain::account::VerifiedIdentity;
-use quota_domain::ids::ConnectionAttemptId;
+use quota_domain::ids::{AccountGroupId, ConnectionAttemptId};
 use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::QuotaWindow;
@@ -68,6 +68,23 @@ pub struct BeginConnectionRequest {
     /// and stored like a pasted credential.
     #[serde(default)]
     pub browser_sign_in: bool,
+}
+
+/// The group a new key joins as it is added, for a provider whose account
+/// holds several keys.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum KeyGroupChoice {
+    /// An existing group of the same provider.
+    Existing {
+        /// The group to join.
+        group_id: AccountGroupId,
+    },
+    /// A new group, named by the person.
+    New {
+        /// The name of the provider account.
+        name: String,
+    },
 }
 
 /// A credential the person pasted, such as an API key.
@@ -160,7 +177,7 @@ pub enum WindowModeChange {
 }
 
 /// The settings surface requested by an overview action.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
 #[serde(rename_all = "snake_case")]
 pub enum SettingsDestination {
     /// General window and monitoring settings.
@@ -169,6 +186,11 @@ pub enum SettingsDestination {
     Accounts,
     /// Provider connection wizard.
     Connect,
+    /// The connection wizard, adding a key to one account group.
+    AddKey {
+        /// The group the new key joins.
+        group_id: AccountGroupId,
+    },
 }
 
 /// The snapshot plus the revision the renderer should reconcile against.

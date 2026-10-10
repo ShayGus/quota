@@ -38,10 +38,11 @@ pub async fn confirm_connection(
     state: State<'_, AppState>,
     attempt_ref: AttemptRef,
     nickname: String,
+    group: Option<quota_contracts::commands::KeyGroupChoice>,
 ) -> Result<(), CommandError> {
     state
         .monitor
-        .confirm_connection(attempt_ref.id(), nickname)
+        .confirm_connection(attempt_ref.id(), nickname, group)
         .await
 }
 

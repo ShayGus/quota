@@ -9,6 +9,7 @@
 import { useState, type JSX } from "react";
 
 import type {
+  AccountGroupId,
   AccountId,
   AccountSnapshot,
   GroupSnapshot,
@@ -60,6 +61,7 @@ function GroupChoice({
   alias,
   actions,
   onPending,
+  onAddKey,
 }: {
   readonly account: AccountSnapshot;
   readonly label: string;
@@ -68,6 +70,7 @@ function GroupChoice({
   readonly alias: string;
   readonly actions: SettingsActions;
   readonly onPending: (pending: Pending) => void;
+  readonly onAddKey: (groupId: AccountGroupId) => void;
 }): JSX.Element {
   const provider = providerLabel(account.provider_id);
   const choices = groups.filter((group) => group.provider_id === account.provider_id);
@@ -102,6 +105,17 @@ function GroupChoice({
             ))}
             <option value={NEW_GROUP}>New group…</option>
           </select>
+          {current === undefined ? null : (
+            <button
+              type="button"
+              className="text-btn"
+              onClick={() => {
+                onAddKey(current.id);
+              }}
+            >
+              Add key
+            </button>
+          )}
           {current === undefined ? null : (
             <button
               type="button"
@@ -175,6 +189,7 @@ function ManagedAccount({
   preferences,
   actions,
   onPending,
+  onAddKey,
 }: {
   readonly account: AccountSnapshot;
   readonly label: string;
@@ -183,6 +198,7 @@ function ManagedAccount({
   readonly preferences: Preferences | null;
   readonly actions: SettingsActions;
   readonly onPending: (pending: Pending) => void;
+  readonly onAddKey: (groupId: AccountGroupId) => void;
 }): JSX.Element {
   const provider = providerLabel(account.provider_id);
   const windows = account.windows.length;
@@ -244,6 +260,7 @@ function ManagedAccount({
           alias={alias}
           actions={actions}
           onPending={onPending}
+          onAddKey={onAddKey}
         />
       ) : null}
       <div className="account-manage-actions">
@@ -454,6 +471,7 @@ export function AccountsPanel({
   preferences,
   actions,
   onAddAccount,
+  onAddKey,
 }: {
   readonly accounts: readonly AccountSnapshot[];
   /** The account groups, for the group choice of each key. */
@@ -462,6 +480,8 @@ export function AccountsPanel({
   readonly actions: SettingsActions;
   /** Opens the add-account page of this window. */
   readonly onAddAccount: () => void;
+  /** Opens the add-account page, adding a key to one group. */
+  readonly onAddKey: (groupId: AccountGroupId) => void;
 }): JSX.Element {
   const [pending, setPending] = useState<Pending | null>(null);
   const aliasOf = (id: AccountId): string => accountLabel(preferences, accounts, id);
@@ -496,6 +516,7 @@ export function AccountsPanel({
             preferences={preferences}
             actions={actions}
             onPending={setPending}
+            onAddKey={onAddKey}
           />
         ))
       )}

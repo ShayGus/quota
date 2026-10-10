@@ -218,3 +218,25 @@ fn a_key_is_hidden_in_its_group_and_shown_again_when_it_rejoins() {
         .unwrap_err();
     assert!(matches!(error, CoreError::Validation { .. }));
 }
+
+#[test]
+fn a_new_key_joins_an_existing_group_of_its_provider_shown() {
+    let mut registry = registry();
+    registry
+        .create_group(group_id("g"), "Work", &[id("personal")])
+        .unwrap();
+    registry
+        .set_group_key_shown(&id("personal"), false)
+        .unwrap();
+    let joined = registry
+        .group_to_join(&group_id("g"), ProviderId::Openrouter)
+        .unwrap();
+    assert_eq!(joined.name, "Work");
+    assert!(joined.key_shown);
+    for refused in [
+        registry.group_to_join(&group_id("g"), ProviderId::Claude),
+        registry.group_to_join(&group_id("missing"), ProviderId::Openrouter),
+    ] {
+        assert!(matches!(refused, Err(CoreError::Validation { .. })));
+    }
+}

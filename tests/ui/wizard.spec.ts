@@ -54,6 +54,8 @@ test.describe("add-account wizard", () => {
     expect((await host.callsTo("confirm_connection")).at(-1)?.args).toEqual({
       attemptRef: { id: "attempt-1" },
       nickname: "Night shift",
+      // Codex keeps one sign-in per account, so it is never grouped.
+      group: null,
     });
     const begin = (await host.callsTo("begin_connection")).at(-1)?.args as {
       request: { provider_id: string; credential: unknown };

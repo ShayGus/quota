@@ -154,7 +154,11 @@ describe("Provider → Connect → Verify", () => {
       target: { value: "  Work  " },
     });
     await act(() => fireEvent.click(add));
-    expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Work");
+    expect(actions.confirmConnection).toHaveBeenCalledWith(
+      { id: "attempt-1" },
+      "Work",
+      null,
+    );
     expect(onDone).toHaveBeenCalledWith(true);
     expect(actions.cancelConnection).not.toHaveBeenCalled();
     expect(actions.disconnectAccount).not.toHaveBeenCalled();
@@ -346,7 +350,11 @@ describe("Provider → Connect → Verify", () => {
     // Typing still works, and the typed nickname is what is saved.
     fireEvent.change(field, { target: { value: "Secret" } });
     await act(() => fireEvent.click(screen.getByRole("button", ADD)));
-    expect(actions.confirmConnection).toHaveBeenCalledWith({ id: "attempt-1" }, "Secret");
+    expect(actions.confirmConnection).toHaveBeenCalledWith(
+      { id: "attempt-1" },
+      "Secret",
+      null,
+    );
     aliases("off");
   });
 
@@ -786,6 +794,7 @@ describe("the connection commands", () => {
     expect(invoke).toHaveBeenCalledWith("confirm_connection", {
       attemptRef: { id: "attempt-1" },
       nickname: "Work",
+      group: null,
     });
     expect(invoke).toHaveBeenCalledWith("get_snapshot");
     expect(getRendererState().snapshot).toEqual(saved);
@@ -800,6 +809,7 @@ describe("the connection commands", () => {
     expect(invoke).toHaveBeenCalledExactlyOnceWith("confirm_connection", {
       attemptRef: { id: "attempt-1" },
       nickname: "Work",
+      group: null,
     });
   });
 

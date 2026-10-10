@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 use chrono::{DateTime, Utc};
 use quota_contracts::CommandError;
-use quota_contracts::commands::{BeginConnectionRequest, VerifiedCandidate};
+use quota_contracts::commands::{BeginConnectionRequest, KeyGroupChoice, VerifiedCandidate};
 use quota_contracts::events::ConnectionProgress;
 use quota_core::ports::{ConnectionBinding, DiscoveredAccount, ProviderAdapter, QuotaRead};
 use quota_domain::account::ConnectionState;
@@ -22,11 +22,13 @@ use super::MonitoringRuntime;
 use super::connection::AttemptReporter;
 use super::worker::publish_snapshot;
 
-/// The fresh identities one verified candidate is committed under.
+/// The fresh identities one verified candidate is committed under, and the
+/// group it joins, chosen when it is confirmed.
 pub(super) struct CandidateIds {
     connection_id: ConnectionId,
     account_id: AccountId,
     pub(super) binding: ConnectionBinding,
+    group: Option<quota_domain::group::AccountGroup>,
 }
 
 /// When the verifying read was sent and when its answer arrived, so the saved
@@ -121,6 +123,7 @@ pub(super) fn candidate_binding(
         connection_id,
         account_id,
         binding,
+        group: None,
     }
 }
 
@@ -150,6 +153,7 @@ pub(super) async fn commit_pending(
     runtime: &MonitoringRuntime,
     attempt_id: &ConnectionAttemptId,
     nickname: String,
+    group: Option<KeyGroupChoice>,
 ) -> Result<(), CommandError> {
     let _connection_gate = runtime.connection_gate.lock().await;
     let Some(pending) = runtime.pending.take(attempt_id).await else {
@@ -159,15 +163,17 @@ pub(super) async fn commit_pending(
     let PendingConnection {
         candidate,
         mut request,
-        ids,
+        mut ids,
         read,
         timestamps,
         reporter,
     } = pending;
     request.nickname = nickname;
-    if let Err(error) =
+    let committed = async {
+        ids.group = group_of_new_key(runtime, ids.binding.provider_id, group).await?;
         commit_with_credential(runtime, candidate, &request, ids, read, timestamps).await
-    {
+    };
+    if let Err(error) = committed.await {
         // The candidate is spent either way, so the wizard returns to the
         // connect step with the typed reason rather than a dead Add button.
         reporter
@@ -266,7 +272,7 @@ async fn commit_candidate(
         expected_but_missing_window_ids: read.expected_but_missing,
         balance,
         show_key_limit: false,
-        group: None,
+        group: ids.group,
     };
     let new_account = quota_core::accounts::NewAccount {
         account_id: ids.account_id.clone(),
@@ -309,6 +315,34 @@ async fn commit_candidate(
         });
     }
     Ok(())
+}
+
+/// The group a new key joins: none, an existing one of its provider, or a
+/// new one.
+async fn group_of_new_key(
+    runtime: &MonitoringRuntime,
+    provider: quota_domain::provider::ProviderId,
+    choice: Option<KeyGroupChoice>,
+) -> Result<Option<quota_domain::group::AccountGroup>, CommandError> {
+    let group = match choice {
+        None => return Ok(None),
+        Some(KeyGroupChoice::Existing { group_id }) => runtime
+            .state
+            .registry
+            .read()
+            .await
+            .group_to_join(&group_id, provider)
+            .map_err(core_command_error)?,
+        Some(KeyGroupChoice::New { name }) => quota_domain::group::AccountGroup::new(
+            quota_domain::ids::AccountGroupId::generate(),
+            &name,
+        )
+        .map_err(|_| CommandError::ValidationFailed {
+            field: "group name".into(),
+            reason: "the group name is blank or too long".into(),
+        })?,
+    };
+    Ok(Some(group))
 }
 
 fn core_command_error(error: quota_core::CoreError) -> CommandError {

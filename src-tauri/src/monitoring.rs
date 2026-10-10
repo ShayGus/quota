@@ -334,11 +334,13 @@ impl MonitoringRuntime {
     /// Saves the verified candidate one attempt is holding, then starts it.
     ///
     /// This is the only step that persists a new account, so a candidate that
-    /// is never confirmed leaves storage untouched.
+    /// is never confirmed leaves storage untouched. A key can join a group as
+    /// it is saved, so it is never seen ungrouped.
     pub async fn confirm_connection(
         &self,
         attempt_id: &ConnectionAttemptId,
         nickname: String,
+        group: Option<quota_contracts::commands::KeyGroupChoice>,
     ) -> Result<(), quota_contracts::CommandError> {
         // Checked before the candidate is taken, so a rejected name leaves the
         // candidate waiting for a corrected one.
@@ -350,7 +352,16 @@ impl MonitoringRuntime {
                 reason: "the nickname is blank or too long".into(),
             });
         }
-        confirm::commit_pending(self, attempt_id, nickname).await
+        // Checked before the candidate is taken, like the nickname.
+        if let Some(quota_contracts::commands::KeyGroupChoice::New { name }) = &group {
+            quota_domain::group::group_name(name).map_err(|_| {
+                quota_contracts::CommandError::ValidationFailed {
+                    field: "group name".into(),
+                    reason: "the group name is blank or too long".into(),
+                }
+            })?;
+        }
+        confirm::commit_pending(self, attempt_id, nickname, group).await
     }
 
     /// Deletes the browser profile a website sign-in keeps for `provider`,

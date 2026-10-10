@@ -54,6 +54,7 @@ function Harness(): React.ReactElement {
       onResume={() => undefined}
       onReconnect={calls.reconnect}
       onEnable={calls.enable}
+      onAddKey={() => undefined}
     />
   );
 }

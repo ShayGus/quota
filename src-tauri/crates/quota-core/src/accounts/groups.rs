@@ -3,6 +3,7 @@
 
 use quota_domain::group::{AccountGroup, group_name};
 use quota_domain::ids::{AccountGroupId, AccountId};
+use quota_domain::provider::ProviderId;
 
 use super::AccountRegistry;
 use crate::error::CoreError;
@@ -57,33 +58,42 @@ impl AccountRegistry {
         let provider = self.provider_of(account_id)?;
         let group = match group_id {
             None => None,
-            Some(group_id) => {
-                let member = self
-                    .accounts
-                    .values()
-                    .find(|entry| {
-                        entry
-                            .stored
-                            .group
-                            .as_ref()
-                            .is_some_and(|group| &group.id == group_id)
-                    })
-                    .ok_or(CoreError::Validation {
-                        field: "group",
-                        reason: "no such group",
-                    })?;
-                if member.stored.connection.provider_id != provider {
-                    return Err(mixed_providers());
-                }
-                // A key joins shown, whatever the member it was copied from.
-                member.stored.group.clone().map(|group| AccountGroup {
-                    key_shown: true,
-                    ..group
-                })
-            }
+            Some(group_id) => Some(self.group_to_join(group_id, provider)?),
         };
         self.entry_mut(account_id)?.stored.group = group;
         Ok(())
+    }
+
+    /// The group a key of `provider` joins as `group_id`, shown.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::Validation`] for an unknown group or one of
+    /// another provider.
+    pub fn group_to_join(
+        &self,
+        group_id: &AccountGroupId,
+        provider: ProviderId,
+    ) -> Result<AccountGroup, CoreError> {
+        let member = self
+            .accounts
+            .values()
+            .find(|entry| {
+                entry
+                    .stored
+                    .group
+                    .as_ref()
+                    .is_some_and(|group| &group.id == group_id)
+            })
+            .ok_or_else(no_such_group)?;
+        if member.stored.connection.provider_id != provider {
+            return Err(mixed_providers());
+        }
+        let group = member.stored.group.clone().ok_or_else(no_such_group)?;
+        // A key joins shown, whatever the member it was copied from.
+        Ok(AccountGroup {
+            key_shown: true,
+            ..group
+        })
     }
 
     /// Renames a group. Returns its members, so the caller can save each.

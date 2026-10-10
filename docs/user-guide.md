@@ -363,16 +363,20 @@ operating system, the view and the provider names, such as `claude` or `codex`.
 ### Several keys of one account
 
 OpenRouter and OpenCode Go let one account hold several API keys, such as one for you, one
-for CI and one for an agent. Add each key as its own account, then put them in one group:
+for CI and one for an agent. Each key is added as its own account and put in a group, the
+provider account it belongs to:
 
-1. In **Settings → Accounts**, open **Account group** on one key and choose **New
-   group…**. Name the account, for example **Work**.
-2. On each other key of that account, choose the same group.
+- **While adding a key:** on the wizard's last step, **Account group** puts the key in an
+  existing group, or in a **New group…** you name, for example **Work**.
+- **From the group:** **Add key** on the group's card, or beside its name in **Settings →
+  Accounts**, opens the wizard with that group already chosen.
+- **For keys you already have:** in **Settings → Accounts**, open **Account group** on a
+  key and choose the group, or **New group…**.
 
 <table>
   <tr>
-    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account card: a $37.20 balance ring and what its keys spent, then a ring for each of the Personal, CI and Agent keys"><br><sub>One account, three keys</sub></td>
-    <td valign="top" width="50%"><img src="images/settings-account-group.png" alt="Settings, Accounts: the Account group of each key"><br><sub>Choosing a key's group</sub></td>
+    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account card: a $37.20 balance ring and what its keys spent, then a ring for each of the Personal, CI and Agent keys, with Add key in its footer"><br><sub>One account, three keys</sub></td>
+    <td valign="top" width="50%"><img src="images/wizard-key-group.png" alt="The wizard's last step: the new key's nickname and its Account group, Work"><br><sub>Adding a key to a group</sub></td>
   </tr>
 </table>
 

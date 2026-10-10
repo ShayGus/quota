@@ -257,6 +257,7 @@ describe("refresh timing", () => {
         onOpenWindow={() => undefined}
         onReconnect={() => undefined}
         onEnable={() => undefined}
+        onAddKey={() => undefined}
       />,
     );
     expect(screen.queryByText(/Manual refreshes.*are deferred/)).toBeNull();
