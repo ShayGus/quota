@@ -302,6 +302,11 @@ export type AccountSnapshot = {
 	order: AccountOrder,
 	/**  A prepaid balance, measured from its last top-up, when the account has one. */
 	balance: BalanceSummary | null,
+	/**
+	 *  What the account's API key spent in the current periods, when its
+	 *  provider reports it.
+	 */
+	key_spend: KeySpend | null,
 	/**  Whether the card shows the account's API key spend limit. */
 	show_key_limit: boolean,
 	/**  The provider account this account belongs to, when it is grouped. */
@@ -384,8 +389,6 @@ export type BalanceSummary = {
 	top_ups: TopUp[],
 	/**  The spending pace, when there is enough history and some spending. */
 	runway: Runway | null,
-	/**  What the key spent in the current periods, when reported. */
-	key_spend: PeriodSpend | null,
 	/**  The active credit grants, soonest to expire first. */
 	credits: CreditGrant[],
 	/**  What the account spent in its current cycle, when reported. */
@@ -789,7 +792,7 @@ export type GroupSnapshot = {
 	 *  What every member key spent together, per period any member reports.
 	 *  Every key counts, shown or not, because the spend is the account's.
 	 */
-	key_spend: PeriodSpend | null,
+	key_spend: KeySpend | null,
 	/**  Whether the group shows what its keys spent together. */
 	spend_shown: boolean,
 };
@@ -814,6 +817,20 @@ group_id: AccountGroupId } |
 { kind: "new"; 
 /**  The name of the provider account. */
 name: string };
+
+/**
+ *  What one API key spent in the current calendar periods, in its own
+ *  currency. A key reports it whether or not it may read the account's
+ *  balance, so it is the account's own reading, not part of the balance.
+ */
+export type KeySpend = {
+	/**  The currency of every amount. */
+	currency: CurrencyCode,
+	/**  Decimal places in one major unit, for example 2 for cents. */
+	scale: number,
+	/**  What was spent in each period. */
+	periods: PeriodSpend,
+};
 
 /**  What happens at login. */
 export type LaunchBehavior = 

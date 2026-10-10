@@ -20,6 +20,13 @@ fn map_error(error: &crate::PersistenceError) -> RepositoryError {
     RepositoryError::new("sqlite", error.to_string())
 }
 
+/// What one account keeps beside its row.
+struct AccountExtras {
+    balance: Option<quota_domain::balance::BalanceLedger>,
+    key_spend: Option<quota_domain::balance::KeySpend>,
+    group: Option<quota_domain::group::AccountGroup>,
+}
+
 /// Implements the account and history ports over one migrated `SQLite` pool.
 #[derive(Clone, Debug)]
 pub struct SqliteAccountPortAdapter {
@@ -31,6 +38,26 @@ impl SqliteAccountPortAdapter {
     #[must_use]
     pub const fn new(repositories: SqliteRepositories) -> Self {
         Self { repositories }
+    }
+
+    /// The state an account keeps beside its row: its prepaid-balance
+    /// ledger, its key's spend and its group.
+    async fn extras(&self, account_id: &AccountId) -> Result<AccountExtras, RepositoryError> {
+        let accounts = self.repositories.accounts();
+        Ok(AccountExtras {
+            balance: accounts
+                .balance_ledger(account_id)
+                .await
+                .map_err(|e| map_error(&e))?,
+            key_spend: accounts
+                .key_spend(account_id)
+                .await
+                .map_err(|e| map_error(&e))?,
+            group: accounts
+                .group_of(account_id)
+                .await
+                .map_err(|e| map_error(&e))?,
+        })
     }
 
     async fn stored_accounts(&self) -> Result<Vec<StoredAccount>, RepositoryError> {
@@ -63,18 +90,11 @@ impl SqliteAccountPortAdapter {
                     _ => None,
                 })
                 .collect();
-            let balance = self
-                .repositories
-                .accounts()
-                .balance_ledger(&record.id)
-                .await
-                .map_err(|e| map_error(&e))?;
-            let group = self
-                .repositories
-                .accounts()
-                .group_of(&record.id)
-                .await
-                .map_err(|e| map_error(&e))?;
+            let AccountExtras {
+                balance,
+                key_spend,
+                group,
+            } = self.extras(&record.id).await?;
             accounts.push(StoredAccount {
                 account_id: record.id,
                 connection: ConnectionSummary {
@@ -101,6 +121,7 @@ impl SqliteAccountPortAdapter {
                 windows,
                 expected_but_missing_window_ids,
                 balance,
+                key_spend,
                 show_key_limit: record.show_key_limit,
                 group,
             });
@@ -209,7 +230,8 @@ async fn store_account_row(
     .map_err(|e| map_error(&e))
 }
 
-/// The account's prepaid-balance ledger, its key-limit switch and its group.
+/// The account's prepaid-balance ledger, its key's spend, its key-limit
+/// switch and its group.
 async fn store_balance(
     transaction: &mut Transaction<'_>,
     account: &StoredAccount,
@@ -225,6 +247,13 @@ async fn store_balance(
         &mut **transaction,
         &account.account_id,
         account.balance.as_ref(),
+    )
+    .await
+    .map_err(|e| map_error(&e))?;
+    AccountRepository::set_key_spend_on(
+        &mut **transaction,
+        &account.account_id,
+        account.key_spend.as_ref(),
     )
     .await
     .map_err(|e| map_error(&e))?;
@@ -355,6 +384,7 @@ impl AccountPort for SqliteAccountPortAdapter {
             expected_but_missing_window_ids: account.expected_but_missing_window_ids,
             order,
             balance: account.balance.as_ref().map(|ledger| ledger.summary(now)),
+            key_spend: account.key_spend,
             show_key_limit: account.show_key_limit,
             group: account.group,
         }))

@@ -59,6 +59,7 @@ fn key(id: &str, ordinal: u32, group: Option<AccountGroup>) -> StoredAccount {
         windows: Vec::new(),
         expected_but_missing_window_ids: Vec::new(),
         balance: None,
+        key_spend: None,
         show_key_limit: false,
         group,
     }

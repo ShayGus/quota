@@ -239,6 +239,21 @@ impl AccountRegistry {
         Ok(())
     }
 
+    /// Records what the account's key spent, as the latest reading reports
+    /// it. A reading that reports none clears it, so a stale amount is never
+    /// shown as current.
+    ///
+    /// # Errors
+    /// Returns [`CoreError::AccountNotFound`] for an unknown identity.
+    pub fn record_key_spend(
+        &mut self,
+        account_id: &AccountId,
+        spent: Option<quota_domain::balance::KeySpend>,
+    ) -> Result<(), CoreError> {
+        self.entry_mut(account_id)?.stored.key_spend = spent;
+        Ok(())
+    }
+
     /// Shows or hides one account's API key spend limit.
     ///
     /// # Errors

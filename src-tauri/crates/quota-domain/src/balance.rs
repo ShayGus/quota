@@ -48,8 +48,6 @@ pub struct BalanceReading {
     pub loaded_minor: i64,
     /// Everything ever spent.
     pub spent_minor: i64,
-    /// What the key spent in the current calendar periods, when reported.
-    pub key_spend: Option<PeriodSpend>,
     /// The active credit grants, for a provider that lists them. When any are
     /// listed, the balance is measured from their sum.
     pub credits: Vec<CreditGrant>,
@@ -106,6 +104,19 @@ pub struct PeriodSpend {
     /// Spent in the current UTC month.
     #[specta(type = Option<f64>)]
     pub month_minor: Option<i64>,
+}
+
+/// What one API key spent in the current calendar periods, in its own
+/// currency. A key reports it whether or not it may read the account's
+/// balance, so it is the account's own reading, not part of the balance.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct KeySpend {
+    /// The currency of every amount.
+    pub currency: CurrencyCode,
+    /// Decimal places in one major unit, for example 2 for cents.
+    pub scale: u8,
+    /// What was spent in each period.
+    pub periods: PeriodSpend,
 }
 
 /// What the balance is measured from.
@@ -165,8 +176,6 @@ pub struct BalanceLedger {
     pub top_ups: Vec<TopUp>,
     /// Spending samples over the pace period, oldest first.
     pub samples: Vec<SpendSample>,
-    /// What the key spent in the current periods, at the last reading.
-    pub key_spend: Option<PeriodSpend>,
     /// The active credit grants, at the last reading.
     #[serde(default)]
     pub credits: Vec<CreditGrant>,
@@ -212,8 +221,6 @@ pub struct BalanceSummary {
     pub top_ups: Vec<TopUp>,
     /// The spending pace, when there is enough history and some spending.
     pub runway: Option<Runway>,
-    /// What the key spent in the current periods, when reported.
-    pub key_spend: Option<PeriodSpend>,
     /// The active credit grants, soonest to expire first.
     pub credits: Vec<CreditGrant>,
     /// What the account spent in its current cycle, when reported.
@@ -251,7 +258,6 @@ impl BalanceLedger {
                     at: now,
                     spent_minor: reading.spent_minor,
                 }],
-                key_spend: reading.key_spend,
                 credits: Vec::new(),
                 cycle_spend: None,
             }
@@ -260,7 +266,6 @@ impl BalanceLedger {
         let mut next = previous.clone();
         next.loaded_minor = reading.loaded_minor;
         next.spent_minor = reading.spent_minor;
-        next.key_spend = reading.key_spend;
         if reading.loaded_minor > previous.loaded_minor {
             let amount = reading.loaded_minor - previous.loaded_minor;
             let balance_after = previous.balance_minor().saturating_add(amount);
@@ -372,7 +377,6 @@ impl BalanceLedger {
             spent_minor: self.spent_minor,
             top_ups: self.top_ups.clone(),
             runway: self.runway(now),
-            key_spend: self.key_spend,
             credits: self.credits.clone(),
             cycle_spend: self.cycle_spend.clone(),
         }

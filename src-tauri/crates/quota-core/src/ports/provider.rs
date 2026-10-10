@@ -163,6 +163,9 @@ pub struct QuotaRead {
     /// What the provider reported about a prepaid balance, when the account
     /// has one. The host measures it from the last top-up it saw.
     pub balance: Option<quota_domain::balance::BalanceReading>,
+    /// What the API key spent in the current periods, for a provider that
+    /// reports it, whether or not the key may read the balance.
+    pub key_spend: Option<quota_domain::balance::KeySpend>,
     /// Provider-specific metadata for local diagnostics only. It never carries
     /// a token, cookie, or unrelated account content.
     pub debug_metadata: Option<serde_json::Value>,

@@ -241,6 +241,9 @@ pub(super) async fn commit_reading(
             .apply_reading(&request.account_id, windows, expected_missing)
             .map_err(|error| error.to_string())?;
         registry
+            .record_key_spend(&request.account_id, read.key_spend.clone())
+            .map_err(|error| error.to_string())?;
+        registry
             .set_identity(&request.account_id, identity)
             .map_err(|error| error.to_string())?;
         // A reconnect is only finished when a read is accepted, so a successful

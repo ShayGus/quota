@@ -61,6 +61,8 @@ pub(crate) struct DecodedUsage {
     pub principal_label: Option<String>,
     /// What the payload said about a prepaid balance, when it had one.
     pub balance: Option<quota_domain::balance::BalanceReading>,
+    /// What the API key spent in the current periods, when the payload said.
+    pub key_spend: Option<quota_domain::balance::KeySpend>,
 }
 
 impl DecodedUsage {
@@ -73,6 +75,7 @@ impl DecodedUsage {
             plan_label: None,
             principal_label: None,
             balance: None,
+            key_spend: None,
         }
     }
 
@@ -91,6 +94,7 @@ impl DecodedUsage {
             windows: self.windows,
             expected_but_missing: self.expected_but_missing,
             balance: self.balance,
+            key_spend: self.key_spend,
             debug_metadata: None,
         };
         if complete {

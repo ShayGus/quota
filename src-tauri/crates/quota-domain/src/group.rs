@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use crate::account::MAX_NICKNAME_LEN;
-use crate::balance::{BalanceSummary, PeriodSpend};
+use crate::balance::{BalanceSummary, KeySpend, PeriodSpend};
 use crate::error::DomainError;
 use crate::ids::{AccountGroupId, AccountId};
 use crate::provider::ProviderId;
@@ -89,7 +89,7 @@ pub struct GroupSnapshot {
     pub balance: Option<BalanceSummary>,
     /// What every member key spent together, per period any member reports.
     /// Every key counts, shown or not, because the spend is the account's.
-    pub key_spend: Option<PeriodSpend>,
+    pub key_spend: Option<KeySpend>,
     /// Whether the group shows what its keys spent together.
     pub spend_shown: bool,
 }
@@ -141,23 +141,31 @@ fn latest_balance(members: &[&AccountSnapshot]) -> Option<BalanceSummary> {
         .and_then(|account| account.balance.clone())
 }
 
-/// What the members spent together, per period. A period no member reports
-/// stays unreported rather than reading as nothing spent.
-fn total_spend(members: &[&AccountSnapshot]) -> Option<PeriodSpend> {
+/// What the members spent together, per period, whether or not each key may
+/// read the balance. A period no member reports stays unreported rather than
+/// reading as nothing spent. Only amounts in the first reporting key's
+/// currency and scale are added, so two currencies are never summed.
+fn total_spend(members: &[&AccountSnapshot]) -> Option<KeySpend> {
+    let first = members
+        .iter()
+        .find_map(|account| account.key_spend.as_ref())?;
     let spends: Vec<PeriodSpend> = members
         .iter()
-        .filter_map(|account| account.balance.as_ref()?.key_spend)
+        .filter_map(|account| account.key_spend.as_ref())
+        .filter(|spend| spend.currency == first.currency && spend.scale == first.scale)
+        .map(|spend| spend.periods)
         .collect();
-    if spends.is_empty() {
-        return None;
-    }
     let sum = |period: fn(&PeriodSpend) -> Option<i64>| {
         spends.iter().filter_map(period).reduce(i64::saturating_add)
     };
-    Some(PeriodSpend {
-        today_minor: sum(|spend| spend.today_minor),
-        week_minor: sum(|spend| spend.week_minor),
-        month_minor: sum(|spend| spend.month_minor),
+    Some(KeySpend {
+        currency: first.currency.clone(),
+        scale: first.scale,
+        periods: PeriodSpend {
+            today_minor: sum(|spend| spend.today_minor),
+            week_minor: sum(|spend| spend.week_minor),
+            month_minor: sum(|spend| spend.month_minor),
+        },
     })
 }
 
@@ -180,7 +188,7 @@ mod tests {
         AccountGroup::new(AccountGroupId::new(id).unwrap(), "Work").unwrap()
     }
 
-    fn balance(balance_minor: i64, spend: Option<PeriodSpend>) -> BalanceSummary {
+    fn balance(balance_minor: i64) -> BalanceSummary {
         BalanceSummary {
             currency: CurrencyCode::new("USD").unwrap(),
             scale: 2,
@@ -192,17 +200,27 @@ mod tests {
             spent_minor: 5_000 - balance_minor,
             top_ups: Vec::new(),
             runway: None,
-            key_spend: spend,
             credits: Vec::new(),
             cycle_spend: None,
         }
     }
 
-    fn spend(today: i64, week: Option<i64>) -> PeriodSpend {
-        PeriodSpend {
-            today_minor: Some(today),
-            week_minor: week,
-            month_minor: None,
+    fn spend(today: i64, week: Option<i64>) -> KeySpend {
+        KeySpend {
+            currency: CurrencyCode::new("USD").unwrap(),
+            scale: 2,
+            periods: PeriodSpend {
+                today_minor: Some(today),
+                week_minor: week,
+                month_minor: None,
+            },
+        }
+    }
+
+    fn spending(account: AccountSnapshot, spent: KeySpend) -> AccountSnapshot {
+        AccountSnapshot {
+            key_spend: Some(spent),
+            ..account
         }
     }
 
@@ -233,6 +251,7 @@ mod tests {
                 rule_version: 1,
             }),
             balance,
+            key_spend: None,
             show_key_limit: false,
             group,
         }
@@ -264,31 +283,39 @@ mod tests {
 
     #[test]
     fn the_balance_is_taken_once_from_the_newest_read_never_added_up() {
-        let older = key("a", Some(group("g")), 1, Some(balance(4_000, None)));
-        let newer = key("b", Some(group("g")), 3, Some(balance(3_900, None)));
+        let older = key("a", Some(group("g")), 1, Some(balance(4_000)));
+        let newer = key("b", Some(group("g")), 3, Some(balance(3_900)));
         let groups = group_snapshots(&[&older, &newer]);
         assert_eq!(groups[0].balance.as_ref().unwrap().balance_minor, 3_900);
     }
 
     #[test]
     fn key_spend_adds_up_per_period_and_an_unreported_period_stays_unreported() {
-        let a = key(
-            "a",
-            Some(group("g")),
-            1,
-            Some(balance(4_000, Some(spend(120, Some(900))))),
+        let a = spending(
+            key("a", Some(group("g")), 1, Some(balance(4_000))),
+            spend(120, Some(900)),
         );
-        let b = key(
-            "b",
-            Some(group("g")),
-            2,
-            Some(balance(4_000, Some(spend(30, None)))),
-        );
+        // A key that may not read the balance still counts what it spent.
+        let b = spending(key("b", Some(group("g")), 2, None), spend(30, None));
         let groups = group_snapshots(&[&a, &b]);
-        let total = groups[0].key_spend.unwrap();
-        assert_eq!(total.today_minor, Some(150));
-        assert_eq!(total.week_minor, Some(900));
-        assert_eq!(total.month_minor, None);
+        let total = groups[0].key_spend.clone().unwrap();
+        assert_eq!(total.currency.as_str(), "USD");
+        assert_eq!(total.periods.today_minor, Some(150));
+        assert_eq!(total.periods.week_minor, Some(900));
+        assert_eq!(total.periods.month_minor, None);
+    }
+
+    #[test]
+    fn spend_in_another_currency_is_never_added() {
+        let a = spending(key("a", Some(group("g")), 1, None), spend(100, None));
+        let euros = KeySpend {
+            currency: CurrencyCode::new("EUR").unwrap(),
+            ..spend(50, None)
+        };
+        let b = spending(key("b", Some(group("g")), 2, None), euros);
+        let groups = group_snapshots(&[&a, &b]);
+        let total = groups[0].key_spend.clone().unwrap();
+        assert_eq!(total.periods.today_minor, Some(100));
     }
 
     #[test]

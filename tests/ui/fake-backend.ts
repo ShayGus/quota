@@ -133,21 +133,30 @@ export function groupsOf(accounts: readonly AccountSnapshot[]): GroupSnapshot[] 
       .filter((account) => account.balance !== null)
       .sort((a, b) => (b.last_success_at ?? "").localeCompare(a.last_success_at ?? ""));
     group.balance = withBalance[0]?.balance ?? null;
+    // Every key counts, whether or not it may read the balance.
     const spends = members.flatMap((account) =>
-      account.balance?.key_spend == null ? [] : [account.balance.key_spend],
+      account.key_spend === null ? [] : [account.key_spend],
     );
-    if (spends.length > 0) {
+    const first = spends[0];
+    if (first !== undefined) {
+      const same = spends.filter(
+        (spend) => spend.currency === first.currency && spend.scale === first.scale,
+      );
       const sum = (period: keyof PeriodSpend): number | null => {
-        const values = spends.flatMap((spend) => {
-          const value = spend[period];
+        const values = same.flatMap((spend) => {
+          const value = spend.periods[period];
           return value === null ? [] : [value];
         });
         return values.length === 0 ? null : values.reduce((a, b) => a + b, 0);
       };
       group.key_spend = {
-        today_minor: sum("today_minor"),
-        week_minor: sum("week_minor"),
-        month_minor: sum("month_minor"),
+        currency: first.currency,
+        scale: first.scale,
+        periods: {
+          today_minor: sum("today_minor"),
+          week_minor: sum("week_minor"),
+          month_minor: sum("month_minor"),
+        },
       };
     }
   }
@@ -613,6 +622,7 @@ function confirmedAccount(
     windows: held.windows,
     expected_but_missing_window_ids: [],
     balance: null,
+    key_spend: null,
     show_key_limit: false,
     group: null,
     order: {

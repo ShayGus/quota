@@ -6,7 +6,7 @@
  */
 import type { JSX } from "react";
 
-import type { BalanceSummary, QuotaWindow } from "../../generated/bindings";
+import type { BalanceSummary, KeySpend, QuotaWindow } from "../../generated/bindings";
 import { remainingPercent } from "../../shared/format/allowance";
 import {
   baselineLine,
@@ -70,6 +70,34 @@ export function balanceMeasurement(balance: BalanceSummary): string {
   return `${spent} spent / ${left} left of ${of}`;
 }
 
+/**
+ * What the account's API key spent, in its own section: a key reports it
+ * whether or not it may read the account's balance.
+ */
+export function KeySpendDetail({ spend }: { readonly spend: KeySpend }): JSX.Element {
+  const money = (minor: number | null): string =>
+    formatAmount(minor, spend.scale, spend.currency) ?? "Not reported";
+  const { periods } = spend;
+  return (
+    <>
+      <h3 className="section-title">This key</h3>
+      <dl className="detail-list" aria-label="This key">
+        <div>
+          <dt>This key spent</dt>
+          <dd>
+            {money(periods.today_minor)} today
+            <br />
+            <span className="muted">
+              {money(periods.week_minor)} this week · {money(periods.month_minor)} this
+              month
+            </span>
+          </dd>
+        </div>
+      </dl>
+    </>
+  );
+}
+
 /** The balance's spending and top-ups, under the selected balance's facts. */
 export function BalanceDetail({
   balance,
@@ -78,7 +106,6 @@ export function BalanceDetail({
 }): JSX.Element {
   const money = (minor: number | null | undefined): string =>
     formatAmount(minor ?? null, balance.scale, balance.currency) ?? "Not reported";
-  const spend = balance.key_spend;
   const credits = balance.baseline_kind === "credits";
   const cycle = balance.cycle_spend;
   return (
@@ -89,19 +116,6 @@ export function BalanceDetail({
           <div>
             <dt>Spent in {cycle.label}</dt>
             <dd>{money(cycle.spent_minor)}</dd>
-          </div>
-        )}
-        {spend === null ? null : (
-          <div>
-            <dt>This key spent</dt>
-            <dd>
-              {money(spend.today_minor)} today
-              <br />
-              <span className="muted">
-                {money(spend.week_minor)} this week · {money(spend.month_minor)} this
-                month
-              </span>
-            </dd>
           </div>
         )}
         <div>

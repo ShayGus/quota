@@ -91,7 +91,6 @@ pub(crate) fn decode(
         scale: SCALE,
         loaded_minor: loaded,
         spent_minor: loaded - balance,
-        key_spend: None,
         credits,
         cycle_spend: cycle_spend(billing),
     });
