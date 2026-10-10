@@ -403,6 +403,11 @@
   gap: 8px;
 }
 
+.card-foot-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .card-foot button {
   font-size: 9px;
   display: flex;

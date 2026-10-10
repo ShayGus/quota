@@ -9,6 +9,7 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from "react";
 
 import type {
+  AccountGroupId,
   AccountId,
   AccountSnapshot,
   GroupSnapshot,
@@ -161,6 +162,7 @@ export function Overview({
   onReconnect,
   onEnable,
   onResume,
+  onAddKey,
 }: {
   readonly state: RendererState;
   readonly filter: OverviewFilter;
@@ -173,6 +175,8 @@ export function Overview({
   readonly onResume: () => void;
   readonly onReconnect: (accountId: AccountId) => void;
   readonly onEnable: (accountId: AccountId) => void;
+  /** Opens the add-account wizard, adding a key to one group. */
+  readonly onAddKey: (groupId: AccountGroupId) => void;
 }): JSX.Element {
   // The indicator style is a confirmed preference, so the overview reads it
   // rather than keeping an unsaved local copy that never reaches the host.
@@ -294,6 +298,7 @@ export function Overview({
                 onOpen={onOpenAccount}
                 onOpenWindow={onOpenWindow}
                 onReconnect={onReconnect}
+                onAddKey={onAddKey}
               />
             ),
           )}

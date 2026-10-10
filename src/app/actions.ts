@@ -11,6 +11,7 @@ import {
   type AccountId,
   type AppView,
   type AttemptRef,
+  type KeyGroupChoice,
   type BeginConnectionRequest,
   type ConnectionAttemptAccepted,
   type ConnectionAttemptId,
@@ -163,8 +164,14 @@ export const actions = {
    * snapshot. A successful reply reconciles here even if Verified was lost;
    * reconciliation failure does not turn that acknowledgement into a failed save.
    */
-  async confirmConnection(attempt: AttemptRef, nickname: string): Promise<boolean> {
-    const saved = await reportSettled(commands.confirmConnection(attempt, nickname));
+  async confirmConnection(
+    attempt: AttemptRef,
+    nickname: string,
+    group: KeyGroupChoice | null = null,
+  ): Promise<boolean> {
+    const saved = await reportSettled(
+      commands.confirmConnection(attempt, nickname, group),
+    );
     if (saved) await reconcileSnapshot();
     return saved;
   },

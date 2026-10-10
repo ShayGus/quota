@@ -5,7 +5,21 @@
  * Settings.
  */
 import { expect, test } from "./harness";
+import { candidate, keyLimit } from "../fixtures";
 import { defaultPreferences, openRouterGroup, scenario } from "./scenarios";
+
+/** A host that verifies one new OpenRouter key and holds it for the person. */
+function newOpenRouterKey() {
+  return {
+    progress: [
+      { kind: "started" as const },
+      {
+        kind: "awaiting_confirmation" as const,
+        context: { candidate: candidate("openrouter", [keyLimit()]) },
+      },
+    ],
+  };
+}
 
 test.describe("account groups", () => {
   test("the overview shows the account total once and a ring for each key", async ({
@@ -181,5 +195,93 @@ test.describe("account groups", () => {
       "#/widget",
     );
     await expect(widget.page.locator(".widget-tile")).toHaveCount(3);
+  });
+
+  test("a new key joins an existing group from the wizard", async ({ open }) => {
+    const host = await open(
+      scenario("settings", {
+        accounts: openRouterGroup(),
+        connection: newOpenRouterKey(),
+      }),
+      "#/settings/connect/1",
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /OpenRouter/ }).click();
+    await page.getByLabel("API key").fill("sk-or-v1-not-a-real-key");
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Add this account?" })).toBeVisible();
+    const group = page.getByLabel("Account group");
+    await expect(group).toHaveValue("");
+    await group.selectOption({ label: "Work" });
+    await page.getByLabel("Account nickname").fill("Batch");
+    await host.screenshotFull("wizard-key-group");
+    await page.getByRole("button", { name: "Add OpenRouter account" }).click();
+    expect((await host.callsTo("confirm_connection")).at(-1)?.args).toEqual({
+      attemptRef: expect.anything() as unknown,
+      nickname: "Batch",
+      group: { kind: "existing", group_id: "group-work" },
+    });
+    await expect(
+      page.getByRole("combobox", { name: "Account group of OpenRouter Batch" }),
+    ).toHaveValue("group-work");
+  });
+
+  test("a new key starts a new group from the wizard", async ({ open }) => {
+    const host = await open(
+      scenario("settings", { connection: newOpenRouterKey() }),
+      "#/settings/connect/1",
+    );
+    const { page } = host;
+    await page.getByRole("button", { name: /OpenRouter/ }).click();
+    await page.getByLabel("API key").fill("sk-or-v1-not-a-real-key");
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await page.getByLabel("Account group").selectOption({ label: "New group…" });
+    const add = page.getByRole("button", { name: "Add OpenRouter account" });
+    // A new group needs its name first.
+    await expect(add).toBeDisabled();
+    await page.getByLabel("Group name").fill("Team");
+    await add.click();
+    expect((await host.callsTo("confirm_connection")).at(-1)?.args).toMatchObject({
+      group: { kind: "new", name: "Team" },
+    });
+  });
+
+  test("Add key on a group's card opens the wizard on that group", async ({ open }) => {
+    const host = await open(scenario("overview", { accounts: openRouterGroup() }));
+    await host.page.getByRole("button", { name: "Add a key to OpenRouter Work" }).click();
+    expect((await host.callsTo("open_settings_window")).at(-1)?.args).toEqual({
+      destination: { add_key: { group_id: "group-work" } },
+    });
+  });
+
+  test("the add-key route starts on the group's provider with it chosen", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("settings", {
+        accounts: openRouterGroup(),
+        connection: newOpenRouterKey(),
+      }),
+      "#/settings/connect/1/group-work",
+    );
+    const { page } = host;
+    await expect(page.getByRole("heading", { name: "Add a key to Work" })).toBeVisible();
+    await host.screenshot("wizard-add-key");
+    await page.getByLabel("API key").fill("sk-or-v1-not-a-real-key");
+    await page.getByRole("button", { name: "Connect", exact: true }).click();
+    await expect(page.getByLabel("Account group")).toHaveValue("group-work");
+  });
+
+  test("Add key in Settings opens the wizard on that group", async ({ open }) => {
+    const host = await open(
+      scenario("settings", { accounts: openRouterGroup() }),
+      "#/settings/accounts",
+    );
+    const { page } = host;
+    await page
+      .getByRole("article", { name: "Manage OpenRouter Personal" })
+      .getByRole("button", { name: "Add key" })
+      .click();
+    await expect(page.getByRole("heading", { name: "Add a key to Work" })).toBeVisible();
   });
 });

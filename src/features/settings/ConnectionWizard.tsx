@@ -9,12 +9,25 @@
  * confirms it and names it here. Leaving the wizard by any route, whether
  * Back, Cancel, Escape, or opening a fresh wizard, discards the candidate, so
  * an unconfirmed account is never left behind.
+ *
+ * A key of a provider whose account holds several keys can join a group as
+ * it is added, so it is never shown on its own first. Opened from a group's
+ * Add key, the wizard starts on that group's provider with the group chosen.
  */
 import { useEffect, useId, useRef, useState, type JSX } from "react";
 
-import type { AttemptRef, BrowserSignIn, QuotaWindow } from "../../generated/bindings";
+import type {
+  AccountGroupId,
+  AttemptRef,
+  BrowserSignIn,
+  GroupSnapshot,
+  KeyGroupChoice,
+  Preferences,
+  QuotaWindow,
+} from "../../generated/bindings";
 import { accountLabel } from "../../shared/format/alias";
 import { formatRemaining } from "../../shared/format/allowance";
+import { groupById, groupLabel, isGroupable } from "../../shared/format/group";
 import { providerLabel } from "../../shared/format/provider";
 import { describeCommandError, launch } from "../../shared/ipc/report";
 import type { RendererState } from "../../shared/state/types";
@@ -58,18 +71,41 @@ export type WizardActions = Pick<
   "beginConnection" | "cancelConnection" | "confirmConnection"
 >;
 
+/** The group choice for "New group…". */
+const NEW_GROUP = "new";
+
 export function ConnectionWizard({
   state,
   actions,
   onDone,
+  groupId = null,
 }: {
   readonly state: RendererState;
   readonly actions: WizardActions;
   /** Leaves the wizard. `added` says whether an account was saved. */
   readonly onDone: (added: boolean) => void;
+  /** The group the new key joins, when the wizard opened from its Add key. */
+  readonly groupId?: AccountGroupId | null;
 }): JSX.Element {
-  const [provider, setProvider] = useState<OfferedProvider | null>(null);
+  const groups = state.snapshot?.groups ?? [];
+  // The group can arrive with a snapshot after the wizard opens, so the
+  // provider and group it presets are read on every render until the person
+  // picks their own.
+  const preset = groupId === null ? undefined : groupById(groups, groupId);
+  const presetProvider =
+    preset !== undefined && (PROVIDERS as readonly string[]).includes(preset.provider_id)
+      ? (preset.provider_id as OfferedProvider)
+      : null;
+  const [picked, setProvider] = useState<OfferedProvider | null>(null);
+  // Back leaves the preset for the provider list.
+  const [presetLeft, setPresetLeft] = useState(false);
+  const provider = picked ?? (presetLeft ? null : presetProvider);
   const [nickname, setNickname] = useState(DEFAULT_NICKNAME);
+  // The group the key joins: "" for none, a group, or NEW_GROUP; until the
+  // person chooses, the preset group.
+  const [chosenGroup, setGroupChoice] = useState<string | null>(null);
+  const groupChoice = chosenGroup ?? preset?.id ?? "";
+  const [groupName, setGroupName] = useState("");
   // A pasted API key, held only until the host has it.
   const [apiKey, setApiKey] = useState("");
   const signIn = provider === null ? null : SIGN_IN[provider];
@@ -179,11 +215,29 @@ export function ConnectionWizard({
     if (live !== null) await actions.cancelConnection(live);
   };
 
+  // A group of another provider, left from before Back, is no choice here.
+  const groupable = provider !== null && isGroupable(provider);
+  const choices = groups.filter((group) => group.provider_id === provider);
+  const joining =
+    !groupable || groupChoice === ""
+      ? null
+      : groupChoice === NEW_GROUP
+        ? NEW_GROUP
+        : (choices.find((group) => group.id === groupChoice)?.id ?? null);
+  const keyGroup: KeyGroupChoice | null =
+    joining === null
+      ? null
+      : joining === NEW_GROUP
+        ? { kind: "new", name: groupName.trim() }
+        : { kind: "existing", group_id: joining };
+  const ready =
+    nickname.trim().length > 0 && (keyGroup?.kind !== "new" || keyGroup.name !== "");
+
   const add = async (): Promise<void> => {
-    if (attempt === null || adding || nickname.trim().length === 0) return;
+    if (attempt === null || adding || !ready) return;
     setAdding(true);
     try {
-      if (await actions.confirmConnection(attempt, nickname.trim())) finish();
+      if (await actions.confirmConnection(attempt, nickname.trim(), keyGroup)) finish();
     } finally {
       setAdding(false);
     }
@@ -279,6 +333,19 @@ export function ConnectionWizard({
           hint="Shown on the account's card in your overview."
           onChange={setNickname}
         />
+        {groupable ? (
+          <KeyGroupField
+            providerName={providerName}
+            groups={groups}
+            choices={choices}
+            preferences={state.preferences}
+            value={joining ?? ""}
+            name={groupName}
+            hidden={alias !== ""}
+            onChoose={setGroupChoice}
+            onName={setGroupName}
+          />
+        ) : null}
         <div className="wizard-action">
           <button
             type="button"
@@ -294,7 +361,7 @@ export function ConnectionWizard({
           <button
             type="button"
             className="button primary"
-            disabled={adding || nickname.trim().length === 0}
+            disabled={adding || !ready}
             onClick={() => {
               launch(add());
             }}
@@ -308,7 +375,11 @@ export function ConnectionWizard({
   } else {
     body = (
       <>
-        <h2>Connect {providerLabel(provider)}</h2>
+        <h2>
+          {preset !== undefined && joining === preset.id
+            ? `Add a key to ${groupLabel(state.preferences, groups, preset)}`
+            : `Connect ${providerLabel(provider)}`}
+        </h2>
         <p className="intro">
           {signIn?.kind === "api_key"
             ? `Paste an API key from ${signIn.keyPage}. Quota checks it with ${providerLabel(provider)} before anything is saved.`
@@ -407,6 +478,7 @@ export function ConnectionWizard({
             disabled={busy}
             onClick={() => {
               setProvider(null);
+              setPresetLeft(true);
               setAttempt(null);
               setRefusal(null);
               setApiKey("");
@@ -489,6 +561,76 @@ export function ConnectionWizard({
         {body}
       </div>
     </section>
+  );
+}
+
+/**
+ * Which provider account a new key belongs to: none, a group of its
+ * provider, or a new group named here.
+ */
+function KeyGroupField({
+  providerName,
+  groups,
+  choices,
+  preferences,
+  value,
+  name,
+  hidden,
+  onChoose,
+  onName,
+}: {
+  readonly providerName: string;
+  /** Every group, so a hidden name is numbered as everywhere else. */
+  readonly groups: readonly GroupSnapshot[];
+  /** The groups of this provider. */
+  readonly choices: readonly GroupSnapshot[];
+  readonly preferences: Preferences | null;
+  /** "" for no group, a group, or "new". */
+  readonly value: string;
+  readonly name: string;
+  readonly hidden: boolean;
+  readonly onChoose: (value: string) => void;
+  readonly onName: (name: string) => void;
+}): JSX.Element {
+  const id = useId();
+  const hintId = useId();
+  return (
+    <>
+      <label className="field-label" htmlFor={id}>
+        Account group
+      </label>
+      <select
+        id={id}
+        className="wizard-group"
+        value={value}
+        aria-describedby={hintId}
+        onChange={(event) => {
+          onChoose(event.currentTarget.value);
+        }}
+      >
+        <option value="">Not grouped</option>
+        {choices.map((group) => (
+          <option key={group.id} value={group.id}>
+            {groupLabel(preferences, groups, group)}
+          </option>
+        ))}
+        <option value={NEW_GROUP}>New group…</option>
+      </select>
+      <div className="form-hint" id={hintId}>
+        Put this key with the other keys of the same {providerName} account to see the
+        account's total.
+      </div>
+      {value === NEW_GROUP ? (
+        <NicknameField
+          id={`${id}-name`}
+          label="Group name"
+          placeholder="For example: Work"
+          value={name}
+          hidden={hidden}
+          onChange={onName}
+        />
+      ) : null}
+    </>
   );
 }
 

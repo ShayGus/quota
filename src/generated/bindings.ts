@@ -79,7 +79,15 @@ export const commands = {
 	 *  Nothing is written until this command runs, so declining a verified
 	 *  connection in the wizard leaves storage untouched.
 	 */
-	confirmConnection: (attemptRef: AttemptRef, nickname: string) => typedError<null, CommandError>(__TAURI_INVOKE("confirm_connection", { attemptRef, nickname })),
+	confirmConnection: (attemptRef: AttemptRef, nickname: string, group: 
+/**  An existing group of the same provider. */
+{ kind: "existing"; 
+/**  The group to join. */
+group_id: AccountGroupId } | 
+/**  A new group, named by the person. */
+{ kind: "new"; 
+/**  The name of the provider account. */
+name: string } | null) => typedError<null, CommandError>(__TAURI_INVOKE("confirm_connection", { attemptRef, nickname, group })),
 	/**  Re-verifies one account under a new generation and queues a fresh read. */
 	reconnectAccount: (accountRef: AccountRef) => typedError<number, CommandError>(__TAURI_INVOKE("reconnect_account", { accountRef })),
 	/**  Saves committed preferences and returns what was actually persisted. */
@@ -793,6 +801,20 @@ export type IndicatorStyle =
 /**  A horizontal bar. The same values, a different indicator. */
 "bar";
 
+/**
+ *  The group a new key joins as it is added, for a provider whose account
+ *  holds several keys.
+ */
+export type KeyGroupChoice = 
+/**  An existing group of the same provider. */
+{ kind: "existing"; 
+/**  The group to join. */
+group_id: AccountGroupId } | 
+/**  A new group, named by the person. */
+{ kind: "new"; 
+/**  The name of the provider account. */
+name: string };
+
 /**  What happens at login. */
 export type LaunchBehavior = 
 /**  Start in the tray without opening a window. */
@@ -1403,7 +1425,12 @@ export type SettingsDestination =
 /**  Connected account management. */
 "accounts" | 
 /**  Provider connection wizard. */
-"connect";
+"connect" | 
+/**  The connection wizard, adding a key to one account group. */
+{ add_key: {
+	/**  The group the new key joins. */
+	group_id: AccountGroupId,
+} };
 
 /**  The snapshot plus the revision the renderer should reconcile against. */
 export type SnapshotResponse = {

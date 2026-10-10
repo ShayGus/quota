@@ -19,9 +19,11 @@ import { emit as emitEvent } from "@tauri-apps/api/event";
 import { mockConvertFileSrc, mockIPC, mockWindows } from "@tauri-apps/api/mocks";
 
 import type {
+  AccountGroup,
   AccountSnapshot,
   AppSnapshot,
   GroupSnapshot,
+  KeyGroupChoice,
   PeriodSpend,
   CommandError,
   ConnectionProgress,
@@ -464,7 +466,18 @@ export function installFakeBackend(config: FakeConfig): void {
             ...snapshot,
             accounts: [
               ...snapshot.accounts,
-              confirmedAccount(held, args?.nickname as string, snapshot.accounts.length),
+              {
+                ...confirmedAccount(
+                  held,
+                  args?.nickname as string,
+                  snapshot.accounts.length,
+                ),
+                group: joinedGroup(
+                  snapshot.accounts,
+                  args?.group as KeyGroupChoice | null,
+                  snapshot.revision,
+                ),
+              },
             ],
           };
           publishSnapshot();
@@ -549,6 +562,29 @@ export function installFakeBackend(config: FakeConfig): void {
 }
 
 /** The account a confirmed candidate becomes, as the host saves it. */
+/** The group a confirmed key joins, as the host resolves the wizard's choice. */
+function joinedGroup(
+  accounts: readonly AccountSnapshot[],
+  choice: KeyGroupChoice | null,
+  revision: number,
+): AccountGroup | null {
+  if (choice === null) {
+    return null;
+  }
+  if (choice.kind === "new") {
+    return {
+      id: `group-${String(revision)}`,
+      name: choice.name.trim(),
+      spend_shown: true,
+      key_shown: true,
+    };
+  }
+  const existing = accounts
+    .map((account) => account.group)
+    .find((group) => group?.id === choice.group_id);
+  return existing == null ? null : { ...existing, key_shown: true };
+}
+
 function confirmedAccount(
   held: VerifiedCandidate,
   nickname: string,

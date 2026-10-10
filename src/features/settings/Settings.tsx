@@ -12,6 +12,7 @@ import type {
   AccountId,
   AccountSnapshot,
   AttemptRef,
+  KeyGroupChoice,
   BeginConnectionRequest,
   Preferences,
   ProviderPollingPolicy,
@@ -74,7 +75,11 @@ export interface SettingsActions {
   ) => Promise<AttemptRef | null>;
   readonly cancelConnection: (attempt: AttemptRef) => Promise<void>;
   /** See `actions.confirmConnection` in `src/app/actions.ts` for result semantics. */
-  readonly confirmConnection: (attempt: AttemptRef, nickname: string) => Promise<boolean>;
+  readonly confirmConnection: (
+    attempt: AttemptRef,
+    nickname: string,
+    group: KeyGroupChoice | null,
+  ) => Promise<boolean>;
   /** Re-verifies one account under a new connection generation. */
   readonly reconnectAccount: (accountId: AccountId) => Promise<void>;
   /** Drops retained history for one account. The host has no all-accounts clear. */
@@ -97,6 +102,21 @@ export interface SettingsActions {
 }
 
 /**
+ * The group a new key joins, from an add-key route:
+ * `#/settings/connect/<request>/<group>`. `null` for any other route, or a
+ * group segment that does not decode.
+ */
+function routeGroup(route: string): AccountGroupId | null {
+  const segment = route.split("/")[4];
+  if (segment === undefined || segment === "") return null;
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Counts route requests, so asking for a section the window already shows is a
  * new route rather than the unchanged hash.
  */
@@ -112,10 +132,14 @@ export function Settings({
 }): JSX.Element {
   const route = useSyncExternalStore(subscribeRoute, () => window.location.hash);
   const tab = route.split("/")[2] ?? "general";
-  const navigate = useCallback((next: SettingsTab | "connect"): void => {
-    requestedRoutes += 1;
-    window.location.hash = `#/settings/${next}/${String(requestedRoutes)}`;
-  }, []);
+  const navigate = useCallback(
+    (next: SettingsTab | "connect", groupId?: AccountGroupId): void => {
+      requestedRoutes += 1;
+      const group = groupId === undefined ? "" : `/${encodeURIComponent(groupId)}`;
+      window.location.hash = `#/settings/${next}/${String(requestedRoutes)}${group}`;
+    },
+    [],
+  );
   const showAccounts = useCallback(() => {
     navigate("accounts");
   }, [navigate]);
@@ -159,6 +183,7 @@ export function Settings({
             state={state}
             actions={actions}
             onDone={showAccounts}
+            groupId={routeGroup(route)}
           />
         ) : preferences === null ? (
           <p className="note">
@@ -182,6 +207,9 @@ export function Settings({
             actions={actions}
             onAddAccount={() => {
               navigate("connect");
+            }}
+            onAddKey={(groupId) => {
+              navigate("connect", groupId);
             }}
           />
         ) : selected === "notifications" ? (

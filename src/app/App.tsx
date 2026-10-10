@@ -104,7 +104,8 @@ const settingsActions: SettingsActions = {
     return accepted === null ? null : { id: accepted.attempt_id };
   },
   cancelConnection: (attempt) => actions.cancelConnection(attempt),
-  confirmConnection: (attempt, nickname) => actions.confirmConnection(attempt, nickname),
+  confirmConnection: (attempt, nickname, group) =>
+    actions.confirmConnection(attempt, nickname, group),
   reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
@@ -381,6 +382,9 @@ function Popover({
               }}
               onEnable={(accountId) => {
                 launch(actions.setAccountEnabled(accountId, true));
+              }}
+              onAddKey={(groupId) => {
+                launch(actions.openSettings({ add_key: { group_id: groupId } }));
               }}
             />
           </FeatureBoundary>
