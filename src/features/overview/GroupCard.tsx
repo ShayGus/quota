@@ -59,9 +59,9 @@ interface KeyReading {
   readonly severity: ReturnType<typeof viewSeverity>;
   /** The ring's centre: `58%`, or `—`. */
   readonly value: string;
-  /** The word under the value: `left`, `no limit`, `off`. */
+  /** The word under the value: none, `no limit`, `off`. */
   readonly caption: string;
-  /** The line under the ring: `$11.60 left`, `$9.00 this month`, a problem. */
+  /** The line under the ring: `$11.60`, `$9.00 this month`, a problem. */
   readonly line: string;
   /** Whether the line is a problem, drawn in the warning colour. */
   readonly problem: boolean;
@@ -129,19 +129,17 @@ function keyReading(account: AccountSnapshot, now: number): KeyReading {
   }
   const view = windowView(account, limit, now);
   // The percentage alone, by the same rules as every ring ("<1%" is never
-  // "0%"); the money left is the line under it.
+  // "0%"); the money it stands for is the line under it.
   const value = viewKnown(view)
     ? (formatRemaining(limit.measurement).split(" · ")[0] ?? "—")
     : viewValue(view, limit);
   const money = viewKnown(view) ? moneyLeft(limit.measurement) : null;
-  const line =
-    problem ??
-    (view === "stale" ? "last known" : money === null ? "no reading" : `${money} left`);
+  const line = problem ?? (view === "stale" ? "last known" : (money ?? "no reading"));
   return {
     fraction: viewFraction(view, limit),
     severity: viewSeverity(view, limit),
     value,
-    caption: "left",
+    caption: "",
     line,
     problem: problem !== null,
     windowId: limit.id,

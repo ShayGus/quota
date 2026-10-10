@@ -43,7 +43,7 @@ export function Ring({
   readonly severity: Severity;
   /** The value text, already formatted. `—` when there is no reading. */
   readonly label: string;
-  /** The small word under the value. */
+  /** The small word under the value, or none when it is empty. */
   readonly caption: string;
 }): JSX.Element {
   const known = fraction !== null;
@@ -65,7 +65,7 @@ export function Ring({
       </svg>
       <div className="ring-center">
         <RingValue label={label} />
-        <span className="ring-caption">{caption}</span>
+        {caption === "" ? null : <span className="ring-caption">{caption}</span>}
       </div>
     </div>
   );
