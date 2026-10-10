@@ -303,8 +303,11 @@ test.describe("account groups", () => {
     const host = await open(scenario("overview", { accounts }));
     const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
     await expect(group).toContainText("Keys spent $4.30 today · $27.10 this month");
-    await expect(group.getByRole("button", { name: /^Key OpenRouter CI/ })).toContainText(
-      "$2.80 left",
-    );
+    const ci = group.getByRole("button", { name: /^Key OpenRouter CI/ });
+    await expect(ci).toContainText("$2.80 left");
+    // Its details say what it spent, though it has no balance to show.
+    await ci.click();
+    await expect(host.page.getByLabel("This key")).toContainText("$17.20 this month");
+    await host.screenshotFull("key-detail-no-balance");
   });
 });
