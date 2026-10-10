@@ -22,7 +22,7 @@ import { Icon, Logo } from "../../shared/ui/Icon";
 import { useNow } from "../../shared/ui/useNow";
 import { OverviewToolbar, type OverviewFilter } from "./OverviewToolbar";
 import { displayName } from "../../shared/format/alias";
-import { groupById, groupLabel, memberView } from "../../shared/format/group";
+import { groupById, groupLabel } from "../../shared/format/group";
 import { GroupCard } from "./GroupCard";
 import { ProviderCard } from "./ProviderCard";
 import { needsAttention } from "./status";
@@ -285,10 +285,16 @@ export function Overview({
                 key={item.group.id}
                 group={item.group}
                 name={groupLabel(state.preferences, groups, item.group)}
-                keyCount={item.group.account_ids.length}
-              >
-                {item.members.map((entry) => card(memberView(entry.account)))}
-              </GroupCard>
+                keys={item.members.map((entry) => ({
+                  account: entry.account,
+                  label: displayName(state.preferences, accounts, entry.account),
+                }))}
+                style={style}
+                now={now}
+                onOpen={onOpenAccount}
+                onOpenWindow={onOpenWindow}
+                onReconnect={onReconnect}
+              />
             ),
           )}
         </div>

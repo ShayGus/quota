@@ -169,7 +169,7 @@ function extraSummary(extra: readonly QuotaWindow[]): string {
 }
 
 /** One ring and the line under it. */
-function QuotaButton({
+export function QuotaButton({
   account,
   accountLabel,
   window,
@@ -229,7 +229,7 @@ function QuotaButton({
 }
 
 /** One compact row: label, bar, value, and reset time. */
-function LedgerRow({
+export function LedgerRow({
   account,
   accountLabel,
   window,

@@ -1,30 +1,67 @@
 /**
  * Account groups in the real renderer: one OpenRouter account with several
- * keys, its total over its keys in the overview, one tile in the widget, and
- * putting keys together from Settings.
+ * keys, one card with the account's total and a ring for each key, a total
+ * tile and a tile for each key in the widget, and putting keys together from
+ * Settings.
  */
 import { expect, test } from "./harness";
 import { defaultPreferences, openRouterGroup, scenario } from "./scenarios";
 
 test.describe("account groups", () => {
-  test("the overview shows the account total once and each key's own limit", async ({
+  test("the overview shows the account total once and a ring for each key", async ({
     open,
   }) => {
     const host = await open(scenario("overview", { accounts: openRouterGroup() }));
-    const group = host.page.getByRole("region", { name: "OpenRouter Work account" });
-    await expect(group).toContainText("Work");
+    const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
+    await expect(host.page.getByRole("article")).toHaveCount(1);
     await expect(group).toContainText("3 keys");
-    await expect(group).toContainText("$37.20 left");
+    await expect(group).toContainText("of $50.00 loaded");
     await expect(group).toContainText("Keys spent $4.30 today · $27.10 this month");
-    const keys = group.getByRole("article");
+    const keys = group.getByRole("button", { name: /^Key OpenRouter / });
     await expect(keys).toHaveCount(3);
-    // Each key shows its own limit; the account balance is not repeated.
-    for (const key of await keys.all()) {
-      await expect(key).toContainText("API key limit");
-      await expect(key).not.toContainText("of $50.00 loaded");
-    }
+    await expect(keys.nth(0)).toContainText("Personal");
+    await expect(keys.nth(0)).toContainText("58%");
+    await expect(keys.nth(0)).toContainText("$11.60 left");
+    await expect(keys.nth(1)).toContainText("14%");
+    // The balance is the account's, so it is drawn once, not for each key.
+    await expect(group.getByText("of $50.00 loaded")).toHaveCount(1);
     await host.screenshot("group-overview");
     await host.screenshotFull("group-overview");
+    // A key's ring opens that key's own details.
+    await keys.nth(1).click();
+    await expect(host.page.getByRole("article")).toHaveCount(0);
+    await expect(host.page.getByText("CI", { exact: true })).toBeVisible();
+    await expect(host.page.getByText("14% · 2.80 USD left")).toBeVisible();
+    await host.screenshot("group-key-detail");
+  });
+
+  test("a key that must be reconnected says so on its own ring", async ({ open }) => {
+    const accounts = openRouterGroup().map((key) =>
+      key.account_id === "acct-or-ci"
+        ? { ...key, connection_state: "reauthentication_required" as const }
+        : key,
+    );
+    const host = await open(scenario("overview", { accounts }));
+    const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
+    const ci = group.getByRole("button", { name: /^Reconnect OpenRouter CI/ });
+    await expect(ci).toContainText("Reconnect");
+    await expect(group).toContainText("CI: reconnect");
+    await expect(group.getByRole("button", { name: /^Key OpenRouter / })).toHaveCount(2);
+    await host.screenshot("group-overview-reconnect");
+  });
+
+  test("the compact layout lists the total, then a row for each key", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("overview", {
+        accounts: openRouterGroup(),
+        preferences: defaultPreferences({ indicator_style: "bar" }),
+      }),
+    );
+    const group = host.page.getByRole("article", { name: "OpenRouter Work account" });
+    await expect(group.getByRole("button", { name: /^Key OpenRouter / })).toHaveCount(3);
+    await host.screenshot("group-overview-bars");
   });
 
   test("hidden account names hide the group's name too", async ({ open }) => {
@@ -36,12 +73,14 @@ test.describe("account groups", () => {
         }),
       }),
     );
-    const group = host.page.getByRole("region", { name: "OpenRouter Group 1 account" });
+    const group = host.page.getByRole("article", { name: "OpenRouter Group 1 account" });
     await expect(group).toBeVisible();
     await expect(group).not.toContainText("Work");
   });
 
-  test("the widget shows the group as one tile named for it", async ({ open }) => {
+  test("the widget shows the group's total, then a tile for each key", async ({
+    open,
+  }) => {
     const host = await open(
       scenario("widget", {
         accounts: openRouterGroup(),
@@ -50,8 +89,9 @@ test.describe("account groups", () => {
       "#/widget",
     );
     const tiles = host.page.locator(".widget-tile");
-    await expect(tiles).toHaveCount(1);
-    await expect(tiles.first()).toHaveAccessibleName(/OpenRouter · Work/);
+    await expect(tiles).toHaveCount(4);
+    await expect(tiles.nth(0)).toHaveAccessibleName(/OpenRouter · Work/);
+    await expect(tiles.nth(1)).toHaveAccessibleName(/Work · Personal/);
     await host.screenshot("group-widget");
   });
 

@@ -1,9 +1,10 @@
 /**
  * Account groups: the keys of one provider account, shown together.
  *
- * A group takes the place of its first key and lists its keys in order; each
- * key drops the account balance the group shows once; the total states only
- * the periods some key reports.
+ * A group takes the place of its first key and lists its keys in order; the
+ * account's total is read from the key that read the balance last, and each
+ * key is its own spend limit; the total states only the periods some key
+ * reports.
  */
 import { describe, expect, it } from "vitest";
 
@@ -11,11 +12,12 @@ import { overviewItems } from "../src/features/overview/Overview";
 import { widgetAccounts } from "../src/features/widget/model";
 import type { AccountSnapshot, GroupSnapshot } from "../src/generated/bindings";
 import {
-  groupBalanceLine,
+  accountView,
   groupLabel,
+  groupReader,
   groupSpendLine,
   isGroupable,
-  memberView,
+  keyLimitOf,
 } from "../src/shared/format/group";
 import { placeAccounts } from "../src/shared/state/order";
 import { account, keyLimit, NOW, preferences, prepaidBalance } from "./fixtures";
@@ -75,16 +77,24 @@ describe("account groups", () => {
     expect(overviewItems(rows, []).map((item) => item.kind)).toEqual(["account"]);
   });
 
-  it("shows a key in its group without the account balance and with its limit", () => {
-    const view = memberView(key("a", 1, "2026-10-01T11:00:00.000Z"));
-    expect(view.windows.map((window) => window.metric_role)).toEqual(["extra_spend_cap"]);
-    expect(view.show_key_limit).toBe(true);
+  it("splits a key into the account's total and the key's own limit", () => {
+    const member = key("a", 1, "2026-10-01T11:00:00.000Z");
+    expect(accountView(member).windows.map((window) => window.metric_role)).toEqual([
+      "prepaid_balance",
+    ]);
+    expect(keyLimitOf(member)?.metric_role).toBe("extra_spend_cap");
   });
 
-  it("states the balance and only the spend periods some key reports", () => {
-    expect(groupBalanceLine(group())).toBe("$37.20 left");
+  it("reads the total from the key that read the balance last", () => {
+    const older = key("a", 1, "2026-10-01T10:00:00.000Z");
+    const newer = key("b", 2, "2026-10-01T11:00:00.000Z");
+    const noBalance = { ...key("c", 3, "2026-10-01T12:00:00.000Z"), balance: null };
+    expect(groupReader([older, newer, noBalance])?.account_id).toBe("b");
+    expect(groupReader([noBalance])?.account_id).toBe("c");
+  });
+
+  it("states only the spend periods some key reports", () => {
     expect(groupSpendLine(group())).toBe("Keys spent $1.50 today · $20.10 this month");
-    expect(groupBalanceLine(group({ balance: null }))).toBeNull();
     expect(groupSpendLine(group({ key_spend: null }))).toBeNull();
   });
 
@@ -96,12 +106,20 @@ describe("account groups", () => {
     expect(groupLabel(preferences(), [group()], group())).toBe("Work");
   });
 
-  it("draws one widget tile per group, from the key that read the balance last", () => {
+  it("draws the group's total as one widget tile, then a ring tile for each key", () => {
     const older = key("a", 1, "2026-10-01T10:00:00.000Z");
     const newer = key("b", 2, "2026-10-01T11:00:00.000Z");
     const tiles = widgetAccounts([older, newer], preferences(), NOW, [group()]);
-    expect(tiles).toHaveLength(1);
-    expect(tiles[0]?.id).toBe("b");
-    expect(tiles[0]?.name).toBe("OpenRouter · Work");
+    expect(tiles.map((tile) => tile.id)).toEqual(["group:group-work", "a", "b"]);
+    expect(tiles.map((tile) => tile.name)).toEqual([
+      "OpenRouter · Work",
+      "Work · a",
+      "Work · b",
+    ]);
+    // The total is the account's balance alone; each key is its limit alone.
+    expect(tiles[0]?.rows.map((entry) => entry.tag)).toEqual(["Credit"]);
+    expect(tiles[1]?.rows.map((entry) => entry.tag)).toEqual(["Key"]);
+    expect(tiles[1]?.rings).toHaveLength(1);
+    expect(tiles[1]?.headline.value).toBe("$11.60");
   });
 });

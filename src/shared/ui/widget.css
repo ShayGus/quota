@@ -216,6 +216,16 @@
   font-size: 11px;
 }
 
+/* A group's key is named inside its ring, since its group shares one mark. */
+.widget-key-mark {
+  max-width: 34px;
+  overflow: hidden;
+  font-size: 9px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .widget-tile-rings .provider-icon svg {
   width: 100%;
   height: 100%;

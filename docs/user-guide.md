@@ -371,22 +371,26 @@ for CI and one for an agent. Add each key as its own account, then put them in o
 
 <table>
   <tr>
-    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account: $37.20 left and what its keys spent, then the Personal, CI and Agent keys, each with its own spend limit"><br><sub>One account, three keys</sub></td>
+    <td valign="top" width="50%"><img src="images/group-overview.png" alt="The Work account card: a $37.20 balance ring and what its keys spent, then a ring for each of the Personal, CI and Agent keys"><br><sub>One account, three keys</sub></td>
     <td valign="top" width="50%"><img src="images/settings-account-group.png" alt="Settings, Accounts: the Account group of each key"><br><sub>Choosing a key's group</sub></td>
   </tr>
 </table>
 
-The overview then shows the account once, with each key under it:
+The overview then shows the account as one card:
 
-- **The account** shows the balance and what its keys spent together today, this week and
-  this month. Every key reads the same balance, so it is shown once, never added up.
-- **Each key** shows its own spend limit and its own status. A key that stops working
-  shows it on its own card and the other keys carry on.
-- The mini widget shows the account as one tile, named for the group.
+- **The account** is the ring at the top: the balance, and what its keys spent together
+  today, this week and this month. Every key reads the same balance, so it is shown once,
+  never added up.
+- **Each key** has its own smaller ring under it: what is left of its spend limit, with
+  the money left under the ring. Select a key's ring to open that key's details. A key
+  that stops working shows it on its own ring, the card's badge names it, and the other
+  keys carry on.
+- The mini widget shows a tile for the account's balance, then a tile for each key with
+  the key's name inside its ring.
 
-OpenCode Go reports usage for the whole subscription, not per key, so every key of an
-OpenCode Go group shows the same 5-hour, weekly and monthly usage. The group keeps the
-keys together and shows each key's own status; nothing is added up.
+OpenCode Go reports usage for the whole subscription, not per key, so its group shows the
+5-hour, weekly and monthly usage once at the top, and each key's ring shows only whether
+that key is working.
 
 The provider does not say which account a key belongs to, so Quota cannot check it: put
 only keys of the same account in one group. Choosing **Not grouped** takes a key out; a

@@ -188,44 +188,64 @@
 }
 
 /*
- * A provider account with several keys: its total once, then each key's card.
- * The frame is a tint, not a second border, so the keys' own cards stay the
- * cards and the group reads as their background.
+ * A provider account with several keys: one card, the account's total on
+ * top and a smaller ring for each key under a light rule.
  */
-.group-card {
-  border-radius: 12px;
-  background: var(--surface-2);
-  padding: 9px 6px 6px;
-}
-
-.group-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 0 6px;
-}
-
-.group-head .provider-copy {
-  flex: 1;
-}
-
-.group-balance {
-  font-size: 13px;
-  font-weight: 650;
-  white-space: nowrap;
-}
-
 .group-spend {
-  padding: 3px 6px 0;
-  font-size: 10px;
+  margin: -1px 0 6px;
+  font-size: 9px;
   color: var(--muted);
+  text-align: center;
 }
 
-.group-keys {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 8px;
+.group-keys-title {
+  border-top: 1px solid var(--line);
+  padding-top: 7px;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.key-grid {
+  row-gap: 8px;
+  margin-top: 6px;
+}
+
+.key-grid .ring {
+  width: 54px;
+  height: 54px;
+}
+
+.key-grid .ring-value {
+  font-size: 16px;
+  letter-spacing: -0.5px;
+}
+
+.key-grid .ring-value span {
+  font-size: 10px;
+}
+
+.key-grid .ring-caption {
+  margin-top: 1px;
+  font-size: 8px;
+}
+
+.key-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 550;
+}
+
+.key-problem {
+  color: var(--warn);
+}
+
+.group-key-rows {
+  margin-top: 6px;
 }
 
 .provider-head {

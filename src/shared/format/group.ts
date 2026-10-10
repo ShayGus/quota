@@ -2,9 +2,9 @@
  * Account groups: the keys of one provider account, shown together.
  *
  * Each key stays its own account, with its own reading and status. A group
- * shows the account total once, above its keys: the balance every key reads
- * the same, and what the keys spent together. Each key then shows what is its
- * own, its spend limit, rather than repeating the account's balance.
+ * is one card: the account's total once, the balance every key reads the
+ * same and what the keys spent together, then one ring for each key, its own
+ * spend limit.
  */
 import type {
   AccountGroupId,
@@ -12,8 +12,9 @@ import type {
   GroupSnapshot,
   Preferences,
   ProviderId,
+  QuotaWindow,
 } from "../../generated/bindings";
-import { formatAmount, isPrepaidBalance } from "./balance";
+import { formatAmount } from "./balance";
 
 /**
  * The providers whose accounts can be grouped: those connected with an API
@@ -26,19 +27,49 @@ export function isGroupable(provider: ProviderId): boolean {
   return GROUPABLE.includes(provider);
 }
 
+/** Whether a window is one key's own spend limit, not the account's. */
+function isKeyLimit(window: QuotaWindow): boolean {
+  return window.metric_role === "extra_spend_cap";
+}
+
+/** One key's own spend limit, or `null` for a key without one. */
+export function keyLimitOf(account: AccountSnapshot): QuotaWindow | null {
+  return account.windows.find(isKeyLimit) ?? null;
+}
+
 /**
- * One key as its group shows it: without the account-wide balance, which the
- * group shows once, and with the key's own spend limit always on, because
- * inside a group the limit is what tells the keys apart.
+ * A key as the account's total: only what belongs to the whole account, its
+ * balance and included allowance, without the key's own limit.
  */
-export function memberView(account: AccountSnapshot): AccountSnapshot {
-  const windows = account.windows.filter(
-    (window) => !isPrepaidBalance(window) && window.metric_role !== "credit_balance",
-  );
-  if (windows.length === account.windows.length) {
-    return account;
-  }
-  return { ...account, windows, show_key_limit: true };
+export function accountView(account: AccountSnapshot): AccountSnapshot {
+  const windows = account.windows.filter((window) => !isKeyLimit(window));
+  return windows.length === account.windows.length ? account : { ...account, windows };
+}
+
+/**
+ * The key a group's total is read from: the one that read the account's
+ * balance last, else the one checked last, as the host takes the balance.
+ */
+export function groupReader<T extends AccountSnapshot>(
+  members: readonly T[],
+): T | undefined {
+  const newest = (candidates: readonly T[]): T | undefined =>
+    candidates.reduce<T | undefined>(
+      (best, member) =>
+        best === undefined ||
+        (member.last_success_at ?? "") > (best.last_success_at ?? "")
+          ? member
+          : best,
+      undefined,
+    );
+  return newest(members.filter((member) => member.balance !== null)) ?? newest(members);
+}
+
+/** What one key spent this month, `$9.00`, or `null` when it reports none. */
+export function keyMonthSpend(account: AccountSnapshot): string | null {
+  const balance = account.balance;
+  const month = balance?.key_spend?.month_minor ?? null;
+  return balance === null ? null : formatAmount(month, balance.scale, balance.currency);
 }
 
 /** The group with this identity, when the snapshot has it. */
@@ -67,16 +98,6 @@ export function groupLabel(
     .sort()
     .indexOf(group.id);
   return `Group ${index === -1 ? "0" : String(index + 1)}`;
-}
-
-/** The account's balance line: "$37.20 left", or `null` without a balance. */
-export function groupBalanceLine(group: GroupSnapshot): string | null {
-  const balance = group.balance;
-  if (balance === null) {
-    return null;
-  }
-  const amount = formatAmount(balance.balance_minor, balance.scale, balance.currency);
-  return amount === null ? null : `${amount} left`;
 }
 
 /**
