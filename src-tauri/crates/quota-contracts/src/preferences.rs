@@ -7,9 +7,11 @@
 use serde::{Deserialize, Serialize};
 use specta::Type;
 
+use quota_domain::ids::AccountId;
 use quota_domain::polling::ProviderPollingPolicy;
 use quota_domain::preferences::{
-    AppView, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme, WidgetPosition,
+    AccountSort, AppView, IndicatorStyle, LaunchBehavior, OverviewMode, PrivacyAliasMode, Theme,
+    WidgetPosition,
 };
 pub use quota_domain::preferences::{
     NotificationAlerts, NotificationPolicy, NotificationThresholds, QuietHours,
@@ -62,6 +64,10 @@ pub struct Preferences {
     /// Where the widget was last left. The host saves it when the widget moves;
     /// the renderer carries it through a save unchanged.
     pub widget_position: Option<WidgetPosition>,
+    /// The order accounts are listed in.
+    pub account_sort: AccountSort,
+    /// The arranged order, used when `account_sort` is `manual`.
+    pub account_order: Vec<AccountId>,
     /// Notification behaviour.
     pub notifications: NotificationPolicy,
     /// Retention and export behaviour.

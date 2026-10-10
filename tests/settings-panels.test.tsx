@@ -267,7 +267,9 @@ describe("privacy", () => {
 describe("appearance", () => {
   it("saves the theme and the overview layout", () => {
     const { actions, saved } = settingsActions();
-    render(<AppearancePanel preferences={preferences()} actions={actions} />);
+    render(
+      <AppearancePanel preferences={preferences()} accounts={[]} actions={actions} />,
+    );
     expect(
       screen.getByRole("button", { name: "Dark" }).getAttribute("aria-pressed"),
     ).toBe("true");

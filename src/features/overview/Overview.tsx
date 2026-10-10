@@ -95,7 +95,10 @@ function useApplyWhenIdle(
  * first render for ever.
  */
 export function overviewPlacements(state: RendererState): readonly PlacedAccount[] {
-  return applyOrder(placeAccounts(state.snapshot?.accounts ?? []), state.appliedOrder);
+  return applyOrder(
+    placeAccounts(state.snapshot?.accounts ?? [], state.preferences),
+    state.appliedOrder,
+  );
 }
 
 /** The accounts the current filter leaves on screen, in the order on screen. */

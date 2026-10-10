@@ -31,6 +31,8 @@ pub fn to_presentation(preferences: &Preferences) -> PresentationPreferences {
         reduce_motion: preferences.reduce_motion,
         view: preferences.view,
         widget_position: preferences.widget_position,
+        account_sort: preferences.account_sort,
+        account_order: preferences.account_order.clone(),
     }
 }
 
@@ -65,6 +67,8 @@ pub fn from_persisted(
         reduce_motion: presentation.reduce_motion,
         view: presentation.view,
         widget_position: presentation.widget_position,
+        account_sort: presentation.account_sort,
+        account_order: presentation.account_order.clone(),
         notifications: operational.notifications,
         privacy: quota_contracts::preferences::PrivacyPolicy {
             alias_mode: presentation.privacy_alias_mode,
