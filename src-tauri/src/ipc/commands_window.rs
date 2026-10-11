@@ -269,24 +269,30 @@ fn settings_route(section: &str, group: Option<&str>) -> String {
     let request = uuid::Uuid::new_v4();
     match group {
         None => format!("#/settings/{section}/{request}"),
-        Some(group) => format!("#/settings/{section}/{request}/{}", encode_segment(group)),
+        Some(group) => format!(
+            "#/settings/{section}/{request}/{}",
+            crate::platform::app_view::encode_segment(group)
+        ),
     }
 }
 
-/// Percent-encodes everything but unreserved characters, as the page's
-/// `decodeURIComponent` reads it back.
-fn encode_segment(text: &str) -> String {
-    use std::fmt::Write as _;
-    let mut encoded = String::with_capacity(text.len());
-    for byte in text.bytes() {
-        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
-            encoded.push(char::from(byte));
-        } else {
-            // Writing to a `String` cannot fail.
-            let _ = write!(encoded, "%{byte:02X}");
-        }
-    }
-    encoded
+/// Shows `target` in the full window, which becomes the view.
+///
+/// Settings asks for this rather than signalling the full window itself,
+/// because while the widget is the view the full window does not exist yet.
+#[tauri::command]
+#[specta::specta]
+pub async fn show_in_overview(
+    state: State<'_, AppState>,
+    target: quota_contracts::commands::OverviewTarget,
+) -> Result<(), CommandError> {
+    crate::platform::app_view::switch_to(
+        &state,
+        quota_domain::preferences::AppView::Overview,
+        Some(&target),
+    )
+    .await
+    .map(|_| ())
 }
 
 /// Shows and focuses the settings window at `destination`, placed over the

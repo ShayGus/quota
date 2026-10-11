@@ -7,6 +7,7 @@
     "windows": [
       {
         "label": "overview",
+        "create": false,
         "title": "Quota Dev",
         "url": "index.html",
         "width": 440,
@@ -24,7 +25,6 @@
         "label": "settings",
         "create": false,
         "title": "Quota Dev settings",
-        "parent": "overview",
         "url": "index.html#/settings",
         "width": 780,
         "height": 600,
@@ -35,6 +35,7 @@
       },
       {
         "label": "widget",
+        "create": false,
         "title": "Quota Dev widget",
         "url": "index.html#/widget",
         "width": 316,

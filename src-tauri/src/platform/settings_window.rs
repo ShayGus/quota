@@ -1,17 +1,17 @@
 //! Where the settings window opens.
 //!
 //! Settings opens over the overview, on the overview's screen, so it covers
-//! the window it configures. The settings window is owned by the overview (its
-//! `parent` in `tauri.conf.json`), so it also stays above it in z-order. When
-//! the overview is hidden, settings opens where the tray popover would, beside
-//! the tray.
+//! the window it configures. When the overview exists, settings is created
+//! owned by it, so it also stays above it in z-order. When the overview is
+//! hidden or not open, settings opens where the tray popover would, beside the
+//! tray.
 //!
 //! The window is created when it is opened, not at launch, and closing it
-//! destroys it, so its webview does not hold memory while settings is unused.
-//! Its configuration stays in `tauri.conf.json`, marked `create: false`.
+//! destroys it, so its webview does not hold memory while settings is unused
+//! (see `lifecycle`).
 
 use quota_contracts::CommandError;
-use tauri::{AppHandle, Manager, PhysicalPosition, WebviewUrl, WebviewWindow};
+use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
 
 use super::tray_anchor::{self, Rect};
 use super::window::{self, failed};
@@ -47,23 +47,29 @@ pub fn over_window(work_area: Rect, overview: Rect, size: (f64, f64), margin: f6
 /// therefore placed twice: once to reach the target screen, then again with
 /// the size it has there.
 pub fn show(app: &AppHandle, route: Option<&str>) -> Result<(), CommandError> {
-    let settings = match app.get_webview_window(LABEL) {
-        Some(settings) => {
-            if let Some(route) = route {
-                navigate(&settings, route)?;
-            }
-            settings
+    let settings = if let Some(settings) = app.get_webview_window(LABEL) {
+        if let Some(route) = route {
+            navigate(&settings, route)?;
         }
-        None => create(app, route.unwrap_or("#/settings"))?,
+        settings
+    } else {
+        let overview = app.get_webview_window(super::lifecycle::OVERVIEW);
+        super::lifecycle::create(
+            app,
+            LABEL,
+            Some(route.unwrap_or("#/settings")),
+            overview.as_ref(),
+        )?
     };
-    let overview = window::get(app, "overview")?;
+    let overview = app.get_webview_window(super::lifecycle::OVERVIEW);
     for _ in 0..2 {
         let size = settings
             .outer_size()
             .map_err(|_| failed("read_window_size"))?;
         let (x, y) = target(
             app,
-            &overview,
+            &settings,
+            overview.as_ref(),
             (f64::from(size.width), f64::from(size.height)),
         )?;
         settings
@@ -78,32 +84,6 @@ pub fn show(app: &AppHandle, route: Option<&str>) -> Result<(), CommandError> {
         .map_err(|_| failed("focus_settings_window"))
 }
 
-/// Creates the hidden settings window from its configuration, at `route`.
-///
-/// When it is destroyed, any connection its wizard left open is cancelled,
-/// because the page's own cleanup does not run in a destroyed webview.
-fn create(app: &AppHandle, route: &str) -> Result<WebviewWindow, CommandError> {
-    let mut config = app
-        .config()
-        .app
-        .windows
-        .iter()
-        .find(|config| config.label == LABEL)
-        .cloned()
-        .ok_or_else(|| failed("find_settings_configuration"))?;
-    config.url = WebviewUrl::App(format!("index.html{route}").into());
-    let settings = tauri::WebviewWindowBuilder::from_config(app, &config)
-        .and_then(tauri::WebviewWindowBuilder::build)
-        .map_err(|_| failed("create_settings_window"))?;
-    let handle = app.clone();
-    settings.on_window_event(move |event| {
-        if matches!(event, tauri::WindowEvent::Destroyed) {
-            cancel_left_connections(&handle);
-        }
-    });
-    Ok(settings)
-}
-
 /// Moves an open settings window to `route`.
 ///
 /// The route is the host's own, its one renderer-given part percent-encoded,
@@ -115,28 +95,17 @@ fn navigate(settings: &WebviewWindow, route: &str) -> Result<(), CommandError> {
         .map_err(|_| failed("navigate_settings"))
 }
 
-/// Discards the connection attempts a closed settings window left behind.
-fn cancel_left_connections(app: &AppHandle) {
-    let Some(state) = app.try_state::<crate::state::AppState>() else {
-        return;
-    };
-    let monitor = state.monitor.clone();
-    tauri::async_runtime::spawn(async move {
-        monitor.cancel_all_connections().await;
-    });
-}
-
-/// Where a settings window of `size` physical pixels goes.
+/// Where a settings window of `size` physical pixels goes: over a visible
+/// `overview`, else beside the tray.
 fn target(
     app: &AppHandle,
-    overview: &tauri::WebviewWindow,
+    settings: &WebviewWindow,
+    overview: Option<&WebviewWindow>,
     size: (f64, f64),
 ) -> Result<(f64, f64), CommandError> {
-    let visible = overview
-        .is_visible()
-        .map_err(|_| failed("read_window_visibility"))?;
-    if !visible {
-        let layout = window::tray_layout(app, overview)?;
+    let shown = overview.filter(|overview| overview.is_visible().unwrap_or(false));
+    let Some(overview) = shown else {
+        let layout = window::tray_layout(app, settings)?;
         return Ok(tray_anchor::place(
             layout.work_area,
             layout.edge,
@@ -144,7 +113,7 @@ fn target(
             size,
             MARGIN * layout.scale,
         ));
-    }
+    };
     let monitor = overview
         .current_monitor()
         .map_err(|_| failed("read_current_monitor"))?

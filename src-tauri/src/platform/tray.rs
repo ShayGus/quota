@@ -174,8 +174,9 @@ fn mark_coverage(x: f64, y: f64) -> (f64, bool) {
 
 /// Whether the system draws dark chrome, so the mark uses the dark accent.
 fn system_is_dark(app: &AppHandle) -> bool {
-    app.get_webview_window("overview")
-        .and_then(|window| window.theme().ok())
+    app.webview_windows()
+        .values()
+        .find_map(|window| window.theme().ok())
         .is_some_and(|theme| theme == tauri::Theme::Dark)
 }
 

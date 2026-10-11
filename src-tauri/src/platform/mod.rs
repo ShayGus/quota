@@ -7,6 +7,7 @@
 pub mod app_view;
 pub mod autostart;
 pub(crate) mod browser;
+pub mod lifecycle;
 pub mod popover_height;
 pub mod settings_window;
 pub mod tray;

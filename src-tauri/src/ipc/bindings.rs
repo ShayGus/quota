@@ -51,6 +51,7 @@ pub fn registry() -> Builder<tauri::Wry> {
             commands_window::set_app_view,
             commands_window::open_provider_usage_page,
             commands_window::open_settings_window,
+            commands_window::show_in_overview,
             commands_report::open_bug_report_issue,
             commands_report::copy_bug_report_prompt,
             commands_update::get_update_prompt,

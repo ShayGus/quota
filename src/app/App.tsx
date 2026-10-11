@@ -21,7 +21,6 @@ import {
   launch,
 } from "../shared/ipc/report";
 import type { RendererFailure, RendererState } from "../shared/state/types";
-import { getRendererState } from "../shared/state/store";
 import { useRendererState } from "../shared/state/useRendererState";
 import { Icon } from "../shared/ui/Icon";
 import { refreshMessage, Toast, type ToastMessage } from "../shared/ui/RefreshNotice";
@@ -30,7 +29,12 @@ import { useNow } from "../shared/ui/useNow";
 import { actions } from "./actions";
 import { AppHeader, SettingsHeader } from "./AppHeader";
 import { AppBoundary, FeatureBoundary } from "./ErrorBoundary";
-import { listenForNavigation, showInPopover } from "../shared/ipc/navigation";
+import {
+  initialTarget,
+  listenForNavigation,
+  showInPopover,
+  type PopoverTarget,
+} from "../shared/ipc/navigation";
 import { useFitContentHeight } from "./useFitContentHeight";
 import { useSnapshotSubscription } from "./useSnapshotSubscription";
 import { useTheme } from "./useTheme";
@@ -215,6 +219,13 @@ function QuotaWindow(): JSX.Element {
   return <Popover state={state} toast={toast} onToast={setToast} />;
 }
 
+/** The popover surface for a navigation target. */
+function viewOf(target: PopoverTarget): View {
+  return target.view === "detail"
+    ? { name: "detail", id: target.accountId, windowId: target.windowId }
+    : { name: "overview" };
+}
+
 /** The popover: header, the current surface, and footer. */
 function Popover({
   state,
@@ -225,7 +236,11 @@ function Popover({
   readonly toast: ToastMessage | null;
   readonly onToast: (message: ToastMessage) => void;
 }): JSX.Element {
-  const [view, setView] = useState<View>({ name: "overview" });
+  // A full window created for a surface, as settings' Details asks for while
+  // the widget is the view, opens at it.
+  const [view, setView] = useState<View>(() =>
+    viewOf(initialTarget(window.location.hash)),
+  );
   // The filter belongs to the window rather than the list, so returning from
   // details keeps it.
   const [filter, setFilter] = useState<OverviewFilter>("all");
@@ -260,16 +275,9 @@ function Popover({
     let stopped = false;
     launch(
       listenForNavigation((target) => {
-        // Settings asked for a surface of the full window. While the widget is
-        // the view, the full window takes its place rather than joining it.
-        if (getRendererState().preferences?.view === "widget") {
-          launch(actions.setAppView("overview"));
-        }
-        if (target.view === "detail") {
-          setView({ name: "detail", id: target.accountId, windowId: target.windowId });
-        } else {
-          setView({ name: "overview" });
-        }
+        // Settings asked the host for a surface of the full window; the host
+        // has already made the full window the view.
+        setView(viewOf(target));
       }).then((detach) => {
         if (stopped) {
           detach();

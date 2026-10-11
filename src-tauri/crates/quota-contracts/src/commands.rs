@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use specta::Type;
 
 use quota_domain::account::VerifiedIdentity;
-use quota_domain::ids::{AccountGroupId, ConnectionAttemptId};
+use quota_domain::ids::{AccountGroupId, AccountId, ConnectionAttemptId, QuotaWindowId};
 use quota_domain::preferences::OverviewMode;
 use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::QuotaWindow;
@@ -190,6 +190,22 @@ pub enum SettingsDestination {
     AddKey {
         /// The group the new key joins.
         group_id: AccountGroupId,
+    },
+}
+
+/// A surface of the full window that another window asks for, as settings'
+/// Details does.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+#[serde(tag = "view", rename_all = "snake_case")]
+pub enum OverviewTarget {
+    /// The account list.
+    Overview,
+    /// One account's quota detail, at one window when named.
+    Detail {
+        /// The account shown.
+        account_id: AccountId,
+        /// The window selected, or `None` for the account's first.
+        window_id: Option<QuotaWindowId>,
     },
 }
 
