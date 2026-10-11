@@ -14,6 +14,29 @@ use tokio::sync::watch;
 use super::confirm;
 use super::{MonitoringRuntime, REMOTE_TIMEOUT, RuntimeState};
 
+impl MonitoringRuntime {
+    /// Cancels every attempt, running or holding a verified candidate.
+    ///
+    /// Only the settings window's wizard starts attempts, and it cancels its
+    /// own when it goes away. A closed settings window is destroyed without
+    /// running the page's cleanup, so the host discards what it left.
+    pub async fn cancel_all_connections(&self) {
+        let mut attempt_ids: Vec<ConnectionAttemptId> =
+            self.attempts.lock().await.keys().cloned().collect();
+        for held in self.pending.attempt_ids().await {
+            if !attempt_ids.contains(&held) {
+                attempt_ids.push(held);
+            }
+        }
+        for attempt_id in attempt_ids {
+            // An attempt that finished meanwhile has nothing left to cancel.
+            if self.cancel_connection(&attempt_id).await.is_err() {
+                tracing::debug!("a connection had nothing left to cancel");
+            }
+        }
+    }
+}
+
 /// Emits one attempt's progress under a revision that only moves forward.
 ///
 /// The renderer accepts only a strictly newer revision for an attempt, so the

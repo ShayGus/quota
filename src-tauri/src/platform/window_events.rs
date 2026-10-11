@@ -1,10 +1,11 @@
 //! What closing or leaving a window does.
 //!
-//! Persistent windows are kept alive: closing the overview or settings hides
-//! it, so the tray can bring it back. Closing settings on its add-account page
-//! also leaves that page, and a tray popover that loses focus hides, as a
-//! popover does. The widget is never hidden by closing: while it is the view it
-//! stays on screen, and wherever it is moved is saved.
+//! The overview is kept alive: closing it hides it, so the tray can bring it
+//! back, and a tray popover that loses focus hides, as a popover does. The
+//! widget is never hidden by closing: while it is the view it stays on screen,
+//! and wherever it is moved is saved. Settings is created when it is opened
+//! and really closes, so its webview is not kept running while it is unused
+//! (see `settings_window`).
 //! The transient update window has its own close handler in `updates::host`.
 
 use quota_domain::preferences::OverviewMode;
@@ -12,13 +13,9 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 
 use super::window::{publish_state, set_visible};
 
-/// Moves the settings window from its add-account page to Accounts, so the
-/// wizard unmounts and discards a verified account that was never confirmed.
-const LEAVE_ADD_ACCOUNT: &str = "if (window.location.hash.startsWith('#/settings/connect')) { window.location.hash = '#/settings/accounts/closed'; }";
-
 /// Keeps every configured window alive when the user closes it.
 pub fn install_close_handlers(app: &AppHandle) {
-    for label in ["overview", "settings", super::widget::LABEL] {
+    for label in ["overview", super::widget::LABEL] {
         let Some(native) = app.get_webview_window(label) else {
             continue;
         };
@@ -49,18 +46,7 @@ fn close(app: &AppHandle, native: &WebviewWindow, label: &'static str) {
     if let Err(error) = native.hide() {
         tracing::warn!(%error, %label, "the window could not be hidden on close");
     }
-    if label == "settings" {
-        leave_add_account(native);
-    } else {
-        report_overview_hidden(app);
-    }
-}
-
-/// Moves a hidden settings window off its add-account page.
-fn leave_add_account(native: &WebviewWindow) {
-    if let Err(error) = native.eval(LEAVE_ADD_ACCOUNT) {
-        tracing::warn!(%error, "settings could not leave the add-account page");
-    }
+    report_overview_hidden(app);
 }
 
 /// Publishes the overview as hidden.

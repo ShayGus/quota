@@ -260,63 +260,74 @@ fn window_state_response(state: WindowModelState) -> WindowStateResponse {
     }
 }
 
-/// The script that moves the settings window to `section`, under a fresh
-/// request so the same section opens anew, with the group a new key joins.
+/// The settings route for `section`, under a fresh request so the same
+/// section opens anew, with the group a new key joins.
 ///
-/// The group id is the renderer's, so it enters the script only as a JSON
-/// string literal, URI-encoded by the page: it can never end the string.
-fn route_script(section: &str, group: Option<&str>) -> Result<String, CommandError> {
+/// The group id is the renderer's, so it enters the route percent-encoded:
+/// it can never leave its segment, in a page address or in a script.
+fn settings_route(section: &str, group: Option<&str>) -> String {
     let request = uuid::Uuid::new_v4();
-    let Some(group) = group else {
-        return Ok(format!(
-            "window.location.hash = '#/settings/{section}/{request}';"
-        ));
-    };
-    let literal = serde_json::to_string(group).map_err(|_| window::failed("navigate_settings"))?;
-    Ok(format!(
-        "window.location.hash = '#/settings/{section}/{request}/' + encodeURIComponent({literal});"
-    ))
+    match group {
+        None => format!("#/settings/{section}/{request}"),
+        Some(group) => format!("#/settings/{section}/{request}/{}", encode_segment(group)),
+    }
 }
 
-/// Shows and focuses the settings window, placed over the overview or, when
-/// the overview is hidden, beside the tray.
+/// Percent-encodes everything but unreserved characters, as the page's
+/// `decodeURIComponent` reads it back.
+fn encode_segment(text: &str) -> String {
+    use std::fmt::Write as _;
+    let mut encoded = String::with_capacity(text.len());
+    for byte in text.bytes() {
+        if byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'~') {
+            encoded.push(char::from(byte));
+        } else {
+            // Writing to a `String` cannot fail.
+            let _ = write!(encoded, "%{byte:02X}");
+        }
+    }
+    encoded
+}
+
+/// Shows and focuses the settings window at `destination`, placed over the
+/// overview or, when the overview is hidden, beside the tray.
 ///
-/// The window is created hidden at launch and stays hidden until this command
-/// or the tray menu runs, so the settings surface never opens beside the
-/// overview on its own. The renderer asks the host rather than creating a
-/// webview itself, so window labels, permissions and geometry stay owned on
-/// one side.
+/// The window is created only when it is opened, by this command or the tray
+/// menu, so the settings surface never opens beside the overview on its own.
+/// The renderer asks the host rather than creating a webview itself, so window
+/// labels, permissions and geometry stay owned on one side.
 #[tauri::command]
 #[specta::specta]
 pub async fn open_settings_window(
     state: State<'_, AppState>,
     destination: SettingsDestination,
 ) -> Result<(), CommandError> {
-    let native = window::get(&state.app, "settings")?;
-    let script = match destination {
-        SettingsDestination::General => "window.location.hash = '#/settings';".to_owned(),
-        SettingsDestination::Accounts => route_script("accounts", None)?,
-        SettingsDestination::Connect => route_script("connect", None)?,
+    let route = match destination {
+        SettingsDestination::General => "#/settings".to_owned(),
+        SettingsDestination::Accounts => settings_route("accounts", None),
+        SettingsDestination::Connect => settings_route("connect", None),
         SettingsDestination::AddKey { group_id } => {
-            route_script("connect", Some(group_id.as_str()))?
+            settings_route("connect", Some(group_id.as_str()))
         }
     };
-    native
-        .eval(&script)
-        .map_err(|_| window::failed("navigate_settings"))?;
-    crate::platform::settings_window::show(&state.app)
+    crate::platform::settings_window::show(&state.app, Some(&route))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::route_script;
+    use super::settings_route;
 
     #[test]
-    fn a_group_id_enters_the_settings_route_only_as_a_string() {
-        let plain = route_script("connect", None).unwrap();
-        assert!(plain.starts_with("window.location.hash = '#/settings/connect/"));
-        assert!(plain.ends_with("';"));
-        let hostile = route_script("connect", Some("x\"); alert(1); //'")).unwrap();
-        assert!(hostile.ends_with(r#"encodeURIComponent("x\"); alert(1); //'");"#));
+    fn a_group_id_enters_the_settings_route_only_percent_encoded() {
+        let plain = settings_route("connect", None);
+        assert!(plain.starts_with("#/settings/connect/"));
+        assert_eq!(plain.matches('/').count(), 3);
+        let hostile = settings_route("connect", Some("x\"); alert(1); //'/../a b"));
+        let group = hostile.rsplit('/').next().unwrap();
+        assert_eq!(
+            group,
+            "x%22%29%3B%20alert%281%29%3B%20%2F%2F%27%2F..%2Fa%20b"
+        );
+        assert_eq!(hostile.matches('/').count(), 4);
     }
 }

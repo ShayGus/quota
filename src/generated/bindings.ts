@@ -160,14 +160,13 @@ name: string } | null) => typedError<null, CommandError>(__TAURI_INVOKE("confirm
 	 */
 	openProviderUsagePage: (providerId: ProviderId) => typedError<null, CommandError>(__TAURI_INVOKE("open_provider_usage_page", { providerId })),
 	/**
-	 *  Shows and focuses the settings window, placed over the overview or, when
-	 *  the overview is hidden, beside the tray.
+	 *  Shows and focuses the settings window at `destination`, placed over the
+	 *  overview or, when the overview is hidden, beside the tray.
 	 * 
-	 *  The window is created hidden at launch and stays hidden until this command
-	 *  or the tray menu runs, so the settings surface never opens beside the
-	 *  overview on its own. The renderer asks the host rather than creating a
-	 *  webview itself, so window labels, permissions and geometry stay owned on
-	 *  one side.
+	 *  The window is created only when it is opened, by this command or the tray
+	 *  menu, so the settings surface never opens beside the overview on its own.
+	 *  The renderer asks the host rather than creating a webview itself, so window
+	 *  labels, permissions and geometry stay owned on one side.
 	 */
 	openSettingsWindow: (destination: SettingsDestination) => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window", { destination })),
 	/**  Opens GitHub's new-issue form for Quota, prefilled with the environment. */

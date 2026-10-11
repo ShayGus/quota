@@ -355,7 +355,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let id = event.id;
     match id.as_ref() {
         "settings" => {
-            if let Err(error) = super::settings_window::show(app) {
+            if let Err(error) = super::settings_window::show(app, None) {
                 tracing::warn!(
                     code = error.diagnostic_code(),
                     "settings could not be shown from the tray"
