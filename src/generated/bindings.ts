@@ -160,16 +160,22 @@ name: string } | null) => typedError<null, CommandError>(__TAURI_INVOKE("confirm
 	 */
 	openProviderUsagePage: (providerId: ProviderId) => typedError<null, CommandError>(__TAURI_INVOKE("open_provider_usage_page", { providerId })),
 	/**
-	 *  Shows and focuses the settings window, placed over the overview or, when
-	 *  the overview is hidden, beside the tray.
+	 *  Shows and focuses the settings window at `destination`, placed over the
+	 *  overview or, when the overview is hidden, beside the tray.
 	 * 
-	 *  The window is created hidden at launch and stays hidden until this command
-	 *  or the tray menu runs, so the settings surface never opens beside the
-	 *  overview on its own. The renderer asks the host rather than creating a
-	 *  webview itself, so window labels, permissions and geometry stay owned on
-	 *  one side.
+	 *  The window is created only when it is opened, by this command or the tray
+	 *  menu, so the settings surface never opens beside the overview on its own.
+	 *  The renderer asks the host rather than creating a webview itself, so window
+	 *  labels, permissions and geometry stay owned on one side.
 	 */
 	openSettingsWindow: (destination: SettingsDestination) => typedError<null, CommandError>(__TAURI_INVOKE("open_settings_window", { destination })),
+	/**
+	 *  Shows `target` in the full window, which becomes the view.
+	 * 
+	 *  Settings asks for this rather than signalling the full window itself,
+	 *  because while the widget is the view the full window does not exist yet.
+	 */
+	showInOverview: (target: OverviewTarget) => typedError<null, CommandError>(__TAURI_INVOKE("show_in_overview", { target })),
 	/**  Opens GitHub's new-issue form for Quota, prefilled with the environment. */
 	openBugReportIssue: () => typedError<null, CommandError>(__TAURI_INVOKE("open_bug_report_issue")),
 	/**  Copies a prompt that asks an AI agent to file the bug for the person. */
@@ -994,6 +1000,20 @@ export type OverviewMode =
 "floating" | 
 /**  A window anchored beside the tray. */
 "tray";
+
+/**
+ *  A surface of the full window that another window asks for, as settings'
+ *  Details does.
+ */
+export type OverviewTarget = 
+/**  The account list. */
+{ view: "overview" } | 
+/**  One account's quota detail, at one window when named. */
+{ view: "detail"; 
+/**  The account shown. */
+account_id: AccountId; 
+/**  The window selected, or `None` for the account's first. */
+window_id: QuotaWindowId | null };
 
 /**  Confirmed native overview window state, or a typed native failure. */
 export type OverviewWindowState = 

@@ -432,6 +432,7 @@ export function installFakeBackend(config: FakeConfig): void {
         return 2;
       case "clear_local_history":
       case "open_settings_window":
+      case "show_in_overview":
       case "open_provider_usage_page":
       case "open_bug_report_issue":
       case "copy_bug_report_prompt":

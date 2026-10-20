@@ -174,8 +174,9 @@ fn mark_coverage(x: f64, y: f64) -> (f64, bool) {
 
 /// Whether the system draws dark chrome, so the mark uses the dark accent.
 fn system_is_dark(app: &AppHandle) -> bool {
-    app.get_webview_window("overview")
-        .and_then(|window| window.theme().ok())
+    app.webview_windows()
+        .values()
+        .find_map(|window| window.theme().ok())
         .is_some_and(|theme| theme == tauri::Theme::Dark)
 }
 
@@ -355,7 +356,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
     let id = event.id;
     match id.as_ref() {
         "settings" => {
-            if let Err(error) = super::settings_window::show(app) {
+            if let Err(error) = super::settings_window::show(app, None) {
                 tracing::warn!(
                     code = error.diagnostic_code(),
                     "settings could not be shown from the tray"

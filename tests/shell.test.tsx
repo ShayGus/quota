@@ -683,10 +683,8 @@ describe("account details privacy", () => {
     await waitFor(() => {
       expect(commandsMatching("native-close")).toHaveLength(1);
     });
-    expect(commandsMatching("emit-to")[0]?.args).toEqual({
-      target: "overview",
-      event: "quota-popover-navigate",
-      payload: { view: "detail", accountId: "a2", windowId: null },
+    expect(commandsMatching("show_in_overview")[0]?.args).toEqual({
+      target: { view: "detail", account_id: "a2", window_id: null },
     });
   });
 

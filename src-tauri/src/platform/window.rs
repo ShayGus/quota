@@ -14,7 +14,7 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 use super::tray_anchor::{self, Edge};
 use tauri_plugin_window_state::StateFlags;
 
-pub(crate) use super::window_transition::{apply_mode_chrome, transition_mode};
+pub(crate) use super::window_transition::transition_mode;
 use quota_domain::preferences::OverviewMode;
 
 /// The window state the saved-state plugin may restore.
@@ -40,9 +40,8 @@ pub fn restored_state_flags() -> StateFlags {
 /// Returns the native error when the overview window is missing or the
 /// operating system refuses the request.
 pub fn activate_overview(app: &AppHandle) -> tauri::Result<()> {
-    let overview = app
-        .get_webview_window("overview")
-        .ok_or(tauri::Error::WindowNotFound)?;
+    let (overview, _) =
+        super::lifecycle::overview(app, None, None).map_err(|_| tauri::Error::WindowNotFound)?;
     overview.show()?;
     overview.set_focus()?;
     Ok(())

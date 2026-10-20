@@ -101,6 +101,11 @@ impl PendingConnections {
     pub(super) async fn take(&self, attempt_id: &ConnectionAttemptId) -> Option<PendingConnection> {
         self.0.lock().await.remove(attempt_id)
     }
+
+    /// The attempts holding a candidate.
+    pub(super) async fn attempt_ids(&self) -> Vec<ConnectionAttemptId> {
+        self.0.lock().await.keys().cloned().collect()
+    }
 }
 
 /// Mints the connection, account, and binding for one candidate.

@@ -321,45 +321,25 @@ async fn install_managed_state(
         providers: providers.clone(),
     });
     app.manage(state);
-    let native = app
-        .get_webview_window("overview")
-        .ok_or_else(|| "overview_window_missing".to_owned())?;
     let state = app.state::<AppState>();
-    let always_on_top = state.preferences_state.read().await.always_on_top;
-    native
-        .set_always_on_top(always_on_top)
-        .map_err(|_| "window_topmost_restore_failed")?;
-    let confirmed_topmost = native
-        .is_always_on_top()
-        .map_err(|_| "window_topmost_read_failed")?;
-    if confirmed_topmost != always_on_top {
-        return Err("window_topmost_confirmation_failed".to_owned());
+    // No window exists yet. The saved topmost flag and mode are recorded, and
+    // the full window takes them whenever it is created, now or later; in the
+    // tray mode it is then anchored to the tray. If the tray icon is not placed
+    // yet, the next tray event completes the anchor.
+    {
+        let preferences = state.preferences_state.read().await;
+        let mut controller = state.window.lock().await;
+        controller.set_always_on_top(preferences.always_on_top);
+        controller.set_mode(preferences.overview_mode);
     }
     // The saved view opens now that the preferences are read.
     crate::platform::app_view::restore_saved(&state)
         .await
         .map_err(|error| format!("view_restore_failed:{}", error.diagnostic_code()))?;
-    let visible = native
-        .is_visible()
-        .map_err(|_| "window_visibility_read_failed")?;
-    let mut controller = state.window.lock().await;
-    controller.set_always_on_top(confirmed_topmost);
-    controller.set_visible(visible);
-    let saved_mode = state.preferences_state.read().await.overview_mode;
-    // The saved mode's chrome needs no tray geometry, so it applies now. The
-    // anchor reads the tray icon's rectangle from the system; if the icon is
-    // not placed yet, the next tray event completes it.
-    crate::platform::window::apply_mode_chrome(&native, saved_mode, &mut controller)
-        .map_err(|_| "window_mode_chrome_restore_failed")?;
-    drop(controller);
-    if saved_mode == quota_domain::preferences::OverviewMode::Tray
-        && let Err(error) = crate::platform::window::anchor_to_tray(app)
-    {
-        tracing::warn!(
-            code = error.diagnostic_code(),
-            "overview could not anchor to the tray"
-        );
-    }
+    let visible = app
+        .get_webview_window(crate::platform::lifecycle::OVERVIEW)
+        .is_some_and(|native| native.is_visible().unwrap_or(false));
+    state.window.lock().await.set_visible(visible);
     // One refresh through the shared supervisor fills each seeded account's
     // reading by the ordinary read path.
     #[cfg(feature = "sample-data")]
@@ -437,12 +417,10 @@ pub fn start() -> Result<(), String> {
         // The log directory needs the host, so it could not be opened earlier.
         crate::file_log::attach(&handle);
         crate::platform::tray::install(&handle)?;
-        crate::platform::window_events::install_close_handlers(&handle);
         crate::platform::widget_screens::watch(&handle);
         // The saved view, the overview or the widget, is the only window a
-        // launch opens, once the backend has read which one it is. The
-        // settings window was created hidden and waits for a person to ask for
-        // it. A backend that cannot start still opens the overview, which
+        // launch creates, once the backend has read which one it is. Settings
+        // is created only when a person asks for it. A backend that cannot start still opens the overview, which
         // explains the failure, unless this is a quiet launch at login.
         tauri::async_runtime::spawn(async move {
             if let Err(error) = initialize_backend(handle.clone()).await {

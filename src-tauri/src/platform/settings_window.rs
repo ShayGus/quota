@@ -1,16 +1,23 @@
 //! Where the settings window opens.
 //!
 //! Settings opens over the overview, on the overview's screen, so it covers
-//! the window it configures. The settings window is owned by the overview (its
-//! `parent` in `tauri.conf.json`), so it also stays above it in z-order. When
-//! the overview is hidden, settings opens where the tray popover would, beside
-//! the tray.
+//! the window it configures. When the overview exists, settings is created
+//! owned by it, so it also stays above it in z-order. When the overview is
+//! hidden or not open, settings opens where the tray popover would, beside the
+//! tray.
+//!
+//! The window is created when it is opened, not at launch, and closing it
+//! destroys it, so its webview does not hold memory while settings is unused
+//! (see `lifecycle`).
 
 use quota_contracts::CommandError;
-use tauri::{AppHandle, PhysicalPosition};
+use tauri::{AppHandle, Manager, PhysicalPosition, WebviewWindow};
 
 use super::tray_anchor::{self, Rect};
 use super::window::{self, failed};
+
+/// The settings window's label in `tauri.conf.json`.
+pub const LABEL: &str = "settings";
 
 /// The gap kept between settings and the edge of the work area.
 const MARGIN: f64 = 12.0;
@@ -31,23 +38,38 @@ pub fn over_window(work_area: Rect, overview: Rect, size: (f64, f64), margin: f6
     )
 }
 
-/// Places the settings window over the overview, or beside the tray when the
-/// overview is hidden, then shows and focuses it.
+/// Opens settings at `route`, a `#/settings` address, or where it already is
+/// when `route` is `None`, then places, shows and focuses it over the
+/// overview, or beside the tray when the overview is hidden.
 ///
 /// A window moved onto a screen with another scale is resized by the system,
 /// which keeps its top-left corner and so moves its centre. Settings is
 /// therefore placed twice: once to reach the target screen, then again with
 /// the size it has there.
-pub fn show(app: &AppHandle) -> Result<(), CommandError> {
-    let settings = window::get(app, "settings")?;
-    let overview = window::get(app, "overview")?;
+pub fn show(app: &AppHandle, route: Option<&str>) -> Result<(), CommandError> {
+    let settings = if let Some(settings) = app.get_webview_window(LABEL) {
+        if let Some(route) = route {
+            navigate(&settings, route)?;
+        }
+        settings
+    } else {
+        let overview = app.get_webview_window(super::lifecycle::OVERVIEW);
+        super::lifecycle::create(
+            app,
+            LABEL,
+            Some(route.unwrap_or("#/settings")),
+            overview.as_ref(),
+        )?
+    };
+    let overview = app.get_webview_window(super::lifecycle::OVERVIEW);
     for _ in 0..2 {
         let size = settings
             .outer_size()
             .map_err(|_| failed("read_window_size"))?;
         let (x, y) = target(
             app,
-            &overview,
+            &settings,
+            overview.as_ref(),
             (f64::from(size.width), f64::from(size.height)),
         )?;
         settings
@@ -62,17 +84,28 @@ pub fn show(app: &AppHandle) -> Result<(), CommandError> {
         .map_err(|_| failed("focus_settings_window"))
 }
 
-/// Where a settings window of `size` physical pixels goes.
+/// Moves an open settings window to `route`.
+///
+/// The route is the host's own, its one renderer-given part percent-encoded,
+/// and enters the script only as a JSON string literal.
+fn navigate(settings: &WebviewWindow, route: &str) -> Result<(), CommandError> {
+    let literal = serde_json::to_string(route).map_err(|_| failed("navigate_settings"))?;
+    settings
+        .eval(format!("window.location.hash = {literal};"))
+        .map_err(|_| failed("navigate_settings"))
+}
+
+/// Where a settings window of `size` physical pixels goes: over a visible
+/// `overview`, else beside the tray.
 fn target(
     app: &AppHandle,
-    overview: &tauri::WebviewWindow,
+    settings: &WebviewWindow,
+    overview: Option<&WebviewWindow>,
     size: (f64, f64),
 ) -> Result<(f64, f64), CommandError> {
-    let visible = overview
-        .is_visible()
-        .map_err(|_| failed("read_window_visibility"))?;
-    if !visible {
-        let layout = window::tray_layout(app, overview)?;
+    let shown = overview.filter(|overview| overview.is_visible().unwrap_or(false));
+    let Some(overview) = shown else {
+        let layout = window::tray_layout(app, settings)?;
         return Ok(tray_anchor::place(
             layout.work_area,
             layout.edge,
@@ -80,7 +113,7 @@ fn target(
             size,
             MARGIN * layout.scale,
         ));
-    }
+    };
     let monitor = overview
         .current_monitor()
         .map_err(|_| failed("read_current_monitor"))?
@@ -132,6 +165,29 @@ mod tests {
             (actual.0 - expected.0).abs() < 1e-3 && (actual.1 - expected.1).abs() < 1e-3,
             "placed at {actual:?}, expected {expected:?}"
         );
+    }
+
+    /// Settings is created when opened, in every build's configuration.
+    #[test]
+    fn no_configuration_creates_settings_at_launch() {
+        for (name, text) in [
+            ("tauri.conf.json", include_str!("../../tauri.conf.json")),
+            (
+                "tauri.dev.conf.json",
+                include_str!("../../tauri.dev.conf.json"),
+            ),
+        ] {
+            let config: serde_json::Value = serde_json::from_str(text).expect("the configuration");
+            let windows = config["app"]["windows"].as_array().expect("the windows");
+            let settings = windows
+                .iter()
+                .find(|window| window["label"] == LABEL)
+                .expect("the settings window");
+            assert_eq!(
+                settings["create"], false,
+                "{name} creates settings at launch"
+            );
+        }
     }
 
     const WORK_AREA: Rect = rect(0.0, 0.0, 1920.0, 1032.0);

@@ -3,16 +3,18 @@
  *
  * The popover owns the overview and quota detail; the settings window owns
  * settings, including adding an account. When a settings control leads to a
- * popover surface, as Details does, the settings window asks the popover to
- * show it and steps aside.
+ * popover surface, as Details does, the settings window asks the host to show
+ * it and steps aside. The host creates the full window at that surface when
+ * it is not open, as while the widget is the view, or else signals it.
  *
  * This is one of the audited integration wrappers allowed to use the raw event
- * API: the event is window-to-window presentation routing, carries no
- * mutation, and no backend listener accepts it as a command.
+ * API: the event is presentation routing from the host, carries no mutation,
+ * and no backend listener accepts it as a command.
  */
-import { emitTo, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
+import { commands } from "../../generated/bindings";
 import type { AccountId, QuotaWindowId } from "../../generated/bindings";
 import { setFailure } from "../state/store";
 
@@ -39,11 +41,37 @@ function reportNavigationFailure(operation: string): void {
   });
 }
 
-/** Asks the popover to show one of its surfaces, then hides this window. */
-export async function showInPopover(target: PopoverTarget): Promise<void> {
+/**
+ * The surface a full window was created at, from its address:
+ * `#/detail/<account>` or `#/detail/<account>/<window>`, else the overview.
+ */
+export function initialTarget(hash: string): PopoverTarget {
+  const [, view, account, quotaWindow] = hash.split("/");
+  if (view !== "detail" || account === undefined || account === "") {
+    return { view: "overview" };
+  }
   try {
-    await emitTo("overview", NAVIGATE_EVENT, target);
+    return {
+      view: "detail",
+      accountId: decodeURIComponent(account),
+      windowId:
+        quotaWindow === undefined || quotaWindow === ""
+          ? null
+          : decodeURIComponent(quotaWindow),
+    };
   } catch {
+    return { view: "overview" };
+  }
+}
+
+/** Asks the host to show one popover surface, then closes this window. */
+export async function showInPopover(target: PopoverTarget): Promise<void> {
+  const shown = await commands.showInOverview(
+    target.view === "detail"
+      ? { view: "detail", account_id: target.accountId, window_id: target.windowId }
+      : { view: "overview" },
+  );
+  if (shown.status === "error") {
     // Without the request delivered, this window stays open for another try.
     reportNavigationFailure("navigate_popover");
     return;

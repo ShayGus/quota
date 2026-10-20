@@ -20,7 +20,7 @@ use tauri::menu::CheckMenuItem;
 use tauri::{AppHandle, Manager, PhysicalPosition, Wry};
 
 use super::tray_anchor::Rect;
-use super::window::{self, failed};
+use super::window::failed;
 use crate::state::AppState;
 
 /// The widget window's label in `tauri.conf.json`.
@@ -232,7 +232,10 @@ pub fn fit(
 /// # Errors
 /// Returns the native failure when the window refuses.
 pub fn show(app: &AppHandle, saved: Option<WidgetPosition>) -> Result<(), CommandError> {
-    let native = window::get(app, LABEL)?;
+    let native = match app.get_webview_window(LABEL) {
+        Some(native) => native,
+        None => super::lifecycle::create(app, LABEL, None, None)?,
+    };
     let size = native
         .outer_size()
         .map_err(|_| failed("read_widget_size"))?;
@@ -293,14 +296,16 @@ pub fn raise(native: &tauri::WebviewWindow) -> Result<(), CommandError> {
         .map_err(|_| failed("set_always_on_top"))
 }
 
-/// Puts the widget away, when the full window becomes the view.
+/// Puts the widget away, when the full window becomes the view. It is
+/// destroyed, so its webview does not run while the widget is not the view.
 ///
 /// # Errors
 /// Returns the native failure when the window refuses.
 pub fn hide(app: &AppHandle) -> Result<(), CommandError> {
-    window::get(app, LABEL)?
-        .hide()
-        .map_err(|_| failed("hide_widget"))
+    match app.get_webview_window(LABEL) {
+        Some(native) => native.destroy().map_err(|_| failed("hide_widget")),
+        None => Ok(()),
+    }
 }
 
 /// Saves where the widget was moved to, once it has rested, so a drag saves

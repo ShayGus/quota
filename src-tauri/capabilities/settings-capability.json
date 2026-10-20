@@ -36,6 +36,7 @@
     "allow-set-app-view",
     "allow-open-provider-usage-page",
     "allow-open-settings-window",
+    "allow-show-in-overview",
     "autostart:allow-enable",
     "autostart:allow-disable",
     "autostart:allow-is-enabled"

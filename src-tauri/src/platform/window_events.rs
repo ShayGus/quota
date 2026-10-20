@@ -1,10 +1,12 @@
 //! What closing or leaving a window does.
 //!
-//! Persistent windows are kept alive: closing the overview or settings hides
-//! it, so the tray can bring it back. Closing settings on its add-account page
-//! also leaves that page, and a tray popover that loses focus hides, as a
-//! popover does. The widget is never hidden by closing: while it is the view it
-//! stays on screen, and wherever it is moved is saved.
+//! The full window is kept alive while it is the view: closing it hides it,
+//! so the tray can bring it back, and a tray popover that loses focus hides, as
+//! a popover does. The widget is never hidden by closing: while it is the view
+//! it stays on screen, and wherever it is moved is saved. Settings really
+//! closes, so its webview is not kept running while it is unused; the
+//! connections its wizard left open are cancelled then, and a full window kept
+//! hidden only for it goes too (see `lifecycle`).
 //! The transient update window has its own close handler in `updates::host`.
 
 use quota_domain::preferences::OverviewMode;
@@ -12,32 +14,40 @@ use tauri::{AppHandle, Manager, WebviewWindow};
 
 use super::window::{publish_state, set_visible};
 
-/// Moves the settings window from its add-account page to Accounts, so the
-/// wizard unmounts and discards a verified account that was never confirmed.
-const LEAVE_ADD_ACCOUNT: &str = "if (window.location.hash.startsWith('#/settings/connect')) { window.location.hash = '#/settings/accounts/closed'; }";
+/// Installs what closing, leaving and moving do for a window just created.
+pub fn install(app: &AppHandle, native: &WebviewWindow, label: &'static str) {
+    let app = app.clone();
+    let native_for_event = native.clone();
+    let settings = label == super::settings_window::LABEL;
+    native.on_window_event(move |event| match event {
+        tauri::WindowEvent::CloseRequested { api, .. } if !settings => {
+            api.prevent_close();
+            close(&app, &native_for_event, label);
+        }
+        tauri::WindowEvent::Destroyed if settings => {
+            cancel_left_connections(&app);
+            super::lifecycle::release_hidden_overview(&app);
+        }
+        tauri::WindowEvent::Focused(false) if label == super::lifecycle::OVERVIEW => {
+            overview_lost_focus(&app);
+        }
+        tauri::WindowEvent::Moved(position) if label == super::widget::LABEL => {
+            super::widget::remember(&app, *position);
+        }
+        _ => {}
+    });
+}
 
-/// Keeps every configured window alive when the user closes it.
-pub fn install_close_handlers(app: &AppHandle) {
-    for label in ["overview", "settings", super::widget::LABEL] {
-        let Some(native) = app.get_webview_window(label) else {
-            continue;
-        };
-        let app = app.clone();
-        let native_for_event = native.clone();
-        native.on_window_event(move |event| match event {
-            tauri::WindowEvent::CloseRequested { api, .. } => {
-                api.prevent_close();
-                close(&app, &native_for_event, label);
-            }
-            tauri::WindowEvent::Focused(false) if label == "overview" => {
-                overview_lost_focus(&app);
-            }
-            tauri::WindowEvent::Moved(position) if label == super::widget::LABEL => {
-                super::widget::remember(&app, *position);
-            }
-            _ => {}
-        });
-    }
+/// Discards the connection attempts a closed settings window left behind,
+/// because the page's own cleanup does not run in a destroyed webview.
+fn cancel_left_connections(app: &AppHandle) {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return;
+    };
+    let monitor = state.monitor.clone();
+    tauri::async_runtime::spawn(async move {
+        monitor.cancel_all_connections().await;
+    });
 }
 
 /// Hides a window instead of closing it. The widget ignores a close: only
@@ -49,18 +59,7 @@ fn close(app: &AppHandle, native: &WebviewWindow, label: &'static str) {
     if let Err(error) = native.hide() {
         tracing::warn!(%error, %label, "the window could not be hidden on close");
     }
-    if label == "settings" {
-        leave_add_account(native);
-    } else {
-        report_overview_hidden(app);
-    }
-}
-
-/// Moves a hidden settings window off its add-account page.
-fn leave_add_account(native: &WebviewWindow) {
-    if let Err(error) = native.eval(LEAVE_ADD_ACCOUNT) {
-        tracing::warn!(%error, "settings could not leave the add-account page");
-    }
+    report_overview_hidden(app);
 }
 
 /// Publishes the overview as hidden.
