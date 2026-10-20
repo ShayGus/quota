@@ -11,6 +11,7 @@ use tokio::time::{MissedTickBehavior, interval_at};
 use crate::ipc::events::SnapshotUpdated as SnapshotUpdatedEvent;
 
 use super::read_path::perform_read;
+use super::sign_in::{self, SignInWatch};
 use super::{
     MAX_REMOTE_READS, MonitoringRuntime, PERIODIC_REFRESH, RefreshReason, RefreshRequest,
     RuntimeState,
@@ -23,6 +24,12 @@ pub(super) async fn run_coordinator(
     let start = tokio::time::Instant::now() + PERIODIC_REFRESH;
     let mut timer = interval_at(start, PERIODIC_REFRESH);
     timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut sign_in_timer = interval_at(
+        tokio::time::Instant::now() + sign_in::WATCH_INTERVAL,
+        sign_in::WATCH_INTERVAL,
+    );
+    sign_in_timer.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut sign_ins = SignInWatch::default();
     let mut workers = JoinSet::new();
     on_scheduled_tick(&runtime).await;
 
@@ -35,6 +42,9 @@ pub(super) async fn run_coordinator(
             }
             _ = timer.tick() => {
                 on_scheduled_tick(&runtime).await;
+            }
+            _ = sign_in_timer.tick() => {
+                sign_in::on_tick(&runtime, &mut sign_ins).await;
             }
             request = receiver.recv(), if workers.len() < MAX_REMOTE_READS => {
                 let Some(request) = request else { break; };

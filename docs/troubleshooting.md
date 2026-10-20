@@ -113,6 +113,14 @@ provider's own tool (see the table above), then choose **Reconnect** on the card
 **Settings → Accounts**. For an API key that was revoked, **Disconnect** the account and
 add it again with a new key.
 
+**The Claude card says Reconnect after a break.** Claude Code's sign-in lasts 8 hours and
+only Claude Code renews it, while you use it. Open Claude Code once: Quota notices the
+renewed sign-in within seconds and the card recovers by itself, with no need to press
+**Reconnect**. To skip even that, turn on **Renew the Claude Code sign-in** in **Settings
+→ Privacy**: Quota then starts Claude Code briefly in the background, without a window,
+whenever the sign-in runs out. It sends no prompt and uses none of your plan. Every few
+weeks the sign-in itself ends, and only signing in to Claude Code again fixes that.
+
 **The readings do not change when I press refresh.** Each provider has a minimum time
 between checks, and Quota waits longer when a provider asks it to slow down. The message
 after refresh says when the account can next be checked. Also check that **Settings →

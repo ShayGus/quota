@@ -47,6 +47,7 @@ mod device;
 mod policy;
 mod queue;
 mod read_path;
+mod sign_in;
 mod worker;
 
 const QUEUE_CAPACITY: usize = 64;
@@ -92,6 +93,8 @@ struct RuntimeState {
     backoff: Arc<dyn BackoffRepository>,
     monitoring: Arc<tokio::sync::RwLock<MonitoringState>>,
     policies: Arc<tokio::sync::RwLock<Vec<ProviderPollingPolicy>>>,
+    /// The confirmed preferences, for the choices monitoring obeys.
+    preferences: Arc<tokio::sync::RwLock<quota_contracts::Preferences>>,
     providers: Arc<quota_providers::ProviderRegistry>,
     clock: Arc<SystemClock>,
     permits: Arc<Semaphore>,
@@ -130,6 +133,8 @@ pub struct MonitoringStartup {
     pub monitoring: Arc<tokio::sync::RwLock<MonitoringState>>,
     /// The live polling policies the supervisor enforces.
     pub policies: Arc<tokio::sync::RwLock<Vec<ProviderPollingPolicy>>>,
+    /// The confirmed preferences, for the choices monitoring obeys.
+    pub preferences: Arc<tokio::sync::RwLock<quota_contracts::Preferences>>,
     /// The compiled provider adapters the supervisor reads through.
     pub providers: Arc<quota_providers::ProviderRegistry>,
 }
@@ -157,6 +162,7 @@ impl MonitoringRuntime {
             backoff: startup.backoff,
             monitoring: startup.monitoring,
             policies: startup.policies,
+            preferences: startup.preferences,
             providers: startup.providers,
             clock: Arc::new(SystemClock),
             permits: Arc::new(Semaphore::new(MAX_REMOTE_READS)),

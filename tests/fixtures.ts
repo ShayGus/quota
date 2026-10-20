@@ -299,7 +299,12 @@ export function preferences(overrides: Partial<Preferences> = {}): Preferences {
       quiet_hours: { kind: "never" },
       recovery_enabled: false,
     },
-    privacy: { alias_mode: "off", retain_history: false, export_identities: false },
+    privacy: {
+      alias_mode: "off",
+      retain_history: false,
+      export_identities: false,
+      renew_claude_sign_in: false,
+    },
     polling: [],
     ...overrides,
   };

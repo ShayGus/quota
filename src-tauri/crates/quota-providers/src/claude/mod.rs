@@ -1,13 +1,15 @@
 //! The Claude adapter: profile verification, a bounded usage read, mapping.
 //!
 //! Claude usage is read from undocumented OAuth routes with a token Claude Code
-//! owns. This adapter never refreshes that token, never runs Claude Code, and has
-//! no inference-based quota path at all. When the profile route reports no
-//! account identity the reading is refused, because an unverified identity must
-//! not be invented.
+//! owns. This adapter never refreshes that token and has no inference-based
+//! quota path at all. An expired token is refused before any request, and the
+//! only renewal it offers is asking Claude Code to renew its own sign-in
+//! ([`renew`]). When the profile route reports no account identity the reading
+//! is refused, because an unverified identity must not be invented.
 
 pub(crate) mod fixed;
 pub(crate) mod mapping;
+pub(crate) mod renew;
 pub(crate) mod wire;
 
 use std::sync::Arc;
@@ -15,7 +17,7 @@ use std::sync::Arc;
 use chrono::Utc;
 use quota_core::ports::{
     ConnectionBinding, DiscoveredAccount, FetchOutcome, ProviderAdapter, ProviderError,
-    ProviderFuture, ReadContext,
+    ProviderFuture, ReadContext, SignInRenewal,
 };
 use quota_domain::account::{
     AccountCardinality, ConnectionState, CredentialOwnership, VerifiedIdentity,
@@ -157,6 +159,9 @@ impl ClaudeAdapter {
         context: ReadContext,
     ) -> Result<FetchOutcome, ProviderError> {
         let credential = credentials::claude_credential().await?;
+        if credential.expired(Utc::now()) {
+            return Err(ProviderError::Authentication);
+        }
         let profile_label = credential.profile_label.clone();
         let pool = decode::pool_id(ProviderId::Claude, &profile_label);
         // The profile route proves which account this credential belongs
@@ -218,6 +223,9 @@ impl ProviderAdapter for ClaudeAdapter {
     ) -> ProviderFuture<'_, Result<Vec<DiscoveredAccount>, ProviderError>> {
         Box::pin(async move {
             let credential = credentials::claude_credential().await?;
+            if credential.expired(Utc::now()) {
+                return Err(ProviderError::Authentication);
+            }
             let context = ReadContext {
                 attempt_id: ConnectionAttemptId::generate(),
                 deadline: None,
@@ -248,5 +256,13 @@ impl ProviderAdapter for ClaudeAdapter {
     ) -> ProviderFuture<'_, Result<FetchOutcome, ProviderError>> {
         let binding = binding.clone();
         Box::pin(self.perform_read(binding, context))
+    }
+
+    fn external_sign_in_file(&self) -> Option<std::path::PathBuf> {
+        credentials::claude_sign_in_file().ok()
+    }
+
+    fn renew_external_sign_in(&self) -> ProviderFuture<'_, Result<SignInRenewal, ProviderError>> {
+        Box::pin(renew::renew())
     }
 }

@@ -1177,6 +1177,11 @@ export type PrivacyPolicy = {
 	retain_history: boolean,
 	/**  Whether diagnostic export includes account labels. */
 	export_identities: boolean,
+	/**
+	 *  Whether Quota may start Claude Code, without a window, to renew its
+	 *  expired sign-in. Off by default.
+	 */
+	renew_claude_sign_in: boolean,
 };
 
 /**  What an adapter declares it can do, before any account exists. */

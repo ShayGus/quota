@@ -379,8 +379,10 @@ pub(super) async fn record_failure(
 
 /// How long to wait before retrying, given the saved policy and this failure.
 ///
-/// A rate limit the provider named wins; otherwise the policy's own backoff
-/// steps apply.
+/// A rate limit the provider named wins. A sign-in that stopped working is
+/// looked at again within five minutes, because the fix usually happens
+/// elsewhere, in the client that owns it, and the person should not wait half
+/// an hour to see it. Otherwise the policy's own backoff steps apply.
 pub(super) async fn failure_delay(
     state: &RuntimeState,
     entry: &quota_core::accounts::RegisteredAccount,
@@ -400,8 +402,16 @@ pub(super) async fn failure_delay(
         .iter()
         .find(|policy| policy.provider_id == entry.binding.provider_id)
         .cloned();
-    policy.map_or_else(
+    let delay = policy.map_or_else(
         || chrono::Duration::minutes(5),
         |policy| policy.backoff_for_attempt(attempts),
-    )
+    );
+    if matches!(error, ProviderError::Authentication) {
+        delay.min(SIGN_IN_RETRY)
+    } else {
+        delay
+    }
 }
+
+/// The longest wait before a sign-in that stopped working is looked at again.
+const SIGN_IN_RETRY: chrono::Duration = chrono::Duration::minutes(5);

@@ -204,6 +204,19 @@ impl FetchOutcome {
     }
 }
 
+/// What asking the client that owns a sign-in to renew it did.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SignInRenewal {
+    /// The sign-in had not expired, so nothing was started.
+    NotNeeded,
+    /// This adapter cannot renew, or the owning client cannot be found.
+    Unavailable,
+    /// The owning client ran and the sign-in now expires later than before.
+    Renewed,
+    /// The owning client ran, or is still running, and the sign-in did not move.
+    Unchanged,
+}
+
 /// A compiled provider adapter.
 pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
     /// Which provider this adapter serves.
@@ -269,6 +282,22 @@ pub trait ProviderAdapter: Send + Sync + std::fmt::Debug {
     /// adapter.
     fn console_sign_in(&self) -> Option<super::ConsoleSignIn> {
         None
+    }
+
+    /// The file another client keeps this provider's sign-in in, for an adapter
+    /// that reads one. Watching it lets a renewal made elsewhere end a reconnect
+    /// demand at once. `None` for every other adapter.
+    fn external_sign_in_file(&self) -> Option<std::path::PathBuf> {
+        None
+    }
+
+    /// Asks the client that owns an expired sign-in to renew it.
+    ///
+    /// Quota never writes or refreshes the credential itself: the owning client
+    /// does, and the caller learns the outcome by reading the file again. Any
+    /// adapter without such a client reports it as unavailable.
+    fn renew_external_sign_in(&self) -> ProviderFuture<'_, Result<SignInRenewal, ProviderError>> {
+        Box::pin(async { Ok(SignInRenewal::Unavailable) })
     }
 
     /// Asks once whether the person has finished a started browser sign-in.
