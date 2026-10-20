@@ -202,6 +202,11 @@ pub struct OperationalPrivacyPreferences {
     pub retain_history: bool,
     /// Whether diagnostic export includes account labels.
     pub export_identities: bool,
+    /// Whether Quota may start Claude Code, without a window, to renew its
+    /// expired sign-in. Off unless the person turns it on, and a settings row
+    /// saved before the choice existed reads as off.
+    #[serde(default)]
+    pub renew_claude_sign_in: bool,
 }
 
 impl Default for OperationalPrivacyPreferences {
@@ -209,6 +214,7 @@ impl Default for OperationalPrivacyPreferences {
         Self {
             retain_history: true,
             export_identities: false,
+            renew_claude_sign_in: false,
         }
     }
 }
@@ -300,6 +306,15 @@ impl PresentationPreferences {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A row saved before the choice existed must not opt the person in.
+    #[test]
+    fn claude_renewal_reads_as_off_from_an_older_row() {
+        let older = r#"{"retain_history":true,"export_identities":false}"#;
+        let restored: OperationalPrivacyPreferences = serde_json::from_str(older).unwrap();
+        assert!(!restored.renew_claude_sign_in);
+        assert!(!OperationalPrivacyPreferences::default().renew_claude_sign_in);
+    }
 
     #[test]
     fn always_on_top_defaults_off_and_survives_a_round_trip() {

@@ -13,7 +13,7 @@ pub mod secrets;
 pub use device::{ConsoleSignIn, DeviceAuthorization, DevicePoll};
 pub use provider::{
     ConnectionBinding, DiscoveredAccount, FetchOutcome, ProviderAdapter, ProviderError,
-    ProviderFuture, QuotaRead, ReadContext,
+    ProviderFuture, QuotaRead, ReadContext, SignInRenewal,
 };
 pub use publisher::{NativeError, PublishError, SnapshotPublisher, WindowController};
 pub use repository::{

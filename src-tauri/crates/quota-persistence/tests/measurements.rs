@@ -344,6 +344,7 @@ async fn opting_out_of_local_history_stops_new_history_rows() {
         privacy: OperationalPrivacyPreferences {
             retain_history: false,
             export_identities: false,
+            renew_claude_sign_in: false,
         },
         polling: vec![],
     };
@@ -353,6 +354,7 @@ async fn opting_out_of_local_history_stops_new_history_rows() {
         privacy: OperationalPrivacyPreferences {
             retain_history: true,
             export_identities: false,
+            renew_claude_sign_in: false,
         },
         ..saved.clone()
     };

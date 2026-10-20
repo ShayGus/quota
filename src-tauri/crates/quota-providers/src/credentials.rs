@@ -4,11 +4,14 @@
 //! CLI, Claude Code, or an `OpenCode` login. Quota only reads the file and never
 //! writes to it, refreshes it, rotates it, or copies it anywhere. A missing or
 //! unusable file is an authentication state for the user to fix in the owning
-//! client, not something this crate repairs.
+//! client, not something this crate repairs. The one exception is asking Claude
+//! Code itself to renew its own expired sign-in (see [`crate::claude::renew`]),
+//! which still leaves every write to Claude Code.
 
 use std::fmt::{self, Debug, Formatter};
 use std::path::{Path, PathBuf};
 
+use chrono::{DateTime, Utc};
 use quota_core::ports::ProviderError;
 use serde_json::Value;
 
@@ -22,6 +25,10 @@ const CLAUDE_TOKEN_PATHS: &[&[&str]] = &[
     &["accessToken"],
     &["access_token"],
 ];
+
+/// Where Claude Code has written when its access token stops working, in
+/// milliseconds since the Unix epoch.
+const CLAUDE_EXPIRY_PATHS: &[&[&str]] = &[&["claudeAiOauth", "expiresAt"], &["expiresAt"]];
 /// The largest credential file this crate will read, in bytes.
 ///
 /// A real credential file is a few kilobytes; the ceiling stops an accidental
@@ -81,8 +88,20 @@ pub(crate) struct CodexCredential {
 pub(crate) struct ClaudeCredential {
     /// The OAuth access token read from `.credentials.json`.
     pub(crate) token: SecretToken,
+    /// When the access token stops working, when the file says.
+    pub(crate) expires_at: Option<DateTime<Utc>>,
     /// A non-revealing label for the profile the credential came from.
     pub(crate) profile_label: String,
+}
+
+impl ClaudeCredential {
+    /// Whether the access token has already stopped working.
+    ///
+    /// Only Claude Code renews it, so an expired token is refused locally:
+    /// sending it would only earn a rejection.
+    pub(crate) fn expired(&self, now: DateTime<Utc>) -> bool {
+        self.expires_at.is_some_and(|expires_at| expires_at <= now)
+    }
 }
 
 /// The `OpenCode` Go credential, as an `OpenCode` login wrote it.
@@ -127,8 +146,16 @@ pub(crate) async fn claude_credential() -> Result<ClaudeCredential, ProviderErro
     let token = string_at(&document, CLAUDE_TOKEN_PATHS).ok_or(ProviderError::Authentication)?;
     Ok(ClaudeCredential {
         token: SecretToken::new(token),
+        expires_at: instant_at(&document, CLAUDE_EXPIRY_PATHS),
         profile_label,
     })
+}
+
+/// The Claude `.credentials.json` path this system reads, honouring
+/// `CLAUDE_CONFIG_DIR` first.
+pub(crate) fn claude_sign_in_file() -> Result<PathBuf, ProviderError> {
+    let lookup: Lookup<'_> = &process_lookup;
+    claude_credentials_file(platform::system(), lookup).map(|(path, _)| path)
 }
 
 /// Reads the `OpenCode` Go credential.
@@ -275,6 +302,18 @@ pub(crate) fn string_at(document: &Value, paths: &[&[&str]]) -> Option<String> {
     })
 }
 
+/// The first instant, in milliseconds since the Unix epoch, found at one of
+/// the given key paths.
+pub(crate) fn instant_at(document: &Value, paths: &[&[&str]]) -> Option<DateTime<Utc>> {
+    paths.iter().find_map(|keys| {
+        let mut cursor = document;
+        for key in *keys {
+            cursor = cursor.get(*key)?;
+        }
+        DateTime::from_timestamp_millis(cursor.as_i64()?)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,6 +352,37 @@ mod tests {
         assert_eq!(string_at(&root, CLAUDE_TOKEN_PATHS), Some("two".to_owned()));
         let empty = serde_json::json!({"refreshToken": "only"});
         assert_eq!(string_at(&empty, CLAUDE_TOKEN_PATHS), None);
+    }
+
+    /// Both spellings carry the expiry, and a missing one is not invented.
+    #[test]
+    fn a_claude_expiry_is_read_from_either_spelling() {
+        let nested = serde_json::json!({"claudeAiOauth": {"expiresAt": 1_000}});
+        assert_eq!(
+            instant_at(&nested, CLAUDE_EXPIRY_PATHS),
+            DateTime::from_timestamp_millis(1_000)
+        );
+        let root = serde_json::json!({"expiresAt": 2_000});
+        assert_eq!(
+            instant_at(&root, CLAUDE_EXPIRY_PATHS),
+            DateTime::from_timestamp_millis(2_000)
+        );
+        let text = serde_json::json!({"claudeAiOauth": {"expiresAt": "soon"}});
+        assert_eq!(instant_at(&text, CLAUDE_EXPIRY_PATHS), None);
+    }
+
+    /// A token is expired from its expiry onwards, and never without one.
+    #[test]
+    fn a_claude_credential_expires_at_its_stated_instant() {
+        let at = DateTime::from_timestamp_millis(10_000).unwrap();
+        let credential = |expires_at| ClaudeCredential {
+            token: SecretToken::new("token".to_owned()),
+            expires_at,
+            profile_label: "claude-config-default".to_owned(),
+        };
+        assert!(!credential(Some(at)).expired(at - chrono::Duration::seconds(1)));
+        assert!(credential(Some(at)).expired(at));
+        assert!(!credential(None).expired(at));
     }
 
     /// Every label this module gives an `OpenCode` login's key is a local

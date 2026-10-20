@@ -242,6 +242,30 @@ describe("privacy", () => {
     expect(saved.at(-1)?.privacy.alias_mode).toBe("stable_aliases");
   });
 
+  it("offers Claude Code renewal only once a Claude account exists, off at first", () => {
+    const { actions, saved } = settingsActions();
+    const { rerender } = render(
+      <PrivacyPanel
+        preferences={preferences()}
+        accounts={[account("a1", "codex", 1, [])]}
+        actions={actions}
+      />,
+    );
+    const name = "Renew the Claude Code sign-in";
+    expect(screen.queryByRole("switch", { name })).toBeNull();
+    rerender(
+      <PrivacyPanel
+        preferences={preferences()}
+        accounts={[account("a1", "codex", 1, []), account("a2", "claude", 2, [])]}
+        actions={actions}
+      />,
+    );
+    const renew = screen.getByRole("switch", { name });
+    expect(renew.getAttribute("aria-checked")).toBe("false");
+    fireEvent.click(renew);
+    expect(saved.at(-1)?.privacy.renew_claude_sign_in).toBe(true);
+  });
+
   it("clears every account's history only after confirmation", () => {
     const { actions } = settingsActions();
     render(
@@ -368,6 +392,7 @@ describe("account management identities", () => {
         alias_mode: "stable_aliases",
         retain_history: false,
         export_identities: false,
+        renew_claude_sign_in: false,
       },
     });
     const { rerender } = render(

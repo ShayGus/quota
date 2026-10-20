@@ -29,6 +29,9 @@ pub struct PrivacyPolicy {
     pub retain_history: bool,
     /// Whether diagnostic export includes account labels.
     pub export_identities: bool,
+    /// Whether Quota may start Claude Code, without a window, to renew its
+    /// expired sign-in. Off by default.
+    pub renew_claude_sign_in: bool,
 }
 
 /// A window mode change requested by the renderer.

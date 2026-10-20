@@ -8,8 +8,10 @@
  * conversations. Every statement here is true of the host today.
  *
  * Then the choices: hiding account names on screen, which uses stable,
- * distinguishable aliases rather than one repeated word (AC-72), and whether
- * past readings are kept on this device.
+ * distinguishable aliases rather than one repeated word (AC-72), whether past
+ * readings are kept on this device, and, once a Claude account exists, whether
+ * Quota may start Claude Code to renew its expired sign-in. That one is off
+ * until the person turns it on, because it runs another app.
  */
 import { useState, type JSX } from "react";
 
@@ -18,7 +20,7 @@ import { Dialog } from "../../../shared/ui/Dialog";
 import { Icon } from "../../../shared/ui/Icon";
 import { SettingRow, SettingsTitle, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
-import { withAliasMode, withRetainHistory } from "../preferences";
+import { withAliasMode, withRenewClaudeSignIn, withRetainHistory } from "../preferences";
 import { credentialStoreName } from "../providers";
 
 /** What Quota does with data, each as a short heading and one sentence. */
@@ -112,6 +114,21 @@ export function PrivacyPanel({
           </button>
         }
       />
+      {accounts.some((account) => account.provider_id === "claude") ? (
+        <SettingRow
+          label="Renew the Claude Code sign-in"
+          description="Claude Code's sign-in runs out after 8 hours without use. When it does, Quota starts Claude Code briefly in the background to renew it. No prompt is sent and none of your plan is used."
+          control={
+            <Switch
+              checked={preferences.privacy.renew_claude_sign_in}
+              label="Renew the Claude Code sign-in"
+              onChange={(renew) => {
+                actions.savePreferences(withRenewClaudeSignIn(preferences, renew));
+              }}
+            />
+          }
+        />
+      ) : null}
       {confirming ? (
         <Dialog
           title="Clear reading history?"

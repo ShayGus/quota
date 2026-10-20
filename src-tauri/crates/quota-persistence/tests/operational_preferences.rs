@@ -59,6 +59,7 @@ async fn saved_operational_policies_round_trip_and_keep_monitoring_state() {
         privacy: OperationalPrivacyPreferences {
             retain_history: false,
             export_identities: true,
+            renew_claude_sign_in: true,
         },
         polling: vec![ProviderPollingPolicy {
             provider_id: ProviderId::Codex,

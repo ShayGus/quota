@@ -311,6 +311,7 @@ describe("Provider → Connect → Verify", () => {
             alias_mode: "stable_aliases",
             retain_history: false,
             export_identities: false,
+            renew_claude_sign_in: false,
           },
         }),
       );
@@ -337,6 +338,7 @@ describe("Provider → Connect → Verify", () => {
               alias_mode: mode,
               retain_history: false,
               export_identities: false,
+              renew_claude_sign_in: false,
             },
           }),
         );

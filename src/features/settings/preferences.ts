@@ -62,6 +62,14 @@ export function withExportIdentities(
   return { ...preferences, privacy: { ...preferences.privacy, export_identities } };
 }
 
+/** The next preferences with Claude Code's expired sign-in renewed by Quota or not. */
+export function withRenewClaudeSignIn(
+  preferences: Preferences,
+  renew_claude_sign_in: boolean,
+): Preferences {
+  return { ...preferences, privacy: { ...preferences.privacy, renew_claude_sign_in } };
+}
+
 /**
  * The next preferences with accounts listed in `account_sort`. The first time
  * the person chooses their own order, it starts from the order on screen, so

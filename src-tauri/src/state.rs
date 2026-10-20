@@ -97,6 +97,7 @@ impl AppState {
             backoff: backoff.clone(),
             monitoring: monitoring_state.clone(),
             policies: policies.clone(),
+            preferences: preferences_state.clone(),
             providers,
         });
         Self {

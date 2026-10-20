@@ -45,6 +45,7 @@ pub fn to_operational(preferences: &Preferences, revision: u32) -> OperationalPr
         privacy: OperationalPrivacyPreferences {
             retain_history: preferences.privacy.retain_history,
             export_identities: preferences.privacy.export_identities,
+            renew_claude_sign_in: preferences.privacy.renew_claude_sign_in,
         },
         polling: preferences.polling.clone(),
     }
@@ -74,6 +75,7 @@ pub fn from_persisted(
             alias_mode: presentation.privacy_alias_mode,
             retain_history: operational.privacy.retain_history,
             export_identities: operational.privacy.export_identities,
+            renew_claude_sign_in: operational.privacy.renew_claude_sign_in,
         },
         polling: operational.polling.clone(),
     }
