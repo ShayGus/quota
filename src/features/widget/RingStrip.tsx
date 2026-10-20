@@ -17,6 +17,11 @@
  * bottom edge the drawer opens upward and the tiles keep their screen
  * position. The drawer closes on its tile, its close button, Esc, another
  * application taking focus, or its account leaving the widget.
+ *
+ * An account that must be reconnected says so on its tile, and its drawer
+ * has a Reconnect button that does what the full window's Reconnect does: it
+ * is busy until the account is checked again, and a reconnect the host
+ * refused says why in the drawer, since the widget has no toast.
  */
 import {
   useCallback,
@@ -71,7 +76,10 @@ const DRAWER_ROW = 18;
 const DRAWER_ROW_GAP = 2;
 const DRAWER_ROWS_PAD = 2;
 const DRAWER_PAD = 2;
-/** Everything in the drawer but the rows themselves. */
+/** The reconnect line's top margin, and its height: two lines of words. */
+const DRAWER_ACTION_TOP = 6;
+const DRAWER_ACTION = 28;
+/** Everything in the drawer but the rows themselves and the reconnect line. */
 const DRAWER_FIXED =
   DRAWER_DIVIDER + DRAWER_HEADER + DRAWER_ROWS_TOP + DRAWER_ROWS_PAD + DRAWER_PAD;
 
@@ -95,11 +103,33 @@ const PERIOD_NAMES: Record<Period, string> = {
   custom: "Other",
 };
 
+/** A reconnect asked from the drawer, while it is sent and once it is refused. */
+interface ReconnectAsk {
+  /** The tile it was asked from. */
+  readonly id: AccountId;
+  /** Whether the host has not answered yet. */
+  readonly sending: boolean;
+  /** The words for why the host refused it, or `null`. */
+  readonly failure: string | null;
+}
+
+/** What the drawer's reconnect line shows. */
+interface ReconnectLine {
+  readonly busy: boolean;
+  readonly failure: string | null;
+}
+
 /** The ring strip. */
 export function RingStrip({
   accounts,
+  onReconnect,
 }: {
   readonly accounts: readonly WidgetAccount[];
+  /**
+   * Reconnects one account, as the full window does. Answers the words for
+   * why the host refused, or `null` once it took the reconnect.
+   */
+  readonly onReconnect: (accountId: AccountId) => Promise<string | null>;
 }): JSX.Element {
   const chrome = useWidgetChrome();
   const { requestFit, setDrawerOpen, setOnPressEnd } = chrome;
@@ -109,6 +139,7 @@ export function RingStrip({
   const [fitted, setFitted] = useState(0);
   const [height, setHeight] = useState(0);
   const [closing, setClosing] = useState(false);
+  const [ask, setAsk] = useState<ReconnectAsk | null>(null);
   const section = useRef<HTMLElement | null>(null);
   const drawer = useRef<HTMLDivElement | null>(null);
   const tiles = useRef(new Map<AccountId, HTMLButtonElement>());
@@ -117,7 +148,7 @@ export function RingStrip({
   const settleToken = useRef(0);
   const settleDone = useRef<(() => void) | null>(null);
   const keyboard = useRef(false);
-  const rowsLength = useRef<number | null>(null);
+  const wanted = useRef<number | null>(null);
   const rows = Math.ceil(accounts.length / PER_ROW);
   const perRow = Math.ceil(accounts.length / rows);
   const wide = perRow < PER_ROW;
@@ -215,9 +246,11 @@ export function RingStrip({
       return;
     }
     cancelSettle();
-    const want = drawerHeightOf(account.rows.length);
+    // A reconnect asked of another account says nothing in this one's drawer.
+    setAsk((current) => (current?.id === id ? current : null));
+    const want = wantedHeightOf(account, ask);
     if (selected !== null && selected !== id && want < fitted) {
-      rowsLength.current = account.rows.length;
+      wanted.current = want;
       shrinkTo(id, want);
       return;
     }
@@ -237,7 +270,7 @@ export function RingStrip({
             setHeight(grown);
           }
           chrome.setDrawerOpen(true);
-          rowsLength.current = account.rows.length;
+          wanted.current = want;
         }),
     );
   };
@@ -248,6 +281,7 @@ export function RingStrip({
       return;
     }
     cancelSettle();
+    setAsk(null);
     if (reducedMotion()) {
       launch(
         requestFit(rest, dir).then((answer) => {
@@ -325,26 +359,27 @@ export function RingStrip({
     }
   }, [selected, accounts, rest, dir, chrome, cancelSettle]);
 
-  // Values update in place; when the row count changes the height follows,
-  // growing the window first and shrinking it after.
+  // Values update in place; when the row count changes, or the reconnect
+  // line comes or goes, the height follows, growing the window first and
+  // shrinking it after.
   useEffect(() => {
     if (selected === null) {
-      rowsLength.current = null;
+      wanted.current = null;
       return;
     }
     const account = accounts.find((entry) => entry.id === selected);
     if (account === undefined) {
       return;
     }
-    if (rowsLength.current === null) {
-      rowsLength.current = account.rows.length;
+    const want = wantedHeightOf(account, ask);
+    if (wanted.current === null) {
+      wanted.current = want;
       return;
     }
-    if (rowsLength.current === account.rows.length || closing) {
+    if (wanted.current === want || closing) {
       return;
     }
-    rowsLength.current = account.rows.length;
-    const want = drawerHeightOf(account.rows.length);
+    wanted.current = want;
     const grown = fitted;
     const frame = requestAnimationFrame(() => {
       if (want >= grown) {
@@ -363,7 +398,7 @@ export function RingStrip({
     return () => {
       cancelAnimationFrame(frame);
     };
-  }, [selected, accounts, closing, fitted, rest, dir, chrome, shrinkTo]);
+  }, [selected, accounts, ask, closing, fitted, rest, dir, chrome, shrinkTo]);
 
   useEffect(() => {
     const onBlur = (): void => {
@@ -448,7 +483,11 @@ export function RingStrip({
             type="button"
             className={`widget-tile${account.id === hovered && account.id !== selected ? " hover" : ""}${account.id === selected ? " selected" : ""}${account.lastKnown ? " last-known" : ""}`}
             style={tileStyle}
-            aria-label={account.description}
+            aria-label={
+              account.reconnect === null
+                ? account.description
+                : `${account.name} needs reconnecting, open to reconnect`
+            }
             aria-expanded={account.id === selected}
             aria-controls={DRAWER_ID}
             onPointerEnter={() => {
@@ -551,6 +590,7 @@ export function RingStrip({
                 {account.headline.tag === "" ? null : (
                   <span className="widget-tag">{account.headline.tag}</span>
                 )}
+                {account.reconnect === null ? null : <Icon name="link" />}
                 <span className={`widget-value${account.headline.low ? " low" : ""}`}>
                   {account.headline.value}
                 </span>
@@ -569,6 +609,22 @@ export function RingStrip({
           closing={closing}
           up={dir === "up"}
           drawerRef={drawer}
+          reconnect={reconnectLineOf(selectedAccount, ask)}
+          onReconnect={() => {
+            const target = selectedAccount.reconnect;
+            const id = selectedAccount.id;
+            if (target === null || (ask?.id === id && ask.sending)) {
+              return;
+            }
+            setAsk({ id, sending: true, failure: null });
+            launch(
+              onReconnect(target).then((failure) => {
+                setAsk((current) =>
+                  current?.id === id ? { id, sending: false, failure } : current,
+                );
+              }),
+            );
+          }}
           onSettled={() => {
             settleDone.current?.();
           }}
@@ -602,14 +658,41 @@ function restHeightOf(rows: number, tileHeight: number): number {
   );
 }
 
-/** The drawer's height for an account with this many limits. */
-function drawerHeightOf(limits: number): number {
+/**
+ * The drawer's reconnect line for one account: shown while the account must
+ * be reconnected, and while a reconnect asked from it runs, so the button
+ * stays busy through the Connecting the host publishes. `null` for no line.
+ */
+function reconnectLineOf(
+  account: WidgetAccount,
+  ask: ReconnectAsk | null,
+): ReconnectLine | null {
+  const asked = ask !== null && ask.id === account.id ? ask : null;
+  const busy = asked !== null && (asked.sending || account.chip?.text === "Connecting");
+  if (account.reconnect === null && !busy) {
+    return null;
+  }
+  return { busy, failure: busy ? null : (asked?.failure ?? null) };
+}
+
+/** The drawer's height for one account, with its reconnect line if it has one. */
+function wantedHeightOf(account: WidgetAccount, ask: ReconnectAsk | null): number {
+  return drawerHeightOf(account.rows.length, reconnectLineOf(account, ask) !== null);
+}
+
+/**
+ * The drawer's height for an account with this many limits, with the
+ * reconnect line or without it.
+ */
+function drawerHeightOf(limits: number, action: boolean): number {
+  const line = action ? DRAWER_ACTION_TOP + DRAWER_ACTION : 0;
   if (limits === 0) {
-    return DRAWER_DIVIDER + DRAWER_HEADER + DRAWER_PAD;
+    return DRAWER_DIVIDER + DRAWER_HEADER + line + DRAWER_PAD;
   }
   return (
     DRAWER_DIVIDER +
     DRAWER_HEADER +
+    line +
     DRAWER_ROWS_TOP +
     limits * DRAWER_ROW +
     (limits - 1) * DRAWER_ROW_GAP +
@@ -718,6 +801,8 @@ function Drawer({
   closing,
   up,
   drawerRef,
+  reconnect,
+  onReconnect,
   onSettled,
   onClose,
 }: {
@@ -732,6 +817,10 @@ function Drawer({
   /** Whether the drawer unfolds above the tiles instead of below them. */
   readonly up: boolean;
   readonly drawerRef: { current: HTMLDivElement | null };
+  /** The reconnect line, or `null` when the account needs no reconnect. */
+  readonly reconnect: ReconnectLine | null;
+  /** Reconnects the account. */
+  readonly onReconnect: () => void;
   /** Runs when the height animation ends. */
   readonly onSettled: () => void;
   /**
@@ -741,7 +830,8 @@ function Drawer({
   readonly onClose: (fromKeyboard: boolean) => void;
 }): JSX.Element {
   const ringPeriods = account.rings.map((ring) => ring.period);
-  const capped = grown + 0.5 < drawerHeightOf(account.rows.length);
+  const action = reconnect === null ? 0 : DRAWER_ACTION_TOP + DRAWER_ACTION;
+  const capped = grown + 0.5 < drawerHeightOf(account.rows.length, reconnect !== null);
   const rule = (
     <div className="widget-drawer-rule">
       <span className="widget-drawer-caret" style={{ left: caret }} />
@@ -774,10 +864,39 @@ function Drawer({
           <Icon name="close" />
         </button>
       </div>
+      {reconnect === null ? null : (
+        <div className="widget-drawer-reconnect">
+          {/* A refusal is announced as it appears; the plain words are not. */}
+          <span
+            className={`widget-drawer-why${reconnect.failure === null ? "" : " failed"}`}
+            role={reconnect.failure === null ? undefined : "alert"}
+          >
+            {reconnect.failure ?? "Reconnect to resume checks."}
+          </span>
+          <button
+            type="button"
+            className="button primary widget-drawer-action"
+            aria-label={`${reconnect.busy ? "Reconnecting" : "Reconnect"} ${account.name}`}
+            aria-disabled={reconnect.busy}
+            aria-busy={reconnect.busy}
+            onClick={() => {
+              // A busy button keeps its focus but does nothing, so the
+              // keyboard is never thrown out of the drawer.
+              if (!reconnect.busy) {
+                onReconnect();
+              }
+            }}
+          >
+            {reconnect.busy ? "Reconnecting…" : "Reconnect"}
+          </button>
+        </div>
+      )}
       {account.rows.length === 0 ? null : (
         <div
           className={`widget-drawer-rows${capped ? " scroll" : ""}`}
-          style={capped ? { maxHeight: Math.max(0, grown - DRAWER_FIXED) } : undefined}
+          style={
+            capped ? { maxHeight: Math.max(0, grown - DRAWER_FIXED - action) } : undefined
+          }
         >
           {account.rows.map((row) => (
             <div className="widget-drawer-row" key={`${row.name}:${row.tag}`}>

@@ -429,6 +429,12 @@ export function installFakeBackend(config: FakeConfig): void {
         return null;
       }
       case "reconnect_account":
+        // The host checks the account again under a new generation, and says
+        // it is connecting until that check ends.
+        updateAccount(accountId(args), (entry) => ({
+          ...entry,
+          connection_state: "connecting",
+        }));
         return 2;
       case "clear_local_history":
       case "open_settings_window":

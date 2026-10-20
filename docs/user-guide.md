@@ -297,6 +297,12 @@ enough room below, such as near the taskbar. When space is limited on both sides
 drawer's rows scroll. Click the tile again, its **Close the details** button, or another
 app to close the drawer. Press Esc to close and return to the tile.
 
+A tile that reads **Reconnect** opens to a **Reconnect** button. It does what the full
+window's **Reconnect** does: Quota checks the sign-in again, and the details say
+**Connecting** until it is done. For an account Quota signs in to on the provider's
+website, such as TypeSafe, the sign-in window opens again, as it does from the full
+window. If Quota cannot start the reconnect, the details say why.
+
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
 mini cards.
 

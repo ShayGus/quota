@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "widget-capability",
-  "description": "The mini widget, the compact view of the app. It reads the snapshot and its events, moves by being dragged, sizes itself to its accounts, and can switch back to the full window. It changes no account and saves no other preference, so no monitoring, connection, store, SQL, filesystem, shell or HTTP permission is granted here. It may open the prefilled bug-report issue in the browser and copy the bug-report prompt.",
+  "description": "The mini widget, the compact view of the app. It reads the snapshot and its events, moves by being dragged, sizes itself to its accounts, and can switch back to the full window. It may reconnect an account that must be reconnected, as the full window's Reconnect does. It changes no other account state and saves no other preference, so no other monitoring or connection permission, and no store, SQL, filesystem, shell or HTTP permission, is granted here. It may open the prefilled bug-report issue in the browser and copy the bug-report prompt.",
   "windows": ["widget"],
   "permissions": [
     "core:default",
@@ -10,6 +10,7 @@
     "allow-get-snapshot",
     "allow-set-app-view",
     "allow-fit-widget",
+    "allow-reconnect-account",
     "allow-open-bug-report-issue",
     "allow-copy-bug-report-prompt"
   ]
