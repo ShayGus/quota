@@ -57,6 +57,69 @@ test.describe("widget", () => {
     await host.screenshot("widget-drawer");
   });
 
+  test("reconnects an account from its drawer, as the full window does", async ({
+    open,
+  }) => {
+    const host = await open(
+      scenario("widget", { preferences: defaultPreferences({ view: "widget" }) }),
+      "#/widget",
+    );
+    const { page } = host;
+    // Tall enough for the open drawer, which the faked host never sizes for.
+    await page.setViewportSize({ width: 316, height: 360 });
+    const tile = page.getByRole("button", {
+      name: "Kimi needs reconnecting, open to reconnect",
+    });
+    await expect(tile).toContainText("Reconnect");
+    await tile.click();
+    const drawer = page.getByRole("region", { name: "Kimi" });
+    await expect(drawer).toContainText("Reconnect to resume checks.");
+    const button = drawer.getByRole("button", { name: "Reconnect Kimi" });
+    await expect(button).toBeVisible();
+    // Opening the drawer reconnects nothing; only its button does.
+    expect(await host.callsTo("reconnect_account")).toEqual([]);
+    await host.screenshot("widget-reconnect", page.locator(".widget"));
+    await button.click();
+    expect((await host.callsTo("reconnect_account")).at(-1)?.args).toEqual({
+      accountRef: { id: "acct-kimi" },
+    });
+    await expect(drawer.locator(".widget-chip")).toHaveText("Connecting");
+    await expect(
+      drawer.getByRole("button", { name: "Reconnecting Kimi" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    await host.screenshot("widget-reconnecting", page.locator(".widget"));
+  });
+
+  test("says in the drawer why a refused reconnect did not start", async ({ open }) => {
+    const host = await open(
+      scenario("widget", {
+        preferences: defaultPreferences({ view: "widget" }),
+        refuse: {
+          reconnect_account: {
+            kind: "persistence_unavailable",
+            context: { owner: "accounts" },
+          },
+        },
+      }),
+      "#/widget",
+    );
+    const { page } = host;
+    await page.setViewportSize({ width: 316, height: 360 });
+    await page
+      .getByRole("button", { name: "Kimi needs reconnecting, open to reconnect" })
+      .click();
+    const drawer = page.getByRole("region", { name: "Kimi" });
+    await drawer.getByRole("button", { name: "Reconnect Kimi" }).click();
+    await expect(drawer.getByRole("alert")).toHaveText(
+      "Quota cannot reach its local storage.",
+    );
+    await expect(drawer.getByRole("button", { name: "Reconnect Kimi" })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
+    await host.screenshot("widget-reconnect-refused", page.locator(".widget"));
+  });
+
   for (const start of ["edge", "empty area"] as const) {
     test(`tracks a press starting at the ${start} while the drawer unfolds`, async ({
       open,

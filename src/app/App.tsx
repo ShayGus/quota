@@ -20,6 +20,7 @@ import {
   describeTransportFailure,
   launch,
 } from "../shared/ipc/report";
+import { getRendererState } from "../shared/state/store";
 import type { RendererFailure, RendererState } from "../shared/state/types";
 import { useRendererState } from "../shared/state/useRendererState";
 import { Icon } from "../shared/ui/Icon";
@@ -110,7 +111,9 @@ const settingsActions: SettingsActions = {
   cancelConnection: (attempt) => actions.cancelConnection(attempt),
   confirmConnection: (attempt, nickname, group) =>
     actions.confirmConnection(attempt, nickname, group),
-  reconnectAccount: (accountId) => actions.reconnectAccount(accountId),
+  reconnectAccount: async (accountId) => {
+    await actions.reconnectAccount(accountId);
+  },
   clearHistory: (accountId) => {
     launch(actions.clearHistory(accountId));
   },
@@ -188,7 +191,8 @@ function QuotaWindow(): JSX.Element {
     return <UpdatePopup />;
   }
   // The widget window is opened with its own hash. It is the compact view of
-  // the app, and its only action is switching back to the full window.
+  // the app: it switches back to the full window, and reconnects an account
+  // the same way the full window's Reconnect does.
   if (window.location.hash.startsWith("#/widget")) {
     return (
       <FeatureBoundary surface="widget">
@@ -200,6 +204,15 @@ function QuotaWindow(): JSX.Element {
           }}
           onExpand={() => {
             launch(actions.setAppView("overview"));
+          }}
+          onReconnect={async (accountId) => {
+            // The widget has no toast, so a refused reconnect comes back as
+            // the words the full window's toast would show for it.
+            if (await actions.reconnectAccount(accountId)) {
+              return null;
+            }
+            const failure = getRendererState().failure;
+            return failure === null ? null : failureText(failure);
           }}
         />
       </FeatureBoundary>

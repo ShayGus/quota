@@ -10,6 +10,7 @@
  * press that moves 4 px drags the window instead.
  */
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { MiniCards } from "../src/features/widget/MiniCards";
@@ -110,6 +111,23 @@ const openrouter = account(
     }),
   ],
   { unrankedReason: "no_included_allowance" },
+);
+
+/** The reconnect the widget is given: the host takes it unless a test says no. */
+const reconnectAccount = vi.fn<(accountId: string) => Promise<string | null>>(() =>
+  Promise.resolve(null),
+);
+
+/** An account whose connection ended, so it must be reconnected. */
+const lapsedGrok = account(
+  "lapsed",
+  "grok",
+  7,
+  [quotaWindow("g", "weekly", percent(83))],
+  {
+    rank: 83,
+    connectionState: "reauthentication_required",
+  },
 );
 
 function accountsOf(...accounts: AccountSnapshot[]) {
@@ -288,6 +306,22 @@ describe("the widget's model", () => {
     }
   });
 
+  it("names the account to reconnect only for one that must be reconnected", () => {
+    const connecting = {
+      ...lapsedGrok,
+      account_id: "connecting",
+      connection_state: "connecting" as const,
+    };
+    const shown = accountsOf(lapsedGrok, kimi, connecting);
+    const [lapsed, healthy, checking] = ["lapsed", "kimi", "connecting"].map((id) =>
+      shown.find((entry) => entry.id === id),
+    );
+    expect(lapsed?.reconnect).toBe("lapsed");
+    expect(healthy?.reconnect).toBeNull();
+    expect(checking?.chip?.text).toBe("Connecting");
+    expect(checking?.reconnect).toBeNull();
+  });
+
   it("chips a warning status with its warning tone", () => {
     const limited = {
       ...account("limited", "cursor", 10, [quotaWindow("l", "session", percent(40))], {
@@ -349,13 +383,17 @@ describe("the ring strip", () => {
         },
       ),
     );
-    const { container } = render(<RingStrip accounts={accountsOf(...nine)} />);
+    const { container } = render(
+      <RingStrip accounts={accountsOf(...nine)} onReconnect={reconnectAccount} />,
+    );
     const tiles = container.querySelector<HTMLElement>(".widget-tiles");
     expect(tiles?.style.width).toBe("292px");
   });
 
   it("writes every ring's value under its tile, after its period's letter", () => {
-    const { container } = render(<RingStrip accounts={accountsOf(kimi, claude)} />);
+    const { container } = render(
+      <RingStrip accounts={accountsOf(kimi, claude)} onReconnect={reconnectAccount} />,
+    );
     const readings = [...container.querySelectorAll(".widget-readings")].map(
       (element) => element.textContent,
     );
@@ -376,20 +414,24 @@ describe("the ring strip", () => {
         connectionState: "reauthentication_required",
       },
     );
-    const { container } = render(<RingStrip accounts={accountsOf(lapsed)} />);
+    const { container } = render(
+      <RingStrip accounts={accountsOf(lapsed)} onReconnect={reconnectAccount} />,
+    );
     expect(container.querySelector(".widget-readings")).toBeNull();
     expect(container.querySelector(".widget-headline")?.textContent).toBe("Reconnect");
   });
 
   it("names every ring colour in its key", () => {
-    render(<RingStrip accounts={accountsOf(kimi)} />);
+    render(<RingStrip accounts={accountsOf(kimi)} onReconnect={reconnectAccount} />);
     for (const name of ["5-hour", "Weekly", "Monthly"]) {
       expect(screen.getByText(name)).toBeTruthy();
     }
   });
 
   it("shows the peek and no drawer when a tile is pointed at", () => {
-    render(<RingStrip accounts={accountsOf(kimi, claude)} />);
+    render(
+      <RingStrip accounts={accountsOf(kimi, claude)} onReconnect={reconnectAccount} />,
+    );
     fireEvent.pointerEnter(screen.getByRole("button", { name: /^Claude/ }));
     const foot = document.querySelector(".widget-foot");
     expect(foot?.classList.contains("peeking")).toBe(true);
@@ -404,7 +446,9 @@ describe("the ring strip", () => {
   });
 
   it("returns the key after the pointer leaves the tiles", async () => {
-    render(<RingStrip accounts={accountsOf(kimi, claude)} />);
+    render(
+      <RingStrip accounts={accountsOf(kimi, claude)} onReconnect={reconnectAccount} />,
+    );
     const tile = screen.getByRole("button", { name: /^Claude/ });
     fireEvent.pointerEnter(tile);
     fireEvent.pointerLeave(tile);
@@ -443,7 +487,12 @@ describe("the widget window", () => {
       disconnect(): void {}
     };
     return render(
-      <Widget state={widgetState(accounts)} onExpand={onExpand} report={report} />,
+      <Widget
+        state={widgetState(accounts)}
+        onExpand={onExpand}
+        onReconnect={reconnectAccount}
+        report={report}
+      />,
     );
   }
 
@@ -612,7 +661,12 @@ describe("the widget window", () => {
       windows: [...claude.windows, quotaWindow("cd", "daily", percent(90))],
     };
     view.rerender(
-      <Widget state={widgetState([kimi, grown])} onExpand={vi.fn()} report={report} />,
+      <Widget
+        state={widgetState([kimi, grown])}
+        onExpand={vi.fn()}
+        onReconnect={reconnectAccount}
+        report={report}
+      />,
     );
     await sleep(50);
     expect(ipc.fitWidget).toHaveBeenCalledTimes(2);
@@ -647,6 +701,7 @@ describe("the widget window", () => {
             },
           ])}
           onExpand={vi.fn()}
+          onReconnect={reconnectAccount}
           report={report}
         />,
       );
@@ -812,11 +867,21 @@ describe("the widget window", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Claude/ }));
     await screen.findByRole("region", { name: "Claude" });
     view.rerender(
-      <Widget state={widgetState([claude, kimi])} onExpand={onExpand} report={report} />,
+      <Widget
+        state={widgetState([claude, kimi])}
+        onExpand={onExpand}
+        onReconnect={reconnectAccount}
+        report={report}
+      />,
     );
     expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
     view.rerender(
-      <Widget state={widgetState([kimi])} onExpand={onExpand} report={report} />,
+      <Widget
+        state={widgetState([kimi])}
+        onExpand={onExpand}
+        onReconnect={reconnectAccount}
+        report={report}
+      />,
     );
     await waitFor(() => {
       expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
@@ -895,5 +960,113 @@ describe("the widget window", () => {
     expect(report.copyPrompt).toHaveBeenCalled();
     expect((await screen.findByRole("status")).textContent).toContain("Prompt copied");
     expect(screen.queryByRole("menu")).toBeNull();
+  });
+
+  describe("reconnecting from the drawer", () => {
+    /** Opens the lapsed account's drawer, beside a healthy one. */
+    async function openLapsed() {
+      const view = renderWidget(vi.fn(), [kimi, lapsedGrok]);
+      const tile = screen.getByRole("button", {
+        name: "Grok needs reconnecting, open to reconnect",
+      });
+      fireEvent.click(tile);
+      const drawer = await screen.findByRole("region", { name: "Grok" });
+      return { view, tile, drawer };
+    }
+
+    function rerenderWith(
+      view: ReturnType<typeof renderWidget>,
+      lapsed: AccountSnapshot,
+    ): void {
+      view.rerender(
+        <Widget
+          state={widgetState([kimi, lapsed])}
+          onExpand={vi.fn()}
+          onReconnect={reconnectAccount}
+          report={report}
+        />,
+      );
+    }
+
+    it("offers a Reconnect only to an account that must be reconnected", async () => {
+      await openLapsed();
+      const drawer = screen.getByRole("region", { name: "Grok" });
+      expect(within(drawer).getByText("Reconnect to resume checks.")).toBeTruthy();
+      expect(within(drawer).getByRole("button", { name: "Reconnect Grok" })).toBeTruthy();
+      // The tile itself still only opens the drawer.
+      expect(reconnectAccount).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: /^Kimi/ }));
+      const healthy = await screen.findByRole("region", { name: "Kimi" });
+      expect(within(healthy).queryByRole("button", { name: /^Reconnect/ })).toBeNull();
+    });
+
+    it("grows the drawer to hold the reconnect line", async () => {
+      await openLapsed();
+      // The drawer's rows, its header and divider, and the 34 px line.
+      expect(ipc.fitWidget).toHaveBeenLastCalledWith(218, "down");
+    });
+
+    it("reconnects as the full window does, busy until the account is checked", async () => {
+      const { view, drawer } = await openLapsed();
+      const { promise, resolve } = Promise.withResolvers<string | null>();
+      reconnectAccount.mockReturnValueOnce(promise);
+      fireEvent.click(within(drawer).getByRole("button", { name: "Reconnect Grok" }));
+      expect(reconnectAccount).toHaveBeenCalledExactlyOnceWith("lapsed");
+      const busy = within(drawer).getByRole("button", { name: "Reconnecting Grok" });
+      expect(busy.getAttribute("aria-disabled")).toBe("true");
+      expect(busy.textContent).toBe("Reconnecting…");
+      // A press while busy asks nothing more of the host.
+      fireEvent.click(busy);
+      expect(reconnectAccount).toHaveBeenCalledOnce();
+      // The host publishes Connecting while it checks the account again.
+      rerenderWith(view, { ...lapsedGrok, connection_state: "connecting" });
+      await act(async () => {
+        resolve(null);
+        await promise;
+      });
+      expect(within(drawer).getByText("Connecting")).toBeTruthy();
+      expect(
+        within(drawer)
+          .getByRole("button", { name: "Reconnecting Grok" })
+          .getAttribute("aria-disabled"),
+      ).toBe("true");
+      // Connected again, the drawer drops the line and shows the readings.
+      rerenderWith(view, { ...lapsedGrok, connection_state: "connected" });
+      await waitFor(() => {
+        expect(within(drawer).queryByRole("button", { name: /^Reconnect/ })).toBeNull();
+      });
+    });
+
+    it("says in the drawer why a reconnect the host refused did not start", async () => {
+      const { drawer } = await openLapsed();
+      reconnectAccount.mockResolvedValueOnce("Quota cannot reach its local storage.");
+      fireEvent.click(within(drawer).getByRole("button", { name: "Reconnect Grok" }));
+      expect((await within(drawer).findByRole("alert")).textContent).toBe(
+        "Quota cannot reach its local storage.",
+      );
+      const again = within(drawer).getByRole("button", { name: "Reconnect Grok" });
+      expect(again.getAttribute("aria-disabled")).toBe("false");
+      // Trying again clears the old refusal.
+      fireEvent.click(again);
+      await waitFor(() => {
+        expect(within(drawer).queryByRole("alert")).toBeNull();
+      });
+      expect(reconnectAccount).toHaveBeenCalledTimes(2);
+    });
+
+    it("reaches the button with Tab and still closes on Esc", async () => {
+      const user = userEvent.setup();
+      const { tile, drawer } = await openLapsed();
+      within(drawer).getByRole("button", { name: "Close the details" }).focus();
+      await user.tab();
+      expect(document.activeElement).toBe(
+        within(drawer).getByRole("button", { name: "Reconnect Grok" }),
+      );
+      await user.keyboard("{Escape}");
+      await waitFor(() => {
+        expect(screen.queryByRole("region", { name: "Grok" })).toBeNull();
+      });
+      expect(document.activeElement).toBe(tile);
+    });
   });
 });

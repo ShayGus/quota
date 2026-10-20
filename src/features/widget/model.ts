@@ -128,6 +128,12 @@ export interface WidgetAccount {
   readonly chip: { readonly text: string; readonly tone: Severity } | null;
   /** The peek line's summary, after the account name: its status or reset. */
   readonly peek: string;
+  /**
+   * The account the drawer's Reconnect button reconnects, when the account
+   * must be reconnected: the account itself, or for a group's total the key
+   * it is read from. `null` when nothing needs reconnecting.
+   */
+  readonly reconnect: AccountId | null;
 }
 
 /**
@@ -289,6 +295,7 @@ function describe(
     description: words === "" ? `${name}: ${headline.value}` : `${name}: ${words}`,
     chip: problem,
     peek: peekSummary(problem, rows, headlineRow),
+    reconnect: problem?.text === RECONNECT ? account.account_id : null,
   };
 }
 
@@ -485,15 +492,18 @@ function peekSummary(
     : `${headlineRow.name} ${headlineRow.reset}`;
 }
 
+/** The status of an account the person must reconnect. */
+const RECONNECT = "Reconnect";
+
 /**
  * The statuses that replace the number on the tile: no reading can be shown
  * for an account that must be reconnected. The others keep the last reading.
  */
-const REPLACE_NUMBERS: ReadonlySet<string> = new Set(["Reconnect"]);
+const REPLACE_NUMBERS: ReadonlySet<string> = new Set([RECONNECT]);
 
 /** The statuses that say something is wrong with the account. */
 const PROBLEMS: ReadonlySet<string> = new Set([
-  "Reconnect",
+  RECONNECT,
   "Connecting",
   "Rate limited",
   "Offline",

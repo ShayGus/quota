@@ -304,6 +304,16 @@
   color: var(--warn);
 }
 
+/* A tile that must be reconnected: its Reconnect reads as a link to open. */
+.widget-headline .icon {
+  flex: none;
+  align-self: center;
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.2;
+  color: var(--warn);
+}
+
 /*
  * The last readings, kept while the account is offline or failing: faded
  * rings and muted numbers, so they never pass for a fresh reading. The peek
@@ -541,6 +551,52 @@
   width: 11px;
   height: 11px;
   stroke-width: 2.4;
+}
+
+/*
+ * An account that must be reconnected: a line of plain words and the full
+ * window's primary button, sized for the drawer. RingStrip.tsx measures the
+ * line as its margin and two lines of words, so a refusal has room to wrap.
+ */
+.widget-drawer-reconnect {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  margin-top: 6px;
+  padding: 0 4px;
+}
+
+.widget-drawer-why {
+  flex: 1;
+  min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 14px;
+  color: var(--muted);
+}
+
+.widget-drawer-why.failed {
+  color: var(--warn);
+}
+
+.widget .widget-drawer-action {
+  flex: none;
+  height: 22px;
+  min-height: 0;
+  padding: 0 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.widget .widget-drawer-action[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: progress;
+  filter: none;
 }
 
 .widget-drawer-rows {

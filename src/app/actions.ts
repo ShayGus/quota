@@ -139,10 +139,12 @@ export const actions = {
    *
    * This is the real reconnect: the backend bumps the generation and queues a
    * fresh verified read, so it is not the same as opening the account's detail
-   * view.
+   * view. A session Quota signs in to on the provider's website is signed in
+   * to again first, in the browser the host opens. True once the host took
+   * the reconnect, so the widget can say why one it refused did not start.
    */
-  async reconnectAccount(accountId: AccountId): Promise<void> {
-    await reportAsync(commands.reconnectAccount({ id: accountId }));
+  async reconnectAccount(accountId: AccountId): Promise<boolean> {
+    return (await reportAsync(commands.reconnectAccount({ id: accountId }))) !== null;
   },
   /** Cancels a live attempt or discards a verified candidate. Neither is a failure. */
   async cancelConnection(attempt: AttemptRef): Promise<void> {

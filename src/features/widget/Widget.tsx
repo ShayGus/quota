@@ -6,7 +6,8 @@
  * a strip of rings, one ring per period, or mini cards with a bar per limit.
  * It is another way to present the app, never shown beside the full window.
  * The host fits the window's height, and it moves wherever it is dragged,
- * from any point on it. RingStrip owns the peek and details drawer. The
+ * from any point on it. RingStrip owns the peek and details drawer, whose
+ * Reconnect button reconnects an account the way the full window does. The
  * button in its corner, the tray menu, and Settings switch back to the full
  * window; beside that button, Report a bug
  * opens the same two choices as the full window's header.
@@ -22,6 +23,7 @@ import {
   type JSX,
 } from "react";
 
+import type { AccountId } from "../../generated/bindings";
 import { launch } from "../../shared/ipc/report";
 import {
   dragWidget,
@@ -119,11 +121,17 @@ interface PendingFit {
 export function Widget({
   state,
   onExpand,
+  onReconnect,
   report,
 }: {
   readonly state: RendererState;
   /** Switches back to the full window. */
   readonly onExpand: () => void;
+  /**
+   * Reconnects one account, as the full window's Reconnect does. Answers the
+   * words for why the host refused, or `null` once it took the reconnect.
+   */
+  readonly onReconnect: (accountId: AccountId) => Promise<string | null>;
   /** Opens the issue form or copies the agent prompt. */
   readonly report: Omit<ReportBugActions, "onCopied">;
 }): JSX.Element {
@@ -155,7 +163,7 @@ export function Widget({
         ) : state.preferences?.indicator_style === "bar" ? (
           <MiniCards accounts={accounts} />
         ) : (
-          <RingStrip accounts={accounts} />
+          <RingStrip accounts={accounts} onReconnect={onReconnect} />
         )}
         {copied ? (
           <p className="widget-notice" role="status">
