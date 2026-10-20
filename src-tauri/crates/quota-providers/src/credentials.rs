@@ -5,7 +5,7 @@
 //! writes to it, refreshes it, rotates it, or copies it anywhere. A missing or
 //! unusable file is an authentication state for the user to fix in the owning
 //! client, not something this crate repairs. The one exception is asking Claude
-//! Code itself to renew its own expired sign-in (see [`crate::claude::renew`]),
+//! Code itself to renew its own expired sign-in (see the `claude::renew` module),
 //! which still leaves every write to Claude Code.
 
 use std::fmt::{self, Debug, Formatter};
