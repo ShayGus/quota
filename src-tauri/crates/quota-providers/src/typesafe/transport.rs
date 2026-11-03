@@ -1,10 +1,11 @@
 //! The requests the `TypeSafe` adapter sends to the console.
 //!
-//! The console is a website, not an API, so these differ from the shared JSON
-//! transport: answers are read as text (HTML, scripts, and React Server
-//! Components rows), and no redirect is ever followed, because the console
-//! answers an expired session by redirecting to its sign-in page. No cookie
-//! jar is kept: the only cookies sent are the session header Quota holds.
+//! The console is a website behind a bot check, so these differ from the
+//! shared JSON transport: answers are read as text first, so a challenge page
+//! is told apart from the console's own answer, and no redirect is ever
+//! followed, because the console answers an expired session, or a page it
+//! moved, with a redirect. No cookie jar is kept: the only cookies sent are
+//! the session header Quota holds.
 //! Nothing here logs a header, a body, or an address.
 
 use std::time::Duration;
@@ -24,16 +25,14 @@ const REQUEST_SECONDS: u64 = 8;
 /// The longest establishing a connection may take.
 const CONNECT_SECONDS: u64 = 5;
 
-/// The largest answer read, in bytes: the console's scripts are large.
-const MAX_TEXT_BYTES: usize = 6 * 1024 * 1024;
+/// The largest answer read, in bytes.
+const MAX_TEXT_BYTES: usize = 1024 * 1024;
 
 /// What one request returned, before any interpretation.
 #[derive(Debug)]
 pub(crate) struct TextReply {
     /// The status.
     pub(crate) status: u16,
-    /// Whether the answer said the server action is unknown to this deployment.
-    pub(crate) action_not_found: bool,
     /// Whether a bot-protection layer said it challenged the request.
     pub(crate) mitigated: bool,
     /// The provider's own retry deadline, when it sent one.
@@ -79,7 +78,6 @@ pub(crate) async fn send(builder: reqwest::RequestBuilder) -> Result<TextReply, 
             .and_then(|header| header.to_str().ok())
             .is_some_and(|header| header.trim().eq_ignore_ascii_case(value))
     };
-    let action_not_found = flag("x-nextjs-action-not-found", "1");
     let mitigated = flag("cf-mitigated", "challenge") || flag("x-vercel-mitigated", "challenge");
     let retry_after = headers
         .get(reqwest::header::RETRY_AFTER)
@@ -113,7 +111,6 @@ pub(crate) async fn send(builder: reqwest::RequestBuilder) -> Result<TextReply, 
     }
     Ok(TextReply {
         status,
-        action_not_found,
         mitigated,
         retry_after,
         set_cookies,
@@ -125,8 +122,7 @@ pub(crate) async fn send(builder: reqwest::RequestBuilder) -> Result<TextReply, 
 ///
 /// A challenge is told apart first, because a bot check also answers 403. A
 /// redirect, a refusal, or the console's sign-in page means the session has
-/// ended. The billing action may also be unknown to a new deployment, which
-/// the caller handles before this.
+/// ended.
 ///
 /// # Errors
 /// Returns the typed failure the answer stands for.
@@ -147,7 +143,7 @@ pub(crate) fn check(reply: &TextReply) -> Result<(), ProviderError> {
             detail: "the console reported a temporary failure".to_owned(),
         }),
         404 => Err(ProviderError::UnsupportedSchema {
-            detail: "the console's billing page is not where it was".to_owned(),
+            detail: "the console's billing overview is not where it was".to_owned(),
         }),
         _ => Err(ProviderError::InvalidData {
             detail: "the console refused the request".to_owned(),
@@ -168,7 +164,6 @@ mod tests {
     fn reply(status: u16, text: &str) -> TextReply {
         TextReply {
             status,
-            action_not_found: false,
             mitigated: false,
             retry_after: None,
             set_cookies: Vec::new(),

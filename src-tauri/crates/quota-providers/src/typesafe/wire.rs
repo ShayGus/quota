@@ -1,31 +1,20 @@
 //! Wire shapes for the `TypeSafe` console's billing overview.
 //!
-//! The console's billing page answers a Next.js server action with the
-//! account's credit balance, its spend in the current cycle, and its credit
+//! The console's billing page reads `GET /api/billing/overview`, which answers
+//! the account's credit balance, its spend in the current cycle, and its credit
 //! grants. The same answer also carries the billing address, the invoice
-//! address, the payment card and the tax identifier. These shapes have no
-//! field for any of them, so they are never read into Quota, kept, or logged.
-//! The action is undocumented, so every field is optional and unknown fields
-//! are ignored.
+//! address, the payment card, the tax identifier and the payment history.
+//! These shapes have no field for any of them, so they are never read into
+//! Quota, kept, or logged. The endpoint is undocumented, so every field is
+//! optional and unknown fields are ignored.
 
 use serde::Deserialize;
 
 use crate::decode::{Numberish, null_as_default};
 
-/// The action's result: whether it succeeded, and what it returned.
+/// The body of `GET /api/billing/overview`, without the payment history.
 #[derive(Debug, Default, Deserialize)]
-pub(crate) struct BillingResult {
-    /// Whether the console answered the request.
-    #[serde(default)]
-    pub(crate) ok: Option<bool>,
-    /// What it returned.
-    #[serde(default)]
-    pub(crate) data: Option<BillingData>,
-}
-
-/// The overview, without the payment history.
-#[derive(Debug, Default, Deserialize)]
-pub(crate) struct BillingData {
+pub(crate) struct Overview {
     /// The account's billing summary.
     #[serde(default)]
     pub(crate) billing: Option<Billing>,

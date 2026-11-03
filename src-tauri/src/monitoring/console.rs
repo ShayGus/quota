@@ -166,7 +166,12 @@ async fn capture(
                 return match try_session(adapter, &header, cancelled).await? {
                     Tried::Accepted => Ok(Some(header)),
                     Tried::Cancelled => Ok(None),
-                    Tried::NotYet => Err(internal("console_sign_in_closed")),
+                    // The browser is closed, so nothing is tried again: a
+                    // failure other than a missing sign-in is the answer.
+                    Tried::NotYet(Some(error)) if error != ProviderError::Authentication => {
+                        Err(attempt_error(&error))
+                    }
+                    Tried::NotYet(_) => Err(internal("console_sign_in_closed")),
                 };
             }
             Plain::Cancelled => return Ok(None),
@@ -183,8 +188,8 @@ async fn capture(
 /// What one try of a session came to.
 enum Tried {
     Accepted,
-    /// Not signed in yet, or a passing failure.
-    NotYet,
+    /// Not signed in yet, or a passing failure, and which one when known.
+    NotYet(Option<ProviderError>),
     Cancelled,
 }
 
@@ -204,7 +209,17 @@ async fn try_session(
         Ok(Err(
             error @ (ProviderError::Blocked { .. } | ProviderError::UnsupportedSchema { .. }),
         )) => Err(attempt_error(&error)),
-        _ => Ok(Tried::NotYet),
+        Ok(Err(error)) => {
+            tracing::info!(
+                code = error.diagnostic_code(),
+                "the website session was not accepted yet"
+            );
+            Ok(Tried::NotYet(Some(error)))
+        }
+        Ok(Ok(_)) => Ok(Tried::NotYet(None)),
+        Err(_elapsed) => Ok(Tried::NotYet(Some(ProviderError::Transient {
+            detail: "the provider did not answer in time".to_owned(),
+        }))),
     }
 }
 

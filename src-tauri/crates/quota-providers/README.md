@@ -213,15 +213,14 @@ boundary as every GET, and a sign-in poll reads the OAuth refusal body
 
 ## TypeSafe
 
-Read from the console's billing page with a website session Quota owns: the host opens the
-sign-in in a window with its own storage (`ConsoleSignIn`, declared by
-`ProviderAdapter::console_sign_in`) and keeps the window's cookies as one `Cookie` header.
-`typesafe::transport` is its own client, because the console is a website: answers are
-text, no redirect is followed, and no cookie jar is kept. `typesafe::page` finds the
-billing action in the page's scripts and its result in the React Server Components rows,
-and tells a bot check (`ProviderError::Blocked`) from an ended session. `typesafe::wire`
-has no field for the billing address, invoice address, card or tax identifier the answer
-also carries. Endpoints and fields are in
+Read from the JSON endpoint the console's billing page reads, with a website session Quota
+owns: the host opens the sign-in in a browser profile of Quota's own (`ConsoleSignIn`,
+declared by `ProviderAdapter::console_sign_in`) and keeps its cookies as one `Cookie`
+header. `typesafe::transport` is its own client, because the console is a website behind a
+bot check: answers are read as text first, no redirect is followed, and no cookie jar is
+kept. `typesafe::page` tells a bot check (`ProviderError::Blocked`) from an ended session.
+`typesafe::wire` has no field for the billing address, invoice address, card, tax
+identifier or payment history the answer also carries. Endpoints and fields are in
 [the provider reference](../../../docs/providers.md#typesafe).
 
 ## Fixture

@@ -165,11 +165,8 @@ fn decode_document(
             ollama::mapping::decode(&body, pool, received_at)?
         }
         ProviderId::Typesafe => {
-            let result =
-                offline_shape::<typesafe::wire::BillingResult>(document, "TypeSafe billing")?;
-            let billing = result
-                .data
-                .and_then(|data| data.billing)
+            let billing = offline_shape::<typesafe::wire::Overview>(document, "TypeSafe billing")?
+                .billing
                 .ok_or_else(|| unsupported("TypeSafe billing"))?;
             typesafe::mapping::decode(&billing, pool, received_at)?
         }
