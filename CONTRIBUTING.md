@@ -109,6 +109,14 @@ bun run build:e2e && bun run test:e2e               # Windows real-app tests, se
 CI runs the relevant commands for each operating system. Linux uses `xvfb-run` for the
 real-app suite. Windows runs that suite directly.
 
+`bun run check` runs every command above except the real-app suites, in that order, and
+stops at the first failure. A pre-push hook runs it before each push, so a push that would
+fail CI's Rust, Windows adapter, Frontend or Interface jobs stops on your machine instead.
+`bun install` turns the hook on: its `prepare` script points `core.hooksPath` at
+`.githooks`. `git push --no-verify` skips the checks once. The real-app suites are left to
+CI, because they need the debug applications built and a WebDriver for the system's
+webview (section 10).
+
 The frontend and Rust commands run on Windows and Linux. They are meant to run unchanged
 on macOS (see [Platforms](docs/platforms.md)). On Windows, stop a running development app
 first. It holds `src-tauri\target\debug\quota.exe` open. Tauri needs the version 6 common
