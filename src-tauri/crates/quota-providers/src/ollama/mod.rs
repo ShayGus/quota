@@ -34,8 +34,9 @@ use crate::post::{Body, PostRequest};
 /// The site the endpoints are on.
 const HOST: &str = "https://ollama.com";
 
-/// The plan's usage.
-const USAGE_PATH: &str = "/api/usage";
+/// The plan's included usage. `/api/usage` answered it until 2026-10-07 and
+/// now answers only a count of requests.
+const BALANCE_PATH: &str = "/api/balance";
 
 /// The account and its plan.
 const ACCOUNT_PATH: &str = "/api/me";
@@ -83,12 +84,12 @@ impl OllamaAdapter {
         format!("{path}?ts={}", Utc::now().timestamp())
     }
 
-    async fn usage(
+    async fn balance(
         &self,
         signer: &Signer,
         context: &ReadContext,
-    ) -> Result<wire::UsageBody, ProviderError> {
-        let uri = Self::request_uri(USAGE_PATH);
+    ) -> Result<wire::BalanceBody, ProviderError> {
+        let uri = Self::request_uri(BALANCE_PATH);
         let authorization = signer.authorization("GET", &uri);
         let headers = [
             ("Authorization", authorization.as_str()),
@@ -99,7 +100,7 @@ impl OllamaAdapter {
             .get(&format!("{HOST}{uri}"), &headers, context)
             .await?;
         serde_json::from_value(reply.body).map_err(|_| ProviderError::UnsupportedSchema {
-            detail: "the payload did not match the supported Ollama usage shape".to_owned(),
+            detail: "the payload did not match the supported Ollama balance shape".to_owned(),
         })
     }
 
@@ -149,10 +150,10 @@ impl OllamaAdapter {
     ) -> Result<FetchOutcome, ProviderError> {
         let profile = signer.profile();
         decode::ensure_binding(binding, ProviderId::OllamaCloud, None, Some(&profile))?;
-        let usage = self.usage(signer, &context).await?;
+        let balance = self.balance(signer, &context).await?;
         let account = self.account(signer, &context).await;
         let pool = decode::pool_id(ProviderId::OllamaCloud, &profile);
-        let decoded = mapping::decode(&usage, &pool, Utc::now())?;
+        let decoded = mapping::decode(&balance, &pool, Utc::now())?;
         Ok(decoded.into_outcome(identity(signer, &account)))
     }
 
@@ -163,8 +164,8 @@ impl OllamaAdapter {
         ownership: CredentialOwnership,
     ) -> Result<Vec<DiscoveredAccount>, ProviderError> {
         let context = keyed::verification_context();
-        // Reading the usage is what proves the sign-in works.
-        self.usage(signer, &context).await?;
+        // Reading the balance is what proves the sign-in works.
+        self.balance(signer, &context).await?;
         let account = self.account(signer, &context).await;
         let profile = signer.profile();
         Ok(vec![DiscoveredAccount {
