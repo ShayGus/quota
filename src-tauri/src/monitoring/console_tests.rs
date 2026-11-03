@@ -116,7 +116,10 @@ async fn a_session_the_provider_refuses_is_not_signed_in_yet() {
     let adapter: Arc<dyn ProviderAdapter> = Arc::new(AcceptsFictional);
     let (_keep, mut cancelled) = watch::channel(false);
     let tried = try_session(&adapter, "session=other", &mut cancelled).await;
-    assert!(matches!(tried, Ok(Tried::NotYet)));
+    assert!(matches!(
+        tried,
+        Ok(Tried::NotYet(Some(ProviderError::Authentication)))
+    ));
 }
 
 /// The cookies the closed browser's profile is read for reach the provider as

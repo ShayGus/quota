@@ -2,13 +2,13 @@
 //!
 //! `TypeSafe` sells credit for its models and documents no API for billing; an
 //! API key cannot read it. The console's billing page can, so Quota signs in
-//! to the console itself, in a window of its own whose browser storage is kept
-//! apart from every other browser, and keeps the session that window ends up
-//! with as the credential, in the system credential store. Each read asks the
-//! billing page's server action for the overview, finding the action's
-//! identifier in the page's scripts as `CodexBar` does. The answer also carries
-//! the billing address, the invoice address, the payment card and the tax
-//! identifier; none of them is read (`wire`).
+//! to the console itself, in a browser profile of its own kept apart from
+//! every other browser, and keeps the session it ends up with as the
+//! credential, in the system credential store. Each read asks the endpoint the
+//! billing page itself reads, `GET /api/billing/overview`, for the overview.
+//! The answer also carries the billing address, the invoice address, the
+//! payment card, the tax identifier and the payment history; none of them is
+//! read (`wire`).
 //!
 //! This is an undocumented website, so a redesign can break it; a failure is
 //! reported, never a guessed number. A bot check is reported as
@@ -23,8 +23,7 @@ mod tests;
 pub(crate) mod transport;
 pub(crate) mod wire;
 
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::sync::Arc;
 
 use chrono::Utc;
 use quota_core::ports::{
@@ -39,25 +38,18 @@ use quota_domain::provider::{ProviderCapabilities, ProviderId};
 use quota_domain::quota::window::SourceKind;
 
 use crate::decode;
-use crate::typesafe::transport::TextReply;
 
-/// The console's billing page, which also answers the billing action.
-const BILLING_URL: &str = "https://console.typesafe.ai/settings/billing";
+/// What the console's billing page reads: the balance, spend and credit.
+const OVERVIEW_URL: &str = "https://console.typesafe.ai/api/billing/overview";
 
 /// The console's sign-in, returning to the billing page.
-const SIGN_IN_URL: &str = "https://console.typesafe.ai/login?returnTo=%2Fsettings%2Fbilling";
+const SIGN_IN_URL: &str = "https://console.typesafe.ai/login?returnTo=%2Fbilling";
 
 /// The address whose cookies are the session.
 const COOKIE_URL: &str = "https://console.typesafe.ai/";
 
-/// How long a found action identifier is reused before it is looked up again.
-const ACTION_LIFETIME: Duration = Duration::from_secs(12 * 60 * 60);
-
 /// The shortest interval between reads: a website, so read it sparingly.
 const MINIMUM_SECONDS: u32 = 600;
-
-/// How many scripts are fetched at once while looking for the action.
-const SCRIPT_BATCH: usize = 8;
 
 /// What the person confirms: the console never names the account without
 /// personal data, so the account is the console sign-in itself.
@@ -71,167 +63,52 @@ const POOL_SEED: &str = "console";
 #[derive(Debug)]
 pub(crate) struct TypesafeAdapter {
     client: reqwest::Client,
-    billing_url: String,
+    overview_url: String,
     secrets: Arc<dyn SecretStore>,
-    action: Mutex<Option<(String, Instant)>>,
 }
 
 impl TypesafeAdapter {
     /// Builds the adapter over the store its sessions live in.
     pub(crate) fn new(secrets: Arc<dyn SecretStore>) -> Result<Self, ProviderError> {
-        Self::at(secrets, (*crate::http::endpoint(BILLING_URL)).to_owned())
+        Self::at(secrets, (*crate::http::endpoint(OVERVIEW_URL)).to_owned())
     }
 
-    /// Builds the adapter for a billing page at another address, for tests.
-    fn at(secrets: Arc<dyn SecretStore>, billing_url: String) -> Result<Self, ProviderError> {
+    /// Builds the adapter for a billing overview at another address, for tests.
+    fn at(secrets: Arc<dyn SecretStore>, overview_url: String) -> Result<Self, ProviderError> {
         Ok(Self {
             client: transport::client()?,
-            billing_url,
+            overview_url,
             secrets,
-            action: Mutex::new(None),
         })
     }
 
-    /// The origin the billing page is served from.
-    fn origin(&self) -> String {
-        let url = &self.billing_url;
-        let after_scheme = url.find("://").map_or(0, |at| at + 3);
-        let path = url
-            .get(after_scheme..)
-            .and_then(|rest| rest.find('/'))
-            .map_or(url.len(), |at| after_scheme + at);
-        url.get(..path).unwrap_or_default().to_owned()
-    }
-
-    /// The cached action identifier, while it is fresh.
-    fn cached_action(&self) -> Option<String> {
-        let guard = self.action.lock().ok()?;
-        guard
-            .as_ref()
-            .filter(|(_, found)| found.elapsed() < ACTION_LIFETIME)
-            .map(|(id, _)| id.clone())
-    }
-
-    fn remember_action(&self, id: Option<String>) {
-        if let Ok(mut guard) = self.action.lock() {
-            *guard = id.map(|id| (id, Instant::now()));
-        }
-    }
-
-    /// Finds the billing action's identifier in the billing page's scripts.
-    async fn find_action(
-        &self,
-        cookie: &str,
-        set_cookies: &mut Vec<String>,
-    ) -> Result<String, ProviderError> {
-        let page = transport::send(
-            self.client
-                .get(self.billing_url.clone())
-                .header("Cookie", cookie)
-                .header("Accept", "text/html"),
-        )
-        .await?;
-        set_cookies.extend(page.set_cookies.iter().cloned());
-        transport::check(&page)?;
-        let sources = page::script_sources(&page.text, &self.origin());
-        let mut failure: Option<ProviderError> = None;
-        for batch in sources.chunks(SCRIPT_BATCH) {
-            let mut fetches = tokio::task::JoinSet::new();
-            for url in batch {
-                let request = self.client.get(url.clone());
-                fetches.spawn(async move { transport::send(request).await });
-            }
-            while let Some(joined) = fetches.join_next().await {
-                match joined {
-                    Ok(Ok(script)) if (200..300).contains(&script.status) => {
-                        if let Some(id) = page::action_id(&script.text) {
-                            fetches.abort_all();
-                            return Ok(id);
-                        }
-                    }
-                    Ok(Ok(script)) if script.status == 429 || script.status >= 500 => {
-                        if failure.is_none() {
-                            failure = transport::check(&script).err();
-                        }
-                    }
-                    Ok(Err(error)) => {
-                        failure.get_or_insert(error);
-                    }
-                    // A script that is not there, or a task that stopped, names no action.
-                    Ok(Ok(_)) | Err(_) => {}
-                }
-            }
-        }
-        Err(failure.unwrap_or_else(|| ProviderError::UnsupportedSchema {
-            detail: "the TypeSafe billing page no longer names its billing action".to_owned(),
-        }))
-    }
-
-    /// Calls the billing action once.
-    async fn call_action(&self, cookie: &str, id: &str) -> Result<TextReply, ProviderError> {
-        transport::send(
-            self.client
-                .post(self.billing_url.clone())
-                .header("Cookie", cookie)
-                .header("Origin", self.origin())
-                .header("Next-Action", id)
-                .header("Accept", "text/x-component")
-                .header("Content-Type", "application/json")
-                .body("[]"),
-        )
-        .await
-    }
-
-    /// The billing overview for one session, and the session header after any
-    /// cookie the console renewed while answering.
+    /// The billing summary the session reads, and the session header with
+    /// any cookie the console renewed, when it renewed one.
     async fn billing(
         &self,
         session: &Secret,
     ) -> Result<(wire::Billing, Option<String>), ProviderError> {
         let cookie = session::checked(session)?;
-        let mut set_cookies = Vec::new();
-        let (id, found_now) = match self.cached_action() {
-            Some(id) => (id, false),
-            None => (self.find_action(cookie, &mut set_cookies).await?, true),
-        };
-        let mut answer = self.call_action(cookie, &id).await?;
-        let id = if answer.status == 404 && answer.action_not_found && !found_now {
-            // The console was redeployed: look the action up again, once.
-            self.remember_action(None);
-            let id = self.find_action(cookie, &mut set_cookies).await?;
-            answer = self.call_action(cookie, &id).await?;
-            id
-        } else {
-            id
-        };
-        set_cookies.extend(answer.set_cookies.iter().cloned());
-        if answer.status == 404 && answer.action_not_found {
-            self.remember_action(None);
-            return Err(ProviderError::UnsupportedSchema {
-                detail: "the TypeSafe console does not know its billing action".to_owned(),
-            });
-        }
+        let answer = transport::send(
+            self.client
+                .get(self.overview_url.clone())
+                .header("Cookie", cookie)
+                .header("Accept", "application/json"),
+        )
+        .await?;
         transport::check(&answer)?;
-        self.remember_action(Some(id));
-        let result: wire::BillingResult = page::action_result(&answer.text)
-            .and_then(|value| serde_json::from_value(value).ok())
-            .ok_or_else(|| ProviderError::UnsupportedSchema {
-                detail: "the TypeSafe billing answer carried no result".to_owned(),
+        let overview: wire::Overview =
+            serde_json::from_str(&answer.text).map_err(|_| ProviderError::UnsupportedSchema {
+                detail: "the TypeSafe billing overview was not the JSON Quota knows".to_owned(),
             })?;
-        if result.ok != Some(true) {
-            return Err(ProviderError::InvalidData {
-                detail: "the TypeSafe console did not answer the billing request".to_owned(),
-            });
-        }
-        let billing = result.data.and_then(|data| data.billing).ok_or_else(|| {
-            ProviderError::UnsupportedSchema {
-                detail: "the TypeSafe billing answer carried no billing summary".to_owned(),
-            }
-        })?;
-        Ok((billing, session::renewed(cookie, &set_cookies)))
+        let billing = overview
+            .billing
+            .ok_or_else(|| ProviderError::UnsupportedSchema {
+                detail: "the TypeSafe billing overview carried no billing summary".to_owned(),
+            })?;
+        Ok((billing, session::renewed(cookie, &answer.set_cookies)))
     }
 
-    /// Performs one read with the given session.
     #[tracing::instrument(
         skip_all,
         fields(provider = ProviderId::Typesafe.as_str(), connection = %binding.connection_id)

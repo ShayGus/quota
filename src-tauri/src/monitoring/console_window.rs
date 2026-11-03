@@ -156,7 +156,7 @@ pub(super) async fn wait(
         match try_session(adapter, &header, cancelled).await? {
             Tried::Accepted => return Ok(Some(header)),
             Tried::Cancelled => return Ok(None),
-            Tried::NotYet => {}
+            Tried::NotYet(_) => {}
         }
     }
 }
