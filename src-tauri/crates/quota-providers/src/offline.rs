@@ -161,7 +161,7 @@ fn decode_document(
             cursor::mapping::decode(&summary, pool, received_at)?
         }
         ProviderId::OllamaCloud => {
-            let body = offline_shape::<ollama::wire::UsageBody>(document, "Ollama usage")?;
+            let body = offline_shape::<ollama::wire::BalanceBody>(document, "Ollama balance")?;
             ollama::mapping::decode(&body, pool, received_at)?
         }
         ProviderId::Typesafe => {
