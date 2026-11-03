@@ -1,0 +1,4 @@
+#!/bin/sh
+# Runs the checks CI runs before a push leaves this machine (tools/checks.mjs).
+# `git push --no-verify` skips them once.
+exec bun tools/checks.mjs
