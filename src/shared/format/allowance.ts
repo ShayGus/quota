@@ -193,15 +193,16 @@ function formatMoney(minor: number, scale: number): string {
   return shown;
 }
 
-/** One number, at the provider's own precision, from an untrusted payload. */
+/**
+ * One number, up to the provider's own precision, from an untrusted payload.
+ * The precision only limits the places: a provider can pad a whole count with
+ * zeros, and 62500.000000000 credits reads as 62,500.
+ */
 function formatNumber(value: number, precision: number): string {
   const places =
     Number.isInteger(precision) && precision >= 0 ? Math.min(precision, 9) : 0;
   // Grouped, so a large count reads at a glance: 62,500 rather than 62500.
-  return value.toLocaleString("en-US", {
-    minimumFractionDigits: places,
-    maximumFractionDigits: places,
-  });
+  return value.toLocaleString("en-US", { maximumFractionDigits: places });
 }
 
 /**
