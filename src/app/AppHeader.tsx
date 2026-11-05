@@ -110,7 +110,7 @@ export function AppHeader({
         >
           <Icon name="shrink" />
         </button>
-        <ReportBugMenu actions={report} variant="header" />
+        <ReportBugMenu actions={report} />
         <button
           type="button"
           className="icon-btn"

@@ -279,16 +279,26 @@ and when it can next be checked.
 
 The mini widget is a small window with every account at a glance. It replaces the full
 window rather than opening beside it, stays on top of other windows, and keeps its place
-and its view when Quota restarts. Drag it anywhere: press on a tile, a detail row, or the
-frame, and move 4 px or more. If a screen is unplugged, or a screen's resolution or scale
-changes, and the widget is left partly off the screens, it moves back just inside the
-nearest one; it returns to its saved place when that screen layout does.
+and its view when Quota restarts. Drag it anywhere: press on a tile, a row, or the frame,
+and move 4 px or more. Leave it within 28 px of a screen's edge and it snaps to that edge.
+If a screen is unplugged, or a screen's resolution or scale changes, and the widget is
+left partly off the screens, it moves back just inside the nearest one; it returns to its
+saved place when that screen layout does.
+
+Its background is see-through, so you can read what's behind it, while its numbers and its
+coloured rim stay solid. Point at it and it turns solid. Because a click then lands on the
+widget, drag it aside to click something underneath. The rim turns amber while a limit is
+low, and the widget flashes when a limit runs low.
+
+To find it, click the tray icon, choose **Find widget** in the tray menu, or press
+**Ctrl+Alt+Q**: it comes to the front, its rim flashes, and rings spread from it. To
+change that shortcut or turn it off, go to **Settings → General → Find the widget**, which
+also says if another app already has it. Wayland doesn't give apps global shortcuts or let
+them place windows, so there the setting isn't offered and only the rim flashes.
 
 Switch to it with the header's **Switch to the mini widget** button, the tray menu's
 **Mini widget**, or **Settings → General → Mini widget**. Its expand button, **Open the
-full window**, switches back. Beside it, **Report a bug** offers the same two choices as
-the header (see [Report a bug](#report-a-bug)). Both buttons show while the pointer is on
-the widget.
+full window**, switches back, and shows while the pointer is on the widget.
 
 In the rings layout, point at a tile and the line under the tiles names the account with
 its status or next reset, without resizing the window or covering content. A click after
@@ -303,30 +313,40 @@ window's **Reconnect** does: Quota checks the sign-in again, and the details say
 website, such as TypeSafe, the sign-in window opens again, as it does from the full
 window. If Quota cannot start the reconnect, the details say why.
 
-The overview layout picks the widget's look: rings give a strip of small rings, bars give
-mini cards.
+In the compact layout, the widget is a list with one row per account, as wide as its
+widest row. Click a row for its details: each limit in full words, when it resets, when it
+was last checked, a **Reconnect** button if it needs one, and **Open full window**. Near
+the bottom of the screen they open upward. Click the row again, press Esc, or click
+another app to close them.
+
+The overview layout picks the widget's look: **Donuts** gives a strip of small rings,
+**Compact** gives the list. Both label a limit by its period, **H** for the 5-hour window,
+**D** daily, **W** weekly and **M** monthly, with **C** for credit and a word such as
+**Fable** for one model's limit. A limit the provider didn't report, or that the plan
+doesn't include, is left out of the widget; the full window still lists it. A dash on a
+limit means Quota couldn't read the provider's answer, and a lone dash means the account
+has no limits to show.
 
 <table>
   <tr>
     <td valign="top" width="50%"><img src="images/widget-rings.png" alt="The mini widget as a strip of rings"><br><sub>Rings: the ring strip</sub></td>
-    <td valign="top" width="50%"><img src="images/widget-cards.png" alt="The mini widget as mini cards with bars"><br><sub>Bars: the mini cards</sub></td>
+    <td valign="top" width="50%"><img src="images/widget-list.png" alt="The mini widget as a compact list, one row per account"><br><sub>Compact: the list</sub></td>
   </tr>
 </table>
 
 ## The tray icon
 
-- **Left-click** opens Quota.
+- **Left-click** opens Quota, and flashes the mini widget when that is the view.
 - **Right-click** opens the menu: **Settings**, **Show App**, **Mini widget** (a check
-  mark shows which view is active), **Report a bug** (see [Report a bug](#report-a-bug)),
-  and **Exit**.
+  mark shows which view is active), **Find widget**, **Report a bug** (see
+  [Report a bug](#report-a-bug)), and **Exit**.
 
 **Exit** is the only way to stop Quota; closing a window hides it to the tray.
 
 ## Report a bug
 
-**Report a bug** is in the tray menu, behind the bug button in the header, beside the mini
-widget's **Open the full window**, and in **Settings → Diagnostics**. Each offers two
-choices:
+**Report a bug** is in the tray menu, behind the bug button in the header, and in
+**Settings → Diagnostics**. Each offers two choices:
 
 - **Open an issue on GitHub** opens Quota's bug form in your browser with your Quota
   version, operating system, view and connected providers already filled in. You describe
@@ -339,12 +359,7 @@ choices:
 Neither includes account names, email addresses, keys or file paths: only the version, the
 operating system, the view and the provider names, such as `claude` or `codex`.
 
-<table>
-  <tr>
-    <td valign="top" width="58%"><img src="images/report-bug-menu.png" alt="The header's Report a bug menu: Open an issue on GitHub, Copy a prompt for an AI agent"><br><sub>From the header</sub></td>
-    <td valign="top" width="42%"><img src="images/widget-report-bug.png" alt="The mini widget with its Report a bug menu beneath the accounts"><br><sub>From the mini widget</sub></td>
-  </tr>
-</table>
+<img src="images/report-bug-menu.png" alt="The header's Report a bug menu: Open an issue on GitHub, Copy a prompt for an AI agent">
 
 ## Manage accounts
 
@@ -533,7 +548,10 @@ offered at the next check.
 A failed check stays silent and logs a warning, and every check and download has a time
 limit. A failed installation shows a message with **Close**, and Quota keeps running its
 current version. Development, debug, sample-data and inspection builds never check. There
-are no update settings, channels, release notes or progress bar.
+are no update settings, channels or progress bar.
+
+The first time a new version runs after an update, a **What's new** panel lists what
+changed in it. It opens once; a new install doesn't show it.
 
 <br clear="right">
 

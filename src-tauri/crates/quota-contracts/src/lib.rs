@@ -29,4 +29,4 @@ pub use events::{
 };
 pub use preferences::{NotificationPolicy, NotificationThresholds, Preferences, PrivacyPolicy};
 pub use refs::{AccountRef, AttemptRef, ConnectionRef};
-pub use update::{UpdatePrompt, UpdatePromptChangedPayload, UpdateResponse};
+pub use update::{ReleaseNotes, UpdatePrompt, UpdatePromptChangedPayload, UpdateResponse};

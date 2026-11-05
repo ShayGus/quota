@@ -179,7 +179,11 @@ reports and what the installers are named. Two files mirror it and
 - `version` in [`package.json`](../package.json)
 - `version` in the `[package]` table of [`src-tauri/Cargo.toml`](../src-tauri/Cargo.toml)
 
-Change all three in one reviewed pull request, together with anything else the release
+Add a `## version` section to [`RELEASE_NOTES.md`](../RELEASE_NOTES.md) too, in words for
+the people using Quota. The app shows it once, on the new version's first run, and the
+GitHub release opens with it; `cargo xtask check-release` fails without it.
+
+Change all of these in one reviewed pull request, together with anything else the release
 should contain, and let the normal CI pass. That commit is what gets released. The version
 must go **up** from the release before it: installed copies only update to a higher
 number.

@@ -2,9 +2,9 @@
 //!
 //! The tray exists in Rust so it survives renderer closure. Closing a window
 //! hides it to the tray; a left click on the icon always opens the app in its
-//! chosen view, and the menu offers Settings, Show App, the switch between the
-//! full window and the mini widget, Report a bug, and Exit. Only Exit ends the
-//! process.
+//! chosen view, and flashes the mini widget when that is the view. The menu
+//! offers Settings, Show App, the switch between the full window and the mini
+//! widget, Find widget, Report a bug, and Exit. Only Exit ends the process.
 
 use quota_domain::account::{ConnectionState, FetchState};
 use quota_domain::provider::ProviderId;
@@ -36,12 +36,13 @@ pub fn install(app: &AppHandle) -> tauri::Result<()> {
     // Checked while the widget is the view; the saved view checks it at launch.
     let widget = CheckMenuItem::with_id(app, "widget", "Mini widget", true, false, None::<&str>)?;
     app.manage(super::widget::WidgetMenuItem(widget.clone()));
+    let find = MenuItem::with_id(app, "find-widget", "Find widget", true, None::<&str>)?;
     let report = report_menu(app, dark)?;
     let exit = item("exit", "Exit", MenuIcon::Power)?;
     let separator = PredefinedMenuItem::separator(app)?;
     let menu = Menu::with_items(
         app,
-        &[&settings, &show, &widget, &report, &separator, &exit],
+        &[&settings, &show, &widget, &find, &report, &separator, &exit],
     )?;
     TrayIconBuilder::with_id("quota")
         .icon(tray_image(false, system_is_dark(app)))
@@ -365,6 +366,7 @@ fn handle_menu_event(app: &AppHandle, event: tauri::menu::MenuEvent) {
         }
         "show" => activate_from_tray(app),
         "widget" => super::app_view::toggle_from_tray(app),
+        "find-widget" => super::app_view::find_widget(app),
         "report-issue" => report_from_tray(app, false),
         "report-prompt" => report_from_tray(app, true),
         "exit" => app.exit(0),

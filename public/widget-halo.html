@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  The rings that spread from the mini widget when it is found. This is a window of
+  its own that clicks pass through, and it runs nothing: no script, and no access
+  to the app. platform/widget.rs sizes it and clears it, and HALO_REACH there is the
+  46 px these rings travel.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Quota widget rings</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: transparent;
+        overflow: hidden;
+      }
+      i {
+        position: absolute;
+        inset: 46px;
+        border: 3px solid #3fd0b0;
+        border-radius: 13px;
+        opacity: 0;
+        animation: ping 900ms ease-out 3;
+      }
+      i + i {
+        animation-delay: 300ms;
+      }
+      @keyframes ping {
+        0% {
+          inset: 46px;
+          opacity: 1;
+        }
+        100% {
+          inset: 0;
+          opacity: 0;
+          border-radius: 40px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        i {
+          inset: 40px;
+          opacity: 1;
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <i></i><i></i>
+  </body>
+</html>

@@ -144,10 +144,15 @@ const NAVIGATE_EVENT: &str = "quota-popover-navigate";
 /// # Errors
 /// Returns the native failure when the window refuses.
 pub async fn restore_saved(state: &AppState) -> Result<(), CommandError> {
-    let (view, saved) = {
+    let (view, saved, shortcut) = {
         let preferences = state.preferences_state.read().await;
-        (preferences.view, preferences.widget_position)
+        (
+            preferences.view,
+            preferences.widget_position,
+            preferences.find_widget_shortcut.clone(),
+        )
     };
+    super::find_shortcut::restore(&state.app, shortcut.as_deref());
     let chrome = state.window.lock().await.state();
     restore(
         &state.app,
@@ -200,7 +205,9 @@ pub fn activate(app: &AppHandle) {
                     code = error.diagnostic_code(),
                     "the widget could not be shown"
                 );
+                return;
             }
+            widget::flash(&app);
             return;
         }
         let mut controller = state.window.lock().await;
@@ -217,6 +224,40 @@ pub fn activate(app: &AppHandle) {
         }
     });
 }
+
+/// Points the widget out, from the tray menu or the shortcut: it comes to the
+/// front and flashes, and if the full window is the view, it becomes the widget.
+pub fn find_widget(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let Some(state) = app.try_state::<AppState>() else {
+            return;
+        };
+        let state = state.inner().clone();
+        let (view, saved) = {
+            let preferences = state.preferences_state.read().await;
+            (preferences.view, preferences.widget_position)
+        };
+        let shown = if view == AppView::Widget {
+            widget::show(&app, saved)
+        } else {
+            let switched = switch(&state, AppView::Widget).await.map(|_| ());
+            // A widget that was just created is not listening yet.
+            tokio::time::sleep(WIDGET_STARTS).await;
+            switched
+        };
+        match shown {
+            Ok(()) => widget::flash(&app),
+            Err(error) => tracing::warn!(
+                code = error.diagnostic_code(),
+                "the widget could not be found"
+            ),
+        }
+    });
+}
+
+/// How long a new widget window takes to start listening, generously.
+const WIDGET_STARTS: std::time::Duration = std::time::Duration::from_millis(900);
 
 /// Switches to the other view from the tray menu.
 pub fn toggle_from_tray(app: &AppHandle) {

@@ -25,6 +25,14 @@ interface Reply {
 
 const ELEMENT_KEY = "element-6066-11e4-a52e-4f735466cecf";
 
+/** Where a window is and how big, in the pixels window positions use. */
+export interface WindowRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /** A located element. */
 export class Element {
   private readonly session: Session;
@@ -33,6 +41,11 @@ export class Element {
   public constructor(session: Session, id: string) {
     this.session = session;
     this.id = id;
+  }
+
+  /** The element's WebDriver identity. */
+  public get elementId(): string {
+    return this.id;
   }
 
   public click(): Promise<void> {
@@ -57,6 +70,51 @@ export class Element {
 export class Session {
   public readonly id: string;
   private readonly base: string;
+
+  /** The window the session is on. */
+  public async handleNow(): Promise<string> {
+    return (await this.get("/window")) as string;
+  }
+
+  /** Where the current window is. */
+  public async rect(): Promise<WindowRect> {
+    return (await this.get("/window/rect")) as WindowRect;
+  }
+
+  /** Moves the current window, as a move by the system would. */
+  public async setRect(position: {
+    readonly x: number;
+    readonly y: number;
+  }): Promise<void> {
+    await this.post("/window/rect", position);
+  }
+
+  /** Moves the test's own pointer onto an element. No real mouse moves. */
+  public async pointAt(element: Element): Promise<void> {
+    await this.post("/actions", {
+      actions: [
+        {
+          type: "pointer",
+          id: "mouse",
+          parameters: { pointerType: "mouse" },
+          actions: [
+            {
+              type: "pointerMove",
+              duration: 0,
+              origin: { [ELEMENT_KEY]: element.elementId },
+              x: 0,
+              y: 0,
+            },
+          ],
+        },
+      ],
+    });
+  }
+
+  /** Runs a script that calls its last argument when it is done. */
+  public async evaluateAsync<T>(script: string, args: unknown[] = []): Promise<T> {
+    return (await this.post("/execute/async", { script, args })) as T;
+  }
 
   public constructor(base: string, id: string) {
     this.base = base;

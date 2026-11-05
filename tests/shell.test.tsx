@@ -95,7 +95,9 @@ function commandsMatching(command: string): typeof invoked {
 
 /** Every recorded call except the one-time snapshot reconciliation at mount. */
 const mutatingCommands = (): readonly string[] =>
-  invoked.map((call) => call.command).filter((command) => command !== "get_snapshot");
+  invoked
+    .map((call) => call.command)
+    .filter((command) => command !== "get_snapshot" && !command.endsWith("_status"));
 
 beforeEach(() => {
   invoked.length = 0;

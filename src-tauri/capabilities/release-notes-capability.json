@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "release-notes-capability",
+  "description": "The what's new panel, a small window the host opens on the first run of a new version. It reads the snapshot only for the saved theme, reads the release notes built into this version, moves by its own header, and closes itself. No other command, and no updater, store, SQL, filesystem, shell or HTTP permission, is granted here.",
+  "windows": ["release-notes"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close",
+    "core:event:default",
+    "allow-get-snapshot",
+    "allow-get-release-notes"
+  ]
+}

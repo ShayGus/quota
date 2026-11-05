@@ -14,6 +14,7 @@ import { launch } from "../../../shared/ipc/report";
 import type { MonitoringState, Preferences } from "../../../generated/bindings";
 import { SettingRow, SettingsTitle, Switch } from "../Primitives";
 import type { SettingsActions } from "../Settings";
+import { FindShortcut } from "./FindShortcut";
 import { backgroundRefreshSeconds, withBackgroundRefresh } from "../polling";
 
 /** The general settings panel. */
@@ -137,6 +138,7 @@ export function WindowPanel({
           />
         }
       />
+      <FindShortcut preferences={preferences} actions={actions} />
       <div className="note">
         Preferences are saved on this device and apply immediately. Launch at login is the
         only system setting Quota changes, and only when you turn it on.

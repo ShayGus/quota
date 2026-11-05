@@ -240,6 +240,17 @@ pub struct FitWidget {
     pub room_below: f64,
 }
 
+/// Whether the shortcut that finds the widget can work here, and does.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct FindShortcutStatus {
+    /// Whether this desktop lets an app have a global shortcut at all. Wayland
+    /// does not, so the setting is not offered there.
+    pub supported: bool,
+    /// Whether the saved combination is registered right now. It is not when
+    /// it is off, or when another app took it first.
+    pub active: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

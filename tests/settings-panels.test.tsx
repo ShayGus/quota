@@ -5,13 +5,14 @@
  * retention selector, and account actions confirm in a dialog, so these drive
  * the real panels and read what each interaction saves (spec 13.2).
  */
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { Preferences } from "../src/generated/bindings";
+import type { FindShortcutStatus, Preferences } from "../src/generated/bindings";
 import { AppearancePanel } from "../src/features/settings/panels/AppearancePanel";
 import { DiagnosticsPanel } from "../src/features/settings/panels/DiagnosticsPanel";
+import { FindShortcut } from "../src/features/settings/panels/FindShortcut";
 import {
   NotificationsPanel,
   previewFor,
@@ -66,6 +67,8 @@ function settingsActions(): { actions: SettingsActions; saved: Preferences[] } {
       showOverview: vi.fn(),
       showAccountDetail: vi.fn(),
       launchAtLogin: vi.fn(() => Promise.resolve(false)),
+      findShortcutStatus: vi.fn(() => Promise.resolve(null)),
+      setFindShortcut: vi.fn(() => Promise.resolve(null)),
       setLaunchAtLogin: vi.fn((launch: boolean) => Promise.resolve(launch)),
     },
   };
@@ -504,5 +507,102 @@ describe("account management identities", () => {
     expect(onAddAccount).toHaveBeenCalledTimes(1);
     for (const name of ["Move Codex a1 up", "Move Codex a1 down"])
       expect(screen.getByRole("button", { name })).toHaveProperty("disabled", true);
+  });
+});
+
+describe("the shortcut that finds the widget", () => {
+  const working = { supported: true, active: true };
+
+  function row(
+    status: FindShortcutStatus | null,
+    setFindShortcut: (shortcut: string | null) => Promise<string | null> = () =>
+      Promise.resolve(null),
+    shortcut: string | null = "Ctrl+Alt+Q",
+  ) {
+    return render(
+      <FindShortcut
+        preferences={preferences({ find_widget_shortcut: shortcut })}
+        actions={{ findShortcutStatus: () => Promise.resolve(status), setFindShortcut }}
+      />,
+    );
+  }
+
+  it("shows the combination, and records a new one", async () => {
+    const save = vi.fn<(shortcut: string | null) => Promise<string | null>>(() =>
+      Promise.resolve(null),
+    );
+    row(working, save);
+    const change = await screen.findByRole("button", {
+      name: "Change the shortcut, now Ctrl+Alt+Q",
+    });
+    expect(change.textContent).toBe("Ctrl+Alt+Q");
+    fireEvent.click(change);
+    expect(change.textContent).toBe("Press keys…");
+    fireEvent.keyDown(change, { key: "Control", code: "ControlLeft", ctrlKey: true });
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.keyDown(change, {
+      key: "f",
+      code: "KeyF",
+      ctrlKey: true,
+      shiftKey: true,
+    });
+    expect(save).toHaveBeenCalledWith("Ctrl+Shift+F");
+  });
+
+  it("cancels recording on Esc, and needs a key that makes it global", async () => {
+    const save = vi.fn<(shortcut: string | null) => Promise<string | null>>(() =>
+      Promise.resolve(null),
+    );
+    row(working, save);
+    const change = await screen.findByRole("button", { name: /^Change the shortcut/ });
+    fireEvent.click(change);
+    fireEvent.keyDown(change, { key: "f", code: "KeyF" });
+    expect(save).not.toHaveBeenCalled();
+    fireEvent.keyDown(change, { key: "Escape", code: "Escape" });
+    expect(change.textContent).toBe("Ctrl+Alt+Q");
+    expect(save).not.toHaveBeenCalled();
+  });
+
+  it("says why a combination was refused", async () => {
+    row(working, () => Promise.resolve("Ctrl+F is taken by another app. Try another."));
+    const change = await screen.findByRole("button", { name: /^Change the shortcut/ });
+    fireEvent.click(change);
+    fireEvent.keyDown(change, { key: "f", code: "KeyF", ctrlKey: true });
+    expect((await screen.findByRole("alert")).textContent).toContain("taken by another");
+  });
+
+  it("says so when another app took the saved one first", async () => {
+    row({ supported: true, active: false });
+    expect((await screen.findByRole("alert")).textContent).toBe(
+      "Ctrl+Alt+Q is taken by another app. Pick another.",
+    );
+  });
+
+  it("turns off and back on", async () => {
+    const save = vi.fn<(shortcut: string | null) => Promise<string | null>>(() =>
+      Promise.resolve(null),
+    );
+    const { unmount } = row(working, save);
+    fireEvent.click(await screen.findByRole("button", { name: "Turn off" }));
+    expect(save).toHaveBeenLastCalledWith(null);
+    unmount();
+    row({ supported: true, active: false }, save, null);
+    fireEvent.click(await screen.findByRole("button", { name: "Turn on" }));
+    expect(save).toHaveBeenLastCalledWith("Ctrl+Alt+Q");
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  it("isn't offered where a desktop has no global shortcuts", async () => {
+    const status = vi.fn(() => Promise.resolve({ supported: false, active: false }));
+    const { container } = render(
+      <FindShortcut
+        preferences={preferences()}
+        actions={{ findShortcutStatus: status, setFindShortcut: vi.fn() }}
+      />,
+    );
+    await waitFor(() => {
+      expect(status).toHaveBeenCalled();
+    });
+    expect(container.textContent).toBe("");
   });
 });

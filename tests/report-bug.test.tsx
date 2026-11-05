@@ -21,7 +21,7 @@ function openMenu(): void {
 
 describe("Report a bug", () => {
   it("is closed until its button is pressed, then offers the two choices", () => {
-    render(<ReportBugMenu actions={actions()} variant="header" />);
+    render(<ReportBugMenu actions={actions()} />);
     const trigger = screen.getByRole("button", { name: "Report a bug" });
     expect(screen.queryByRole("menu")).toBeNull();
     expect(trigger.getAttribute("aria-expanded")).toBe("false");
@@ -35,7 +35,7 @@ describe("Report a bug", () => {
 
   it("opens the issue form and closes", () => {
     const report = actions();
-    render(<ReportBugMenu actions={report} variant="header" />);
+    render(<ReportBugMenu actions={report} />);
     openMenu();
     fireEvent.click(screen.getByRole("menuitem", { name: "Open an issue on GitHub" }));
     expect(report.openIssue).toHaveBeenCalledOnce();
@@ -45,7 +45,7 @@ describe("Report a bug", () => {
 
   it("confirms a prompt that reached the clipboard", async () => {
     const report = actions(true);
-    render(<ReportBugMenu actions={report} variant="header" />);
+    render(<ReportBugMenu actions={report} />);
     openMenu();
     fireEvent.click(
       screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
@@ -57,7 +57,7 @@ describe("Report a bug", () => {
 
   it("does not confirm a prompt the clipboard refused", async () => {
     const report = actions(false);
-    render(<ReportBugMenu actions={report} variant="header" />);
+    render(<ReportBugMenu actions={report} />);
     openMenu();
     fireEvent.click(
       screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
@@ -70,7 +70,7 @@ describe("Report a bug", () => {
   });
 
   it("closes on Escape without letting the window hide", () => {
-    render(<ReportBugMenu actions={actions()} variant="header" />);
+    render(<ReportBugMenu actions={actions()} />);
     openMenu();
     const escape = new KeyboardEvent("keydown", { key: "Escape", cancelable: true });
     act(() => {
@@ -83,7 +83,7 @@ describe("Report a bug", () => {
   it("closes on a press outside it", () => {
     render(
       <>
-        <ReportBugMenu actions={actions()} variant="header" />
+        <ReportBugMenu actions={actions()} />
         <p>elsewhere</p>
       </>,
     );

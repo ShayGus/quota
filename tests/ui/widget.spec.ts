@@ -23,18 +23,168 @@ test.describe("widget", () => {
     });
   });
 
-  test("the compact bar layout renders", async ({ open }) => {
-    const host = await open(
-      scenario("widget", {
-        preferences: defaultPreferences({ view: "widget", indicator_style: "bar" }),
-      }),
-      "#/widget",
-    );
-    await expect(
-      host.page.getByRole("button", { name: "Open the full window" }),
-    ).toBeVisible();
+  const LIST = scenario("widget", {
+    preferences: defaultPreferences({ view: "widget", indicator_style: "bar" }),
+  });
+
+  test("the compact list renders one row per account, at its own width", async ({
+    open,
+  }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    const rows = page.locator(".widget-row");
+    await expect(rows.first()).toBeVisible();
+    const box = await page.locator(".widget").boundingBox();
+    expect(box?.width ?? 0).toBeLessThanOrEqual(400);
+    await expect
+      .poll(async () => (await host.callsTo("fit_widget")).at(-1)?.args)
+      .toMatchObject({ contentWidth: Math.ceil(box?.width ?? 0) });
     await host.screenshot("widget-bars");
-    await host.screenshotFull("widget-cards");
+    await host.screenshotFull("widget-list");
+  });
+
+  test("every row's limits start at the same point, in columns of one width", async ({
+    open,
+  }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    await expect(page.locator(".widget-row").first()).toBeVisible();
+    const rows = await page.locator(".widget-row-limits").evaluateAll((all) =>
+      all.map((limits) =>
+        [...limits.querySelectorAll(".widget-limit")].map((limit) => {
+          const box = limit.getBoundingClientRect();
+          return { left: box.left, width: box.width };
+        }),
+      ),
+    );
+    const filled = rows.filter((row) => row.length > 0);
+    expect(filled.length).toBeGreaterThan(1);
+    const firsts = filled.map((row) => row[0]?.left ?? 0);
+    expect(Math.max(...firsts) - Math.min(...firsts)).toBeLessThanOrEqual(0.5);
+    const widths = filled.flat().map((limit) => limit.width);
+    expect(Math.max(...widths) - Math.min(...widths)).toBeLessThanOrEqual(0.5);
+    const second = filled.map((row) => row[1]?.left).filter((left) => left !== undefined);
+    expect(Math.max(...second) - Math.min(...second)).toBeLessThanOrEqual(0.5);
+  });
+
+  test("every row has its provider's icon, and words end where numbers end", async ({
+    open,
+  }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    const rows = page.locator(".widget-row");
+    await expect(rows.first()).toBeVisible();
+    await expect(page.locator(".widget-row .provider-icon")).toHaveCount(
+      await rows.count(),
+    );
+    const edges = await page.evaluate(() => {
+      const rightOf = (selector: string): number[] =>
+        [...document.querySelectorAll(selector)].map(
+          (element) => element.getBoundingClientRect().right,
+        );
+      return {
+        words: rightOf(".widget-row-status"),
+        limits: rightOf(".widget-limit .widget-value"),
+      };
+    });
+    expect(edges.words.length).toBeGreaterThan(0);
+    const end = Math.max(...edges.limits);
+    for (const right of edges.words) {
+      expect(Math.abs(right - end)).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  test("the list is see-through until pointed at, and its rim stays", async ({
+    open,
+  }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    const list = page.locator(".widget-list");
+    const fill = (): Promise<string> =>
+      list.evaluate((element) => getComputedStyle(element).backgroundColor);
+    const rim = (): Promise<string> =>
+      list.evaluate((element) => getComputedStyle(element).boxShadow);
+    await expect.poll(fill).toContain("0.75");
+    const before = await rim();
+    expect(before).toContain("inset");
+    await page.locator(".widget-row").first().hover();
+    await expect(page.locator(".widget.solid")).toBeVisible();
+    await expect.poll(fill).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
+    expect(await rim()).toBe(before);
+    await host.screenshot("widget-list-solid");
+  });
+
+  test("a row opens its details, which never make the list wider", async ({ open }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    await page.setViewportSize({ width: 316, height: 400 });
+    const row = page.locator(".widget-row").first();
+    const before = await page.locator(".widget").boundingBox();
+    await row.click();
+    await expect(row).toHaveAttribute("aria-expanded", "true");
+    const details = page.locator(".widget-details");
+    await expect(details).toBeVisible();
+    await expect(details.getByRole("button", { name: "Open full window" })).toBeVisible();
+    const after = await page.locator(".widget").boundingBox();
+    expect(after?.width).toBe(before?.width);
+    expect(after?.height ?? 0).toBeGreaterThan(before?.height ?? 0);
+    await host.screenshot("widget-list-details");
+    await page.keyboard.press("Escape");
+    await expect(details).toBeHidden();
+    await expect(row).toBeFocused();
+  });
+
+  test("the details' Open full window switches to it", async ({ open }) => {
+    const host = await open(LIST, "#/widget");
+    const { page } = host;
+    await page.setViewportSize({ width: 316, height: 400 });
+    await page.locator(".widget-row").first().click();
+    await page.getByRole("button", { name: "Open full window" }).click();
+    expect((await host.callsTo("set_app_view")).at(-1)?.args).toEqual({
+      view: "overview",
+    });
+  });
+
+  test("the list has no report button: the tray has it", async ({ open }) => {
+    const host = await open(LIST, "#/widget");
+    await expect(host.page.locator(".widget-row").first()).toBeVisible();
+    await expect(host.page.getByRole("button", { name: "Report a bug" })).toHaveCount(0);
+  });
+
+  test("Settings offers the shortcut that finds the widget", async ({ open }) => {
+    const host = await open(scenario("settings"), "#/settings/general");
+    const { page } = host;
+    const change = page.locator(".find-shortcut .button").first();
+    await expect(change).toHaveText("Ctrl+Alt+Q");
+    await change.click();
+    await expect(change).toHaveText("Press keys…");
+    await page.keyboard.press("Control+Shift+F9");
+    await expect
+      .poll(async () => (await host.callsTo("set_find_widget_shortcut")).at(-1)?.args)
+      .toEqual({ shortcut: "Ctrl+Shift+F9" });
+    await host.screenshot("settings-find-shortcut");
+  });
+
+  test("Settings says when another app took the shortcut", async ({ open }) => {
+    const host = await open(
+      { ...scenario("settings"), shortcutActive: false },
+      "#/settings/general",
+    );
+    await expect(host.page.getByRole("alert")).toHaveText(
+      "Ctrl+Alt+Q is taken by another app. Pick another.",
+    );
+    await host.screenshot("settings-find-shortcut-taken");
+  });
+
+  test("Settings doesn't offer the shortcut where a desktop can't have it", async ({
+    open,
+  }) => {
+    const host = await open(
+      { ...scenario("settings"), shortcutSupported: false },
+      "#/settings/general",
+    );
+    await expect(host.page.getByRole("switch", { name: "Mini widget" })).toBeVisible();
+    await expect(host.page.getByText("Find the widget")).toHaveCount(0);
   });
 
   test("a hover only peeks, a click opens the drawer once", async ({ open }) => {

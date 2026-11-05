@@ -17,6 +17,7 @@ mod flow;
 mod host;
 mod policy;
 mod prompt;
+pub mod release_notes;
 mod schedule;
 #[cfg(feature = "sample-data")]
 mod test_endpoint;

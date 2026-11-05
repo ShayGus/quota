@@ -34,6 +34,8 @@
     "allow-set-overview-mode",
     "allow-set-overview-always-on-top",
     "allow-set-app-view",
+    "allow-set-find-widget-shortcut",
+    "allow-find-widget-shortcut-status",
     "allow-open-provider-usage-page",
     "allow-open-settings-window",
     "allow-show-in-overview",

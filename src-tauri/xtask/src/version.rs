@@ -24,6 +24,32 @@ const PACKAGE_JSON: &str = "package.json";
 /// The desktop host manifest, which mirrors it.
 const CARGO_MANIFEST: &str = "src-tauri/Cargo.toml";
 
+/// The release notes, which every released version needs a section in.
+const RELEASE_NOTES: &str = "RELEASE_NOTES.md";
+
+/// Whether the notes have a `## version` section with at least one item.
+fn has_notes(notes: &str, version: &str) -> bool {
+    let heading = format!("## {version}");
+    notes
+        .lines()
+        .skip_while(|line| line.trim_end() != heading)
+        .skip(1)
+        .take_while(|line| !line.starts_with("## "))
+        .any(|line| line.starts_with("- "))
+}
+
+/// Reports a version whose first run would have no release notes to show.
+fn check_release_notes(root: &Path, version: &str, outcome: &mut Outcome) {
+    let notes = std::fs::read_to_string(root.join(RELEASE_NOTES)).unwrap_or_default();
+    if !has_notes(&notes, version) {
+        outcome.fail(
+            RELEASE_NOTES.to_string(),
+            1,
+            format!("version `{version}` has no `## {version}` section with a list of changes"),
+        );
+    }
+}
+
 /// Reports a version that is missing from a file, or different in one.
 pub(crate) fn check(root: &Path, outcome: &mut Outcome) {
     let authority = json_version(root, AUTHORITY, outcome);
@@ -32,6 +58,7 @@ pub(crate) fn check(root: &Path, outcome: &mut Outcome) {
     let (Some(authority), Some(package), Some(manifest)) = (authority, package, manifest) else {
         return;
     };
+    check_release_notes(root, &authority, outcome);
     for (file, version) in [
         (PACKAGE_JSON, package.as_str()),
         (CARGO_MANIFEST, manifest.as_str()),

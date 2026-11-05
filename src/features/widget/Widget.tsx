@@ -3,14 +3,15 @@
  * above the others.
  *
  * It has two looks, picked with the same ring-or-bar choice as the overview:
- * a strip of rings, one ring per period, or mini cards with a bar per limit.
+ * a strip of rings, one ring per period, or a compact list, one row per account.
  * It is another way to present the app, never shown beside the full window.
- * The host fits the window's height, and it moves wherever it is dragged,
- * from any point on it. RingStrip owns the peek and details drawer, whose
- * Reconnect button reconnects an account the way the full window does. The
- * button in its corner, the tray menu, and Settings switch back to the full
- * window; beside that button, Report a bug
- * opens the same two choices as the full window's header.
+ * The host fits the window to it, and it moves wherever it is dragged, from any
+ * point on it. Its background is see-through until it is pointed at, while its
+ * numbers and its rim never fade. The rim turns amber while a limit is low, and
+ * the widget flashes when one runs low or when the person asks to find it. Each
+ * look's details have a Reconnect button that reconnects an account the way the
+ * full window does. The button in its corner, the tray menu, and Settings switch
+ * back to the full window.
  */
 import {
   createContext,
@@ -28,24 +29,30 @@ import { launch } from "../../shared/ipc/report";
 import {
   dragWidget,
   fitWidget,
+  listenForFind,
+  setContentWidth,
+  showWidgetHalo,
   type FitWidget,
   type WidgetGrowth,
 } from "../../shared/ipc/widget";
 import type { RendererState } from "../../shared/state/types";
 import { Icon } from "../../shared/ui/Icon";
-import { TOAST_MS } from "../../shared/ui/RefreshNotice";
-import {
-  PROMPT_COPIED,
-  ReportBugMenu,
-  type ReportBugActions,
-} from "../../shared/ui/ReportBug";
 import { useNow } from "../../shared/ui/useNow";
-import { MiniCards } from "./MiniCards";
-import { widgetAccounts } from "./model";
+import { CompactList } from "./CompactList";
+import { widgetAccounts, type WidgetAccount } from "./model";
 import { RingStrip } from "./RingStrip";
 
 /** How far the pointer moves before a press becomes a drag, in CSS pixels. */
 const DRAG_DISTANCE = 4;
+
+/** How long the pointer must rest on the widget before it turns solid. */
+const SOLID_AFTER_MS = 90;
+/** How long it stays solid after the pointer leaves. */
+const SEE_THROUGH_AFTER_MS = 280;
+/** How long a release waits for its own click before making one. */
+const CLICK_GRACE_MS = 40;
+/** How long a flash lasts, as `widget-rim-flash` in widget.css animates it. */
+const FLASH_MS = 2700;
 
 /** A press on the widget that may still become a drag. */
 export interface WidgetPress {
@@ -69,6 +76,12 @@ export interface WidgetChrome {
   readonly drawerOpen: { current: boolean };
   /** Tells the window fit whether the drawer owns the window size. */
   readonly setDrawerOpen: (open: boolean) => void;
+  /** The side the window's next fit prefers, which the look decides. */
+  readonly growth: { current: WidgetGrowth };
+  /** Tells the look what the host did with a fit it didn't ask for itself. */
+  readonly setOnFitted: (
+    callback: ((answer: FitWidget, asked: number) => void) | null,
+  ) => void;
   /** The last height asked of the host, so a settling resize is not re-asked. */
   readonly target: { current: number | null };
   /**
@@ -91,6 +104,7 @@ interface WidgetPressControls {
 
 const defaultDrawerOpen = { current: false };
 const defaultOnPressEnd = { current: null as ((target: Element | null) => void) | null };
+const defaultGrowth: { current: WidgetGrowth } = { current: "down" };
 
 const WidgetChromeContext = createContext<WidgetChrome>({
   setOnPressEnd: (callback) => {
@@ -101,6 +115,8 @@ const WidgetChromeContext = createContext<WidgetChrome>({
   setDrawerOpen: (open) => {
     defaultDrawerOpen.current = open;
   },
+  growth: defaultGrowth,
+  setOnFitted: () => undefined,
   target: { current: null },
   requestFit: (contentHeight, direction) => fitWidget(contentHeight, direction),
 });
@@ -122,7 +138,6 @@ export function Widget({
   state,
   onExpand,
   onReconnect,
-  report,
 }: {
   readonly state: RendererState;
   /** Switches back to the full window. */
@@ -132,8 +147,6 @@ export function Widget({
    * words for why the host refused, or `null` once it took the reconnect.
    */
   readonly onReconnect: (accountId: AccountId) => Promise<string | null>;
-  /** Opens the issue form or copies the agent prompt. */
-  readonly report: Omit<ReportBugActions, "onCopied">;
 }): JSX.Element {
   const now = useNow();
   const accounts = useMemo(
@@ -151,26 +164,30 @@ export function Widget({
   useFitWindow(root, chrome);
   useTransparentPage();
   useDragToMove(chrome);
-  const [copied, showCopied] = useCopiedNotice();
+  const pointer = useSolidWhilePointedAt();
+  const { flashing, low } = useFlash(accounts);
   return (
     <WidgetChromeContext value={chrome}>
-      <div className="widget" ref={root}>
+      <div
+        className={`widget${pointer.solid ? " solid" : ""}${flashing ? " flashing" : ""}${low ? " low" : ""}`}
+        ref={root}
+        onPointerEnter={pointer.onEnter}
+        onPointerLeave={pointer.onLeave}
+      >
         {accounts.length === 0 ? (
           <button type="button" className="widget-empty" onClick={onExpand}>
             <strong>No accounts to show</strong>
             <span>Open the full window to add one</span>
           </button>
         ) : state.preferences?.indicator_style === "bar" ? (
-          <MiniCards accounts={accounts} />
+          <CompactList
+            accounts={accounts}
+            onReconnect={onReconnect}
+            onExpand={onExpand}
+          />
         ) : (
           <RingStrip accounts={accounts} onReconnect={onReconnect} />
         )}
-        {copied ? (
-          <p className="widget-notice" role="status">
-            {PROMPT_COPIED}
-          </p>
-        ) : null}
-        <ReportBugMenu variant="widget" actions={{ ...report, onCopied: showCopied }} />
         <button
           type="button"
           className="widget-expand"
@@ -185,8 +202,15 @@ export function Widget({
   );
 }
 
+/** The look's answer to a fit the window asked for itself. */
+interface WidgetFitAnswers {
+  readonly onFitted: {
+    readonly current: ((answer: FitWidget, asked: number) => void) | null;
+  };
+}
+
 /** The window's shared press, drawer flag and deferred fit. */
-function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
+function useWidgetChromeValue(): WidgetChrome & WidgetPressControls & WidgetFitAnswers {
   const onPressEnd = useRef<((target: Element | null) => void) | null>(null);
   const setOnPressEnd = useCallback(
     (callback: ((target: Element | null) => void) | null): void => {
@@ -197,6 +221,14 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
   const press = useRef<WidgetPress | null>(null);
   const drawerOpen = useRef(false);
   const target = useRef<number | null>(null);
+  const growth = useRef<WidgetGrowth>("down");
+  const onFitted = useRef<((answer: FitWidget, asked: number) => void) | null>(null);
+  const setOnFitted = useCallback(
+    (callback: ((answer: FitWidget, asked: number) => void) | null): void => {
+      onFitted.current = callback;
+    },
+    [],
+  );
   const pending = useRef<PendingFit | null>(null);
   const send = useCallback(
     (contentHeight: number, direction: WidgetGrowth): Promise<FitWidget | null> => {
@@ -258,58 +290,166 @@ function useWidgetChromeValue(): WidgetChrome & WidgetPressControls {
       press,
       drawerOpen,
       setDrawerOpen,
+      growth,
+      setOnFitted,
+      onFitted,
       target,
       requestFit,
       beginPress,
       markDragging,
       endPress,
     }),
-    [requestFit, endPress, beginPress, markDragging, setDrawerOpen, setOnPressEnd],
+    [
+      requestFit,
+      endPress,
+      beginPress,
+      markDragging,
+      setDrawerOpen,
+      setOnPressEnd,
+      setOnFitted,
+    ],
   );
 }
 
 /**
- * Whether the copied-prompt notice is showing. The widget has no toast layer,
- * so the notice sits beneath the accounts for as long as a toast would.
+ * Whether the widget is solid. It stays see-through while the pointer only
+ * passes over it, and a moment after the pointer leaves, so it doesn't flicker.
  */
-function useCopiedNotice(): readonly [boolean, () => void] {
-  const [shownAt, setShownAt] = useState<number | null>(null);
-  useEffect(() => {
-    if (shownAt === null) {
-      return;
+function useSolidWhilePointedAt(): {
+  readonly solid: boolean;
+  readonly onEnter: () => void;
+  readonly onLeave: () => void;
+} {
+  const [solid, setSolid] = useState(false);
+  const timer = useRef<number | null>(null);
+  const after = useCallback((next: boolean, wait: number): void => {
+    if (timer.current !== null) {
+      window.clearTimeout(timer.current);
     }
-    const timer = window.setTimeout(() => {
-      setShownAt(null);
-    }, TOAST_MS);
-    return () => {
-      window.clearTimeout(timer);
-    };
-  }, [shownAt]);
-  const show = (): void => {
-    setShownAt(Date.now());
-  };
-  return [shownAt !== null, show];
+    timer.current = window.setTimeout(() => {
+      timer.current = null;
+      setSolid(next);
+    }, wait);
+  }, []);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) {
+        window.clearTimeout(timer.current);
+      }
+    },
+    [],
+  );
+  const onEnter = useCallback((): void => {
+    after(true, SOLID_AFTER_MS);
+  }, [after]);
+  const onLeave = useCallback((): void => {
+    after(false, SEE_THROUGH_AFTER_MS);
+  }, [after]);
+  return { solid, onEnter, onLeave };
+}
+
+/** The limits drawn low right now, each named by its account and its own name. */
+function lowLimitsOf(accounts: readonly WidgetAccount[]): readonly string[] {
+  return accounts
+    .filter((account) => !account.lastKnown)
+    .flatMap((account) =>
+      account.rows.filter((row) => row.low).map((row) => `${account.id}:${row.name}`),
+    );
 }
 
 /**
- * Observes the resting content height. While the drawer is open it fits
- * explicitly around its animation, so intermediate heights are not sent.
+ * Whether the widget is flashing, and whether a limit is low. It flashes when
+ * the host asks, and when a limit runs low: not for one that was already low
+ * when the widget opened, which only colours the rim.
+ */
+function useFlash(accounts: readonly WidgetAccount[]): {
+  readonly flashing: boolean;
+  readonly low: boolean;
+} {
+  const lowNow = lowLimitsOf(accounts);
+  const key = lowNow.join("|");
+  const [flashes, setFlashes] = useState(0);
+  const [finished, setFinished] = useState(0);
+  const [ranLow, setRanLow] = useState(0);
+  // Nothing is known until the first accounts arrive.
+  const [seen, setSeen] = useState<string | null>(null);
+  if (accounts.length > 0 && key !== seen) {
+    setSeen(key);
+    const before = new Set(seen === null ? lowNow : seen.split("|"));
+    if (lowNow.some((limit) => !before.has(limit))) {
+      setFlashes((count) => count + 1);
+      setRanLow((count) => count + 1);
+    }
+  }
+  useEffect(() => {
+    let current = true;
+    let stop: (() => void) | null = null;
+    launch(
+      listenForFind(() => {
+        setFlashes((count) => count + 1);
+      }).then((release) => {
+        if (current) {
+          stop = release;
+        } else {
+          release();
+        }
+      }),
+    );
+    return () => {
+      current = false;
+      stop?.();
+    };
+  }, []);
+  useEffect(() => {
+    if (ranLow > 0) {
+      launch(showWidgetHalo());
+    }
+  }, [ranLow]);
+  useEffect(() => {
+    if (flashes === 0) {
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      setFinished(flashes);
+    }, FLASH_MS);
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [flashes]);
+  return { flashing: flashes !== finished, low: lowNow.length > 0 };
+}
+
+/**
+ * Observes the resting content, height and width. While the ring strip's drawer
+ * is open it fits explicitly around its animation, so intermediate heights are
+ * not sent.
  */
 function useFitWindow(
   root: { readonly current: HTMLElement | null },
-  chrome: WidgetChrome,
+  chrome: WidgetChrome & WidgetFitAnswers,
 ): void {
-  const { drawerOpen, target, requestFit } = chrome;
+  const { drawerOpen, target, requestFit, growth, onFitted } = chrome;
   useEffect(() => {
     const element = root.current;
     if (element === null) {
       return;
     }
+    let width: number | null = null;
     const fit = (): void => {
-      if (drawerOpen.current || element.offsetHeight === target.current) {
+      const measured = Math.ceil(element.getBoundingClientRect().width);
+      const height = element.offsetHeight;
+      if (drawerOpen.current || (height === target.current && measured === width)) {
         return;
       }
-      launch(requestFit(element.offsetHeight, "down"));
+      width = measured;
+      setContentWidth(measured);
+      launch(
+        requestFit(height, growth.current).then((answer) => {
+          if (answer !== null) {
+            onFitted.current?.(answer, height);
+          }
+        }),
+      );
     };
     fit();
     const observer = new ResizeObserver(fit);
@@ -317,7 +457,7 @@ function useFitWindow(
     return () => {
       observer.disconnect();
     };
-  }, [root, drawerOpen, target, requestFit]);
+  }, [root, drawerOpen, target, requestFit, growth, onFitted]);
 }
 
 /** Lets the desktop show through around the widget's rounded corners. */
@@ -337,6 +477,8 @@ function useTransparentPage(): void {
 function useDragToMove(controls: WidgetPressControls): void {
   const { press, beginPress, markDragging, endPress } = controls;
   const suppressClick = useRef(false);
+  const draggedBefore = useRef(false);
+  const clickSeen = useRef(false);
   useEffect(() => {
     const finish = (event?: Event): void => {
       window.removeEventListener("pointermove", onMove, true);
@@ -364,13 +506,32 @@ function useDragToMove(controls: WidgetPressControls): void {
       ) {
         markDragging();
         suppressClick.current = true;
+        draggedBefore.current = true;
         launch(dragWidget());
       }
     };
     const onRelease = (event: globalThis.PointerEvent): void => {
-      if (event.pointerId === press.current?.pointerId) {
-        finish(event);
+      if (event.pointerId !== press.current?.pointerId) {
+        return;
       }
+      const stillClick = !press.current.dragging && draggedBefore.current;
+      finish(event);
+      if (stillClick && event.type === "pointerup") {
+        clickAfterDrag(event);
+      }
+    };
+    // The system's move loop takes the button's release from the page, and the
+    // first press after it can come without its click. The person did click, so
+    // the click they meant is made here, unless the page's own arrives.
+    const clickAfterDrag = (event: globalThis.PointerEvent): void => {
+      draggedBefore.current = false;
+      clickSeen.current = false;
+      const under = document.elementFromPoint(event.clientX, event.clientY);
+      window.setTimeout(() => {
+        if (!clickSeen.current && under instanceof HTMLElement) {
+          under.closest("button")?.click();
+        }
+      }, CLICK_GRACE_MS);
     };
     const onPress = (event: globalThis.PointerEvent): void => {
       if (event.button !== 0) {
@@ -390,6 +551,7 @@ function useDragToMove(controls: WidgetPressControls): void {
       window.addEventListener("blur", finish);
     };
     const onClick = (event: globalThis.MouseEvent): void => {
+      clickSeen.current = true;
       // A click that follows a drag is swallowed, on any button. A keyboard
       // click is never part of a drag, so it is always let through.
       if (suppressClick.current && event.detail !== 0) {

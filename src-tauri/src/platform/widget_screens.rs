@@ -124,12 +124,11 @@ pub fn watch(app: &AppHandle) {
 }
 
 /// The screens' positions, sizes and scales, so a change of any is noticed.
+///
+/// Asked of the app, not the widget: the widget appearing is not a change of
+/// screens, and treating it as one could pull back a widget moved right after.
 fn screens_layout(app: &AppHandle) -> String {
-    let Some(native) = app.get_webview_window(widget::LABEL) else {
-        return String::new();
-    };
-    native
-        .available_monitors()
+    app.available_monitors()
         .map(|monitors| {
             monitors
                 .iter()

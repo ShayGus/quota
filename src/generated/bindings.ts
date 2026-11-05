@@ -144,7 +144,25 @@ name: string } | null) => typedError<null, CommandError>(__TAURI_INVOKE("confirm
 	 *  the drawer opened upward is never saved; an upward close saves the
 	 *  restored resting position instead.
 	 */
-	fitWidget: (contentHeight: number, direction: WidgetGrowth) => typedError<FitWidget, CommandError>(__TAURI_INVOKE("fit_widget", { contentHeight, direction })),
+	fitWidget: (contentWidth: number, contentHeight: number, direction: WidgetGrowth) => typedError<FitWidget, CommandError>(__TAURI_INVOKE("fit_widget", { contentWidth, contentHeight, direction })),
+	/**
+	 *  Draws the rings around the mini widget for a moment, as finding it does, so
+	 *  a limit that just ran low can point the widget out.
+	 */
+	showWidgetHalo: () => typedError<null, CommandError>(__TAURI_INVOKE("show_widget_halo")),
+	/**
+	 *  Changes or turns off the key combination that finds the widget, and saves
+	 *  it only once it works. Another app's combination is refused, and the one
+	 *  that worked before keeps working.
+	 * 
+	 *  # Errors
+	 *  Returns [`CommandError::ValidationFailed`] for a combination that cannot be
+	 *  read or that another app holds, and a persistence error when it cannot be
+	 *  saved.
+	 */
+	setFindWidgetShortcut: (shortcut: string | null) => typedError<Preferences, CommandError>(__TAURI_INVOKE("set_find_widget_shortcut", { shortcut })),
+	/**  Whether the key combination that finds the widget can work here, and does. */
+	findWidgetShortcutStatus: () => typedError<FindShortcutStatus, CommandError>(__TAURI_INVOKE("find_widget_shortcut_status")),
 	/**
 	 *  Switches between the full window and the mini widget, and saves the view.
 	 * 
@@ -203,6 +221,16 @@ name: string } | null) => typedError<null, CommandError>(__TAURI_INVOKE("confirm
 	 *  or any button during the install, is refused.
 	 */
 	respondToUpdatePrompt: (response: UpdateResponse) => typedError<null, CommandError>(__TAURI_INVOKE("respond_to_update_prompt", { response })),
+	/**
+	 *  The release notes built into this version, for the what's new panel, or
+	 *  nothing when this version has none.
+	 */
+	getReleaseNotes: () => __TAURI_INVOKE<{
+	/**  The version they describe. */
+	version: string,
+	/**  What changed, one plain sentence each. */
+	items: string[],
+} | null>("get_release_notes"),
 };
 
 /** Events */
@@ -764,6 +792,20 @@ export type FetchState =
 /**  The last attempt failed. */
 "error";
 
+/**  Whether the shortcut that finds the widget can work here, and does. */
+export type FindShortcutStatus = {
+	/**
+	 *  Whether this desktop lets an app have a global shortcut at all. Wayland
+	 *  does not, so the setting is not offered there.
+	 */
+	supported: boolean,
+	/**
+	 *  Whether the saved combination is registered right now. It is not when
+	 *  it is off, or when another app took it first.
+	 */
+	active: boolean,
+};
+
 /**  What fitting the mini widget to its content decided. */
 export type FitWidget = {
 	/**
@@ -1141,6 +1183,16 @@ export type Preferences = {
 	account_sort: AccountSort,
 	/**  The arranged order, used when `account_sort` is `manual`. */
 	account_order: AccountId[],
+	/**
+	 *  The key combination that finds the widget, or `None` when it is off.
+	 *  Only `set_find_widget_shortcut` changes it; a save carries it unchanged.
+	 */
+	find_widget_shortcut: string | null,
+	/**
+	 *  The version the release notes were last handled for. The host saves it;
+	 *  the renderer carries it through a save unchanged.
+	 */
+	last_release_notes: string | null,
 	/**  Notification behaviour. */
 	notifications: NotificationPolicy,
 	/**  Retention and export behaviour. */
@@ -1450,6 +1502,14 @@ export type RegisteredProvider = {
 	capabilities: ProviderCapabilities,
 	/**  Whether the adapter is compiled into this build at all. */
 	compiled_in_this_build: boolean,
+};
+
+/**  One version's release notes, which the first run of that version shows. */
+export type ReleaseNotes = {
+	/**  The version they describe. */
+	version: string,
+	/**  What changed, one plain sentence each. */
+	items: string[],
 };
 
 /**  A metered resource such as a model or product surface. */

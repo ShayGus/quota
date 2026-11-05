@@ -23,6 +23,7 @@ export const WINDOW_SIZE = {
   settings: { width: 780, height: 600 },
   widget: { width: 316, height: 172 },
   update: { width: 440, height: 250 },
+  "release-notes": { width: 460, height: 520 },
 } as const;
 
 /** A loaded window and what the test can do with the faked host behind it. */

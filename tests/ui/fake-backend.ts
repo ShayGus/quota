@@ -36,7 +36,7 @@ import type {
 } from "../../src/generated/bindings";
 
 /** The windows the application creates, by label. */
-export type WindowLabel = "overview" | "settings" | "widget" | "update";
+export type WindowLabel = "overview" | "settings" | "widget" | "update" | "release-notes";
 
 /** What a scripted connection attempt does after it starts. */
 export interface ConnectionScript {
@@ -64,6 +64,10 @@ export interface FakeConfig {
   readonly window: WindowLabel;
   readonly snapshot: AppSnapshot;
   readonly preferences: Preferences;
+  /** Whether this desktop can have the shortcut; yes unless a test says no. */
+  readonly shortcutSupported?: boolean;
+  /** Whether the saved shortcut is held by this app; another app may have it. */
+  readonly shortcutActive?: boolean;
   readonly overviewWindow: OverviewWindowState;
   readonly providers: readonly RegisteredProvider[];
   readonly launchAtLogin: boolean;
@@ -323,6 +327,28 @@ export function installFakeBackend(config: FakeConfig): void {
         return config.overviewWindow;
       case "fit_overview_height":
         return config.overviewWindow;
+      case "get_release_notes":
+        return {
+          version: "0.1.11",
+          items: [
+            "The mini widget's compact layout is now a small list.",
+            "Codex credits read 62,500 instead of 62,500.000000000.",
+          ],
+        };
+      case "show_widget_halo":
+        return null;
+      case "find_widget_shortcut_status":
+        return {
+          supported: config.shortcutSupported ?? true,
+          active:
+            (config.shortcutActive ?? true) && preferences.find_widget_shortcut !== null,
+        };
+      case "set_find_widget_shortcut":
+        savePreferences({
+          ...preferences,
+          find_widget_shortcut: (args?.shortcut as string | null) ?? null,
+        });
+        return preferences;
       case "fit_widget": {
         const asked = typeof args?.contentHeight === "number" ? args.contentHeight : 0;
         const direction = args?.direction === "up" ? "up" : "down";

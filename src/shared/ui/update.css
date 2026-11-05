@@ -24,3 +24,22 @@
   margin-top: 0;
   padding: 17px;
 }
+
+.release-notes-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 17px 17px 0;
+}
+
+.release-notes-body ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.release-notes-body li {
+  margin-bottom: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text);
+}

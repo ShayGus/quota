@@ -595,3 +595,21 @@ dialog p {
   height: 15px;
   color: var(--muted);
 }
+
+/* The shortcut that finds the widget: the combination, and turning it off. */
+.find-shortcut {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.find-shortcut .button.recording {
+  border-color: var(--focus);
+  color: var(--muted);
+}
+
+.find-shortcut-message {
+  margin: -6px 0 8px;
+  font-size: 12px;
+  color: var(--warn);
+}

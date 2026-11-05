@@ -1,5 +1,5 @@
 /**
- * Report a bug: the header's menu, the one beside the widget's expand button,
+ * Report a bug: the header's menu,
  * and the section in Settings → Diagnostics. Each asks the host, which builds
  * the issue address and the prompt itself; the renderer sends no arguments.
  */
@@ -57,30 +57,6 @@ test.describe("report a bug", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByRole("menu")).toHaveCount(0);
     await expect(page.getByRole("article").first()).toBeVisible();
-  });
-
-  test("the widget offers both choices beside its expand button", async ({ open }) => {
-    const host = await open(
-      scenario("widget", { preferences: defaultPreferences({ view: "widget" }) }),
-      "#/widget",
-    );
-    const { page } = host;
-    await page.locator(".widget").hover();
-    await page.getByRole("button", { name: "Report a bug" }).click();
-    await expect(page.getByRole("menuitem")).toHaveText([ISSUE, PROMPT]);
-    // The host grows the window to the widget's content; the page stands in.
-    const box = await page.locator(".widget").boundingBox();
-    const height = Math.ceil(box?.height ?? 0);
-    expect(height).toBeGreaterThan(172);
-    await page.setViewportSize({ width: 316, height });
-    await host.screenshot("report-bug/widget-menu");
-    await host.screenshot("docs/widget-report-bug");
-    await page.getByRole("menuitem", { name: PROMPT }).click();
-    await expect
-      .poll(async () => (await host.callsTo("copy_bug_report_prompt")).length)
-      .toBe(1);
-    await expect(page.getByRole("status")).toContainText("Prompt copied");
-    await host.screenshot("report-bug/widget-copied");
   });
 
   test("Settings → Diagnostics offers both choices", async ({ open }) => {

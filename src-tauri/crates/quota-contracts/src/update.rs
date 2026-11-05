@@ -45,3 +45,12 @@ pub struct UpdatePromptChangedPayload {
     /// What the pop-up shows now.
     pub prompt: UpdatePrompt,
 }
+
+/// One version's release notes, which the first run of that version shows.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Type)]
+pub struct ReleaseNotes {
+    /// The version they describe.
+    pub version: String,
+    /// What changed, one plain sentence each.
+    pub items: Vec<String>,
+}

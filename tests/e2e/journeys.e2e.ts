@@ -8,13 +8,19 @@
  * screens have something to show; it keeps its data under a `sample` folder.
  * `bun run build:e2e` builds both.
  */
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbox";
+import {
+  DEV_IDENTIFIER,
+  findWindow,
+  Sandbox,
+  waitUntilVisible,
+  type RunningApp,
+} from "./sandbox";
 import { startFakeProvider } from "./fake-provider";
 import { startFakeUpdateServer } from "./fake-update-server";
 import { waitFor } from "./webdriver";
@@ -27,7 +33,6 @@ const SAMPLE_APP =
   join("src-tauri", "target", "e2e", `quota-sample${EXE}`);
 
 /** The identity a debug build must run under, from `tauri.dev.conf.json`. */
-const DEV_IDENTIFIER = "app.quota.monitor.dev";
 const PRODUCTION_IDENTIFIER = "app.quota.monitor";
 
 let sandbox: Sandbox | null = null;
@@ -152,6 +157,68 @@ describe("the real application", () => {
     await app.stop();
   });
 
+  it("after an update, the first run shows what's new, once; a new install doesn't", async () => {
+    const world = await begin("release-notes");
+    const hasNotes = (session: RunningApp["session"]) =>
+      session.handles().then(async (handles) => {
+        for (const handle of handles) {
+          await session.switchTo(handle);
+          const found = await session.evaluate<boolean>(
+            'return document.querySelector(".release-notes") !== null',
+          );
+          if (found) return true;
+        }
+        return false;
+      });
+
+    // A new install has nothing to catch up on, and records its version.
+    let app = await startOverview(world, APP);
+    const saved = join(world.data, DEV_IDENTIFIER, "preferences.json");
+    await waitFor("the version to be recorded", () =>
+      Promise.resolve(readFileSync(saved, "utf8").includes('"last_release_notes": "')),
+    );
+    expect(await hasNotes(app.session)).toBe(false);
+    await quit(world, app);
+
+    // As if this profile last ran an older version.
+    writeFileSync(
+      saved,
+      readFileSync(saved, "utf8").replace(
+        /"last_release_notes": "[^"]*"/g,
+        '"last_release_notes": "0.0.1"',
+      ),
+    );
+    app = await world.launch(APP);
+    await app.session.switchTo(await findWindow(app.session, "release-notes"));
+    const { version } = JSON.parse(readFileSync("package.json", "utf8")) as {
+      readonly version: string;
+    };
+    await waitFor("the notes", async () => {
+      const text = await pageText(app);
+      return text.includes(`Quota ${version}`) && text.includes("What's new")
+        ? true
+        : null;
+    });
+    expect(
+      await app.session.evaluate<number>(
+        'return document.querySelectorAll(".release-notes li").length',
+      ),
+    ).toBeGreaterThan(0);
+    await world.screenshot(app.session, "release-notes");
+    const panel = await app.session.handleNow();
+    await (await app.session.findByText("button", "Close")).click();
+    await waitFor("the panel to close", async () =>
+      (await app.session.handles()).includes(panel) ? null : true,
+    );
+    await app.session.switchTo(await findWindow(app.session, "overview"));
+    await quit(world, app);
+
+    // Only once.
+    app = await startOverview(world, APP);
+    expect(await hasNotes(app.session)).toBe(false);
+    await app.stop();
+  });
+
   it("exports diagnostics into the application's own folder and says which file", async () => {
     const world = await begin("diagnostics-export");
     const app = await startOverview(world, APP);
@@ -159,7 +226,11 @@ describe("the real application", () => {
     await app.session.switchTo(await findWindow(app.session, "settings"));
     await waitUntilVisible(app.session, "the settings window");
     await (await app.session.findByText("button", "Diagnostics")).click();
-    await (await app.session.findByText("button", "Export diagnostics")).click();
+    // The panel draws after the click, so it may not be there yet.
+    const exportButton = await waitFor("the diagnostics panel", () =>
+      app.session.findByText("button", "Export diagnostics"),
+    );
+    await exportButton.click();
 
     // The host names the file it wrote, so a refusal here would be read as a
     // refusal rather than as a silence.

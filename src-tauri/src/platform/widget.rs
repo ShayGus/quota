@@ -9,7 +9,11 @@
 //! not left to the window-state plugin, which saves only when the app exits
 //! cleanly. A saved position is used while it is still on a screen; otherwise,
 //! as on the first run or after a screen is unplugged, the widget goes to the
-//! top-right corner of the main screen.
+//! top-right corner of the main screen. Left to rest near a screen's edge, it
+//! snaps to that edge.
+//!
+//! Finding it flashes its rim and draws rings around it, in a window of their
+//! own that clicks pass through, so the widget itself never moves or resizes.
 
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
@@ -17,19 +21,27 @@ use std::time::Duration;
 use quota_contracts::CommandError;
 use quota_domain::preferences::WidgetPosition;
 use tauri::menu::CheckMenuItem;
-use tauri::{AppHandle, Manager, PhysicalPosition, Wry};
+use tauri::{AppHandle, Emitter as _, Manager, PhysicalPosition, Wry};
 
 use super::tray_anchor::Rect;
+pub use super::widget_edges::{
+    MAX_WIDTH, MIN_WIDTH, WidthAnchor, clamp_width, fit_x, left_edge_after, physical_rect, snap,
+    take_anchor,
+};
+use super::widget_edges::{anchor_next_fit, snapped};
+pub use super::widget_rings::{HALO_LABEL, draw_halo};
 use super::window::failed;
 use crate::state::AppState;
 
 /// The widget window's label in `tauri.conf.json`.
 pub const LABEL: &str = "widget";
 
-/// The widget's width in logical pixels, as `tauri.conf.json` and the
-/// renderer's card have it. It never changes, so every fit sets it again,
-/// and a width a screen change left wrong is put right on the next fit.
+/// The widget's width in logical pixels when it opens, as `tauri.conf.json` has
+/// it. The ring strip is always this wide, and the list as wide as its columns.
 pub const WIDTH: f64 = 316.0;
+
+/// The event that flashes the widget's rim, in `shared/ipc/widget.ts`.
+const FIND_EVENT: &str = "quota-widget-find";
 
 /// The gap kept between a placed widget and the edge of the work area.
 const MARGIN: f64 = 24.0;
@@ -268,16 +280,43 @@ pub fn show(app: &AppHandle, saved: Option<WidgetPosition>) -> Result<(), Comman
     native
         .set_position(placed)
         .map_err(|_| failed("place_widget"))?;
+    // The window opens at its widest, and the first fit narrows it: from a
+    // saved spot that spot is the left edge, and from the corner the right one.
+    let at_saved = saved.is_some_and(|saved| saved.x == placed.x && saved.y == placed.y);
+    anchor_next_fit(at_saved);
     tracing::info!(
         x = placed.x,
         y = placed.y,
         saved = saved.is_some(),
-        at_saved = saved.is_some_and(|saved| saved.x == placed.x && saved.y == placed.y),
+        at_saved,
         screens = screens.len(),
         "the widget is shown"
     );
     raise(&native)?;
     native.show().map_err(|_| failed("show_widget"))
+}
+
+/// Points the widget out: its rim flashes, and rings spread from it where the
+/// desktop lets an app place a window.
+pub fn flash(app: &AppHandle) {
+    flash_rim(app);
+    if let Err(error) = draw_halo(app) {
+        tracing::warn!(code = error.diagnostic_code(), "the rings were not drawn");
+    }
+}
+
+/// Asks the widget's page to flash its rim.
+fn flash_rim(app: &AppHandle) {
+    if app.emit_to(LABEL, FIND_EVENT, ()).is_err() {
+        tracing::warn!("the widget was not asked to flash");
+    }
+}
+
+/// Whether the desktop is Wayland, which does not let an app place its windows
+/// or claim a global shortcut.
+#[must_use]
+pub fn on_wayland() -> bool {
+    cfg!(target_os = "linux") && std::env::var_os("WAYLAND_DISPLAY").is_some()
 }
 
 /// Puts the widget back above every other window.
@@ -328,6 +367,7 @@ pub fn remember(app: &AppHandle, position: PhysicalPosition<i32>) {
             return;
         };
         let state = state.inner().clone();
+        let position = snapped(&app, position);
         let position = WidgetPosition {
             x: position.x,
             y: position.y,
@@ -353,6 +393,15 @@ pub fn remember(app: &AppHandle, position: PhysicalPosition<i32>) {
 pub fn mark_programmatic(position: PhysicalPosition<i32>) {
     PROGRAMMATIC_POS.store(pack(position), Ordering::SeqCst);
     PROGRAMMATIC_SET.store(true, Ordering::SeqCst);
+}
+
+/// Whether the widget is at the spot saved as where the person left it.
+pub async fn is_on_saved_spot(state: &AppState, position: PhysicalPosition<i32>) -> bool {
+    state.preferences_state.read().await.widget_position
+        == Some(WidgetPosition {
+            x: position.x,
+            y: position.y,
+        })
 }
 
 /// Saves the resting position an upward close restored, so a restart puts the
@@ -386,16 +435,6 @@ pub fn reflect(app: &AppHandle, widget: bool) {
         && let Err(error) = item.0.set_checked(widget)
     {
         tracing::warn!(%error, "the tray widget item could not be updated");
-    }
-}
-
-/// A monitor rectangle as the placement takes it.
-fn physical_rect(position: tauri::PhysicalPosition<i32>, size: tauri::PhysicalSize<u32>) -> Rect {
-    Rect {
-        x: f64::from(position.x),
-        y: f64::from(position.y),
-        width: f64::from(size.width),
-        height: f64::from(size.height),
     }
 }
 

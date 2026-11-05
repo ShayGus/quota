@@ -1,9 +1,14 @@
 /**
- * The mini widget, from the approved canvas: the ring strip and the mini cards.
+ * The mini widget, from the approved canvas: the ring strip and the compact list.
  *
  * A period keeps one colour in both looks and both themes' variants: teal for
  * the 5-hour window, blue for the week, violet for the month. Colours never
  * change with the reading; a low number is amber, and it is always written.
+ *
+ * Its background is see-through until it is pointed at; its numbers and its
+ * rim stay solid, with a slight halo on the numbers against whatever is behind.
+ * The rim, drawn inside a dark hairline so it reads on any desktop, turns amber
+ * while a limit is low.
  */
 :root {
   --period-session: #0f8f75;
@@ -11,6 +16,14 @@
   --period-weekly: #2f6fd6;
   --period-monthly: #8a4fd8;
   --period-custom: var(--muted);
+  --widget-solid: 247 249 251;
+  --widget-edge: #0000005c;
+  --widget-rim-rest: #0f8f75;
+  --widget-rim-low: #b4690e;
+  --widget-track: #17212b2e;
+  --widget-halo: 0 0 2px #ffffffcc, 0 1px 2px #ffffffaa;
+  --widget-tone-model: #4d5b69;
+  --widget-tone-money: #84640e;
 }
 
 :root[data-theme="dark"] {
@@ -18,6 +31,22 @@
   --period-daily: #ff8fb1;
   --period-weekly: #5b9dff;
   --period-monthly: #c58aff;
+  --widget-solid: 35 46 57;
+  --widget-edge: #000000c0;
+  --widget-rim-rest: #3fd0b0;
+  --widget-rim-low: #f4c074;
+  --widget-track: #ffffff2e;
+  --widget-halo: 0 0 2px #000000cc, 0 1px 2px #000000aa;
+  --widget-tone-model: #b7cad9;
+  --widget-tone-money: #e7d39a;
+}
+
+.tone-model {
+  --period: var(--widget-tone-model);
+}
+
+.tone-money {
+  --period: var(--widget-tone-money);
 }
 
 .period-session {
@@ -51,13 +80,40 @@
   height: auto;
 }
 
+/* The details opened upward: the rows hold their place at the window's bottom. */
+:root.widget-window.widget-grows-up body {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 100vh;
+}
+
+:root.widget-window.widget-grows-up #root {
+  flex: none;
+}
+
 .widget {
+  --widget-alpha: 0.75;
+  --widget-shadow: var(--widget-halo);
+  --widget-rim: var(--widget-rim-rest);
   position: relative;
-  width: 316px;
+  width: max-content;
   user-select: none;
   cursor: default;
   /* A finger or pen press-move reports pointer moves, so it can drag. */
   touch-action: none;
+}
+
+.widget.solid,
+.widget.flashing,
+.widget:has(:focus-visible),
+.widget:has([aria-expanded="true"]) {
+  --widget-alpha: 1;
+  --widget-shadow: none;
+}
+
+.widget.low {
+  --widget-rim: var(--widget-rim-low);
 }
 
 /*
@@ -104,9 +160,24 @@
   stroke-linejoin: round;
 }
 
+.widget.solid .widget-expand,
 .widget:hover .widget-expand,
 .widget-expand:focus-visible {
   opacity: 1;
+}
+
+.widget:has(> .widget-list) .widget-expand {
+  top: 5px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border: 0;
+  border-radius: 5px;
+}
+
+.widget:has(> .widget-list) .widget-expand svg {
+  width: 10px;
+  height: 10px;
 }
 
 .widget-expand:hover {
@@ -114,16 +185,40 @@
 }
 
 .widget-strip,
-.widget-cards,
+.widget-list,
 .widget-empty {
   position: relative;
-  width: 100%;
   padding: 8px;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--surface);
+  border: 1px solid var(--widget-edge);
+  border-radius: 11px;
+  background: rgb(var(--widget-solid) / var(--widget-alpha));
+  box-shadow: inset 0 0 0 2px var(--widget-rim);
   color: var(--text);
+  text-shadow: var(--widget-shadow);
   overflow: hidden;
+  transition: background-color 130ms ease;
+}
+
+.widget.flashing > section,
+.widget.flashing > .widget-empty {
+  animation: widget-rim-flash 900ms ease-out 3;
+}
+
+@keyframes widget-rim-flash {
+  0% {
+    box-shadow: inset 0 0 0 5px var(--widget-rim);
+  }
+  100% {
+    box-shadow: inset 0 0 0 2px var(--widget-rim);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .widget.flashing > section,
+  .widget.flashing > .widget-empty {
+    animation: none;
+    box-shadow: inset 0 0 0 5px var(--widget-rim);
+  }
 }
 
 .widget button {
@@ -140,6 +235,7 @@
 /* Ring strip */
 
 .widget-strip {
+  width: 316px;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -452,7 +548,7 @@
   height: 8px;
   margin-left: -4px;
   transform: rotate(45deg);
-  background: var(--surface);
+  background: rgb(var(--widget-solid));
   border-left: 1px solid var(--line);
   border-top: 1px solid var(--line);
 }
@@ -662,95 +758,243 @@
   stroke: var(--period);
 }
 
-/* Mini cards */
+/*
+ * The compact list. A name column, then limit columns of one width, set by
+ * CompactList.tsx, which every row shares; details take the width they find and
+ * never add to it.
+ */
 
-.widget-cards {
+.widget-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: 86px;
-  gap: 6px;
+  column-gap: 8px;
+  width: max-content;
+  max-width: 400px;
+  padding: 3px 15px 3px 2px;
 }
 
-.widget-card {
+:root[data-theme="dark"] .widget-list {
+  --period-weekly: #7ab0ff;
+}
+
+.widget .widget-row {
   display: grid;
-  grid-template-rows: 16px repeat(3, 14px);
-  row-gap: 4px;
-  align-content: start;
-  min-width: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--surface-2);
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 20px;
+  /* No side padding: a subgrid takes it from its first and last columns, so they
+   * would end up narrower. The empty last column keeps the gap on the right. */
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
   text-align: left;
 }
 
-.widget-card.wide {
-  grid-column: 1 / -1;
+.widget.solid .widget-row:hover {
+  background: #8882;
 }
 
-.widget-card-title {
+.widget-row.open {
+  background: #8883;
+}
+
+.widget-row-name {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
+  max-width: 144px;
+  padding-left: 4px;
+  font-size: 11.5px;
+  font-weight: 650;
 }
 
-.widget-card-title .provider-icon {
+.widget-row-name .provider-icon {
+  flex: none;
   width: 16px;
   height: 16px;
   border: 0;
-  border-radius: 4px;
-  background: var(--surface-3);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text);
   font-size: 11px;
-  color: var(--muted);
 }
 
-.widget-card-title .provider-icon svg {
-  width: 11px;
-  height: 11px;
+.widget-row-name .provider-icon.claude {
+  font-size: 17px;
+  line-height: 1;
 }
 
-.widget-card-name {
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
+/* A name's letters sit a little under the middle of their line, so the marks do too. */
+.widget-row-name .provider-icon svg {
+  width: 100%;
+  height: 100%;
+  translate: 0 1px;
+}
+
+.widget-row-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.widget-card-row {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) auto;
-  align-items: center;
-  column-gap: 5px;
-  height: 14px;
-}
-
-.widget-card-row .widget-tag {
   white-space: nowrap;
-  overflow: hidden;
 }
 
-.widget-card-row .widget-value {
+.widget-row-limits {
+  display: grid;
+  grid-column: 2 / -2;
+  grid-template-columns: subgrid;
+  row-gap: 1px;
+}
+
+.widget-limit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 5px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.widget-limit-tag {
   font-size: 10px;
+  font-weight: 700;
+  color: var(--period);
+}
+
+.widget-limit .widget-value {
+  font-size: 11.5px;
   text-align: right;
 }
 
-.widget-card-row .widget-value.amount {
-  grid-column: 2 / 4;
+.widget-limit.low .widget-value {
+  color: var(--widget-rim-low);
 }
 
-.widget-bar {
-  height: 4px;
-  border-radius: 2px;
-  background: var(--track);
+.widget-limit-gauge {
+  grid-column: 1 / -1;
+  display: block;
+  height: 2px;
+  margin-top: 1px;
+  border-radius: 1px;
+  background: var(--widget-track);
   overflow: hidden;
 }
 
-.widget-bar > span {
+.widget-limit-gauge > span {
   display: block;
   height: 100%;
   background: var(--period);
+}
+
+.widget-limit.low .widget-limit-gauge > span {
+  background: var(--widget-rim-low);
+}
+
+/* Words and a lone dash end where the numbers end. */
+.widget-row-status {
+  grid-column: 1 / -1;
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.widget-row-status .icon {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  stroke-width: 2.2;
+  color: var(--warn);
+}
+
+.widget-details {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 5px;
+  /* The width it finds: details never make the widget wider. */
+  contain: inline-size;
+  margin: 1px 2px 3px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  background: #0000002e;
+}
+
+.widget-details .widget-chip {
+  justify-self: start;
+}
+
+.widget-details-reconnect {
+  display: grid;
+  gap: 4px;
+  justify-items: start;
+}
+
+.widget-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  align-items: baseline;
+  font-size: 11.5px;
+}
+
+.widget-detail-name {
+  font-weight: 600;
+}
+
+.widget-detail-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 5px;
+  border-radius: 50%;
+  background: var(--period);
+}
+
+.widget-detail-value {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.widget-detail-value.low {
+  color: var(--widget-rim-low);
+}
+
+.widget-detail-value.stale {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.widget-detail-note {
+  grid-column: 1 / -1;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.widget-details-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2px 8px;
+  padding-top: 5px;
+  border-top: 1px solid #8884;
+  font-size: 10.5px;
+  color: var(--muted);
+}
+
+.widget .widget-details-full {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--period-session);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.widget .widget-details-full:hover {
+  text-decoration: underline;
 }
 
 /* No accounts yet */
@@ -760,73 +1004,11 @@
   flex-direction: column;
   align-items: center;
   gap: 2px;
+  width: 220px;
   padding: 14px 8px;
   font-size: 12px;
 }
 
 .widget-empty span {
   color: var(--muted);
-}
-
-/* Report a bug, beside the expand button, and shown with it. */
-.widget-report {
-  position: absolute;
-  /* Same upward-drawer offset as the expand button. */
-  top: calc(5px + var(--widget-drawer-above, 0px));
-  right: 31px;
-  width: 22px;
-  height: 22px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--surface-3);
-  color: var(--muted);
-  opacity: 0;
-  transition:
-    opacity 120ms ease,
-    top 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.widget-report .icon {
-  width: 13px;
-  height: 13px;
-  stroke-width: 2;
-}
-
-.widget:hover .widget-report,
-.widget-report:focus-visible,
-.widget-report[aria-expanded="true"] {
-  opacity: 1;
-}
-
-.widget-report:hover {
-  color: var(--text);
-}
-
-/*
- * The widget fits its window to its content, so the menu and the notice sit
- * beneath the accounts and the window grows to show them, never clipped.
- */
-.report-bug-widget {
-  position: static;
-}
-
-.report-bug-widget .report-menu {
-  position: static;
-  margin-top: 6px;
-  min-width: 0;
-  box-shadow: none;
-}
-
-.widget-notice {
-  margin: 6px 0 0;
-  padding: 8px 10px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--text);
-  color: var(--surface);
-  font-size: 11px;
-  line-height: 1.5;
 }

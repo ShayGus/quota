@@ -71,6 +71,12 @@ pub struct Preferences {
     pub account_sort: AccountSort,
     /// The arranged order, used when `account_sort` is `manual`.
     pub account_order: Vec<AccountId>,
+    /// The key combination that finds the widget, or `None` when it is off.
+    /// Only `set_find_widget_shortcut` changes it; a save carries it unchanged.
+    pub find_widget_shortcut: Option<String>,
+    /// The version the release notes were last handled for. The host saves it;
+    /// the renderer carries it through a save unchanged.
+    pub last_release_notes: Option<String>,
     /// Notification behaviour.
     pub notifications: NotificationPolicy,
     /// Retention and export behaviour.

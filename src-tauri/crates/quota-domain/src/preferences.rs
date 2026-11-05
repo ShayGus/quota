@@ -272,6 +272,27 @@ pub struct PresentationPreferences {
     /// not list follows the ones it does.
     #[serde(default)]
     pub account_order: Vec<crate::ids::AccountId>,
+    /// The key combination that finds the widget, or `None` when the person
+    /// turned it off. A preference file written before the choice existed
+    /// reads as the default.
+    #[serde(default = "default_find_widget_shortcut")]
+    pub find_widget_shortcut: Option<String>,
+    /// The version the release notes were last handled for, so they show once
+    /// after an update. A preference file written before the panel existed has
+    /// none, which says that this run is an update.
+    #[serde(default)]
+    pub last_release_notes: Option<String>,
+}
+
+/// The key combination that finds the widget until the person changes it.
+pub const DEFAULT_FIND_WIDGET_SHORTCUT: &str = "Ctrl+Alt+Q";
+
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "a serde default has to return the type of its field"
+)]
+fn default_find_widget_shortcut() -> Option<String> {
+    Some(DEFAULT_FIND_WIDGET_SHORTCUT.to_owned())
 }
 
 impl Default for PresentationPreferences {
@@ -290,6 +311,8 @@ impl Default for PresentationPreferences {
             widget_position: None,
             account_sort: AccountSort::default(),
             account_order: Vec::new(),
+            find_widget_shortcut: default_find_widget_shortcut(),
+            last_release_notes: None,
         }
     }
 }
@@ -332,9 +355,14 @@ mod tests {
         let object = json.as_object_mut().unwrap();
         object.remove("view");
         object.remove("widget_position");
+        object.remove("find_widget_shortcut");
         let restored: PresentationPreferences = serde_json::from_value(json).unwrap();
         assert_eq!(restored.view, AppView::Overview);
         assert_eq!(restored.widget_position, None);
+        assert_eq!(
+            restored.find_widget_shortcut.as_deref(),
+            Some(DEFAULT_FIND_WIDGET_SHORTCUT)
+        );
     }
 
     #[test]
