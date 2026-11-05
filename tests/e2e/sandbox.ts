@@ -59,6 +59,9 @@ interface WindowsShellFolder {
 }
 
 /** Where logs and screenshots are kept for CI to upload. */
+/** The debug build's identifier, which names its folders. */
+export const DEV_IDENTIFIER = "app.quota.monitor.dev";
+
 export const RESULTS_DIRECTORY = join(process.cwd(), "test-results", "e2e");
 
 /** A running application, started through `tauri-driver`. */

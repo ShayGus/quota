@@ -14,7 +14,13 @@ import process from "node:process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbox";
+import {
+  DEV_IDENTIFIER,
+  findWindow,
+  Sandbox,
+  waitUntilVisible,
+  type RunningApp,
+} from "./sandbox";
 import { startFakeProvider } from "./fake-provider";
 import { startFakeUpdateServer } from "./fake-update-server";
 import { waitFor } from "./webdriver";
@@ -27,7 +33,6 @@ const SAMPLE_APP =
   join("src-tauri", "target", "e2e", `quota-sample${EXE}`);
 
 /** The identity a debug build must run under, from `tauri.dev.conf.json`. */
-const DEV_IDENTIFIER = "app.quota.monitor.dev";
 const PRODUCTION_IDENTIFIER = "app.quota.monitor";
 
 let sandbox: Sandbox | null = null;
@@ -221,7 +226,11 @@ describe("the real application", () => {
     await app.session.switchTo(await findWindow(app.session, "settings"));
     await waitUntilVisible(app.session, "the settings window");
     await (await app.session.findByText("button", "Diagnostics")).click();
-    await (await app.session.findByText("button", "Export diagnostics")).click();
+    // The panel draws after the click, so it may not be there yet.
+    const exportButton = await waitFor("the diagnostics panel", () =>
+      app.session.findByText("button", "Export diagnostics"),
+    );
+    await exportButton.click();
 
     // The host names the file it wrote, so a refusal here would be read as a
     // refusal rather than as a silence.

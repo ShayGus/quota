@@ -214,10 +214,13 @@ pub async fn fit_widget(
             .set_position(moved)
             .map_err(|_| window::failed("fit_window_position"))?;
         widget::mark_programmatic(moved);
-        // A first fit from the fallback corner must not replace a saved spot
-        // whose screen is only away for now, as `widget::show` says.
+        // A fit from the fallback corner must not replace a saved spot whose
+        // screen is only away for now, as `widget::show` says, or save the corner
+        // as a spot the person chose. So only a widget on its saved spot follows.
         let shrank_up = direction == WidgetGrowth::Up && f64::from(content_height) < current;
-        let stayed_snapped = outer_x != position.x && anchor == widget::WidthAnchor::Resting;
+        let stayed_snapped = outer_x != position.x
+            && anchor == widget::WidthAnchor::Resting
+            && widget::is_on_saved_spot(&state, position).await;
         if shrank_up || stayed_snapped {
             let resting = WidgetPosition {
                 x: outer_x,

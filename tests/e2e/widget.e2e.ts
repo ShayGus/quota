@@ -6,13 +6,20 @@
  * Everything goes through WebDriver, inside a throwaway profile, so these run
  * on CI's machines and touch no real mouse or keyboard.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import process from "node:process";
 
 import { afterEach, describe, expect, it } from "vitest";
 
 import { moveNativeWindow, nativeWindow, type NativeWindow } from "./native-window";
-import { findWindow, Sandbox, waitUntilVisible, type RunningApp } from "./sandbox";
+import {
+  DEV_IDENTIFIER,
+  findWindow,
+  Sandbox,
+  waitUntilVisible,
+  type RunningApp,
+} from "./sandbox";
 import { waitFor } from "./webdriver";
 
 const EXE = process.platform === "win32" ? ".exe" : "";
@@ -49,8 +56,15 @@ async function startList(name: string): Promise<{ world: Sandbox; app: RunningAp
   await waitUntilVisible(session, "the overview");
   await (await session.find('[aria-label="Settings"]')).click();
   await session.switchTo(await findWindow(session, "settings"));
-  await (await session.findByText("button", "Appearance")).click();
-  await (await session.findByText("button", "Compact")).click();
+  const appearance = await waitFor("the settings", () =>
+    session.findByText("button", "Appearance"),
+  );
+  await appearance.click();
+  // The panel draws after the click, so it may not be there yet.
+  const compact = await waitFor("the appearance panel", () =>
+    session.findByText("button", "Compact"),
+  );
+  await compact.click();
   await session.switchTo(overview);
   await (await session.find('[aria-label="Switch to the mini widget"]')).click();
   await session.switchTo(await findWindow(session, "widget"));
@@ -139,6 +153,19 @@ describe("the compact mini widget", () => {
     const seen = await fitted(app, "the list");
     expect(seen.width).toBeLessThanOrEqual(WIDEST);
     await world.screenshot(app.session, "widget-list");
+    await app.stop();
+  });
+
+  it("doesn't save where it first opens as a spot the person chose", async () => {
+    const { world, app } = await startList("widget-unsaved");
+    await fitted(app, "the list");
+    // Longer than the host waits before it saves a move.
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    const saved = readFileSync(
+      join(world.config, DEV_IDENTIFIER, "sample", "preferences.json"),
+      "utf8",
+    );
+    expect(saved).toMatch(/"widget_position":\s*null/);
     await app.stop();
   });
 

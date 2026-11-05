@@ -395,6 +395,15 @@ pub fn mark_programmatic(position: PhysicalPosition<i32>) {
     PROGRAMMATIC_SET.store(true, Ordering::SeqCst);
 }
 
+/// Whether the widget is at the spot saved as where the person left it.
+pub async fn is_on_saved_spot(state: &AppState, position: PhysicalPosition<i32>) -> bool {
+    state.preferences_state.read().await.widget_position
+        == Some(WidgetPosition {
+            x: position.x,
+            y: position.y,
+        })
+}
+
 /// Saves the resting position an upward close restored, so a restart puts the
 /// widget where its tiles are. A drag that is still settling must not
 /// overwrite it afterwards, so pending delayed saves are discarded first.
