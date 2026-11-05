@@ -304,7 +304,12 @@ website, such as TypeSafe, the sign-in window opens again, as it does from the f
 window. If Quota cannot start the reconnect, the details say why.
 
 The overview layout picks the widget's look: rings give a strip of small rings, bars give
-mini cards.
+mini cards. Both label a limit by its period, **H** for the 5-hour window, **D** daily,
+**W** weekly and **M** monthly, with **C** for credit and a word such as **Fable** for one
+model's limit. A limit the provider didn't report, or that the plan doesn't include, is
+left out of the widget; the full window still lists it. A dash on a limit means Quota
+couldn't read the provider's answer, and a lone dash means the account has no limits to
+show.
 
 <table>
   <tr>

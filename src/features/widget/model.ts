@@ -5,7 +5,8 @@
  * in a smaller form: rings for the ring strip, rows for the mini cards. A period
  * keeps one colour everywhere, so teal is always the 5-hour window, blue the
  * week and violet the month. Money is shown as money, never as a share of it.
- * Nothing here invents a number for a reading that has none.
+ * Nothing here invents a number for a reading that has none, and a limit the
+ * provider didn't report, or that the account doesn't have, isn't drawn at all.
  */
 import type {
   AccountId,
@@ -14,6 +15,7 @@ import type {
   Preferences,
   ProviderId,
   QuotaWindow,
+  UnavailableReason,
 } from "../../generated/bindings";
 import { displayName } from "../../shared/format/alias";
 import {
@@ -55,6 +57,16 @@ const MAX_RINGS = 3;
 /** At or below this share left, a number is drawn as low. */
 const LOW_PERCENT = 20;
 
+/**
+ * Why a limit can have no number without anything being wrong. A response Quota
+ * couldn't read isn't one of them: its dash says something is wrong.
+ */
+const ABSENT_REASONS: ReadonlySet<UnavailableReason> = new Set([
+  "not_reported",
+  "unsupported",
+  "not_applicable",
+]);
+
 /** One ring: a period, and how much of it is left, or `null` for no arc. */
 export interface WidgetRing {
   readonly period: Period;
@@ -68,7 +80,7 @@ export interface WidgetRing {
 
 /** One limit, as a mini card row or a line of the breakdown. */
 export interface WidgetRow {
-  /** The short label in front of the row: `5h`, `Wk`, `Fable`, `Extra`. */
+  /** The short label in front of the row: `H`, `W`, `C`, `Fable`, `Extra`. */
   readonly tag: string;
   /** The full name: `5-hour`, `Fable weekly`, `Monthly · On-demand`. */
   readonly name: string;
@@ -236,12 +248,13 @@ function describe(
   // A prepaid balance measured from its last top-up is drawn as a ring, like
   // an allowance; a key limit beside it only when the person chose to show it.
   const limit = part === "key" ? keyLimitOf(account) : null;
-  const shown =
+  const candidates =
     part === "key"
       ? limit === null
         ? []
         : [limit]
       : account.windows.filter((window) => isWindowShown(account, window));
+  const shown = candidates.filter((window) => !isAbsent(window));
   const included = part === "key" ? shown : ordered(shown.filter(isRankable));
   const others = part === "key" ? [] : shown.filter((window) => !isRankable(window));
   const rows = [...included, ...others].map((window) =>
@@ -297,6 +310,14 @@ function describe(
     peek: peekSummary(problem, rows, headlineRow),
     reconnect: problem?.text === RECONNECT ? account.account_id : null,
   };
+}
+
+/** Whether a limit is one the provider didn't report or the account doesn't have. */
+function isAbsent({ measurement }: QuotaWindow): boolean {
+  return (
+    measurement.kind === "not_entitled" ||
+    (measurement.kind === "unavailable" && ABSENT_REASONS.has(measurement.value))
+  );
 }
 
 /** Included windows by period, the account's own before each model's. */
@@ -366,22 +387,13 @@ function tagOf(window: QuotaWindow): string {
     return "Extra";
   }
   if (window.metric_role === "credit_balance" || isPrepaidBalance(window)) {
-    return "Credit";
+    return "C";
   }
   if (window.scope.resource !== ACCOUNT_RESOURCE || window.category === "custom") {
     const word = window.scope.label.split(" ")[0] ?? "";
     return word === "" ? "Limit" : word.slice(0, 6);
   }
-  switch (window.category) {
-    case "session":
-      return "5h";
-    case "daily":
-      return "Day";
-    case "weekly":
-      return "Wk";
-    case "monthly":
-      return "Mo";
-  }
+  return LETTERS[window.category];
 }
 
 /**
@@ -403,7 +415,7 @@ function ringsOf(rows: readonly WidgetRow[]): readonly WidgetRing[] {
     rings.push({
       period,
       fraction: shown.fraction,
-      letter: LETTERS[period] ?? (shown.tag[0] ?? "").toUpperCase(),
+      letter: period === "custom" ? (shown.tag[0] ?? "").toUpperCase() : LETTERS[period],
       value: shown.value,
       low: shown.low,
     });
@@ -411,8 +423,8 @@ function ringsOf(rows: readonly WidgetRow[]): readonly WidgetRing[] {
   return rings;
 }
 
-/** The letter each standard period goes by under a tile. */
-const LETTERS: Partial<Record<Period, string>> = {
+/** The letter each standard period goes by, on a tile and on a row. */
+const LETTERS: Record<Exclude<Period, "custom">, string> = {
   session: "H",
   daily: "D",
   weekly: "W",

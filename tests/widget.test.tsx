@@ -161,12 +161,12 @@ describe("the widget's model", () => {
       ["session", 0.41],
       ["weekly", 0.3],
     ]);
-    expect(shown?.rows.map((row) => row.tag)).toEqual(["5h", "Wk", "Fable"]);
+    expect(shown?.rows.map((row) => row.tag)).toEqual(["H", "W", "Fable"]);
   });
 
   it("names the number after the ring it belongs to, and flags it low", () => {
     const [first, second] = accountsOf(kimi, claude);
-    expect(first?.headline).toEqual({ tag: "5h", value: "8%", low: true });
+    expect(first?.headline).toEqual({ tag: "H", value: "8%", low: true });
     expect(second?.headline).toEqual({ tag: "Fable", value: "30%", low: false });
   });
 
@@ -174,15 +174,65 @@ describe("the widget's model", () => {
     const [shown] = accountsOf(openrouter);
     expect(shown?.rings).toEqual([]);
     expect(shown?.headline.value).toBe("$17.54");
-    expect(shown?.rows).toMatchObject([
-      { tag: "Credit", kind: "amount", value: "$17.54" },
-    ]);
+    expect(shown?.rows).toMatchObject([{ tag: "C", kind: "amount", value: "$17.54" }]);
     const [withCap] = accountsOf(cursor);
     expect(withCap?.rows[2]).toMatchObject({
       tag: "Extra",
       kind: "amount",
       value: "$15.00",
     });
+  });
+
+  it.each<[string, Measurement]>([
+    ["not reported", { kind: "unavailable", value: "not_reported" }],
+    ["not supported", { kind: "unavailable", value: "unsupported" }],
+    ["not applicable", { kind: "unavailable", value: "not_applicable" }],
+    ["not included in the plan", { kind: "not_entitled" }],
+  ])("leaves out a limit that is %s", (_reason, measurement) => {
+    const partial = account(
+      "partial",
+      "claude",
+      9,
+      [quotaWindow("h", "session", measurement), quotaWindow("w", "weekly", percent(60))],
+      { rank: 60 },
+    );
+    const [shown] = accountsOf(partial);
+    expect(shown?.rows.map((row) => row.tag)).toEqual(["W"]);
+    expect(shown?.rings.map((ring) => ring.period)).toEqual(["weekly"]);
+    expect(shown?.description).not.toContain("5-hour");
+  });
+
+  it("keeps the dash on a reading Quota couldn't understand", () => {
+    const garbled = account(
+      "garbled",
+      "claude",
+      9,
+      [
+        quotaWindow("h", "session", { kind: "unavailable", value: "invalid_response" }),
+        quotaWindow("w", "weekly", percent(60)),
+      ],
+      { rank: 60 },
+    );
+    const [shown] = accountsOf(garbled);
+    expect(shown?.rows.map((row) => [row.tag, row.value])).toEqual([
+      ["H", "—"],
+      ["W", "60%"],
+    ]);
+  });
+
+  it("keeps an account whose every limit is left out", () => {
+    const silent = account(
+      "silent",
+      "codex",
+      9,
+      [quotaWindow("h", "session", { kind: "unavailable", value: "not_reported" })],
+      { rank: null },
+    );
+    const [shown] = accountsOf(silent);
+    expect(shown?.id).toBe("silent");
+    expect(shown?.rows).toEqual([]);
+    expect(shown?.rings).toEqual([]);
+    expect(shown?.headline.value).toBe("—");
   });
 
   it("puts an account with only money after the ranked ones", () => {
