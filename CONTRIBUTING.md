@@ -400,6 +400,12 @@ user's `AppData` and `Local AppData` folders to the sandbox, then restores their
 after each journey. It sets a temporary `USERPROFILE` for sign-in files. The Windows job
 runs on `windows-2022`. The OS credential store is not isolated.
 
+That redirect applies to every app of that Windows user, and a run stopped by force leaves
+it in place until the next run starts. So outside CI the Windows journeys refuse to start
+unless you set `QUOTA_E2E_REDIRECT_USER_FOLDERS=yes`. Close your other apps first, and let
+the run finish. A later `bun run test:e2e` puts back what a stopped run left, with or
+without that setting.
+
 The journeys in [`tests/e2e/journeys.e2e.ts`](tests/e2e/journeys.e2e.ts) cover: first
 launch with an empty profile; the main popover at 440 px; settings opening from the
 popover and a preference surviving a restart; diagnostics export reporting a path and
