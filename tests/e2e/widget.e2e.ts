@@ -24,6 +24,9 @@ const SAMPLE_APP =
 const WIDEST = 400;
 const HALO_REACH = 46;
 
+/** A little longer than `HALO_LASTS` in `platform/widget_rings.rs`. */
+const RINGS_LAST_MS = 3500;
+
 /** The debug build's window titles, from `tauri.dev.conf.json` and `platform/widget.rs`. */
 const WIDGET_TITLE = "Quota Dev widget";
 const RINGS_TITLE = "Quota widget rings";
@@ -55,6 +58,28 @@ async function startList(name: string): Promise<{ world: Sandbox; app: RunningAp
     session.evaluate<boolean>("return document.querySelector('.widget-row') !== null"),
   );
   return { world, app };
+}
+
+/**
+ * Waits for the widget's flash, then for the rings that come with it to be gone,
+ * and that the app is still there. Seeing the flash alone says nothing about
+ * them: the app can still die drawing the rings.
+ */
+async function flashesAndSurvives(world: Sandbox, app: RunningApp): Promise<void> {
+  await waitFor("the flash", () =>
+    app.session.evaluate<boolean>(
+      'return document.querySelector(".widget.flashing") !== null',
+    ),
+  );
+  await new Promise((resolve) => {
+    setTimeout(resolve, RINGS_LAST_MS);
+  });
+  expect(
+    await app.session.evaluate<boolean>(
+      'return document.querySelector(".widget") !== null',
+    ),
+  ).toBe(true);
+  expect(world.applicationProcesses(SAMPLE_APP)).toHaveLength(1);
 }
 
 /** The list's own size, and the window's, as the page measures them. */
@@ -243,11 +268,7 @@ describe("the compact mini widget", () => {
     await new Promise((resolve) => {
       second.once("exit", resolve);
     });
-    await waitFor("the flash", () =>
-      app.session.evaluate<boolean>(
-        'return document.querySelector(".widget.flashing") !== null',
-      ),
-    );
+    await flashesAndSurvives(world, app);
     await app.stop();
   });
 
@@ -284,11 +305,7 @@ describe("the compact mini widget", () => {
       expect(
         await waitFor("the tray menu", () => world.chooseTrayItem("Find widget")),
       ).toBe(true);
-      await waitFor("the flash", () =>
-        session.evaluate<boolean>(
-          'return document.querySelector(".widget.flashing") !== null',
-        ),
-      );
+      await flashesAndSurvives(world, app);
       await app.stop();
     },
   );

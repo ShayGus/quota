@@ -168,7 +168,7 @@ describe("the real application", () => {
 
     // A new install has nothing to catch up on, and records its version.
     let app = await startOverview(world, APP);
-    const saved = join(world.config, DEV_IDENTIFIER, "preferences.json");
+    const saved = join(world.data, DEV_IDENTIFIER, "preferences.json");
     await waitFor("the version to be recorded", () =>
       Promise.resolve(readFileSync(saved, "utf8").includes('"last_release_notes": "')),
     );

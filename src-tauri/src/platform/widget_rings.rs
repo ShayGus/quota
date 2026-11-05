@@ -70,8 +70,10 @@ fn place_halo(
         size.width.saturating_add(reach.saturating_mul(2)),
         size.height.saturating_add(reach.saturating_mul(2)),
     ))?;
-    halo.set_ignore_cursor_events(true)?;
-    halo.show()
+    // Shown first: on Linux, letting clicks through a window that has never been
+    // shown panics inside the window library and ends the app.
+    halo.show()?;
+    halo.set_ignore_cursor_events(true)
 }
 
 /// Where the widget is, how big, and how far the rings reach from it.
