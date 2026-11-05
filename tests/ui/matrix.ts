@@ -10,11 +10,11 @@
  *   tray (`tray`) or a floating window (`floating`). The widget ignores it.
  * - `indicator_style` (`IndicatorStyle`): rings or bars. In the full window it
  *   picks the card layout. In the widget it picks the look: rings give the ring
- *   strip, bars give the mini cards. There is no third widget variant.
+ *   strip, bars give the compact list. There is no third widget variant.
  *
  * So the real surfaces are the six below. The owner's names map to them as:
  * "Full window" is the four `full-*` surfaces, "Floating bar" is the ring strip
- * (`widget-strip`), and "Floating cards" is the mini cards (`widget-cards`).
+ * (`widget-strip`), and "Floating list" is the compact list (`widget-list`).
  */
 import type {
   AccountSnapshot,
@@ -77,12 +77,12 @@ export const SURFACES: readonly Surface[] = [
     name: "Floating bar (ring strip)",
   },
   {
-    id: "widget-cards",
+    id: "widget-list",
     window: "widget",
     view: "widget",
     mode: "tray",
     style: "bar",
-    name: "Floating cards (mini cards)",
+    name: "Floating list (compact list)",
   },
 ];
 

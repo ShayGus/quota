@@ -14,8 +14,8 @@ one small window, with when each resets and how recently it was checked.
       <img src="docs/images/widget-rings.png" alt="The mini widget as a strip of rings"><br>
       <sub><b>Mini widget, rings.</b> Every account in a small window that stays on top, wherever you put it.</sub>
       <br><br>
-      <img src="docs/images/widget-cards.png" alt="The mini widget as mini cards with bars"><br>
-      <sub><b>Mini widget, bars.</b> The same accounts as mini cards.</sub>
+      <img src="docs/images/widget-list.png" alt="The mini widget as a compact list, one row per account"><br>
+      <sub><b>Mini widget, compact.</b> The same accounts as a small see-through list.</sub>
       <br><br>
       <img src="docs/images/overview-bars-light.png" alt="The full window in the compact layout, light theme"><br>
       <sub><b>Compact layout</b>, light theme.</sub>

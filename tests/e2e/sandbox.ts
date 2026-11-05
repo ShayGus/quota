@@ -618,12 +618,13 @@ function findMenuItem(layout: unknown, label: string): number | null {
 /** The window of the application the session can see by its role. */
 export async function findWindow(
   session: Session,
-  role: "overview" | "settings" | "widget",
+  role: "overview" | "settings" | "widget" | "release-notes",
 ): Promise<string> {
   const selector = {
     overview: ".popover",
     settings: ".settings-window",
     widget: ".widget",
+    "release-notes": ".release-notes",
   }[role];
   return waitFor(`the ${role} window`, async () => {
     for (const handle of await session.handles()) {

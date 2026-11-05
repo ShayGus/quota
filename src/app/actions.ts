@@ -10,6 +10,7 @@ import {
   type AccountGroupId,
   type AccountId,
   type AppView,
+  type FindShortcutStatus,
   type AttemptRef,
   type KeyGroupChoice,
   type BeginConnectionRequest,
@@ -196,6 +197,29 @@ export const actions = {
    */
   async setAppView(view: AppView): Promise<void> {
     await reportAsync(commands.setAppView(view));
+  },
+  /** Whether the shortcut that finds the widget can work here, and does. */
+  async findShortcutStatus(): Promise<FindShortcutStatus | null> {
+    return reportAsync(commands.findWidgetShortcutStatus());
+  },
+  /**
+   * Changes or turns off the shortcut that finds the widget. The answer is the
+   * words for why it was refused, shown beside the setting, or `null`. The
+   * saved preference follows through the host's event.
+   */
+  async setFindShortcut(shortcut: string | null): Promise<string | null> {
+    const refused = "That shortcut couldn't be set. Try another.";
+    try {
+      const result = await commands.setFindWidgetShortcut(shortcut);
+      if (result.status === "ok") {
+        return null;
+      }
+      return result.error.kind === "validation_failed"
+        ? result.error.context.reason
+        : refused;
+    } catch {
+      return refused;
+    }
   },
   /**
    * Asks the host to fit the popover's height to its content. The host decides

@@ -4,8 +4,8 @@
  * These tests hold the approved canvas to what the widget draws: one ring per
  * period with the shortest outside, so a lone ring is the outer one; the
  * number under the rings named after its ring; money as money, never a
- * share; mini cards in pairs with an odd last card across the width; and a
- * corner button that switches back to the full window. Pointing at a tile
+ * share; a compact list with one row per account; and a corner button that
+ * switches back to the full window. Pointing at a tile
  * only shows its peek line, a still click opens its details drawer, and a
  * press that moves 4 px drags the window instead.
  */
@@ -13,13 +13,12 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { MiniCards } from "../src/features/widget/MiniCards";
+import { CompactList } from "../src/features/widget/CompactList";
 import { widgetAccounts } from "../src/features/widget/model";
 import { RingStrip } from "../src/features/widget/RingStrip";
 import { Widget } from "../src/features/widget/Widget";
 import type { AccountSnapshot, Measurement } from "../src/generated/bindings";
-import type { RendererState } from "../src/shared/state/types";
-import { TOAST_MS } from "../src/shared/ui/RefreshNotice";
+import { initialRendererState, type RendererState } from "../src/shared/state/types";
 import {
   account,
   NOW,
@@ -29,6 +28,8 @@ import {
   unavailable,
   window as quotaWindow,
 } from "./fixtures";
+
+const findListeners = vi.hoisted(() => new Set<() => void>());
 
 const ipc = vi.hoisted(() => ({
   fitWidget: vi.fn((contentHeight: number, direction: string) =>
@@ -40,6 +41,14 @@ const ipc = vi.hoisted(() => ({
     }),
   ),
   dragWidget: vi.fn(() => Promise.resolve()),
+  setContentWidth: vi.fn(),
+  showWidgetHalo: vi.fn(() => Promise.resolve()),
+  listenForFind: vi.fn((flash: () => void) => {
+    findListeners.add(flash);
+    return Promise.resolve(() => {
+      findListeners.delete(flash);
+    });
+  }),
 }));
 vi.mock("../src/shared/ipc/widget", () => ipc);
 
@@ -161,12 +170,12 @@ describe("the widget's model", () => {
       ["session", 0.41],
       ["weekly", 0.3],
     ]);
-    expect(shown?.rows.map((row) => row.tag)).toEqual(["5h", "Wk", "Fable"]);
+    expect(shown?.rows.map((row) => row.tag)).toEqual(["H", "W", "Fable"]);
   });
 
   it("names the number after the ring it belongs to, and flags it low", () => {
     const [first, second] = accountsOf(kimi, claude);
-    expect(first?.headline).toEqual({ tag: "5h", value: "8%", low: true });
+    expect(first?.headline).toEqual({ tag: "H", value: "8%", low: true });
     expect(second?.headline).toEqual({ tag: "Fable", value: "30%", low: false });
   });
 
@@ -174,15 +183,65 @@ describe("the widget's model", () => {
     const [shown] = accountsOf(openrouter);
     expect(shown?.rings).toEqual([]);
     expect(shown?.headline.value).toBe("$17.54");
-    expect(shown?.rows).toMatchObject([
-      { tag: "Credit", kind: "amount", value: "$17.54" },
-    ]);
+    expect(shown?.rows).toMatchObject([{ tag: "C", kind: "amount", value: "$17.54" }]);
     const [withCap] = accountsOf(cursor);
     expect(withCap?.rows[2]).toMatchObject({
       tag: "Extra",
       kind: "amount",
       value: "$15.00",
     });
+  });
+
+  it.each<[string, Measurement]>([
+    ["not reported", { kind: "unavailable", value: "not_reported" }],
+    ["not supported", { kind: "unavailable", value: "unsupported" }],
+    ["not applicable", { kind: "unavailable", value: "not_applicable" }],
+    ["not included in the plan", { kind: "not_entitled" }],
+  ])("leaves out a limit that is %s", (_reason, measurement) => {
+    const partial = account(
+      "partial",
+      "claude",
+      9,
+      [quotaWindow("h", "session", measurement), quotaWindow("w", "weekly", percent(60))],
+      { rank: 60 },
+    );
+    const [shown] = accountsOf(partial);
+    expect(shown?.rows.map((row) => row.tag)).toEqual(["W"]);
+    expect(shown?.rings.map((ring) => ring.period)).toEqual(["weekly"]);
+    expect(shown?.description).not.toContain("5-hour");
+  });
+
+  it("keeps the dash on a reading Quota couldn't understand", () => {
+    const garbled = account(
+      "garbled",
+      "claude",
+      9,
+      [
+        quotaWindow("h", "session", { kind: "unavailable", value: "invalid_response" }),
+        quotaWindow("w", "weekly", percent(60)),
+      ],
+      { rank: 60 },
+    );
+    const [shown] = accountsOf(garbled);
+    expect(shown?.rows.map((row) => [row.tag, row.value])).toEqual([
+      ["H", "—"],
+      ["W", "60%"],
+    ]);
+  });
+
+  it("keeps an account whose every limit is left out", () => {
+    const silent = account(
+      "silent",
+      "codex",
+      9,
+      [quotaWindow("h", "session", { kind: "unavailable", value: "not_reported" })],
+      { rank: null },
+    );
+    const [shown] = accountsOf(silent);
+    expect(shown?.id).toBe("silent");
+    expect(shown?.rows).toEqual([]);
+    expect(shown?.rings).toEqual([]);
+    expect(shown?.headline.value).toBe("—");
   });
 
   it("puts an account with only money after the ranked ones", () => {
@@ -349,24 +408,302 @@ describe("the widget's model", () => {
   });
 });
 
-describe("the mini cards", () => {
-  it("pair the cards, with an odd last card across the width", () => {
-    const { container, rerender } = render(
-      <MiniCards accounts={accountsOf(kimi, claude, cursor)} />,
+describe("the compact list", () => {
+  function list(
+    accounts: readonly AccountSnapshot[],
+    onExpand: () => void = vi.fn(),
+    onReconnect: (id: string) => Promise<string | null> = () => Promise.resolve(null),
+  ) {
+    return render(
+      <CompactList
+        accounts={accountsOf(...accounts)}
+        onExpand={onExpand}
+        onReconnect={onReconnect}
+      />,
     );
-    const wide = (): string[] =>
-      [...container.querySelectorAll(".widget-card")].map((card) =>
-        card.classList.contains("wide") ? "wide" : "half",
-      );
-    expect(wide()).toEqual(["half", "half", "wide"]);
-    rerender(<MiniCards accounts={accountsOf(kimi, claude, cursor, openrouter)} />);
-    expect(wide()).toEqual(["half", "half", "half", "half"]);
+  }
+
+  const CREDITS: Measurement = {
+    kind: "quantity",
+    value: {
+      unit: { kind: "credits" },
+      precision: 9,
+      used: null,
+      remaining: 62500,
+      limit: null,
+    },
+  };
+
+  it("has one row per account, with each limit's label and number", () => {
+    const { container } = list([kimi, claude]);
+    const rows = [...container.querySelectorAll(".widget-row")];
+    expect(rows).toHaveLength(2);
+    const [first] = rows;
+    expect(first?.querySelector(".widget-row-label")?.textContent).toBe("Kimi");
+    expect(first?.querySelector(".widget-row-name .provider-icon")).not.toBeNull();
+    expect(
+      [...(first?.querySelectorAll(".widget-limit-tag") ?? [])].map(
+        (tag) => tag.textContent,
+      ),
+    ).toEqual(["H", "W", "M"]);
   });
 
-  it("show money in a card as an amount", () => {
-    render(<MiniCards accounts={accountsOf(openrouter)} />);
-    expect(screen.getByText("$17.54")).toBeTruthy();
-    expect(screen.queryByText(/%/)).toBeNull();
+  it("shows no plan or tier, and no row for a limit that isn't reported", () => {
+    const partial = account(
+      "partial",
+      "claude",
+      9,
+      [
+        quotaWindow("h", "session", { kind: "unavailable", value: "not_reported" }),
+        quotaWindow("w", "weekly", percent(60)),
+      ],
+      { rank: 60 },
+    );
+    const { container } = list([partial]);
+    expect(container.querySelector(".widget-row-limits")?.textContent).toBe("W60%");
+  });
+
+  it("says what a count counts in the details, not in the row", () => {
+    const codex = account(
+      "codex",
+      "codex",
+      9,
+      [
+        quotaWindow("c", "custom", CREDITS, {
+          label: "Credits",
+          role: "credit_balance",
+          boundaryAt: null,
+        }),
+      ],
+      { unrankedReason: "no_included_allowance" },
+    );
+    const { container } = list([codex]);
+    expect(container.querySelector(".widget-limit .widget-value")?.textContent).toBe(
+      "62,500",
+    );
+    const [shown] = accountsOf(codex);
+    expect(shown?.rows[0]?.detail).toBe("62,500 credits");
+  });
+
+  it("opens a row's details in full words on a click, and closes on Esc", async () => {
+    list([kimi, claude]);
+    const row = screen.getByRole("button", { name: /^Claude/ });
+    expect(row.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(row);
+    const details = await screen.findByRole("region", { name: "Claude" });
+    expect(details.textContent).toContain("41% left");
+    expect(details.textContent).toContain("Resets in");
+    expect(details.textContent).toContain("Open full window");
+    expect(row.getAttribute("aria-expanded")).toBe("true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    await waitFor(() => {
+      expect(screen.queryByRole("region", { name: "Claude" })).toBeNull();
+    });
+    expect(document.activeElement).toBe(row);
+  });
+
+  it("closes the details on a second click, and ignores a double-click", async () => {
+    list([kimi]);
+    const row = screen.getByRole("button", { name: /^Kimi/ });
+    fireEvent.click(row, { detail: 1 });
+    await screen.findByRole("region", { name: "Kimi" });
+    fireEvent.click(row, { detail: 2 });
+    expect(screen.getByRole("region", { name: "Kimi" })).toBeTruthy();
+    fireEvent.click(row, { detail: 1 });
+    expect(screen.queryByRole("region", { name: "Kimi" })).toBeNull();
+  });
+
+  it("opens the full window from the details", async () => {
+    const onExpand = vi.fn();
+    list([kimi], onExpand);
+    fireEvent.click(screen.getByRole("button", { name: /^Kimi/ }));
+    const details = await screen.findByRole("region", { name: "Kimi" });
+    fireEvent.click(within(details).getByRole("button", { name: "Open full window" }));
+    expect(onExpand).toHaveBeenCalledOnce();
+  });
+
+  it("opens upward when the host has no room below", async () => {
+    ipc.fitWidget.mockResolvedValueOnce({
+      height: 80,
+      direction: "down",
+      room_above: 600,
+      room_below: 20,
+    });
+    list([kimi]);
+    fireEvent.click(screen.getByRole("button", { name: /^Kimi/ }));
+    await screen.findByRole("region", { name: "Kimi" });
+    expect(document.documentElement.classList.contains("widget-grows-up")).toBe(true);
+    fireEvent.keyDown(document, { key: "Escape" });
+  });
+
+  it("reconnects an account from its details", async () => {
+    const onReconnect = vi.fn(() => Promise.resolve(null));
+    list([lapsedGrok], vi.fn(), onReconnect);
+    const row = screen.getByRole("button", {
+      name: "Grok needs reconnecting, open to reconnect",
+    });
+    expect(row.textContent).toContain("Reconnect");
+    fireEvent.click(row);
+    const details = await screen.findByRole("region", { name: "Grok" });
+    fireEvent.click(within(details).getByRole("button", { name: "Reconnect Grok" }));
+    expect(onReconnect).toHaveBeenCalledWith("lapsed");
+  });
+
+  it("moves between rows with the arrow keys", () => {
+    list([kimi, claude]);
+    const first = screen.getByRole("button", { name: /^Kimi/ });
+    const second = screen.getByRole("button", { name: /^Claude/ });
+    first.focus();
+    fireEvent.keyDown(first, { key: "ArrowDown" });
+    expect(document.activeElement).toBe(second);
+    fireEvent.keyDown(second, { key: "Home" });
+    expect(document.activeElement).toBe(first);
+  });
+});
+
+describe("how the widget stands out", () => {
+  const healthy = account("ok", "claude", 2, [quotaWindow("w", "weekly", percent(60))], {
+    rank: 60,
+  });
+  const running = account("ok", "claude", 2, [quotaWindow("w", "weekly", percent(10))], {
+    rank: 10,
+  });
+
+  beforeEach(() => {
+    findListeners.clear();
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+  });
+
+  function stateOf(accounts: AccountSnapshot[], style: "ring" | "bar"): RendererState {
+    return {
+      ...initialRendererState,
+      snapshot: snapshot("instance", 1, accounts),
+      preferences: preferences({ indicator_style: style, view: "widget" }),
+    };
+  }
+
+  function show(accounts: AccountSnapshot[], style: "ring" | "bar" = "bar") {
+    return render(
+      <Widget
+        state={stateOf(accounts, style)}
+        onExpand={vi.fn()}
+        onReconnect={() => Promise.resolve(null)}
+      />,
+    );
+  }
+
+  it("is see-through until the pointer settles on it, in both looks", () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    for (const style of ["bar", "ring"] as const) {
+      const { container, unmount } = show([healthy], style);
+      const widget = container.querySelector(".widget");
+      if (widget === null) throw new Error("the widget is not drawn");
+      expect(widget.classList.contains("solid")).toBe(false);
+      fireEvent.pointerEnter(widget);
+      expect(widget.classList.contains("solid")).toBe(false);
+      act(() => {
+        vi.advanceTimersByTime(100);
+      });
+      expect(widget.classList.contains("solid")).toBe(true);
+      fireEvent.pointerLeave(widget);
+      expect(widget.classList.contains("solid")).toBe(true);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(widget.classList.contains("solid")).toBe(false);
+      unmount();
+    }
+    vi.useRealTimers();
+  });
+
+  it("colours the rim while a limit is low, without a flash when it opens", () => {
+    const { container } = show([running]);
+    const widget = container.querySelector(".widget");
+    expect(widget?.classList.contains("low")).toBe(true);
+    expect(widget?.classList.contains("flashing")).toBe(false);
+    expect(ipc.showWidgetHalo).not.toHaveBeenCalled();
+  });
+
+  it("flashes when a limit runs low, and only then", () => {
+    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"], now: NOW });
+    const { container, rerender } = show([healthy]);
+    const widget = container.querySelector(".widget");
+    expect(widget?.classList.contains("low")).toBe(false);
+    const again = (accounts: AccountSnapshot[]): void => {
+      rerender(
+        <Widget
+          state={stateOf(accounts, "bar")}
+          onExpand={vi.fn()}
+          onReconnect={() => Promise.resolve(null)}
+        />,
+      );
+    };
+    again([running]);
+    expect(widget?.classList.contains("low")).toBe(true);
+    expect(widget?.classList.contains("flashing")).toBe(true);
+    expect(ipc.showWidgetHalo).toHaveBeenCalledOnce();
+    act(() => {
+      vi.advanceTimersByTime(2800);
+    });
+    expect(widget?.classList.contains("flashing")).toBe(false);
+    again([running]);
+    expect(ipc.showWidgetHalo).toHaveBeenCalledOnce();
+    vi.useRealTimers();
+  });
+
+  it("flashes when the host asks to find it", async () => {
+    const { container } = show([healthy]);
+    const widget = container.querySelector(".widget");
+    await waitFor(() => {
+      expect(findListeners.size).toBe(1);
+    });
+    act(() => {
+      findListeners.forEach((flash) => {
+        flash();
+      });
+    });
+    expect(widget?.classList.contains("flashing")).toBe(true);
+  });
+
+  it("offers no bug report of its own: the tray has it", () => {
+    show([healthy]);
+    expect(screen.queryByRole("button", { name: "Report a bug" })).toBeNull();
+  });
+
+  it("tells the host how wide its content is", () => {
+    show([healthy]);
+    expect(ipc.setContentWidth).toHaveBeenCalled();
+  });
+
+  it("makes the click a press after a drag didn't get", async () => {
+    const onExpand = vi.fn();
+    render(
+      <Widget
+        state={stateOf([healthy], "bar")}
+        onExpand={onExpand}
+        onReconnect={() => Promise.resolve(null)}
+      />,
+    );
+    const button = screen.getByRole("button", { name: "Open the full window" });
+    const elementFromPoint = vi.fn(() => button);
+    document.elementFromPoint = elementFromPoint;
+    const press = (x: number): void => {
+      fireEvent.pointerDown(button, { pointerId: 3, button: 0, clientX: x, clientY: 5 });
+    };
+    press(5);
+    fireEvent.pointerMove(window, { pointerId: 3, buttons: 1, clientX: 40, clientY: 5 });
+    expect(ipc.dragWidget).toHaveBeenCalledOnce();
+    fireEvent.pointerMove(window, { pointerId: 3, buttons: 0, clientX: 40, clientY: 5 });
+    press(40);
+    fireEvent.pointerUp(button, { pointerId: 3, clientX: 40, clientY: 5 });
+    expect(onExpand).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onExpand).toHaveBeenCalledOnce();
+    });
   });
 });
 
@@ -465,11 +802,6 @@ describe("the widget window", () => {
     document.elementFromPoint = elementFromPoint;
   });
 
-  const report = {
-    openIssue: vi.fn(() => Promise.resolve()),
-    copyPrompt: vi.fn(() => Promise.resolve(true)),
-  };
-
   function widgetState(accounts: readonly AccountSnapshot[]): RendererState {
     return {
       snapshot: snapshot("instance", 1, [...accounts]),
@@ -491,7 +823,6 @@ describe("the widget window", () => {
         state={widgetState(accounts)}
         onExpand={onExpand}
         onReconnect={reconnectAccount}
-        report={report}
       />,
     );
   }
@@ -665,7 +996,6 @@ describe("the widget window", () => {
         state={widgetState([kimi, grown])}
         onExpand={vi.fn()}
         onReconnect={reconnectAccount}
-        report={report}
       />,
     );
     await sleep(50);
@@ -702,7 +1032,6 @@ describe("the widget window", () => {
           ])}
           onExpand={vi.fn()}
           onReconnect={reconnectAccount}
-          report={report}
         />,
       );
       await sleep(50);
@@ -757,36 +1086,6 @@ describe("the widget window", () => {
     fireEvent.pointerUp(button, { pointerId: 7 });
     fireEvent.click(button, { detail: 1 });
     expect(onExpand).toHaveBeenCalledOnce();
-  });
-
-  it("drags after a pressed copy notice expires", async () => {
-    vi.useFakeTimers({ toFake: ["Date", "setTimeout", "clearTimeout"] });
-    renderWidget(vi.fn());
-    const copy = async (): Promise<void> => {
-      fireEvent.click(screen.getByRole("button", { name: "Report a bug" }));
-      await act(() => {
-        fireEvent.click(
-          screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
-        );
-        return Promise.resolve();
-      });
-    };
-    await copy();
-    act(() => {
-      vi.advanceTimersByTime(TOAST_MS - 100);
-    });
-    const notice = screen.getByRole("status");
-    press(notice, 50, 135);
-    act(() => {
-      vi.advanceTimersByTime(100);
-    });
-    expect(screen.queryByRole("status")).toBeNull();
-    move(window, 50, 139);
-    move(window, 50, 145);
-    expect(ipc.dragWidget).toHaveBeenCalledOnce();
-    fireEvent.pointerUp(window, { pointerId: 7 });
-    move(window, 50, 149);
-    expect(ipc.dragWidget).toHaveBeenCalledOnce();
   });
 
   it("stops tracking when the pressed widget unmounts", () => {
@@ -871,7 +1170,6 @@ describe("the widget window", () => {
         state={widgetState([claude, kimi])}
         onExpand={onExpand}
         onReconnect={reconnectAccount}
-        report={report}
       />,
     );
     expect(screen.getByRole("region", { name: "Claude" })).toBeTruthy();
@@ -880,7 +1178,6 @@ describe("the widget window", () => {
         state={widgetState([kimi])}
         onExpand={onExpand}
         onReconnect={reconnectAccount}
-        report={report}
       />,
     );
     await waitFor(() => {
@@ -951,17 +1248,6 @@ describe("the widget window", () => {
     expect(await screen.findByRole("region", { name: "Claude" })).toBeTruthy();
   });
 
-  it("reports a bug from beside the expand button and confirms a copied prompt", async () => {
-    renderWidget(vi.fn());
-    fireEvent.click(screen.getByRole("button", { name: "Report a bug" }));
-    fireEvent.click(
-      screen.getByRole("menuitem", { name: "Copy a prompt for an AI agent" }),
-    );
-    expect(report.copyPrompt).toHaveBeenCalled();
-    expect((await screen.findByRole("status")).textContent).toContain("Prompt copied");
-    expect(screen.queryByRole("menu")).toBeNull();
-  });
-
   describe("reconnecting from the drawer", () => {
     /** Opens the lapsed account's drawer, beside a healthy one. */
     async function openLapsed() {
@@ -983,7 +1269,6 @@ describe("the widget window", () => {
           state={widgetState([kimi, lapsed])}
           onExpand={vi.fn()}
           onReconnect={reconnectAccount}
-          report={report}
         />,
       );
     }

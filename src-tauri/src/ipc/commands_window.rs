@@ -151,6 +151,7 @@ pub async fn fit_overview_height(
 #[specta::specta]
 pub async fn fit_widget(
     state: State<'_, AppState>,
+    content_width: u32,
     content_height: u32,
     direction: WidgetGrowth,
 ) -> Result<FitWidget, CommandError> {
@@ -194,24 +195,35 @@ pub async fn fit_widget(
         },
         scale,
     );
+    let width = widget::clamp_width(f64::from(content_width));
+    let anchor = widget::take_anchor();
+    let outer_x = widget::left_edge_after(
+        anchor,
+        position.x,
+        outer.width,
+        (width * scale).round() + f64::from(outer.width.saturating_sub(inner.width)),
+        widget::physical_rect(area.position, area.size),
+        scale,
+    );
     native
-        .set_size(LogicalSize::new(widget::WIDTH, fitted.height))
+        .set_size(LogicalSize::new(width, fitted.height))
         .map_err(|_| window::failed("fit_window_size"))?;
-    if fitted.outer_y != position.y {
-        let moved = PhysicalPosition::new(position.x, fitted.outer_y);
+    if fitted.outer_y != position.y || outer_x != position.x {
+        let moved = PhysicalPosition::new(outer_x, fitted.outer_y);
         native
             .set_position(moved)
             .map_err(|_| window::failed("fit_window_position"))?;
         widget::mark_programmatic(moved);
-        if direction == WidgetGrowth::Up && f64::from(content_height) < current {
-            widget::save_resting_position(
-                &state,
-                WidgetPosition {
-                    x: position.x,
-                    y: fitted.outer_y,
-                },
-            )
-            .await;
+        // A first fit from the fallback corner must not replace a saved spot
+        // whose screen is only away for now, as `widget::show` says.
+        let shrank_up = direction == WidgetGrowth::Up && f64::from(content_height) < current;
+        let stayed_snapped = outer_x != position.x && anchor == widget::WidthAnchor::Resting;
+        if shrank_up || stayed_snapped {
+            let resting = WidgetPosition {
+                x: outer_x,
+                y: fitted.outer_y,
+            };
+            widget::save_resting_position(&state, resting).await;
         }
     }
     Ok(FitWidget {
@@ -220,6 +232,14 @@ pub async fn fit_widget(
         room_above: fitted.room_above,
         room_below: fitted.room_below,
     })
+}
+
+/// Draws the rings around the mini widget for a moment, as finding it does, so
+/// a limit that just ran low can point the widget out.
+#[tauri::command]
+#[specta::specta]
+pub async fn show_widget_halo(state: State<'_, AppState>) -> Result<(), CommandError> {
+    crate::platform::widget::draw_halo(&state.app)
 }
 
 /// Switches between the full window and the mini widget, and saves the view.

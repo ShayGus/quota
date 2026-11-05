@@ -11,6 +11,7 @@ import { AccountDetail } from "../features/accounts/AccountDetail";
 import { Overview } from "../features/overview/Overview";
 import type { OverviewFilter } from "../features/overview/OverviewToolbar";
 import { Settings, type SettingsActions } from "../features/settings/Settings";
+import { ReleaseNotesWindow } from "../features/update/ReleaseNotes";
 import { UpdateWindow } from "../features/update/UpdatePrompt";
 import { useUpdatePrompt } from "../features/update/useUpdatePrompt";
 import { Widget } from "../features/widget/Widget";
@@ -71,6 +72,8 @@ const settingsActions: SettingsActions = {
   setAppView: (view) => {
     launch(actions.setAppView(view));
   },
+  findShortcutStatus: () => actions.findShortcutStatus(),
+  setFindShortcut: (shortcut) => actions.setFindShortcut(shortcut),
   setOverviewMode: (mode) => {
     launch(actions.setOverviewMode(mode));
   },
@@ -162,6 +165,11 @@ export function App(): JSX.Element {
   );
 }
 
+/** Closes the window this page is in. */
+function closeThisWindow(): void {
+  launch(actions.closeWindow());
+}
+
 /** The update pop-up's window, including the installing and failure states. */
 function UpdatePopup(): JSX.Element {
   const prompt = useUpdatePrompt();
@@ -186,6 +194,14 @@ function QuotaWindow(): JSX.Element {
   const isSettingsWindow = window.location.hash.startsWith("#/settings");
   const [toast, setToast] = useState<ToastMessage | null>(null);
   useFailureToast(state.failure, setToast);
+  // What's new is opened by the host with its own hash, on a new version's first run.
+  if (window.location.hash.startsWith("#/release-notes")) {
+    return (
+      <FeatureBoundary surface="release notes">
+        <ReleaseNotesWindow onClose={closeThisWindow} />
+      </FeatureBoundary>
+    );
+  }
   // The update pop-up is opened by the host with its own hash.
   if (window.location.hash.startsWith("#/update")) {
     return <UpdatePopup />;
@@ -198,10 +214,6 @@ function QuotaWindow(): JSX.Element {
       <FeatureBoundary surface="widget">
         <Widget
           state={state}
-          report={{
-            openIssue: () => actions.openBugReportIssue(),
-            copyPrompt: () => actions.copyBugReportPrompt(),
-          }}
           onExpand={() => {
             launch(actions.setAppView("overview"));
           }}

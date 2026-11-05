@@ -73,7 +73,8 @@
         "overview-capability",
         "settings-capability",
         "widget-capability",
-        "update-capability"
+        "update-capability",
+        "release-notes-capability"
       ],
       "pattern": {
         "use": "brownfield"

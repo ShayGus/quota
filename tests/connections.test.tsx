@@ -47,6 +47,8 @@ function settingsActions(): SettingsActions {
     showOverview: vi.fn(),
     showAccountDetail: vi.fn(),
     launchAtLogin: vi.fn(() => Promise.resolve(false)),
+    findShortcutStatus: vi.fn(() => Promise.resolve(null)),
+    setFindShortcut: vi.fn(() => Promise.resolve(null)),
     setLaunchAtLogin: vi.fn((launch: boolean) => Promise.resolve(launch)),
   };
 }

@@ -33,6 +33,8 @@ pub fn to_presentation(preferences: &Preferences) -> PresentationPreferences {
         widget_position: preferences.widget_position,
         account_sort: preferences.account_sort,
         account_order: preferences.account_order.clone(),
+        find_widget_shortcut: preferences.find_widget_shortcut.clone(),
+        last_release_notes: preferences.last_release_notes.clone(),
     }
 }
 
@@ -70,6 +72,8 @@ pub fn from_persisted(
         widget_position: presentation.widget_position,
         account_sort: presentation.account_sort,
         account_order: presentation.account_order.clone(),
+        find_widget_shortcut: presentation.find_widget_shortcut.clone(),
+        last_release_notes: presentation.last_release_notes.clone(),
         notifications: operational.notifications,
         privacy: quota_contracts::preferences::PrivacyPolicy {
             alias_mode: presentation.privacy_alias_mode,

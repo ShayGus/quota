@@ -7,12 +7,15 @@
 pub mod app_view;
 pub mod autostart;
 pub(crate) mod browser;
+pub mod find_shortcut;
 pub mod lifecycle;
 pub mod popover_height;
 pub mod settings_window;
 pub mod tray;
 pub mod tray_anchor;
 pub mod widget;
+pub mod widget_edges;
+pub mod widget_rings;
 pub mod widget_screens;
 pub mod window;
 pub mod window_events;

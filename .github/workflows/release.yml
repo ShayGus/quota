@@ -482,6 +482,8 @@ jobs:
           {
             echo "Quota $VERSION."
             echo
+            awk -v heading="## $VERSION" '$0 == heading { on = 1; next } /^## / { on = 0 } on' RELEASE_NOTES.md
+            echo
             echo "Windows: the installer (no administrator rights needed) and the MSI."
             echo "Linux: the AppImage, the deb, and the rpm."
             echo "macOS: a disk image for Apple Silicon and one for Intel. The app is not signed by Apple, so macOS asks you to confirm opening it the first time."

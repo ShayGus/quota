@@ -336,6 +336,8 @@ async fn install_managed_state(
     crate::platform::app_view::restore_saved(&state)
         .await
         .map_err(|error| format!("view_restore_failed:{}", error.diagnostic_code()))?;
+    // The first run of a new version says what changed, over the view it opened.
+    crate::updates::release_notes::show_if_updated(&state).await;
     let visible = app
         .get_webview_window(crate::platform::lifecycle::OVERVIEW)
         .is_some_and(|native| native.is_visible().unwrap_or(false));
@@ -378,7 +380,12 @@ pub fn start() -> Result<(), String> {
     let state_flags = crate::platform::window::restored_state_flags();
     // The widget's position is saved in the preferences whenever it moves, so
     // the plugin, which saves only at a clean exit, leaves that window alone.
-    let unmanaged = [crate::platform::widget::LABEL];
+    // The rings around it come and go in a moment, and have nothing to keep.
+    let unmanaged = [
+        crate::platform::widget::LABEL,
+        crate::platform::widget::HALO_LABEL,
+        crate::updates::release_notes::LABEL,
+    ];
     #[cfg(feature = "sample-data")]
     let window_state = tauri_plugin_window_state::Builder::default()
         .with_filename("sample/.window-state.json")
@@ -408,6 +415,7 @@ pub fn start() -> Result<(), String> {
             .plugin(tauri_plugin_opener::init())
             .plugin(tauri_plugin_clipboard_manager::init())
             .plugin(tauri_plugin_notification::init())
+            .plugin(tauri_plugin_global_shortcut::Builder::new().build())
             .plugin(tauri_plugin_updater::Builder::new().build()),
     )
     .invoke_handler(registry.invoke_handler())

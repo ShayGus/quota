@@ -32,11 +32,8 @@ export interface ReportBugActions {
 /** The menu's trigger and, while open, the menu. */
 export function ReportBugMenu({
   actions,
-  variant,
 }: {
   readonly actions: ReportBugActions;
-  /** `header` for the full window, `widget` for the mini widget. */
-  readonly variant: "header" | "widget";
 }): JSX.Element {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement | null>(null);
@@ -47,10 +44,10 @@ export function ReportBugMenu({
     launch(action());
   };
   return (
-    <div className={`report-bug report-bug-${variant}`} ref={root}>
+    <div className="report-bug report-bug-header" ref={root}>
       <button
         type="button"
-        className={variant === "header" ? "icon-btn" : "widget-report"}
+        className="icon-btn"
         aria-label="Report a bug"
         title="Report a bug"
         aria-haspopup="menu"

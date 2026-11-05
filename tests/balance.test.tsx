@@ -162,7 +162,7 @@ describe("a prepaid balance in the widget", () => {
     expect(shown?.rings).toHaveLength(1);
     expect(shown?.rings[0]?.fraction).toBeCloseTo(0.744);
     expect(shown?.headline.value).toBe("$37.20");
-    expect(shown?.rows.map((row) => row.tag)).toEqual(["Credit"]);
+    expect(shown?.rows.map((row) => row.tag)).toEqual(["C"]);
   });
 });
 

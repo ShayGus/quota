@@ -30,8 +30,24 @@ import { defaultPreferences, scenario } from "./scenarios";
 import type { FakeConfig } from "./fake-backend";
 import type { AccountSnapshot } from "../../src/generated/bindings";
 
-/** The mini widget's width, from `.widget` in widget.css. */
-const WIDGET_WIDTH = 316;
+/** The ring strip's width, from `.widget-strip` in widget.css. */
+const RING_STRIP_WIDTH = 316;
+/** The compact list's widest: it is as wide as its columns, up to this. */
+const LIST_WIDEST = 400;
+
+/** A surface's width is the ring strip's, or the compact list's own. */
+function expectWidgetWidth(
+  surface: Surface,
+  width: number | undefined,
+  accounts = 1,
+): void {
+  if (surface.style === "ring" && accounts > 0) {
+    expect(width).toBe(RING_STRIP_WIDTH);
+    return;
+  }
+  expect(width ?? 0).toBeGreaterThan(0);
+  expect(width ?? 0).toBeLessThanOrEqual(LIST_WIDEST + 1);
+}
 
 /** The hash each webview is opened with. */
 const HASH = { overview: "", widget: "#/widget" } as const;
@@ -69,16 +85,11 @@ async function shown(page: Page, surface: Surface) {
       id,
       cards: count(".provider-card"),
       tiles: count(".widget-tile"),
-      miniCards: count(".widget-card"),
-      wide: count(".widget-card.wide"),
+      rows: count(".widget-row"),
       empty: count(".widget-empty") + count(".empty"),
       scrollWidth: document.documentElement.scrollWidth,
       innerWidth: window.innerWidth,
       widget: box(".widget")?.width,
-      lastCard: [...document.querySelectorAll(".widget-card")]
-        .at(-1)
-        ?.getBoundingClientRect().width,
-      container: document.querySelector(".widget-cards")?.getBoundingClientRect().width,
       tileRows: [
         ...new Set(
           [...document.querySelectorAll(".widget-tile")].map(
@@ -130,7 +141,7 @@ test.describe("counts", () => {
             } else if (surface.style === "ring") {
               await expect(page.locator(".widget-tile")).toHaveCount(count);
             } else {
-              await expect(page.locator(".widget-card")).toHaveCount(count);
+              await expect(page.locator(".widget-row")).toHaveCount(count);
             }
             await expect(page.locator("html")).toHaveAttribute("data-theme", theme);
             const seen = await shown(page, surface);
@@ -140,16 +151,11 @@ test.describe("counts", () => {
               expect(seen.pinned).toBe(surface.mode === "floating" ? 1 : 0);
               expect(seen.pinLabel).toBe(surface.mode === "floating" ? 1 : 0);
             } else {
-              expect(seen.widget).toBe(WIDGET_WIDTH);
+              expectWidgetWidth(surface, seen.widget, count);
             }
-            if (surface.style === "bar" && surface.window === "widget" && count > 0) {
-              // Two cards a row; an odd last card takes the whole width.
-              expect(seen.wide).toBe(count % 2);
-              if (count % 2 === 1) {
-                expect(seen.lastCard).toBe(
-                  seen.container ? seen.container - 18 : undefined,
-                );
-              }
+            if (surface.style === "bar" && surface.window === "widget") {
+              // One row per account.
+              expect(seen.rows).toBe(count);
             }
             if (surface.style === "ring" && surface.window === "widget" && count > 0) {
               // At most four tiles a row, rows as even as they can be.
@@ -216,14 +222,14 @@ test.describe("states", () => {
               await expect(tile.locator(".widget-headline")).toHaveCount(0);
             }
           } else {
-            // The mini cards draw readings, not statuses: only an account with no
+            // The list draws readings, not statuses: only an account with no
             // reading at all (reconnect needed) says its state.
-            await expect(page.locator(".widget-card")).toHaveCount(1);
+            await expect(page.locator(".widget-row")).toHaveCount(1);
             if (state === "reconnect needed") {
-              await expect(page.locator(".widget-card")).toContainText("Reconnect");
+              await expect(page.locator(".widget-row")).toContainText("Reconnect");
             } else {
               await expect(
-                page.locator(".widget-card .widget-bar").first(),
+                page.locator(".widget-row .widget-limit").first(),
               ).toBeVisible();
             }
           }
@@ -267,12 +273,12 @@ test.describe("long names", () => {
         );
         const { page } = host;
         await expect(
-          page.locator(".provider-card, .widget-tile, .widget-card").first(),
+          page.locator(".provider-card, .widget-tile, .widget-row").first(),
         ).toBeVisible();
         const seen = await shown(page, surface);
         // Nothing may push the window wider than it is.
         expect(seen.scrollWidth).toBeLessThanOrEqual(seen.innerWidth);
-        if (surface.window === "widget") expect(seen.widget).toBe(WIDGET_WIDTH);
+        if (surface.window === "widget") expectWidgetWidth(surface, seen.widget);
         await host.screenshot(
           `matrix/long-names/${surface.id}-${theme}`,
           canvas(page, surface),
@@ -298,12 +304,10 @@ test.describe("widget sizes", () => {
   const COUNT_STEPS = [0, 1, 2, 3, 4, 5, 7, 12];
 
   for (const surface of SURFACES.filter((entry) => entry.window === "widget")) {
-    test(`${surface.name}: always ${String(WIDGET_WIDTH)} px wide, and tall exactly as its accounts need`, async ({
-      open,
-    }) => {
+    test(`${surface.name}: asks for exactly the size it measures`, async ({ open }) => {
       // The widget fits its content: it asks the host to fit the window to
-      // exactly the height it measures, through the fit_widget command. The
-      // code sets no minimum or maximum height; the width is fixed.
+      // exactly the size it measures, through the fit_widget command. The code
+      // sets no minimum or maximum height.
       const heights: number[] = [];
       for (const count of COUNT_STEPS) {
         const accounts = Array.from({ length: count }, (_, index) =>
@@ -318,25 +322,31 @@ test.describe("widget sizes", () => {
         const host = await open(configFor(surface, accounts, "dark", false), HASH.widget);
         await expect(host.page.locator(".widget")).toBeVisible();
         const box = await host.page.locator(".widget").boundingBox();
-        expect(box?.width).toBe(WIDGET_WIDTH);
+        expectWidgetWidth(surface, box?.width, count);
         heights.push(box?.height ?? 0);
         await expect
           .poll(async () => {
             const sizes = await host.callsTo("fit_widget");
             const last = sizes.at(-1)?.args as
-              { contentHeight: number; direction: string } | undefined;
-            return last === undefined ? null : [WIDGET_WIDTH, last.contentHeight];
+              { contentWidth: number; contentHeight: number } | undefined;
+            return last === undefined ? null : [last.contentWidth, last.contentHeight];
           })
-          .toEqual([WIDGET_WIDTH, Math.ceil(box?.height ?? 0)]);
+          .toEqual([Math.ceil(box?.width ?? 0), Math.ceil(box?.height ?? 0)]);
         await host.screenshot(
           `matrix/widget-sizes/${surface.id}-n${String(count)}`,
           host.page.locator(".widget"),
         );
         await host.page.goto("about:blank");
       }
-      // More accounts never make the window shorter, and 12 is taller than 1.
+      // More accounts never make the ring strip shorter. The list can get a row
+      // shorter when a longer name widens it and a wrapped row fits on one line,
+      // but every account always has at least a row's height.
       for (let index = 1; index < heights.length; index += 1) {
-        expect(heights[index]).toBeGreaterThanOrEqual(heights[index - 1] ?? 0);
+        if (surface.style === "ring") {
+          expect(heights[index]).toBeGreaterThanOrEqual(heights[index - 1] ?? 0);
+        } else {
+          expect(heights[index]).toBeGreaterThanOrEqual((COUNT_STEPS[index] ?? 0) * 20);
+        }
       }
       expect(heights.at(-1)).toBeGreaterThan(heights[1] ?? Infinity);
     });
@@ -469,7 +479,7 @@ test.describe("switching modes", () => {
       "#/widget",
       await secondWindow(),
     );
-    await expect(widget.page.locator(".widget-card")).toHaveCount(3);
+    await expect(widget.page.locator(".widget-row")).toHaveCount(3);
     await expect(widget.page.locator(".widget-tile")).toHaveCount(0);
   });
 

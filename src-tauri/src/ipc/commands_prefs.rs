@@ -10,6 +10,7 @@
 )]
 
 use quota_contracts::CommandError;
+use quota_contracts::commands::FindShortcutStatus;
 use quota_contracts::preferences::Preferences;
 use quota_contracts::refs::AccountRef;
 use quota_core::ports::{OperationalPreferencesRepository, PreferenceRepository};
@@ -38,6 +39,56 @@ pub async fn set_indicator_style(
     style: IndicatorStyle,
 ) -> Result<Preferences, CommandError> {
     change_preferences(&state, |preferences| preferences.indicator_style = style).await
+}
+
+/// Changes or turns off the key combination that finds the widget, and saves
+/// it only once it works. Another app's combination is refused, and the one
+/// that worked before keeps working.
+///
+/// # Errors
+/// Returns [`CommandError::ValidationFailed`] for a combination that cannot be
+/// read or that another app holds, and a persistence error when it cannot be
+/// saved.
+#[tauri::command]
+#[specta::specta]
+pub async fn set_find_widget_shortcut(
+    state: State<'_, AppState>,
+    shortcut: Option<String>,
+) -> Result<Preferences, CommandError> {
+    let previous = state
+        .preferences_state
+        .read()
+        .await
+        .find_widget_shortcut
+        .clone();
+    crate::platform::find_shortcut::set(&state.app, previous.as_deref(), shortcut.as_deref())?;
+    let saved_shortcut = shortcut.clone();
+    let saved = change_preferences(&state, move |preferences| {
+        preferences.find_widget_shortcut = saved_shortcut;
+    })
+    .await;
+    if saved.is_err() {
+        // Not saved, so the next launch would use the old one: use it now too.
+        let restored = crate::platform::find_shortcut::set(
+            &state.app,
+            shortcut.as_deref(),
+            previous.as_deref(),
+        );
+        if let Err(error) = restored {
+            tracing::warn!(
+                code = error.diagnostic_code(),
+                "the previous shortcut could not be restored"
+            );
+        }
+    }
+    saved
+}
+
+/// Whether the key combination that finds the widget can work here, and does.
+#[tauri::command]
+#[specta::specta]
+pub async fn find_widget_shortcut_status() -> Result<FindShortcutStatus, CommandError> {
+    Ok(crate::platform::find_shortcut::status())
 }
 
 /// Saves a full preference aggregate after locking the preference writers.

@@ -123,7 +123,7 @@ describe("account groups", () => {
       "Work · b",
     ]);
     // The total is the account's balance alone; each key is its limit alone.
-    expect(tiles[0]?.rows.map((entry) => entry.tag)).toEqual(["Credit"]);
+    expect(tiles[0]?.rows.map((entry) => entry.tag)).toEqual(["C"]);
     expect(tiles[1]?.rows.map((entry) => entry.tag)).toEqual(["Key"]);
     expect(tiles[1]?.rings).toHaveLength(1);
     expect(tiles[1]?.headline.value).toBe("$11.60");

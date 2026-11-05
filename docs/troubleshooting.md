@@ -165,8 +165,7 @@ old one.
 ## Getting help
 
 The quickest way is **Report a bug**: in the tray menu, behind the bug button in the
-header, beside the mini widget's **Open the full window**, or in **Settings →
-Diagnostics**. It offers two choices:
+header, or in **Settings → Diagnostics**. It offers two choices:
 
 - **Open an issue on GitHub** opens the bug form with your Quota version, operating
   system, view and connected providers already filled in.

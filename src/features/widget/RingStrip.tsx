@@ -104,7 +104,7 @@ const PERIOD_NAMES: Record<Period, string> = {
 };
 
 /** A reconnect asked from the drawer, while it is sent and once it is refused. */
-interface ReconnectAsk {
+export interface ReconnectAsk {
   /** The tile it was asked from. */
   readonly id: AccountId;
   /** Whether the host has not answered yet. */
@@ -114,7 +114,7 @@ interface ReconnectAsk {
 }
 
 /** What the drawer's reconnect line shows. */
-interface ReconnectLine {
+export interface ReconnectLine {
   readonly busy: boolean;
   readonly failure: string | null;
 }
@@ -663,7 +663,7 @@ function restHeightOf(rows: number, tileHeight: number): number {
  * be reconnected, and while a reconnect asked from it runs, so the button
  * stays busy through the Connecting the host publishes. `null` for no line.
  */
-function reconnectLineOf(
+export function reconnectLineOf(
   account: WidgetAccount,
   ask: ReconnectAsk | null,
 ): ReconnectLine | null {

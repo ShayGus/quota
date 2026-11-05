@@ -14,6 +14,7 @@ import type {
   AttemptRef,
   KeyGroupChoice,
   BeginConnectionRequest,
+  FindShortcutStatus,
   Preferences,
   ProviderPollingPolicy,
 } from "../../generated/bindings";
@@ -51,6 +52,10 @@ export interface SettingsActions {
   readonly savePreferences: (next: Preferences) => void;
   readonly setAlwaysOnTop: (alwaysOnTop: boolean) => void;
   readonly setAppView: (view: Preferences["view"]) => void;
+  /** Whether the shortcut that finds the widget works, or `null` if unknown. */
+  readonly findShortcutStatus: () => Promise<FindShortcutStatus | null>;
+  /** Changes the shortcut; answers why it was refused, or `null`. */
+  readonly setFindShortcut: (shortcut: string | null) => Promise<string | null>;
   readonly setOverviewMode: (mode: Preferences["overview_mode"]) => void;
   readonly setAccountEnabled: (accountId: AccountId, enabled: boolean) => void;
   readonly renameAccount: (accountId: AccountId, nickname: string) => void;

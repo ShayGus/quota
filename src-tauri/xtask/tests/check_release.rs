@@ -66,6 +66,10 @@ fn tree(root: &Path, workspace: &str, member: &str) -> Result<(), String> {
         "{\"name\": \"@quota/desktop\", \"version\": \"0.1.0\"}\n",
     )?;
     write(
+        root.join("RELEASE_NOTES.md"),
+        "## 0.1.0\n\n- Something changed.\n",
+    )?;
+    write(
         root.join("src-tauri/tauri.conf.json"),
         &configuration(ENDPOINT),
     )?;
@@ -924,6 +928,18 @@ fn overview_inspection_leaves_settings_capabilities_independent() -> Outcome {
 
 /// The version a compliant tree declares in all three files.
 const VERSION: &str = "0.1.0";
+
+#[test]
+fn a_version_without_release_notes_fails() -> Outcome {
+    let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
+    tree(directory.path(), &workspace_manifest(), &member_manifest())?;
+    fs::write(
+        directory.path().join("RELEASE_NOTES.md"),
+        "## 0.0.9\n\n- An older version.\n\n## 0.1.0\n\nNo list here.\n",
+    )
+    .map_err(|error| error.to_string())?;
+    fails_with(directory.path(), "has no `## 0.1.0` section")
+}
 
 #[test]
 fn a_drifted_package_manifest_version_fails() -> Outcome {

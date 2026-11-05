@@ -34,6 +34,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "set_overview_always_on_top",
         "fit_overview_height",
         "fit_widget",
+        "show_widget_halo",
+        "set_find_widget_shortcut",
+        "find_widget_shortcut_status",
         "set_app_view",
         "open_provider_usage_page",
         "open_settings_window",
@@ -44,6 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "export_sanitized_diagnostics",
         "get_update_prompt",
         "respond_to_update_prompt",
+        "get_release_notes",
     ]);
     // Tauri embeds its Windows application manifest as a resource linked into
     // the application binary only. Test binaries then load the version 5 common

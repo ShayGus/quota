@@ -8,6 +8,7 @@
 import {
   commands,
   events,
+  type ReleaseNotes,
   type UpdatePrompt,
   type UpdateResponse,
 } from "../../generated/bindings";
@@ -16,6 +17,11 @@ import { reportSettled } from "./report";
 /** What the host is showing in the pop-up now, or `null` when nothing. */
 export function readUpdatePrompt(): Promise<UpdatePrompt | null> {
   return commands.getUpdatePrompt();
+}
+
+/** The release notes built into this version, or `null` when it has none. */
+export function readReleaseNotes(): Promise<ReleaseNotes | null> {
+  return commands.getReleaseNotes();
 }
 
 /** Listens for the host changing what the pop-up shows. */

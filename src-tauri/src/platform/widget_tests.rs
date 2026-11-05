@@ -254,3 +254,72 @@ fn the_fitted_width_is_the_configured_widget_width() {
         .expect("the widget window");
     assert_eq!(widget["width"].as_f64(), Some(WIDTH));
 }
+
+const SNAP_AREA: Rect = rect(0.0, 0.0, 1920.0, 1032.0);
+
+fn snapped_to(x: f64, y: f64) -> (f64, f64) {
+    snap((x, y), (200.0, 100.0), SNAP_AREA, 28.0, 8.0)
+}
+
+#[test]
+fn a_widget_left_near_an_edge_snaps_to_it() {
+    assert_eq!(snapped_to(20.0, 500.0), (8.0, 500.0));
+    assert_eq!(snapped_to(1700.0, 500.0), (1712.0, 500.0));
+    assert_eq!(snapped_to(800.0, 10.0), (800.0, 8.0));
+    assert_eq!(snapped_to(800.0, 910.0), (800.0, 924.0));
+    assert_eq!(snapped_to(10.0, 915.0), (8.0, 924.0));
+}
+
+#[test]
+fn a_widget_left_away_from_the_edges_stays_exactly_there() {
+    assert_eq!(snapped_to(800.0, 500.0), (800.0, 500.0));
+    assert_eq!(snapped_to(28.0, 28.0), (28.0, 28.0));
+}
+
+#[test]
+fn a_widget_partly_off_the_screen_snaps_back_onto_it() {
+    assert_eq!(snapped_to(-50.0, 500.0), (8.0, 500.0));
+    assert_eq!(snapped_to(1800.0, 500.0), (1712.0, 500.0));
+}
+
+fn assert_left(anchor: WidthAnchor, x: f64, current: f64, width: f64, expected: f64) {
+    let left = fit_x(anchor, x, current, width, SNAP_AREA, 28.0);
+    assert!(
+        (left - expected).abs() < f64::EPSILON,
+        "{left} != {expected}"
+    );
+}
+
+#[test]
+fn a_saved_spot_keeps_its_left_edge_when_the_window_narrows() {
+    assert_left(WidthAnchor::Left, 1500.0, 316.0, 197.0, 1500.0);
+}
+
+#[test]
+fn the_first_run_corner_keeps_its_right_edge_when_the_window_narrows() {
+    assert_left(WidthAnchor::Right, 1580.0, 316.0, 197.0, 1699.0);
+}
+
+#[test]
+fn a_widget_snapped_to_the_right_stays_there_as_its_width_changes() {
+    assert_left(WidthAnchor::Resting, 1715.0, 197.0, 180.0, 1732.0);
+    assert_left(WidthAnchor::Resting, 1715.0, 197.0, 240.0, 1672.0);
+}
+
+#[test]
+fn a_widget_away_from_the_right_keeps_its_left_edge() {
+    assert_left(WidthAnchor::Resting, 400.0, 197.0, 240.0, 400.0);
+}
+
+#[test]
+fn a_widening_widget_is_kept_on_its_screen() {
+    assert_left(WidthAnchor::Left, 1700.0, 197.0, 316.0, 1604.0);
+}
+
+#[test]
+fn a_width_is_kept_between_the_narrowest_and_the_widest() {
+    assert!((clamp_width(197.0) - 197.0).abs() < f64::EPSILON);
+    assert!((clamp_width(10.0) - MIN_WIDTH).abs() < f64::EPSILON);
+    assert!((clamp_width(900.0) - MAX_WIDTH).abs() < f64::EPSILON);
+    assert!((clamp_width(f64::NAN) - WIDTH).abs() < f64::EPSILON);
+}

@@ -47,6 +47,12 @@ On Windows, `arboard` uses `clipboard-win` 5.4.1 and `error-code` 3.4.0, which a
 the Boost Software License (BSL-1.0). `deny.toml` allows that licence for those two crates
 only, as named exceptions, rather than adding it to the allow list for the whole graph.
 
+`tauri-plugin-global-shortcut` 2.4.1 was added on 5 November 2026 for the key combination
+that finds the mini widget. It brings `global-hotkey` and, on Linux, `x11-dl`. It is used
+from Rust only: the host registers the combination, so no renderer package was added and
+no window is granted a shortcut permission. Settings asks the host to change it, through a
+command of Quota's own, so a window can't register a shortcut of its choosing.
+
 `tungstenite` 0.30.0 was added on 6 October 2026 for the `TypeSafe` sign-in in the
 person's own browser. Google refuses its sign-in inside an app's embedded window, so Quota
 opens the installed Chrome or Edge with a profile of its own and reads that window's

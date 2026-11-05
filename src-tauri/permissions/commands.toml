@@ -62,6 +62,18 @@ description = "Fit the overview's height to its content inside the work area."
 [allow-fit-widget]
 description = "Fit the mini widget window to its content, growing the drawer's way."
 
+[allow-show-widget-halo]
+description = "Draw the rings around the mini widget for a moment, when a limit runs low."
+
+[allow-set-find-widget-shortcut]
+description = "Change or turn off the key combination that finds the mini widget."
+
+[allow-find-widget-shortcut-status]
+description = "Read whether the key combination that finds the mini widget is working."
+
+[allow-get-release-notes]
+description = "Read the release notes built into this version."
+
 [allow-set-app-view]
 description = "Switch between the full window and the mini widget, and save the view."
 
