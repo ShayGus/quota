@@ -56,7 +56,8 @@ function powershell(script: string): string {
   return execFileSync(
     "powershell",
     ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script],
-    { encoding: "utf8" },
+    // With no window of its own, it can't take the focus, which closes open details.
+    { encoding: "utf8", windowsHide: true },
   ).trim();
 }
 

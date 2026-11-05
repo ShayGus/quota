@@ -127,7 +127,9 @@ function widgetWindow(): NativeWindow {
 function settled(what: string, check: (window: NativeWindow) => boolean) {
   return waitFor(what, () => {
     const found = nativeWindow(WIDGET_TITLE);
-    return Promise.resolve(found !== null && check(found) ? found : null);
+    if (found !== null && check(found)) return Promise.resolve(found);
+    // Says where the window was, if this runs out of time.
+    throw new Error(`the window was ${JSON.stringify(found)}`);
   });
 }
 
@@ -199,6 +201,11 @@ describe("the compact mini widget", () => {
         (seen) => Math.abs(seen.y - y) <= 1,
       );
       await (await app.session.find(".widget-row")).click();
+      await waitFor("the details", () =>
+        app.session.evaluate<boolean>(
+          'return document.querySelector(".widget-details") !== null',
+        ),
+      );
       const open = await settled(
         "the details to open upward",
         (seen) => seen.height > placed.height && seen.y < placed.y,
@@ -301,7 +308,6 @@ describe("the compact mini widget", () => {
     "flashes from the tray's Find widget",
     async () => {
       const { world, app } = await startList("widget-find");
-      const { session } = app;
       expect(
         await waitFor("the tray menu", () => world.chooseTrayItem("Find widget")),
       ).toBe(true);
