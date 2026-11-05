@@ -121,6 +121,28 @@ describe("the remaining-allowance label", () => {
     expect(formatRemaining(measurement)).toBe("340 credits");
   });
 
+  it.each([
+    [62500, 9, "62,500 credits"],
+    [12.5, 9, "12.5 credits"],
+    [0.25, 2, "0.25 credits"],
+    [0, 9, "0 credits"],
+  ])(
+    "shows %d credits at precision %d without padding zeros",
+    (remaining, precision, text) => {
+      const measurement = {
+        kind: "quantity" as const,
+        value: {
+          unit: { kind: "credits" as const },
+          precision,
+          used: null,
+          remaining,
+          limit: null,
+        },
+      };
+      expect(formatRemaining(measurement)).toBe(text);
+    },
+  );
+
   it("keeps an amount and its currency when there is no cap", () => {
     const measurement = {
       kind: "money" as const,
