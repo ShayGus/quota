@@ -121,12 +121,16 @@ pub(crate) async fn send(builder: reqwest::RequestBuilder) -> Result<TextReply, 
 /// What an answer means for a read: nothing, or the failure it is.
 ///
 /// A challenge is told apart first, because a bot check also answers 403. A
-/// redirect, a refusal, or the console's sign-in page means the session has
-/// ended.
+/// redirect, a `401`, or the console's sign-in page means the session has ended.
+/// Any other `403` is about the request Quota sends, not the session, so signing
+/// in again would not help and the person is not asked to.
 ///
 /// # Errors
 /// Returns the typed failure the answer stands for.
 pub(crate) fn check(reply: &TextReply) -> Result<(), ProviderError> {
+    if !(200..=299).contains(&reply.status) {
+        tracing::warn!(status = reply.status, "the console did not answer the read");
+    }
     if page::is_challenge(reply.status, reply.mitigated, &reply.text) {
         return Err(ProviderError::Blocked {
             detail: "the console answered with a bot check".to_owned(),
@@ -135,7 +139,10 @@ pub(crate) fn check(reply: &TextReply) -> Result<(), ProviderError> {
     match reply.status {
         200..=299 if page::is_login_landing(&reply.text) => Err(ProviderError::Authentication),
         200..=299 => Ok(()),
-        300..=399 | 401 | 403 => Err(ProviderError::Authentication),
+        300..=399 | 401 => Err(ProviderError::Authentication),
+        403 => Err(ProviderError::UnsupportedSchema {
+            detail: "the console refused the request Quota sends".to_owned(),
+        }),
         429 => Err(ProviderError::RateLimited {
             retry_after: reply.retry_after,
         }),
@@ -173,7 +180,7 @@ mod tests {
 
     #[test]
     fn an_ended_session_is_authentication_whichever_way_it_shows() {
-        for status in [302, 303, 307, 401, 403] {
+        for status in [302, 303, 307, 401] {
             assert_eq!(
                 check(&reply(status, "")),
                 Err(ProviderError::Authentication)
@@ -184,6 +191,14 @@ mod tests {
             Err(ProviderError::Authentication)
         );
         assert_eq!(check(&reply(200, "1:{\"ok\":true}")), Ok(()));
+    }
+
+    #[test]
+    fn a_refused_request_is_not_an_ended_session() {
+        assert!(matches!(
+            check(&reply(403, r#"{"detail":"Cross-origin request refused"}"#)),
+            Err(ProviderError::UnsupportedSchema { .. })
+        ));
     }
 
     #[test]
