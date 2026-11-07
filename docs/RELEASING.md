@@ -1,6 +1,6 @@
 # Releasing
 
-A release is one button on GitHub. You give it a version, it builds the Windows, Linux and
+Merging a higher version starts a release by itself. It builds the Windows, Linux and
 macOS packages and the list that lets installed copies update themselves, and it puts them
 in a **draft release**. Nothing is public until you press Publish. This page is the whole
 procedure, including the one-time setup of the update key.
@@ -193,6 +193,20 @@ refused, because the Windows MSI package version cannot hold it.
 
 ## 2. Cut the release
 
+Merging the version starts this by itself. Once CI passes on that commit,
+[`draft-new-version.yml`](../.github/workflows/draft-new-version.yml) starts the release
+workflow for the new version. It holds no secret and does what the button below does, so
+every refusal in this section still applies.
+
+Other merges start nothing, because their version already has a release run or a published
+tag. A commit is also skipped when `main` has moved past it, because CI on the newer
+commit decides. A failed release run doesn't count, so the next commit to pass CI tries
+again.
+
+Start it by hand after deleting a draft, because its finished run stops the automatic
+start from building it again, or after a failed run when you don't want to wait for the
+next commit:
+
 1. Open the **Actions** tab, choose **Release**, and choose **Run workflow**.
 2. Pick `main` as the branch. The version comes from the branch you release.
 3. Enter the version, for example `0.1.0`.
@@ -302,9 +316,9 @@ else is a failure, and you should stop and report what you saw instead.
    release, and start it. _You should see:_ Quota open as usual and **no pop-up**, because
    nothing newer exists.
 4. **Make v0.1.1.** In a pull request, raise the version to `0.1.1` in the three files
-   (section 1), merge it, let CI pass, and run the Release workflow for `0.1.1`. It stays
-   a **draft**. With it unpublished, quit and start the installed v0.1.0 again. _You
-   should see:_ **no pop-up.** A draft is never offered.
+   (section 1), merge it, and let CI pass, which starts the release. It stays a **draft**.
+   With it unpublished, quit and start the installed v0.1.0 again. _You should see:_ **no
+   pop-up.** A draft is never offered.
 5. **Publish v0.1.1.** Press **Publish release**.
 6. **Start v0.1.0** again (or wait for the next check under
    [the update schedule](user-guide.md#updates)). _You should see:_ one small Quota

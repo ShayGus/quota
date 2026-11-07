@@ -1,0 +1,66 @@
+# Starts the release workflow when a new version has passed CI, so merging a
+# version raise is all a draft needs. Publishing stays a person's decision.
+#
+# This workflow builds nothing and holds no secret. It does what the Run workflow
+# button does, so release.yml keeps every one of its own refusals. Its automatic
+# `GITHUB_TOKEN` can start a workflow: GitHub lets a token's `workflow_dispatch`
+# create a run, unlike its other events.
+#
+# docs/RELEASING.md is the guide this workflow implements.
+
+name: Draft a new version
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: ["main"]
+
+permissions: {}
+
+jobs:
+  start:
+    name: Start the release
+    # CI also runs for pull requests, and one from a fork can have a branch called
+    # main. Only a passed run of a push to this repository's main counts.
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      # A draft's tag doesn't exist until it's published, so the release runs are
+      # what show a draft exists. A failed run doesn't count, so the next commit
+      # to pass CI tries again. The commit comes from the CI run: `github.sha` here
+      # is main's newest commit, which may be a later one.
+      - name: Start the release if this commit brings a new version
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          latest="$(gh api "repos/$REPOSITORY/commits/main" --jq .sha)"
+          if [ "$latest" != "$COMMIT" ]; then
+            echo "main has moved on from $COMMIT, so CI on the newer commit decides"
+            exit 0
+          fi
+          version="$(gh api -H "Accept: application/vnd.github.raw+json" \
+            "repos/$REPOSITORY/contents/src-tauri/tauri.conf.json?ref=$COMMIT" | jq -r .version)"
+          if gh api "repos/$REPOSITORY/git/ref/tags/v$version" > /dev/null 2>&1; then
+            echo "version $version is already published"
+            exit 0
+          fi
+          started="$(gh api "repos/$REPOSITORY/actions/workflows/release.yml/runs?per_page=100" |
+            jq --arg title "Release $version" \
+              '[.workflow_runs[] | select(.display_title == $title and (.conclusion == null or .conclusion == "success"))] | length')"
+          if [ "$started" != 0 ]; then
+            echo "version $version already has a release run"
+            exit 0
+          fi
+          gh workflow run release.yml --repo "$REPOSITORY" --ref main -f "version=$version"
+          echo "started the release of version $version"
