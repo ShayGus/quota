@@ -58,10 +58,47 @@ interface WindowsShellFolder {
   readonly value: string;
 }
 
-/** Where logs and screenshots are kept for CI to upload. */
+/**
+ * The user's own folder settings, kept while a run has them redirected. If the
+ * run dies before it restores them, the next run finds them here.
+ */
+const SHELL_FOLDERS_BACKUP = join(tmpdir(), "quota-e2e-user-folders.json");
+
+/** Set to `yes` to run this suite on a Windows machine someone is using. */
+const REDIRECT_CONSENT = "QUOTA_E2E_REDIRECT_USER_FOLDERS";
+
+/** Writes one of the user's folder settings. */
+async function setShellFolder(name: string, type: string, value: string): Promise<void> {
+  await run("reg.exe", [
+    "add",
+    SHELL_FOLDERS_KEY,
+    "/v",
+    name,
+    "/t",
+    type,
+    "/d",
+    value,
+    "/f",
+  ]);
+}
+
+/** Puts back the folder settings a run that died left redirected. */
+async function restoreLeftFolders(): Promise<void> {
+  if (!existsSync(SHELL_FOLDERS_BACKUP)) return;
+  const left = JSON.parse(readFileSync(SHELL_FOLDERS_BACKUP, "utf8")) as [
+    string,
+    WindowsShellFolder,
+  ][];
+  for (const [name, folder] of left) {
+    await setShellFolder(name, folder.type, folder.value);
+  }
+  rmSync(SHELL_FOLDERS_BACKUP, { force: true });
+}
+
 /** The debug build's identifier, which names its folders. */
 export const DEV_IDENTIFIER = "app.quota.monitor.dev";
 
+/** Where logs and screenshots are kept for CI to upload. */
 export const RESULTS_DIRECTORY = join(process.cwd(), "test-results", "e2e");
 
 /** A running application, started through `tauri-driver`. */
@@ -169,7 +206,18 @@ export class Sandbox {
     }
   }
 
+  /**
+   * Redirects the app folders of the whole Windows user, so every app opened
+   * during a journey gets them too. That is harmless on CI's throwaway machines,
+   * so a machine someone is using has to ask for it.
+   */
   private async redirectWindowsFolders(): Promise<void> {
+    await restoreLeftFolders();
+    if (process.env["CI"] === undefined && process.env[REDIRECT_CONSENT] !== "yes") {
+      throw new Error(
+        `These journeys redirect AppData for every app of this Windows user. Close your apps, don't stop the run by force, and set ${REDIRECT_CONSENT}=yes to run them here.`,
+      );
+    }
     for (const name of ["AppData", "Local AppData"]) {
       const { stdout } = await run("reg.exe", ["query", SHELL_FOLDERS_KEY, "/v", name]);
       const row = stdout
@@ -182,23 +230,18 @@ export class Sandbox {
       }
       this.windowsShellFolders.set(name, { type: value[2], value: value[3] });
     }
+    writeFileSync(SHELL_FOLDERS_BACKUP, JSON.stringify([...this.windowsShellFolders]));
 
     try {
       for (const [name, path] of [
         ["AppData", this.config],
         ["Local AppData", this.cache],
       ] as const) {
-        await run("reg.exe", [
-          "add",
-          SHELL_FOLDERS_KEY,
-          "/v",
+        await setShellFolder(
           name,
-          "/t",
           this.windowsShellFolders.get(name)?.type ?? "REG_SZ",
-          "/d",
           path,
-          "/f",
-        ]);
+        );
       }
 
       const { stdout } = await run(
@@ -228,19 +271,10 @@ export class Sandbox {
 
   private async restoreWindowsFolders(): Promise<void> {
     for (const [name, folder] of this.windowsShellFolders) {
-      await run("reg.exe", [
-        "add",
-        SHELL_FOLDERS_KEY,
-        "/v",
-        name,
-        "/t",
-        folder.type,
-        "/d",
-        folder.value,
-        "/f",
-      ]);
+      await setShellFolder(name, folder.type, folder.value);
     }
     this.windowsShellFolders.clear();
+    rmSync(SHELL_FOLDERS_BACKUP, { force: true });
   }
 
   private async startBus(): Promise<void> {
