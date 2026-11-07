@@ -42,6 +42,10 @@ use crate::decode;
 /// What the console's billing page reads: the balance, spend and credit.
 const OVERVIEW_URL: &str = "https://console.typesafe.ai/api/billing/overview";
 
+/// The console's own address, sent as `Origin`: since 2026-11 the console
+/// refuses a read without it, with a `403`, whatever the session.
+const ORIGIN: &str = "https://console.typesafe.ai";
+
 /// The console's sign-in, returning to the billing page.
 const SIGN_IN_URL: &str = "https://console.typesafe.ai/login?returnTo=%2Fbilling";
 
@@ -93,7 +97,8 @@ impl TypesafeAdapter {
             self.client
                 .get(self.overview_url.clone())
                 .header("Cookie", cookie)
-                .header("Accept", "application/json"),
+                .header("Accept", "application/json")
+                .header("Origin", ORIGIN),
         )
         .await?;
         transport::check(&answer)?;

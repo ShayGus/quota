@@ -27,6 +27,8 @@ enum Console {
     Challenge,
     /// The overview answers something that is not its JSON.
     Redesigned,
+    /// The console refuses the request, whatever the session.
+    RefusesRequest,
 }
 
 /// Serves the console until the test ends, and answers the overview's address.
@@ -42,6 +44,7 @@ fn serve(console: Console, renew: Arc<AtomicBool>) -> String {
                 continue;
             }
             let mut cookie = String::new();
+            let mut origin = String::new();
             loop {
                 let mut line = String::new();
                 if reader.read_line(&mut line).is_err() || line == "\r\n" || line.is_empty() {
@@ -50,8 +53,11 @@ fn serve(console: Console, renew: Arc<AtomicBool>) -> String {
                 if let Some(value) = line.to_ascii_lowercase().strip_prefix("cookie:") {
                     value.trim().clone_into(&mut cookie);
                 }
+                if let Some(value) = line.to_ascii_lowercase().strip_prefix("origin:") {
+                    value.trim().clone_into(&mut origin);
+                }
             }
-            let (status, headers, text) = answer(console, &request_line, &cookie, &renew);
+            let (status, headers, text) = answer(console, &request_line, &cookie, &origin, &renew);
             let _written = write!(
                 stream,
                 "HTTP/1.1 {status}\r\n{headers}Content-Length: {}\r\nConnection: close\r\n\r\n{text}",
@@ -66,6 +72,7 @@ fn answer(
     console: Console,
     request_line: &str,
     cookie: &str,
+    origin: &str,
     renew: &AtomicBool,
 ) -> (&'static str, String, String) {
     let parts: Vec<&str> = request_line.split_whitespace().take(2).collect();
@@ -84,6 +91,8 @@ fn answer(
             r#"{"error":"Unauthorized","code":"unauthorized"}"#.to_owned(),
         ),
         Console::Redesigned => ("200 OK", String::new(), "<html></html>".to_owned()),
+        Console::RefusesRequest => cross_origin_refusal(),
+        Console::SignedIn if origin != "https://console.typesafe.ai" => cross_origin_refusal(),
         Console::SignedIn if !cookie.contains("session=original") => (
             "401 Unauthorized",
             String::new(),
@@ -98,6 +107,15 @@ fn answer(
             ("200 OK", renewed, ANSWER.to_owned())
         }
     }
+}
+
+/// What the console answers a read that does not name it as the origin.
+fn cross_origin_refusal() -> (&'static str, String, String) {
+    (
+        "403 Forbidden",
+        String::new(),
+        r#"{"detail":"Cross-origin request refused"}"#.to_owned(),
+    )
 }
 
 fn adapter(console: Console, renew: bool) -> TypesafeAdapter {
@@ -131,6 +149,15 @@ async fn a_refused_session_is_an_ended_session() {
         adapter.discover_with(&session()).await.err(),
         Some(ProviderError::Authentication)
     );
+}
+
+#[tokio::test]
+async fn a_refused_request_does_not_ask_the_person_to_sign_in_again() {
+    let adapter = adapter(Console::RefusesRequest, false);
+    assert!(matches!(
+        adapter.discover_with(&session()).await,
+        Err(ProviderError::UnsupportedSchema { .. })
+    ));
 }
 
 #[tokio::test]
