@@ -7,6 +7,12 @@ runs after an update. The GitHub release uses the same words. Each section is a
 `## version` heading and a list, in plain text. A release can't be built without a section
 for its version.
 
+## 0.1.12
+
+- TypeSafe shows your balance again. TypeSafe changed what it accepts, and Quota took that
+  for an ended session, so reconnecting kept saying the sign-in window was closed. If the
+  card still asks you to reconnect, do it once.
+
 ## 0.1.11
 
 - The mini widget's compact layout is now a small list: one row per account, in columns
