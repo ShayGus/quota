@@ -80,8 +80,8 @@ message naming `TAURI_SIGNING_PRIVATE_KEY`. The password must unlock that key; a
 or incorrect password prevents signing an encrypted key.
 
 The two secrets are given to the build steps and to no other step: not the preflight, not
-the tests, not the assembly, not the draft. `cargo xtask check-release` fails if the
-workflow ever hands them anywhere else.
+the assembly, not the draft. `cargo xtask check-release` fails if the workflow ever hands
+them anywhere else.
 
 ### Back it up, offline, now
 
@@ -164,10 +164,9 @@ including the [interface suite](../CONTRIBUTING.md#9-interface-tests) and
 [real-app suite](../CONTRIBUTING.md#10-real-app-tests-linux-and-windows).
 
 Every job in `ci.yml`, including both real-app jobs, is covered without editing the
-release workflow, because the preflight asks about the whole workflow. The release
-workflow then runs the release gate, the architecture gate, the binding check and
-`cargo test --workspace` again on the exact commit, with no secret present, and builds
-only after those pass.
+release workflow, because the preflight asks about the whole workflow. Those jobs include
+the release gate, the architecture gate, the binding check and `cargo test --workspace`,
+so the release workflow doesn't run them again. It goes straight to the builds.
 
 ## 1. Prepare the version
 
@@ -207,7 +206,6 @@ The run refuses to continue, and creates nothing, when:
 - the normal CI has not completed successfully on that commit, or has never run on it.
   Every CI job counts, as in [Which tests a release needs](#which-tests-a-release-needs).
   One failing job stops the release;
-- the release gate, the architecture gate, the binding check, or the tests fail;
 - the update key is not in the repository secrets;
 - any build fails: Windows, Linux, or either Mac. The draft is created only after all of
   them succeed;

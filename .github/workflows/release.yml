@@ -5,7 +5,7 @@
 # the only job that may write. The draft writes nothing until every build has
 # succeeded and the update list has been verified. The update signing key
 # (`TAURI_SIGNING_PRIVATE_KEY` and its password) reaches the build steps and no
-# other step: not the preflight, not the tests, not the assembly. It is not an
+# other step: not the preflight, not the assembly. It is not an
 # operating-system certificate; no such certificate is used. `cargo xtask
 # check-release` fails if the key reaches any other step.
 #
@@ -85,7 +85,8 @@ jobs:
       # (unit), windows, frontend, interface, and real-app. A run only reports
       # success when all of its jobs pass. A check-run query instead would count
       # this release run's own check, which is still running, and refuse every
-      # release.
+      # release. This is the only test gate here: CI's jobs ran on this same
+      # commit, so running them again would add nothing.
       - name: The commit passed the normal checks
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,71 +105,9 @@ jobs:
             exit 1
           fi
 
-  checks:
-    name: Safety checks
-    needs: preflight
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    defaults:
-      run:
-        # Every Rust package, the lockfile, and the Cargo configuration live in
-        # the Cargo workspace under src-tauri.
-        working-directory: src-tauri
-    steps:
-      # actions/checkout v7.0.1
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          persist-credentials: false
-
-      # The same development packages ci.yml installs. Tauri builds against the
-      # system WebView, so a runner without them cannot compile the host.
-      - name: Install the Tauri system build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install --no-install-recommends -y \
-            build-essential \
-            curl \
-            file \
-            libayatana-appindicator3-dev \
-            libdbus-1-dev \
-            librsvg2-dev \
-            libssl-dev \
-            libwebkit2gtk-4.1-dev \
-            libxdo-dev \
-            patchelf \
-            pkg-config \
-            wget
-          pkg-config --exists webkit2gtk-4.1
-
-      # src-tauri/rust-toolchain.toml pins the compiler, and rustup installs it
-      # on first use. No step in this workflow repeats the version.
-      - name: Install the pinned toolchain
-        run: rustup show active-toolchain
-
-      # Swatinem/rust-cache v2.9.2
-      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
-        with:
-          workspaces: src-tauri
-
-      # The gates and the tests run again on the exact commit that is released,
-      # with no release secret in the runner. The frontend checks are not
-      # repeated: preflight has already refused any commit whose CI did not
-      # pass, and all package builds run the frontend build themselves.
-      - name: Release gate
-        run: cargo xtask check-release
-
-      - name: Architecture gate
-        run: cargo xtask check-architecture
-
-      - name: Generated binding drift
-        run: cargo xtask bindings --check
-
-      - name: Test
-        run: cargo test --workspace --locked
-
   windows:
     name: Windows x64 packages
-    needs: checks
+    needs: preflight
     runs-on: windows-latest
     timeout-minutes: 60
     steps:
@@ -224,7 +163,7 @@ jobs:
 
   linux:
     name: Linux x64 packages
-    needs: checks
+    needs: preflight
     # Ubuntu 22.04 is pinned on purpose. It is the oldest supported base that
     # ships WebKitGTK 4.1, so the packages run on more distributions than a
     # build from 24.04 would. A runner image upgrade needs a review.
@@ -346,7 +285,7 @@ jobs:
 
   macos:
     name: macOS ${{ matrix.name }} packages
-    needs: checks
+    needs: preflight
     # Both Macs are built on one Apple Silicon runner. Rust and Tauri build for
     # either processor from either, so the Intel package needs no Intel runner.
     # Nothing here can start the result: GitHub's runners only compile and
@@ -504,7 +443,7 @@ jobs:
     name: Draft release
     # Every build has succeeded and the update list has verified, or nothing is
     # created at all.
-    needs: [checks, assemble]
+    needs: assemble
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     # The one job that writes: it creates the tag and the draft release.
