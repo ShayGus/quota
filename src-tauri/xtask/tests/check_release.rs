@@ -1151,9 +1151,10 @@ esac
     Ok(Some(fs::read_to_string(call).unwrap_or_default()))
 }
 
+/// The draft workflow's script, once its job is known to take only a passed CI
+/// run of a push to this repository's main, on that run's commit, with no secret.
 #[cfg(unix)]
-#[test]
-fn a_new_version_that_passed_ci_starts_one_release() -> Outcome {
+fn draft_workflow_script() -> Result<String, String> {
     let source = include_str!("../../../.github/workflows/draft-new-version.yml");
     if source.contains("secrets.") {
         return Err("the draft workflow must hold no secret".to_string());
@@ -1189,10 +1190,16 @@ fn a_new_version_that_passed_ci_starts_one_release() -> Outcome {
     if commit != Some("${{ github.event.workflow_run.head_sha }}") {
         return Err("the draft workflow must ask about the commit CI ran on".to_string());
     }
-    let script = step
-        .get("run")
+    step.get("run")
         .and_then(serde_yaml_ng::Value::as_str)
-        .ok_or("the draft workflow has no script")?;
+        .map(str::to_owned)
+        .ok_or_else(|| "the draft workflow has no script".to_string())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_new_version_that_passed_ci_starts_one_release() -> Outcome {
+    let script = draft_workflow_script()?;
     let started = "workflow run release.yml --repo test/quota --ref main -f version=0.1.12";
     let run = |title: &str, conclusion: &str| {
         format!(r#"{{"workflow_runs":[{{"display_title":"{title}","conclusion":{conclusion}}}]}}"#)
@@ -1252,7 +1259,7 @@ fn a_new_version_that_passed_ci_starts_one_release() -> Outcome {
     ];
     for (what, main_sha, main_status, tag_status, runs, expected) in cases {
         let seen = draft_starts(
-            script,
+            &script,
             &[("REPOSITORY", "test/quota"), ("COMMIT", "abc")],
             &[
                 ("MAIN_SHA", main_sha),
