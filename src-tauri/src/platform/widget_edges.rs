@@ -4,7 +4,7 @@
 
 use std::sync::atomic::{AtomicU8, Ordering};
 
-use tauri::{AppHandle, Manager, PhysicalPosition};
+use tauri::{AppHandle, Manager, PhysicalPosition, PhysicalSize};
 
 use super::tray_anchor::Rect;
 use super::widget::WIDTH;
@@ -134,17 +134,19 @@ pub fn anchor_next_fit(at_saved: bool) {
     NEXT_ANCHOR.store(if at_saved { 1 } else { 2 }, Ordering::SeqCst);
 }
 
-/// Moves a widget left resting near an edge onto that edge, and answers where
-/// it is now. Any failure leaves it where the person left it.
-pub fn snapped(app: &AppHandle, position: PhysicalPosition<i32>) -> PhysicalPosition<i32> {
+/// Answers where a widget of `size` left resting at `position` belongs, and
+/// moves it there unless a drawer has moved it since: moving it then would pull
+/// the drawer off the row it opened from. Any failure leaves it where the person
+/// left it.
+pub fn snapped(
+    app: &AppHandle,
+    position: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+) -> PhysicalPosition<i32> {
     let Some(native) = app.get_webview_window(super::widget::LABEL) else {
         return position;
     };
-    let (Ok(Some(monitor)), Ok(size), Ok(scale)) = (
-        native.current_monitor(),
-        native.outer_size(),
-        native.scale_factor(),
-    ) else {
+    let (Ok(Some(monitor)), Ok(scale)) = (native.current_monitor(), native.scale_factor()) else {
         return position;
     };
     let area = monitor.work_area();
@@ -160,8 +162,8 @@ pub fn snapped(app: &AppHandle, position: PhysicalPosition<i32>) -> PhysicalPosi
         reason = "the position lies on a screen, well inside i32"
     )]
     let moved = PhysicalPosition::new(x.round() as i32, y.round() as i32);
-    if moved == position {
-        return position;
+    if moved == position || native.outer_position().ok() != Some(position) {
+        return moved;
     }
     super::widget::mark_programmatic(moved);
     if native.set_position(moved).is_err() {

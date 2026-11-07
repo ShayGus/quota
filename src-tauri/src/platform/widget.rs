@@ -349,7 +349,8 @@ pub fn hide(app: &AppHandle) -> Result<(), CommandError> {
 
 /// Saves where the widget was moved to, once it has rested, so a drag saves
 /// its end and not every step on the way. A position the host moved the
-/// widget to on purpose, as an upward drawer does, is never saved.
+/// widget to on purpose, as an upward drawer does, is never saved. Its size is
+/// taken now, because a drawer opened before it has rested makes it taller.
 pub fn remember(app: &AppHandle, position: PhysicalPosition<i32>) {
     if PROGRAMMATIC_SET.load(Ordering::SeqCst)
         && PROGRAMMATIC_POS.load(Ordering::SeqCst) == pack(position)
@@ -357,6 +358,9 @@ pub fn remember(app: &AppHandle, position: PhysicalPosition<i32>) {
         return;
     }
     let this_move = MOVES.fetch_add(1, Ordering::SeqCst).wrapping_add(1);
+    let size = app
+        .get_webview_window(LABEL)
+        .and_then(|native| native.outer_size().ok());
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SAVE_DELAY).await;
@@ -367,7 +371,7 @@ pub fn remember(app: &AppHandle, position: PhysicalPosition<i32>) {
             return;
         };
         let state = state.inner().clone();
-        let position = snapped(&app, position);
+        let position = size.map_or(position, |size| snapped(&app, position, size));
         let position = WidgetPosition {
             x: position.x,
             y: position.y,
