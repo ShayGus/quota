@@ -244,6 +244,34 @@ describe("the compact mini widget", () => {
       await app.stop();
     });
 
+    it("stays where it was left when details open straight after the move", async () => {
+      const { world, app } = await startList("widget-quick-open");
+      await fitted(app, "the list");
+      const scale = await scaleOf(app);
+      const before = widgetWindow();
+      const y = before.area.bottom - before.height - 60 * scale;
+      moveNativeWindow(WIDGET_TITLE, before.x, y);
+      // No waiting here: the host decides a move has rested half a second after
+      // it, and the details have to open before then.
+      await (await app.session.find(".widget-row")).click();
+      await settled(
+        "the details to open upward",
+        (seen) => seen.height > before.height && seen.y < y,
+      );
+      // Longer than the host waits before it decides, so a snap would have happened.
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      const open = widgetWindow();
+      expect(Math.abs(open.y + open.height - (y + before.height))).toBeLessThanOrEqual(2);
+      const saved = readFileSync(
+        join(world.config, DEV_IDENTIFIER, "sample", "preferences.json"),
+        "utf8",
+      );
+      expect(saved).toMatch(
+        new RegExp(`"widget_position":\\s*\\{[^}]*"y":\\s*${String(y)}\\b`),
+      );
+      await app.stop();
+    });
+
     it("snaps to a screen's edge when left near it, and stays where it's left", async () => {
       const { app } = await startList("widget-snap");
       await fitted(app, "the list");
