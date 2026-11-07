@@ -1103,6 +1103,178 @@ fn release_preflight_requires_all_ci_runs_to_succeed() -> Outcome {
     Ok(())
 }
 
+/// What the draft workflow's script does against a stand-in for GitHub: the
+/// release it starts, if it starts one, or `None` when it fails.
+#[cfg(unix)]
+fn draft_starts(
+    script: &str,
+    environment: &[(&str, &str)],
+    github: &[(&str, &str)],
+) -> Result<Option<String>, String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let directory = tempfile::tempdir().map_err(|error| error.to_string())?;
+    let gh = directory.path().join("gh");
+    fs::write(
+        &gh,
+        r#"#!/bin/sh
+case "$*" in
+  "workflow run "*) printf '%s' "$*" > "$GH_CALL" ;;
+  *commits/main*) printf '%s' "$MAIN_SHA"; exit "$MAIN_STATUS" ;;
+  *contents/src-tauri/tauri.conf.json*) printf '{"version":"0.1.12"}' ;;
+  *git/ref/tags/v0.1.12*) exit "$TAG_STATUS" ;;
+  *actions/workflows/release.yml/runs*) printf '%s' "$RELEASE_RUNS" ;;
+  *) exit 99 ;;
+esac
+"#,
+    )
+    .map_err(|error| error.to_string())?;
+    fs::set_permissions(&gh, fs::Permissions::from_mode(0o755))
+        .map_err(|error| error.to_string())?;
+    let call = directory.path().join("gh-call");
+    let path = std::env::join_paths(std::iter::once(directory.path().to_path_buf()).chain(
+        std::env::split_paths(&std::env::var_os("PATH").ok_or("PATH is missing")?),
+    ))
+    .map_err(|error| error.to_string())?;
+    let output = Command::new("bash")
+        .args(["--noprofile", "--norc", "-eo", "pipefail", "-c", script])
+        .current_dir(directory.path())
+        .envs(environment.iter().copied())
+        .envs(github.iter().copied())
+        .env("PATH", path)
+        .env("GH_CALL", &call)
+        .output()
+        .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    Ok(Some(fs::read_to_string(call).unwrap_or_default()))
+}
+
+/// The draft workflow's script, once its job is known to take only a passed CI
+/// run of a push to this repository's main, on that run's commit, with no secret.
+#[cfg(unix)]
+fn draft_workflow_script() -> Result<String, String> {
+    let source = include_str!("../../../.github/workflows/draft-new-version.yml");
+    if source.contains("secrets.") {
+        return Err("the draft workflow must hold no secret".to_string());
+    }
+    let workflow: serde_yaml_ng::Value =
+        serde_yaml_ng::from_str(source).map_err(|error| error.to_string())?;
+    let job = workflow
+        .get("jobs")
+        .and_then(|jobs| jobs.get("start"))
+        .ok_or("the draft workflow's job is missing")?;
+    let condition = job
+        .get("if")
+        .and_then(serde_yaml_ng::Value::as_str)
+        .ok_or("the draft workflow's job has no condition")?;
+    for needed in [
+        "github.event.workflow_run.conclusion == 'success'",
+        "github.event.workflow_run.event == 'push'",
+        "github.event.workflow_run.head_branch == 'main'",
+        "github.event.workflow_run.head_repository.full_name == github.repository",
+    ] {
+        if !condition.contains(needed) {
+            return Err(format!("the draft workflow must require {needed}"));
+        }
+    }
+    let step = job
+        .get("steps")
+        .and_then(|steps| steps.get(0))
+        .ok_or("the draft workflow's step is missing")?;
+    let commit = step
+        .get("env")
+        .and_then(|env| env.get("COMMIT"))
+        .and_then(serde_yaml_ng::Value::as_str);
+    if commit != Some("${{ github.event.workflow_run.head_sha }}") {
+        return Err("the draft workflow must ask about the commit CI ran on".to_string());
+    }
+    step.get("run")
+        .and_then(serde_yaml_ng::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| "the draft workflow has no script".to_string())
+}
+
+#[cfg(unix)]
+#[test]
+fn a_new_version_that_passed_ci_starts_one_release() -> Outcome {
+    let script = draft_workflow_script()?;
+    let started = "workflow run release.yml --repo test/quota --ref main -f version=0.1.12";
+    let run = |title: &str, conclusion: &str| {
+        format!(r#"{{"workflow_runs":[{{"display_title":"{title}","conclusion":{conclusion}}}]}}"#)
+    };
+    let no_runs = r#"{"workflow_runs":[]}"#.to_string();
+    let cases = [
+        (
+            "a new version",
+            "abc",
+            "0",
+            "1",
+            no_runs.clone(),
+            Some(started),
+        ),
+        ("main moved on", "def", "0", "1", no_runs.clone(), Some("")),
+        (
+            "a published version",
+            "abc",
+            "0",
+            "0",
+            no_runs.clone(),
+            Some(""),
+        ),
+        (
+            "a draft",
+            "abc",
+            "0",
+            "1",
+            run("Release 0.1.12", "\"success\""),
+            Some(""),
+        ),
+        (
+            "a running build",
+            "abc",
+            "0",
+            "1",
+            run("Release 0.1.12", "null"),
+            Some(""),
+        ),
+        (
+            "a failed build",
+            "abc",
+            "0",
+            "1",
+            run("Release 0.1.12", "\"failure\""),
+            Some(started),
+        ),
+        (
+            "another version",
+            "abc",
+            "0",
+            "1",
+            run("Release 0.1.1", "\"success\""),
+            Some(started),
+        ),
+        ("GitHub failing", "", "1", "1", no_runs, None),
+    ];
+    for (what, main_sha, main_status, tag_status, runs, expected) in cases {
+        let seen = draft_starts(
+            &script,
+            &[("REPOSITORY", "test/quota"), ("COMMIT", "abc")],
+            &[
+                ("MAIN_SHA", main_sha),
+                ("MAIN_STATUS", main_status),
+                ("TAG_STATUS", tag_status),
+                ("RELEASE_RUNS", &runs),
+            ],
+        )?;
+        if seen.as_deref() != expected {
+            return Err(format!("{what} started {seen:?}, expected {expected:?}"));
+        }
+    }
+    Ok(())
+}
+
 /// Replaces one file of a compliant tree and asks the gate about it.
 fn rejects_after(edit: impl FnOnce(&Path) -> Result<(), String>, needle: &str) -> Outcome {
     let directory = tempfile::tempdir().map_err(|e| e.to_string())?;
